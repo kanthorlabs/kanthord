@@ -448,7 +448,7 @@ A human who needs further work on a completed node adds a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
 Three conditions reach `Blocked`, and each follows the evaluation except the human block.
-They are a current assessment that does not pass, the end state other of a request evidence and a human reason on a paused node.
+They are a current assessment that does not pass and causes no [rework](#rework-limit), the end state other of a request evidence and a human reason on a paused node.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
 
@@ -513,6 +513,17 @@ A human resume resets nothing, so it grants one more try.
 Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss or a release with a `stop` that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
 A release with a `stop` writes no outcome and no assessment.
+The configuration file of the server sets the limit.
+
+### Rework limit
+
+A rework returns a node from `Evaluating` to `Available` in the same attempt.
+A current execution assessment with the result `criterion-not-met` causes a rework while the attempt holds fewer reworks than the limit.
+A rework ends the evaluation claim, writes no outcome and keeps the attempt open.
+The transaction inserts the job when the node is claimable.
+A `criterion-not-met` assessment at the limit and an `undetermined` assessment close the attempt into `Blocked`.
+A human unblock opens the next attempt, and that attempt counts its reworks from zero.
+The next execution reads the assessment that caused the latest rework of its attempt.
 The configuration file of the server sets the limit.
 
 ### Successful outcome
@@ -590,7 +601,8 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Waiting -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Evaluating -> Completed` | Current passing assessment; node requires no external action | Closes | Outcome |
 | `Evaluating -> External.Requested` | Release; current passing assessment stands, and a required external action of the attempt is requested | No effect | Assessment |
-| `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
+| `Evaluating -> Available` | Current execution assessment `criterion-not-met` below the rework limit | No effect | Assessment |
+| `Evaluating -> Blocked` | Current assessment does not pass and causes no rework | Closes | Outcome |
 | `Evaluating -> Paused` | Human holds the node; reviewer execution stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Evaluating -> Waiting` | Loss declaration or release with a stop of the evaluation claim below the consecutive failure limit | No effect | None |
@@ -646,6 +658,7 @@ stateDiagram-v2
     Waiting --> Completed: Success override
     Waiting --> Discarded: Human discard
     Evaluating --> Completed: Pass, no external action
+    Evaluating --> Available: Rework below the limit
     Evaluating --> Blocked: Assessment does not pass
     Evaluating --> Paused: Human hold
     Evaluating --> Discarded: Human discard
@@ -773,6 +786,7 @@ Outcome and completion owns the routing of the opened attempt to `Available` or 
 
 The next execution reads the node revision that its attempt pins.
 It reads the outcome of the cleared attempt and the cause that the outcome names.
+After a rework, it reads the assessment that caused the latest rework of its attempt.
 It reads the opener of its attempt.
 A read of a record of a closed attempt migrates nothing.
 

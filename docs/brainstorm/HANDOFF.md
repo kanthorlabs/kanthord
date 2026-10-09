@@ -117,7 +117,7 @@ Folded from the Worker Service section on 2026-09-18 by Ulrich, to be designed w
 
 #### Policy and budgets
 
-- [ ] Decide which failures permit automatic continuation and what authorizes a further node attempt.
+- [ ] Decide which other failures permit automatic continuation. The [rework limit](mission-service.md#rework-limit) rules a `criterion-not-met` assessment, the [consecutive failure limit](mission-service.md#consecutive-failure-limit) rules a stop, and a human unblock alone opens a further node attempt.
 - [ ] **SC3 / SC4:** Define resumption charging, exactly one debit per loss under repeated notices, whether a clean release avoids a charge, and budget reset authority, including whether a fresh evaluation identity resets its allowance.
 - [ ] **A7 / B3:** Decide whether exhaustion of a resumption or evaluation-retry budget closes the attempt, publishes an outcome and gives that outcome current effect.
 - [ ] Define the publisher and meaning of an outcome when an evaluation produces no assessment.

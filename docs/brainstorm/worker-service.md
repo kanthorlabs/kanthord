@@ -279,6 +279,8 @@ At its start, every execution runs the verifications of each task of the pinned 
 A task whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
 The execution executes every other task.
 No record of an earlier execution or an earlier attempt decides that a task is complete.
+The judgement of a task at the start reads the rationale of the assessment that caused the latest rework of the attempt, or else the cause of the outcome of the cleared attempt.
+A task that the agent judges unmet with that rationale is revised with the rationale as the revision instruction.
 
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
 When every task of the revision is complete, the execution releases with no further work.

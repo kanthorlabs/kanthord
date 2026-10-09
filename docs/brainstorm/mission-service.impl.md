@@ -97,6 +97,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 
 - The Mission Service owns the section `mission` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
 - `mission.consecutive_failure_limit` holds the [consecutive failure limit](mission-service.md#consecutive-failure-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
+- `mission.rework_limit` holds the [rework limit](mission-service.md#rework-limit), as a non-negative integer in the `nat` format of `convict`, and it defaults to `2`. The value `0` turns rework off.
 - `mission.text_max_bytes` holds the upper bound of a `Text` value in UTF-8 bytes, as a positive integer in the `nat` format of `convict`, and it defaults to `32768`.
 - The bound applies at a write. A stored value keeps its length after a change of the bound.
 
@@ -410,6 +411,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assessment, and only an execution assessment supports `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
+- `execution rework-assessment get` answers the execution assessment with the greatest `sequence` among the assessments of the claimed attempt whose result is `criterion-not-met`. It answers 404 `mission.record.not_found` when the claimed attempt holds no such assessment.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   The execution of that claim is the opener of that attempt.
 - A discard or a success override that meets a requested external action of the open attempt with no end state answers 409 `mission.node.action_unresolved` with `details: { requirement_keys }`, because a node reaches a terminal state only when no external action of its open attempt is unresolved.
@@ -716,6 +718,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert that a loss or a release with a `stop` below `mission.consecutive_failure_limit` returns the node to `Available` or `Waiting` with a job, that the loss or the stop that reaches it moves the node to `Paused` with no job, no outcome and the attempt open, that lost and stopped executions count together, that a release with no stop ends the count, and that a resume after the limit grants one more try.
 - Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfied_ids` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
+- Tests assert that a current `criterion-not-met` execution assessment below `mission.rework_limit` moves the node to `Available` with a job, ends the claim, keeps the attempt open and writes no outcome. They assert `Blocked` with an outcome at the limit and at once for `undetermined`, that the next attempt counts from zero, and that `execution rework-assessment get` answers the latest `criterion-not-met` assessment of the claimed attempt or 404.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `include_retired`.
 - Tests admit initiative creation at any time.
