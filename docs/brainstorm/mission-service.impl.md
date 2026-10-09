@@ -411,6 +411,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assessment, and only an execution assessment supports `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
+- `execution cleared-assessment get` answers the assessment that the outcome of the cleared attempt names, the cause that [The unblock](mission-service.md#the-unblock) requires the next execution to read. It answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
 - `execution rework-assessment get` answers the execution assessment with the greatest `sequence` among the assessments of the claimed attempt whose result is `criterion-not-met`. It answers 404 `mission.record.not_found` when the claimed attempt holds no such assessment.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   The execution of that claim is the opener of that attempt.
