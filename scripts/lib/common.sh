@@ -6,6 +6,7 @@ ROOT=${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 ENGINE_DIR="$ROOT/engine"
 APP_DIR="$ROOT/apps"
 RUN_DIR="$ROOT/.dev"
+ENV_FILE="$ROOT/.env"
 
 ENGINE_PORT=${ENGINE_PORT:-31415}
 WEB_PORT=${WEB_PORT:-27182}

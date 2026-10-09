@@ -49,7 +49,7 @@ help:
 	@echo "  homelab-nginx    Install the nginx site of the homelab on 127.0.0.1:80 with sudo"
 	@echo "                   /s/kanthord goes to the daemon. / serves the nginx default page"
 	@echo "                   HOMELAB_HOST=name sets the host, for example homelab.example.com"
-	@echo "                   Without it, both targets read HOMELAB_HOST= from .dev/homelab.env"
+	@echo "                   Without it, both targets read HOMELAB_HOST= from .env"
 	@echo "  homelab-kanthord Run the daemon container under /s/kanthord on 127.0.0.1:31416"
 	@echo "                   The first run creates its configuration in the volume"
 	@echo "                   IMAGE=name:tag (kanthord:latest) CONTAINER=name VOLUME=name"
