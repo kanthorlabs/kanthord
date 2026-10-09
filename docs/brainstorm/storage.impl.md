@@ -33,11 +33,14 @@ The component owns a dedicated platform validator for every platform of the Stor
 
 ## The S3 implementation
 
-The S3 implementation uses `@aws-sdk/client-s3` at 3.1139.0.
+The S3 implementation uses `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`, each at 3.1139.0.
 
+- The S3 client addresses the bucket in path style, `<endpoint>/<bucket>/<key>`, for every call and every presigned URL.
 - A presigned PUT and a presigned GET sign locally and answer no result class.
 - The object metadata read calls `HeadObject`, and the object delete calls `DeleteObject`, each at the recorded version when one exists.
 - The read-back of `s3.delete_object` reads the recorded object version, and a not-found answer is a match.
+- The S3 credential holds `s3:ListBucket` on the bucket, so a `HeadObject` of an absent object answers 404. The object metadata read maps only 404 to an absent object.
+- A 403 from `HeadObject` answers HTTP 502 for the object check, and the read-back of `s3.delete_object` does not match.
 - A result class that an operation answers as its error is HTTP 502 `storage.platform.s3.<class>` with `details: { status }`. `status` holds the HTTP status of the store when the failure carries one, and null otherwise, for example for a lost answer or for a returned stored error that keeps no status.
 
 A platform implementation is a TypeScript module with its own method signatures and no shared interface.
