@@ -279,6 +279,8 @@ At its start, every execution runs the verifications of each task of the pinned 
 A task whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
 The execution executes every other task.
 No record of an earlier execution or an earlier attempt decides that a task is complete.
+The judgement of a task at the start reads the rationale of the assessment that caused the latest rework of the attempt, or else the cause of the outcome of the cleared attempt.
+A task that the agent judges unmet with that rationale is revised with the rationale as the revision instruction.
 
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
 When every task of the revision is complete, the execution releases with no further work.
@@ -288,6 +290,7 @@ Otherwise, when the resource budget ends before the task commit of the current t
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
 Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
+An execution that stops for a reason other than a revocation performs the same cleanup and releases with further work and a `stop` that names the reason.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
 The sequence diagram below shows the steps method on an objective with a native agent, on the path where every task passes its verifications.
@@ -373,7 +376,7 @@ sequenceDiagram
 
 The [overview](overview.md#kanthords-own-harness) owns the end conditions of an execution.
 A human pause, a human discard and a success override reach the execution as a revocation.
-An assessment that does not pass and a resource limit reach the Mission Service as a release.
+An assessment that does not pass, a resource limit and a stop of the execution reach the Mission Service as a release.
 
 The sequence diagram below shows how an execution learns of a revocation or a loss after deadline expiry.
 

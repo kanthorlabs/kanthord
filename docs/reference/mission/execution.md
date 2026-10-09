@@ -6,17 +6,19 @@
 
 A worker execution reads the mission records of its own claim through these operations. Each operation takes the execution identity as its first path parameter. The server derives the node, the attempt and the pinned revision from the live claim. An execution cannot select another node, and no read returns a revision newer than the pin.
 
-| Command                                | Answer                                                              |
-| -------------------------------------- | ------------------------------------------------------------------- |
-| `execution pinned-revision get`        | The pinned revision of the claimed node.                            |
-| `execution revision list`              | One page of the revisions of the claimed node, at or below the pin. |
-| `execution revision get`               | One revision at or below the pin.                                   |
-| `execution evidence list`              | One page of the evidence of the claimed node and attempt.           |
-| `execution evidence asset content get` | The stored content of one asset inside the execution bound.         |
-| `execution objective list`             | One page of the current child objectives of a claimed initiative.   |
-| `execution objective outcome list`     | One page of the current outcomes of those objectives.               |
-| `execution objective evidence list`    | One page of the evidence that those outcomes name.                  |
-| `execution cleared-outcome get`        | The outcome of the previous attempt, which an unblock cleared.      |
+| Command                                | Answer                                                               |
+| -------------------------------------- | -------------------------------------------------------------------- |
+| `execution pinned-revision get`        | The pinned revision of the claimed node.                             |
+| `execution revision list`              | One page of the revisions of the claimed node, at or below the pin.  |
+| `execution revision get`               | One revision at or below the pin.                                    |
+| `execution evidence list`              | One page of the evidence of the claimed node and attempt.            |
+| `execution evidence asset content get` | The stored content of one asset inside the execution bound.          |
+| `execution objective list`             | One page of the current child objectives of a claimed initiative.    |
+| `execution objective outcome list`     | One page of the current outcomes of those objectives.                |
+| `execution objective evidence list`    | One page of the evidence that those outcomes name.                   |
+| `execution cleared-outcome get`        | The outcome of the previous attempt, which an unblock cleared.       |
+| `execution cleared-assessment get`     | The assessment that the cleared outcome names.                       |
+| `execution rework-assessment get`      | The assessment that caused the latest rework of the claimed attempt. |
 
 Every operation requires a machine JWT of a registered worker. The Gateway proves that `execution_id` is a live claim of that registration before the handler runs.
 
@@ -27,7 +29,9 @@ The execution bound for asset content covers two sets of evidence:
 
 A current child objective is a child objective of the claimed initiative that is not retired. The three objective reads return empty pages for a claimed objective.
 
-Only an unblock opens an attempt after attempt 1. `execution cleared-outcome get` returns the last outcome of the attempt before the claimed attempt. For a claim on attempt 1, it fails with `404 mission.record.not_found`.
+Only an unblock opens an attempt after attempt 1. `execution cleared-outcome get` returns the last outcome of the attempt before the claimed attempt. For a claim on attempt 1, it fails with `404 mission.record.not_found`. `execution cleared-assessment get` returns the assessment that this outcome names, with the same failure.
+
+`execution rework-assessment get` returns the `criterion-not-met` execution assessment with the greatest `sequence` of the claimed attempt. When the attempt holds none, it fails with `404 mission.record.not_found`.
 
 These operations change nothing. Each list call reads one page. The CLI does not follow `next_cursor`. Each read takes its own snapshot.
 
@@ -109,6 +113,10 @@ The answer is a page in reverse node identity order. Each item has one of two fo
 
 The answer is one [`Outcome`](outcome.md#outcome).
 
+### `execution cleared-assessment get` and `execution rework-assessment get`
+
+The answer is one [`Assessment`](assessment.md#assessment).
+
 ### `execution evidence asset content get`
 
 The answer is a `StoredContent` object, as for [`evidence asset content get`](evidence.md#evidence-asset-content-get). A `produced` asset returns `asset_id`, `address`, `media_type`, `encoding` (`base64`) and `data`. An `object` asset returns `asset_id`, `address`, `media_type`, `size`, a presigned `get_url` and `expires_at`.
@@ -121,42 +129,44 @@ Identity formats follow the [identity reference](../identities.md). Timestamps a
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                              | Commands                             | Meaning                                                                                                               |
-| ----------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`       | All                                  | Absent, invalid or expired token, or a human token.                                                                   |
-| `403 gateway.registration.required`             | All                                  | The machine identity holds no live worker registration.                                                               |
-| `400 gateway.request.validation_failed`         | All                                  | Invalid path parameter, `limit` outside 1 to 1000, or an unknown query field.                                         |
-| `400 gateway.request.unexpected_body`           | All                                  | The request carries a body.                                                                                           |
-| `403 gateway.invocation.execution_proof_failed` | All                                  | `execution_id` is not a live claim of this registration.                                                              |
-| `409 scheduler.execution.not_running`           | All                                  | The claim of the execution is no longer live.                                                                         |
-| `400 system.pagination.cursor_invalid`          | All `list` commands                  | The `cursor` value is not a cursor that this operation issued.                                                        |
-| `404 mission.execution.revision_above_pin`      | `revision get`, `revision list`      | The revision, or the cursor revision, is above the pinned revision.                                                   |
-| `404 mission.record.not_found`                  | `cleared-outcome get`, `content get` | The claimed attempt is attempt 1; or the asset does not exist or lies outside the execution bound.                    |
-| `403 mission.authorization.refused`             | `content get`                        | The claim is not live for the node and attempt, or the storage binding is removed or disabled. Details hold `reason`. |
-| `409 mission.evidence.content_repository`       | `content get`                        | The asset is a `repository` address. Details hold `evidence_id` and `address`.                                        |
-| `409 mission.evidence.content_platform`         | `content get`                        | The asset is a `platform` address. Details hold `evidence_id` and `address`.                                          |
-| `503 mission.evidence.storage_unavailable`      | `content get`                        | An `object` asset needs object storage, and the Server wires none.                                                    |
-| `504 gateway.invocation.timeout`                | All                                  | The operation did not complete in 30 seconds.                                                                         |
+| HTTP status / code                              | Commands                                                                                | Meaning                                                                                                                                                                   |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`       | All                                                                                     | Absent, invalid or expired token, or a human token.                                                                                                                       |
+| `403 gateway.registration.required`             | All                                                                                     | The machine identity holds no live worker registration.                                                                                                                   |
+| `400 gateway.request.validation_failed`         | All                                                                                     | Invalid path parameter, `limit` outside 1 to 1000, or an unknown query field.                                                                                             |
+| `400 gateway.request.unexpected_body`           | All                                                                                     | The request carries a body.                                                                                                                                               |
+| `403 gateway.invocation.execution_proof_failed` | All                                                                                     | `execution_id` is not a live claim of this registration.                                                                                                                  |
+| `409 scheduler.execution.not_running`           | All                                                                                     | The claim of the execution is no longer live.                                                                                                                             |
+| `400 system.pagination.cursor_invalid`          | All `list` commands                                                                     | The `cursor` value is not a cursor that this operation issued.                                                                                                            |
+| `404 mission.execution.revision_above_pin`      | `revision get`, `revision list`                                                         | The revision, or the cursor revision, is above the pinned revision.                                                                                                       |
+| `404 mission.record.not_found`                  | `cleared-outcome get`, `cleared-assessment get`, `rework-assessment get`, `content get` | The claimed attempt is attempt 1; the claimed attempt holds no `criterion-not-met` execution assessment; or the asset does not exist or lies outside the execution bound. |
+| `403 mission.authorization.refused`             | `content get`                                                                           | The claim is not live for the node and attempt, or the storage binding is removed or disabled. Details hold `reason`.                                                     |
+| `409 mission.evidence.content_repository`       | `content get`                                                                           | The asset is a `repository` address. Details hold `evidence_id` and `address`.                                                                                            |
+| `409 mission.evidence.content_platform`         | `content get`                                                                           | The asset is a `platform` address. Details hold `evidence_id` and `address`.                                                                                              |
+| `503 mission.evidence.storage_unavailable`      | `content get`                                                                           | An `object` asset needs object storage, and the Server wires none.                                                                                                        |
+| `504 gateway.invocation.timeout`                | All                                                                                     | The operation did not complete in 30 seconds.                                                                                                                             |
 
 The CLI checks some input before it sends a request. Each local failure exits `1` and sends no request.
 
-| CLI code                                                                | Commands                  | Meaning                                                                                                                                                                                                                                             |
-| ----------------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli.mission.execution.pinned_revision.get.invalid_execution_id`        | `pinned-revision get`     | `<execution-id>` is not a canonical `execution_<ulid>` identity.                                                                                                                                                                                    |
-| `cli.mission.execution.revision.list.invalid_execution_id`              | `revision list`           | Same check.                                                                                                                                                                                                                                         |
-| `cli.mission.execution.revision.get.invalid_execution_id`               | `revision get`            | Same check.                                                                                                                                                                                                                                         |
-| `cli.mission.execution.revision.get.invalid_revision`                   | `revision get`            | `<revision>` is not a positive decimal integer.                                                                                                                                                                                                     |
-| `cli.mission.execution.evidence.list.invalid_execution_id`              | `evidence list`           | `<execution-id>` is not a canonical `execution_<ulid>` identity.                                                                                                                                                                                    |
-| `cli.mission.execution.evidence.asset.content.get.invalid_execution_id` | `content get`             | Same check.                                                                                                                                                                                                                                         |
-| `cli.mission.execution.evidence.asset.content.get.invalid_asset_id`     | `content get`             | `<asset-id>` is not a canonical `evidence_asset_<ulid>` identity.                                                                                                                                                                                   |
-| `cli.mission.execution.objective.list.invalid_execution_id`             | `objective list`          | `<execution-id>` is not a canonical `execution_<ulid>` identity.                                                                                                                                                                                    |
-| `cli.mission.execution.objective.outcome.list.invalid_execution_id`     | `objective outcome list`  | Same check.                                                                                                                                                                                                                                         |
-| `cli.mission.execution.objective.evidence.list.invalid_execution_id`    | `objective evidence list` | Same check.                                                                                                                                                                                                                                         |
-| `cli.mission.execution.cleared_outcome.get.invalid_execution_id`        | `cleared-outcome get`     | Same check.                                                                                                                                                                                                                                         |
-| `cli.mission.execution.<operation>.token_required`                      | All                       | No nonblank token resolves. `<operation>` is `pinned_revision.get`, `revision.list`, `revision.get`, `evidence.list`, `evidence.asset.content.get`, `objective.list`, `objective.outcome.list`, `objective.evidence.list` or `cleared_outcome.get`. |
-| `cli.pagination.limit_invalid`                                          | All `list` commands       | `--limit` is not a positive decimal integer.                                                                                                                                                                                                        |
-| `cli.pagination.limit_out_of_range`                                     | All `list` commands       | `--limit` is greater than 1000.                                                                                                                                                                                                                     |
-| `cli.option.duplicate`                                                  | All `list` commands       | An option occurs more than once.                                                                                                                                                                                                                    |
+| CLI code                                                                | Commands                  | Meaning                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cli.mission.execution.pinned_revision.get.invalid_execution_id`        | `pinned-revision get`     | `<execution-id>` is not a canonical `execution_<ulid>` identity.                                                                                                                                                                                                                                       |
+| `cli.mission.execution.revision.list.invalid_execution_id`              | `revision list`           | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.revision.get.invalid_execution_id`               | `revision get`            | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.revision.get.invalid_revision`                   | `revision get`            | `<revision>` is not a positive decimal integer.                                                                                                                                                                                                                                                        |
+| `cli.mission.execution.evidence.list.invalid_execution_id`              | `evidence list`           | `<execution-id>` is not a canonical `execution_<ulid>` identity.                                                                                                                                                                                                                                       |
+| `cli.mission.execution.evidence.asset.content.get.invalid_execution_id` | `content get`             | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.evidence.asset.content.get.invalid_asset_id`     | `content get`             | `<asset-id>` is not a canonical `evidence_asset_<ulid>` identity.                                                                                                                                                                                                                                      |
+| `cli.mission.execution.objective.list.invalid_execution_id`             | `objective list`          | `<execution-id>` is not a canonical `execution_<ulid>` identity.                                                                                                                                                                                                                                       |
+| `cli.mission.execution.objective.outcome.list.invalid_execution_id`     | `objective outcome list`  | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.objective.evidence.list.invalid_execution_id`    | `objective evidence list` | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.cleared_assessment.get.invalid_execution_id`     | `cleared-assessment get`  | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.rework_assessment.get.invalid_execution_id`      | `rework-assessment get`   | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.cleared_outcome.get.invalid_execution_id`        | `cleared-outcome get`     | Same check.                                                                                                                                                                                                                                                                                            |
+| `cli.mission.execution.<operation>.token_required`                      | All                       | No nonblank token resolves. `<operation>` is `pinned_revision.get`, `revision.list`, `revision.get`, `evidence.list`, `evidence.asset.content.get`, `objective.list`, `objective.outcome.list`, `objective.evidence.list`, `cleared_outcome.get`, `cleared_assessment.get` or `rework_assessment.get`. |
+| `cli.pagination.limit_invalid`                                          | All `list` commands       | `--limit` is not a positive decimal integer.                                                                                                                                                                                                                                                           |
+| `cli.pagination.limit_out_of_range`                                     | All `list` commands       | `--limit` is greater than 1000.                                                                                                                                                                                                                                                                        |
+| `cli.option.duplicate`                                                  | All `list` commands       | An option occurs more than once.                                                                                                                                                                                                                                                                       |
 
 A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.mission.execution.<operation>.indeterminate`, with `<operation>` as above. These reads change nothing, so run the command again.
 
@@ -186,6 +196,8 @@ All operations share these properties:
 | `execution objective outcome list`     | `GET /api/mission/execution/:execution_id/objective/outcome`                | `mission.execution.objective.outcome.list`     | `limit`; `cursor`                                           |
 | `execution objective evidence list`    | `GET /api/mission/execution/:execution_id/objective/evidence`               | `mission.execution.objective.evidence.list`    | `limit`; `cursor`                                           |
 | `execution cleared-outcome get`        | `GET /api/mission/execution/:execution_id/cleared-outcome`                  | `mission.execution.clearedOutcome.get`         | None                                                        |
+| `execution cleared-assessment get`     | `GET /api/mission/execution/:execution_id/cleared-assessment`               | `mission.execution.cleared_assessment.get`     | None                                                        |
+| `execution rework-assessment get`      | `GET /api/mission/execution/:execution_id/rework-assessment`                | `mission.execution.rework_assessment.get`      | None                                                        |
 
 `execution_id` is a required `execution_<ulid>` path parameter. Operations without `limit` and `cursor` accept no query fields.
 
@@ -323,4 +335,24 @@ kanthord mission execution cleared-outcome get <execution-id> [--token <jwt>] [-
 
 ```sh
 kanthord mission execution cleared-outcome get execution_01M4C5G6BP0355Z52M6JCYZCSK
+```
+
+### `execution cleared-assessment get`
+
+```text
+kanthord mission execution cleared-assessment get <execution-id> [--token <jwt>] [--endpoint <url>]
+```
+
+```sh
+kanthord mission execution cleared-assessment get execution_01M4C5G6BP0355Z52M6JCYZCSK
+```
+
+### `execution rework-assessment get`
+
+```text
+kanthord mission execution rework-assessment get <execution-id> [--token <jwt>] [--endpoint <url>]
+```
+
+```sh
+kanthord mission execution rework-assessment get execution_01M4C5G6BP0355Z52M6JCYZCSK
 ```

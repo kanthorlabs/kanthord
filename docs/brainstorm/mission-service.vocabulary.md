@@ -545,12 +545,14 @@ No execution identity writes a node, and no execution identity writes a criterio
 - Each parent and dependency names a plan file inside that set, never a path or a node outside the set.
 - The membership changes with each import, so the term names no closed set.
 
-A human keeps the whole mission plan in Markdown, and one import set holds these four files.
+A human keeps the whole mission plan in Markdown, and one import set holds these six files.
 
 - `account-recovery.md`, the initiative
 - `add-password-reset.md`, an objective of that initiative
-- `add-reset-token-expiry.md`, a task of that objective
+- `add-reset-request.md`, a task of that objective that holds each verification of the objective
+- `add-reset-token-expiry.md`, another task of that objective
 - `add-password-reset-email.md`, another objective of that initiative, with `add-password-reset.md` as a dependency
+- `send-reset-email.md`, a task of that objective that holds each verification of the objective
 
 - The import resolves the name `add-password-reset.md` inside this set.
 - The omission of a file from this set requests a retirement of its node.

@@ -37,7 +37,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 
 - `Job` holds `job_id`, `project_id`, `node_id` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
-- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `credentials`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `trace_id` and `root_span_id`.
+- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `credentials`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
   - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service. Both are absent for an instance that the server hosts.
   - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinned_revision` are positive safe integers.
@@ -47,12 +47,15 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `expired_at` is the fixed deadline under [Configuration](#configuration).
   - `created_at` is the claim acceptance time, and `ended_at` is the end time or `null` before a terminal write.
     A null `ended_at` alone establishes no liveness.
+  - `stop` is `null`, or the `stop` of the release that ended the execution.
   - `trace_id` and `root_span_id` hold the protocol-defined values of the Tracking Service: 32 and 16 lower-case hexadecimal characters under the [trace model](tracking-service.impl.md#trace-model). Before the tracer of the Tracking Service exists, the Scheduler mints both values at the claim through the `TraceIdentity` dependency that its `contract.ts` declares, and the composition root injects that stand-in.
 - `WorkPull` is the input of `scheduler.work.pull`: `resource_identity` and `runtime_identity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity. A mismatch of either field answers 403 `scheduler.work.claimant_mismatch`.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
-- `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean.
+- `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean, and `stop` as `null` or `{ reason, code }`.
   `false` states that the execution of the attempt requires no further work.
-  The Mission Service reads `further_work` for routing in the release transaction, and nothing stores it.
+  `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent`, and `stop.code` is the error code of the failed operation or `null`.
+  A `stop` requires `further_work: true`, and a `stop` with `further_work: false` answers 400 `gateway.request.validation_failed`.
+  The Mission Service reads both fields for routing in the release transaction. The execution row stores `stop`, and nothing stores `further_work`.
   The answer is `{ execution_id, ended_at }`.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
 - `scheduler.execution.list` accepts the optional query field `node_id`. With it, the list holds the executions of that node only. A `node_id` that the project does not hold answers an empty page.
@@ -141,9 +144,10 @@ The Scheduler Service owns the section `scheduler` of the configuration file tha
 Every 30 s, the Scheduler settles every execution row whose `ended_at` is null and whose `expired_at` is reached or passed.
 This write is the loss declaration.
 It sets `ended_at` to the clock reading at the start of its transaction.
-The loss declaration counts the lost rows of the attempt after its latest finished row and hands the count to the Mission Service.
-The Mission Service consumes the loss in that transaction.
-Below `mission.consecutive_loss_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
+The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop`, and it hands the count to the Mission Service.
+A release with a `stop` counts the same rows, itself included, in the release transaction.
+The Mission Service consumes the loss or the stop in that transaction.
+Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
 At the limit, it moves the node to `Paused`, and no job exists.
 The attempt stays open.
@@ -176,7 +180,8 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   They assert loss settlement before admission and no return of the lost execution.
   A registration resume meets the same row and asserts settlement before its precondition check.
   A human act also checks its precondition against the settled state.
-- Tests sweep expired steps and evaluation claims below and at `mission.consecutive_loss_limit`.
+- Tests sweep expired steps and evaluation claims below and at `mission.consecutive_failure_limit`.
+- Tests release steps and evaluation claims with a `stop` below and at `mission.consecutive_failure_limit`, mix lost and stopped rows in one count, and assert that `execution get` answers the `stop`. A test refuses a `stop` with `further_work: false`.
   They assert one loss increment, the specified node state and a job only when claimable.
 - A test computes the deadline from a binding override of `wall_time_ms` and the configured reserve, including the default `600` seconds.
   A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.

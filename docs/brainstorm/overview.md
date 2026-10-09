@@ -71,7 +71,7 @@ The instance executes the steps that achieve the WHAT of that node.
 An execution is responsible for producing the outcome of the node that it takes.
 An execution ends when the current outcome is successful, an assessment does not pass, a human pauses the node, or a human discards the node.
 An execution also ends on a resource limit or when the execution cannot progress.
-An assessment that does not pass ends the execution and blocks the node.
+An assessment that does not pass ends the execution and blocks the node, unless the [rework limit](mission-service.md#rework-limit) returns the node to further work.
 A blocked node is not available for a further execution.
 Only a human unblocks a node.
 An unblock authorizes a further execution, and it asserts nothing about the results.

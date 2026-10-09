@@ -23,10 +23,11 @@ These checks are operator-run KanthorD tests, not work assigned to the TODO app 
 | Duplicate name | Submit two entries with the same filename. | `mission.import.duplicate_file`; no partial writes. |
 | Forbidden task edge | Add `depends_on` to one task. | Import rejects it; tasks never become scheduled graph vertices with dependencies. |
 | Binding cardinality | Remove the repository binding from one objective. | `mission.node.bindings_invalid`; no partial writes. |
+| Uncovered objective verification | Remove `npm run lint && npm run format:check` from `foundation-runtime.md`. | `mission.import.verification_uncovered` names `foundation.md` and the command; no partial writes. |
 | Containment cycle | Make foundation depend on its own `todo-api.md` initiative. | `mission.import.cycle`, including the implicit initiative wait edge. |
 | Stale mission version | Perform a valid human graph write, then apply a previously prepared import/version. | Version conflict refuses the whole apply; the earlier human write survives. |
 | Pre-start task edit | Change one task criterion in an identity-bearing export before any attempt. | Exactly its owning objective takes a new content revision; the task keeps its node identity. |
-| Omission/retirement | Omit one task from an identity-bearing export in an unused mission. | Preview lists precisely that retirement; apply requires the digest and exact retirement confirmation. Task retires, owning objective content revises. |
+| Omission/retirement | Omit one task that holds no objective verification from an identity-bearing export in an unused mission. | Preview lists precisely that retirement; apply requires the digest and exact retirement confirmation. Task retires, owning objective content revises. |
 
 The six explicit dependency edges are persistence→foundation, authentication→persistence, todos→authentication, operations→foundation, acceptance→todos and acceptance→operations. Parent links are not dependency rows.
 
