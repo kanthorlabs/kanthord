@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 SCRIPT_NAME=homelab-kanthord
 . "$(dirname "$0")/../lib/common.sh"
+. "$(dirname "$0")/lib.sh"
 require_command curl
 
 engine=${CONTAINER_ENGINE:-}
@@ -15,7 +16,7 @@ fi
 [ -n "$engine" ] || die "neither podman nor docker is installed. CONTAINER_ENGINE=path selects one"
 require_command "$engine"
 
-host=${HOMELAB_HOST:-homelab.kanthorlabs.com}
+host=$(homelab_host) || exit 1
 base_path=/s/kanthord
 image=${IMAGE:-kanthord:latest}
 name=${CONTAINER:-kanthord-homelab}

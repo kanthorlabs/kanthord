@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 SCRIPT_NAME=homelab-nginx
 . "$(dirname "$0")/../lib/common.sh"
+. "$(dirname "$0")/lib.sh"
 require_command nginx
 require_command sudo
 require_command curl
 
-host=${HOMELAB_HOST:-homelab.kanthorlabs.com}
+host=$(homelab_host) || exit 1
 site=/etc/nginx/sites-available/homelab
 enabled=/etc/nginx/sites-enabled/homelab
 template="$ROOT/scripts/homelab/nginx.conf"
