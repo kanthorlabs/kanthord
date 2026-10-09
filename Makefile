@@ -12,6 +12,7 @@ export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
+	homelab-nginx homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools
 
 help:
@@ -44,6 +45,18 @@ help:
 	@echo "                   or docker. CONTAINER_ENGINE=docker selects one"
 	@echo "                   IMAGE=registry/name sets the image name"
 	@echo ""
+	@echo "homelab"
+	@echo "  homelab-nginx    Install the nginx site of the homelab on 127.0.0.1:80 with sudo"
+	@echo "                   /s/kanthord goes to the daemon. / serves the nginx default page"
+	@echo "                   HOMELAB_HOST=name sets the host, for example homelab.example.com"
+	@echo "                   Without it, both targets read HOMELAB_HOST= from .env"
+	@echo "  homelab-kanthord Run the daemon container under /s/kanthord on 127.0.0.1:31416"
+	@echo "                   The first run creates its configuration in the volume"
+	@echo "                   IMAGE=name:tag (kanthord:latest) CONTAINER=name VOLUME=name"
+	@echo "                   HOMELAB_PORT=port moves it off 31416"
+	@echo "  homelab-cleanup  Remove the daemon container. Ask before it removes the volume"
+	@echo "                   YES=1 skips the question. The nginx site stays"
+	@echo ""
 	@echo "pending decision"
 	@echo "  sync             Level main with origin/main in every repository"
 	@echo "                   ON_DIRTY=stash|commit|abort   MSG=\"...\" for commit"
@@ -68,6 +81,13 @@ release-smoke:
 	@$(S)/release/smoke.sh
 release-image:
 	@$(S)/release/image.sh
+
+homelab-nginx:
+	@$(S)/homelab/nginx.sh
+homelab-kanthord:
+	@$(S)/homelab/kanthord.sh
+homelab-cleanup:
+	@$(S)/homelab/cleanup.sh
 
 sync:
 	@$(S)/sync/all.sh

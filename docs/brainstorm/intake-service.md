@@ -168,7 +168,7 @@ It runs only inside a repeat, under the authorization and the release path of th
 No timer, no restart and no background process starts a read-back.
 A read-back that finds the effect sets succeeded with its result, and a read-back that finds nothing changes no state.
 The [Repository component](repository.md#platform-connector-and-platform-implementations) declares the read-back of each write operation, or declares none.
-An operation without a read-back leaves pending or failed only through a human discard.
+An operation without a read-back leaves pending only through a human discard. A failed request leaves through a delete.
 
 A caller tracks its request by a repeat with the same key, and no caller operation reads a request.
 

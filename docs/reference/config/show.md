@@ -22,6 +22,7 @@ gateway:
     - 127.0.0.1:31415
     - localhost:31415
   allowed_origins: []
+  base_path: /
   token_lifetime: 31536000
   idempotency_ttl: 86400
 ```
@@ -35,6 +36,7 @@ gateway:
 | `gateway.port`           | integer             | Listener port; defaults to `31415`.                                                                   |
 | `gateway.allowed_hosts`   | string array        | Accepted Host headers, including port; defaults to `127.0.0.1:31415` and `localhost:31415`.           |
 | `gateway.allowed_origins` | string array        | Allowed CORS origins; defaults to an empty list.                                                      |
+| `gateway.base_path`       | string              | Path prefix of the whole HTTP surface; defaults to `/`.                                               |
 | `gateway.token_lifetime`  | nonnegative integer | JWT lifetime in seconds; defaults to `31536000`.                                                      |
 | `gateway.idempotency_ttl` | positive integer    | Process-local replay record lifetime in seconds; defaults to `86400`.                                 |
 
