@@ -13,7 +13,7 @@ template="$ROOT/scripts/homelab/nginx.conf"
 rendered="$RUN_DIR/homelab/nginx.conf"
 
 mkdir -p "$(dirname "$rendered")" || die "cannot create $(dirname "$rendered")"
-sed -e "s/@HOST@/$host/" -e "s/@ENGINE_PORT@/$ENGINE_PORT/" "$template" >"$rendered" || die "cannot render $template"
+sed -e "s/@HOST@/$host/" -e "s/@HOMELAB_PORT@/$HOMELAB_PORT/" "$template" >"$rendered" || die "cannot render $template"
 
 log "installing $site for $host"
 sudo install -m 644 "$rendered" "$site" || die "cannot install $site"
