@@ -93,28 +93,64 @@ Do steps 1 to 3 of the [generic setup](#generic-setup), with `homelab.example.co
 Write `/etc/nginx/sites-available/homelab`:
 
 ```nginx
+limit_req_zone $binary_remote_addr zone=kanthord:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=kanthord_conn:10m;
+
 server {
     listen 127.0.0.1:80;
     server_name homelab.example.com;
 
-    location /s/kanthord {
+    set_real_ip_from 127.0.0.1;
+    real_ip_header CF-Connecting-IP;
+
+    absolute_redirect off;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    location = /s/kanthord {
+        return 301 /s/kanthord/;
+    }
+
+    location ^~ /s/kanthord/ {
+        limit_req zone=kanthord burst=40 nodelay;
+        limit_conn kanthord_conn 20;
+        limit_req_status 429;
+        limit_conn_status 429;
+        client_max_body_size 50m;
+
         proxy_pass http://127.0.0.1:31415;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
     }
 
+    location ~ /\. {
+        deny all;
+    }
+
     location / {
-        return 404;
+        try_files $uri $uri/ =404;
     }
 }
 ```
 
 - `proxy_pass` has no URI after the port, so nginx keeps the `/s/kanthord` prefix.
 - `listen 127.0.0.1:80` keeps nginx off the local network. Only `cloudflared` reaches it.
+- `real_ip_header CF-Connecting-IP` gives the logs and the limits the address of the client, not the address of `cloudflared`.
+- `limit_req` and `limit_conn` answer `429` to a client that sends more than 10 requests per second after a burst of 40, or that holds more than 20 connections.
+- `client_max_body_size 50m` matches the largest request body of the daemon.
+- `absolute_redirect off` keeps a redirect relative, so the browser stays on HTTPS.
+- The `add_header` lines stop framing and MIME sniffing, and keep the browser on HTTPS.
+- `location ~ /\.` refuses a hidden file of the web root.
 
 Enable the site and reload nginx:
 
@@ -125,7 +161,7 @@ sudo systemctl reload nginx
 curl -H 'Host: homelab.example.com' http://127.0.0.1/s/kanthord/api/liveness
 ```
 
-To add another service, add a `location /s/<service-name>` block. A service that cannot serve under its prefix breaks behind a path.
+To add another service, add a `location ^~ /s/<service-name>/` block. A service that cannot serve under its prefix breaks behind a path.
 
 ### 3. Add the tunnel route
 
