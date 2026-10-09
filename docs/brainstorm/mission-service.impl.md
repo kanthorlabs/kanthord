@@ -583,8 +583,9 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - The authorization of an evidence asset maps the caller to a reason. A `check` or an `execution_get` from a human or a service identity, or from a client with no live claim, answers `claim_not_live`.
 - A `get` or a `delete` admits only a human. A service identity answers `service_mismatch`, and a client identity answers `node_mismatch`.
 - The presigned PUT answers `node_mismatch` for an asset identity that an asset row holds.
-- A `check` admits a pending asset and a published asset of the claim attempt.
-- A repeat of `mission.evidence.asset.complete` for a published asset answers the recorded result and calls no check. A raced second call also answers that result.
+- A `check` admits only a pending asset of the claim attempt. A published asset answers `node_mismatch`.
+- A repeat of `mission.evidence.asset.complete` for a published asset answers the recorded result and calls no check.
+- A second call whose check runs after the first call commits answers 403 `node_mismatch`. The asset keeps the version of the first call.
 - A repeat with the same idempotency key replays the recorded answer.
 
 ## Operation contracts
