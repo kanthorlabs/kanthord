@@ -71,7 +71,7 @@ Every client endpoint carries the prefix. On the server, set `KANTHORD_ENDPOINT=
 | Symptom                                              | Cause and fix                                                                                                                                         |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `403` with `gateway.http.host_not_allowed`           | The host is not in `gateway.allowed_hosts`. Add it to `/var/lib/kanthord/.config/kanthord/kanthord.yaml`, then run `sudo systemctl restart kanthord`. |
-| `404` with `gateway.routing.not_found` on `/api/...` | The endpoint or the proxy drops the prefix. Add `/s/kanthord` to the endpoint, and make the proxy forward the full path.                             |
+| `404` with `gateway.routing.not_found` on `/api/...` | The endpoint or the proxy drops the prefix. Add `/s/kanthord` to the endpoint, and make the proxy forward the full path.                              |
 | `502` from the proxy                                 | The server is not running. Read `sudo journalctl -u kanthord`.                                                                                        |
 
 ## Homelab with Cloudflare Tunnel and nginx
