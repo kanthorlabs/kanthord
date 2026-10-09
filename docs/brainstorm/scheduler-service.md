@@ -193,7 +193,8 @@ The [Mission Service](mission-service.md#attempt) owns the two acts that open an
 The Scheduler introduces no project-wide cap.
 
 A release ends the execution.
-The [Mission Service](mission-service.md#state-transitions) routes a release by `further_work` and leaves the attempt open.
+The [Mission Service](mission-service.md#state-transitions) routes a release by `further_work` and `stop`, and it leaves the attempt open.
+A release with a `stop` names the reason that ended the execution, and the execution row keeps it.
 A release names no wait.
 No job exists while a node waits.
 The Mission Service inserts the job in the transaction that makes the node claimable, and it deletes the job in the transaction that makes the node unclaimable.

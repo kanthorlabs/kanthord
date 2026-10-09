@@ -133,6 +133,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The application deregisters only a registration whose runtime identity it knows.
 - The application deregisters at a stop only when no execution is live. An upgrade stops the old process before it starts the new one.
 - It exits 0 after a successful deregistration or after the 404 that ends its registration. Any other deregistration or cleanup failure exits 1 without a retry.
+- An execution that ends with a release or a closure leaves the instance registered, and the application pulls again. A release with a `stop` is a release. An execution that ends with no release and no closure exits 1.
 - A stop during a live execution exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
 - A 10-second watchdog applies only when no execution is live and no registration waits for its answer.
 - `SIGHUP` reopens nothing.
@@ -421,6 +422,15 @@ The bash timeout of an agent command stays below the remaining wall-time budget.
 After the agent stops at budget end, the execution code, not the agent, writes the checkpoint commit, pushes and releases with further work.
 The boundary is the task commit: work that the budget ends before its task commit, or during the judgement of a passing run, takes the checkpoint; a task commit whose run failed or left an item unrun, with no later task work, takes the head-commit evidence and the release with no further work.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
+A stop for a reason other than `revoked` aborts the agent and runs the same cleanup under a fresh context bounded by `expired_at`.
+A steps execution writes the checkpoint commit when the workspace holds uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code }`.
+A reviewer execution writes no commit and releases with the `stop` only.
+A failed push still releases with the `stop`, and the next execution starts from the pushed head.
+A failed release ends the execution with no release, and the loss settlement routes the node.
+A reply with no valid marker line gets one repair turn, for the task judgement, the evaluation judgement and the review reply.
+The repair instruction is `The reply holds no valid <marker> line. Reply again with exactly one such line.`
+A second invalid judgement stops the execution with `judgement_invalid`, and a second invalid review reply ends the review of that task.
+Tests stop a steps execution with each reason and assert the checkpoint commit, the push and the release with the `stop`. Tests stop a reviewer execution and assert the release with the `stop`. Tests send one invalid reply and assert the repair turn, and send two and assert the stop.
 
 ## Trust boundary
 

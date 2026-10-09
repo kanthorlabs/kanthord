@@ -288,6 +288,7 @@ Otherwise, when the resource budget ends before the task commit of the current t
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
 Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
+An execution that stops for a reason other than a revocation performs the same cleanup and releases with further work and a `stop` that names the reason.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
 The sequence diagram below shows the steps method on an objective with a native agent, on the path where every task passes its verifications.
@@ -373,7 +374,7 @@ sequenceDiagram
 
 The [overview](overview.md#kanthords-own-harness) owns the end conditions of an execution.
 A human pause, a human discard and a success override reach the execution as a revocation.
-An assessment that does not pass and a resource limit reach the Mission Service as a release.
+An assessment that does not pass, a resource limit and a stop of the execution reach the Mission Service as a release.
 
 The sequence diagram below shows how an execution learns of a revocation or a loss after deadline expiry.
 

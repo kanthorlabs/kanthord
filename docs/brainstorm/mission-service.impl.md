@@ -96,7 +96,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 ## Configuration
 
 - The Mission Service owns the section `mission` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
-- `mission.consecutive_loss_limit` holds the [consecutive loss limit](mission-service.md#consecutive-loss-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
+- `mission.consecutive_failure_limit` holds the [consecutive failure limit](mission-service.md#consecutive-failure-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
 - `mission.text_max_bytes` holds the upper bound of a `Text` value in UTF-8 bytes, as a positive integer in the `nat` format of `convict`, and it defaults to `32768`.
 - The bound applies at a write. A stored value keeps its length after a change of the bound.
 
@@ -266,10 +266,11 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - The Mission Service routes a release inside the release transaction of the Scheduler Service, and it checks the release predicate before the terminal write. The node state fixes the kind of the release: `Executing` for a steps release and `Evaluating` for a reviewer release.
 - A steps release with `further_work: false` requires a published evidence of the open attempt whose provenance is the releasing execution. For an objective, that evidence holds one `repository` asset whose `binding_id` equals the repository binding of the pinned revision. For an initiative, it holds one `produced` asset.
 - A steps release with `further_work: true` carries the checkpoint and push obligation of [worker-service.impl.md](worker-service.impl.md#stop-and-budget), and the service checks no record for it.
+- A release with a `stop`, from a steps execution or a reviewer execution, checks no record. It routes under the [consecutive failure limit](mission-service.md#consecutive-failure-limit).
 - A reviewer release requires a current passing assessment of the attempt and no required external action of the attempt that is eligible and unrequested. An action is eligible under [worker-service.md](worker-service.md#evaluation-and-required-external-actions): it is unrequested in the attempt, and it follows no action or its predecessor reached its expected end state.
 - A release that fails the predicate answers 409 `mission.release.obligation_unmet` with `details: { obligation }`, where `obligation` is `evidence`, `assessment` or `request`. The refusal writes no execution row, no node state and no job, and the execution stays `running`.
 - The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
-- Tests release a steps claim on an objective with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record.
+- Tests release a steps claim on an objective with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record. A test releases a reviewer claim with a `stop` and no assessment and asserts `Evaluating -> Waiting`.
 
 ## Evidence content
 
@@ -712,7 +713,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
-- Tests assert that a loss below `mission.consecutive_loss_limit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
+- Tests assert that a loss or a release with a `stop` below `mission.consecutive_failure_limit` returns the node to `Available` or `Waiting` with a job, that the loss or the stop that reaches it moves the node to `Paused` with no job, no outcome and the attempt open, that lost and stopped executions count together, that a release with no stop ends the count, and that a resume after the limit grants one more try.
 - Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfied_ids` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.

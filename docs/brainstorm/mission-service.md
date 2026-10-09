@@ -499,18 +499,20 @@ It holds when every current objective of the initiative holds a terminal state.
 The condition reads the current children of the node, and a retirement removes a node from that set.
 While it does not hold, the initiative in `Available` holds no job.
 
-### Consecutive loss limit
+### Consecutive failure limit
 
-The consecutive losses of an attempt are its lost executions after its latest finished execution.
-The Scheduler Service counts them at each loss declaration and hands the count to the Mission Service.
+The consecutive failures of an attempt are its lost executions and its stopped executions after its latest finished execution with no stop.
+A stopped execution is an execution whose release carries a `stop`.
+The Scheduler Service counts them at each loss declaration and at each release with a `stop`, and it hands the count to the Mission Service.
 A revocation at a Mission transition before the expiry of the claim is no loss.
 A human act can meet a claim whose `ended_at` is null and whose `expired_at` is reached or passed.
 The Mission Service first consumes its loss declaration in the same transaction, under [Scheduler liveness](scheduler-service.md#liveness).
 The human act then checks its own precondition against the settled state.
-A release of an execution of the attempt ends the count.
+A release with no stop and an assessment end of an execution of the attempt end the count.
 A human resume resets nothing, so it grants one more try.
-Below the limit, a loss returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
-A loss that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
+Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
+A loss or a release with a `stop` that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
+A release with a `stop` writes no outcome and no assessment.
 The configuration file of the server sets the limit.
 
 ### Successful outcome
@@ -576,9 +578,9 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Available -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Available -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
-| `Executing -> Available` | Release; execution requires further work | No effect | None |
-| `Executing -> Available` | Loss declaration of the steps claim below the consecutive loss limit | No effect | None |
-| `Executing -> Paused` | Loss declaration of the steps claim that reaches the consecutive loss limit | Stays open | None |
+| `Executing -> Available` | Release with no stop; execution requires further work | No effect | None |
+| `Executing -> Available` | Loss declaration or release with a stop of the steps claim below the consecutive failure limit | No effect | None |
+| `Executing -> Paused` | Loss declaration or release with a stop of the steps claim that reaches the consecutive failure limit | Stays open | None |
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -591,8 +593,8 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
 | `Evaluating -> Paused` | Human holds the node; reviewer execution stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `Evaluating -> Waiting` | Loss declaration of the evaluation claim below the consecutive loss limit | No effect | None |
-| `Evaluating -> Paused` | Loss declaration of the evaluation claim that reaches the consecutive loss limit | Stays open | None |
+| `Evaluating -> Waiting` | Loss declaration or release with a stop of the evaluation claim below the consecutive failure limit | No effect | None |
+| `Evaluating -> Paused` | Loss declaration or release with a stop of the evaluation claim that reaches the consecutive failure limit | Stays open | None |
 | `Blocked -> Available` | Human unblock; closure holds | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
@@ -634,8 +636,8 @@ stateDiagram-v2
     Available --> Discarded: Human discard
     Executing --> Waiting: Release, no further work
     Executing --> Available: Release, further work
-    Executing --> Available: Loss declaration
-    Executing --> Paused: Loss limit reached
+    Executing --> Available: Loss declaration or stop
+    Executing --> Paused: Failure limit reached
     Executing --> Paused: Human hold
     Executing --> Completed: Success override
     Executing --> Discarded: Human discard
@@ -647,8 +649,8 @@ stateDiagram-v2
     Evaluating --> Blocked: Assessment does not pass
     Evaluating --> Paused: Human hold
     Evaluating --> Discarded: Human discard
-    Evaluating --> Waiting: Loss declaration
-    Evaluating --> Paused: Loss limit reached
+    Evaluating --> Waiting: Loss declaration or stop
+    Evaluating --> Paused: Failure limit reached
     Blocked --> Available: Unblock, closure holds
     Blocked --> Pending: Unblock, closure fails
     Blocked --> Completed: Success override
