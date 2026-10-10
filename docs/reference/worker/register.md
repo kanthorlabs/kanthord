@@ -6,7 +6,7 @@
 
 Register a worker instance using an existing machine bearer JWT and receive its runtime identity, not another JWT. The API and `kanthord worker register` create no human account, client identity, or worker definition.
 
-Generate the credential locally with [`kanthord jwt generate --project <project id> --binding <binding name>`](../jwt.md). Its business claims are `kind: "client"`, `sub`, `name`, `project_id`, and `resource_identity`. Gateway verifies the token and resolves the worker binding in its project. Registration adds no claim to the JWT and issues no token.
+Generate the credential locally with [`kanthord auth jwt generate --project <project id> --binding <binding name>`](../auth/jwt.md). Its business claims are `kind: "client"`, `sub`, `name`, `project_id`, and `resource_identity`. Gateway verifies the token and resolves the worker binding in its project. Registration adds no claim to the JWT and issues no token.
 
 A client identity holds at most one live registration. A client identity with a live registration receives that runtime identity with any idempotency key. Within the process-local replay TTL, a repeated key after that registration ends fails with `409 gateway.registration.stale`. Cancelling after registration commits does not deregister it.
 

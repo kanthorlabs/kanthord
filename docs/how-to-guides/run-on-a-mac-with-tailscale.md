@@ -76,10 +76,10 @@ Tailscale now forwards `https://<mac>.<tailnet>.ts.net` to the server. The first
 ## 6. Get a token
 
 ```sh
-kanthord jwt generate <your username>
+kanthord auth jwt generate <your username>
 ```
 
-The command prints a human token on the terminal. See [jwt generate](../reference/jwt.md).
+The command prints a human token on the terminal. See [auth jwt generate](../reference/auth/jwt.md).
 
 ## 7. Sign in from the phone
 

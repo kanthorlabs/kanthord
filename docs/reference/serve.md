@@ -8,7 +8,7 @@ Start an application and keep it running until cancellation, a shutdown signal, 
 
 ### Server
 
-Startup opens the operational log and SQLite store, applies migrations, and binds the listener. Startup issues no JWT and requires no terminal. Obtain human or machine tokens explicitly with [JWT generation](jwt.md). The default listener is `127.0.0.1:31415`.
+Startup opens the operational log and SQLite store, applies migrations, and binds the listener. Startup issues no JWT and requires no terminal. Obtain human or machine tokens explicitly with [JWT generation](auth/jwt.md). The default listener is `127.0.0.1:31415`.
 
 `SIGINT` and `SIGTERM` initiate graceful shutdown with a 10-second bound. Shutdown stops admission, cancels waiting work and streams, drains in-flight work, and releases server resources. `SIGHUP` reopens the log; reopen failure initiates shutdown. Use [healthchecks](gateway/healthcheck.md) to inspect the running server.
 

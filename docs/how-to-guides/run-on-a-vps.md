@@ -100,10 +100,10 @@ Allow ports 80 and 443 in the firewall. Keep port 31415 closed. The daemon liste
 ## 7. Get a token and sign in
 
 ```sh
-sudo -u kanthord -H kanthord jwt generate <your username>
+sudo -u kanthord -H kanthord auth jwt generate <your username>
 ```
 
-The command prints a human token on the terminal. See [jwt generate](../reference/jwt.md).
+The command prints a human token on the terminal. See [auth jwt generate](../reference/auth/jwt.md).
 
 1. Open `https://kanthord.example.com`.
 2. Keep the Endpoint value. The dashboard fills it with the address of the page.

@@ -6,7 +6,7 @@
 
 Verify a human bearer JWT and return its business properties under their original claim names. The API and `kanthord gateway verify` perform the same read operation; neither creates an idempotency record.
 
-Authentication checks the signature, expiry, claim types, username and display-name validity, and session bans. Human tokens cannot carry `binding` or `reg`. Generate a token locally with [JWT generation](../jwt.md).
+Authentication checks the signature, expiry, claim types, username and display-name validity, and session bans. Human tokens cannot carry `binding` or `reg`. Generate a token locally with [JWT generation](../auth/jwt.md).
 
 ## Expected response
 

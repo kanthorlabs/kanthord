@@ -57,7 +57,7 @@ The daemon answers `/s/kanthord` with a 301 to `/s/kanthord/`, so the proxy need
 ### 5. Get a token and sign in
 
 ```sh
-sudo -u kanthord -H kanthord jwt generate <your username>
+sudo -u kanthord -H kanthord auth jwt generate <your username>
 ```
 
 1. Open `https://proxy.example.com/s/kanthord/`.

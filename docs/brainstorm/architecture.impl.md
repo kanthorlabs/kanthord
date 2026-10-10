@@ -353,8 +353,8 @@ This sibling declares the fields below.
 - `gateway.allowed_hosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.allowed_origins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.base_path`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
-- `gateway.token_lifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.token_version`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.auth.token_lifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.auth.version`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotency_ttl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `agent.prompt.system_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
 - `agent.prompt.host_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
@@ -559,7 +559,7 @@ A fatal error runs as below.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
 - A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
-- The `jwt generate` command of [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) holds that exception. It prints a token and a client secret only to terminal standard output and reads no terminal input.
+- The `auth jwt generate` command of [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) holds that exception. It prints a token and a client secret only to terminal standard output and reads no terminal input.
 - The exception covers that token display alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
@@ -578,7 +578,7 @@ A fatal error runs as below.
 - Documented configuration files and environment variables supply only their declared values. They never trigger an interactive fallback.
 - The `kanthord` bin exposes one program, and the launcher of the runtime section is the entry of every invocation.
 - A top-level name of that program belongs to one of three closed sets.
-- The first set holds the global commands that this sibling declares, and it holds `config`, `serve` and `jwt`.
+- The first set holds the global commands that this sibling declares, and it holds `config`, `serve` and `auth`.
 - The second set holds one group for each service of [architecture.md](architecture.md), named by that service in lower case.
 - It holds `project`, `mission`, `scheduler`, `intake`, `worker`, `tracking` and `gateway`.
 - The third set holds one group for each shared component of [architecture.md](architecture.md#shared-components), named by the prefix of its operations.
@@ -602,11 +602,11 @@ A fatal error runs as below.
 - A command of the group of a service or shared component that names an operation reaches the server through the RESTful API, which [gateway-service.md](gateway-service.md) rules.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
-- The `jwt` group holds `generate` and `inspect`, and a bare `kanthord jwt` prints the help of the group.
-- The CLI provides `kanthord jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
-- The CLI provides `kanthord jwt inspect [token]` to decode a JWT locally. It reads no server configuration, verifies no signature and calls no route.
+- The `auth` group holds every authentication command, and a bare `kanthord auth` prints the help of the group. Its `jwt` group holds `generate` and `inspect`, and a bare `kanthord auth jwt` prints the help of the group.
+- The CLI provides `kanthord auth jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
+- The CLI provides `kanthord auth jwt inspect [token]` to decode a JWT locally. It reads no server configuration, verifies no signature and calls no route.
 - The help of a command and the validation of its arguments need no running server.
-- `--config` belongs to `config`, `serve`, and the local `jwt generate` command. Service and shared component commands reject that option, because they use the client configuration. `jwt generate` resolves the path through the same option, environment and default order as the server.
+- `--config` belongs to `config`, `serve`, and the local `auth jwt generate` command. Service and shared component commands reject that option, because they use the client configuration. `auth jwt generate` resolves the path through the same option, environment and default order as the server.
 - `kanthord --help` lists the three global commands, the seven service groups and the one shared component group, and it names nothing else. The help of a group lists the commands of that group alone.
 - `commander` at 15.0.0 produces the help.
 
@@ -890,7 +890,7 @@ A process split retains these boundaries.
 - A test covers a stop with an active MCP stream, and it asserts that the stop of the admission waits for no connection.
 - A test covers a start with redirected standard output, and it asserts successful readiness, no JWT in the output and the release of every resource on shutdown.
 - A test covers consecutive starts against the same configuration and database, and it asserts no token issuance, continued validity of a locally generated human JWT, and no human account table or stored password.
-- A test covers `jwt generate` without a running server, its configured signing key and lifetime, an explicit username, the default subject when the argument is omitted, invalid usernames, a display name, a machine JWT with a fresh client identity for each run, a `username` argument together with `--binding`, `--binding` without `--project` and `--project` without `--binding`, its refusal to print a token to redirected output, and the claim list of `--verbose`. A test covers `jwt inspect` from the argument, `KANTHORD_TOKEN` and `cli.yaml`, a malformed token, and its output to redirected output.
+- A test covers `auth jwt generate` without a running server, its configured signing key and lifetime, an explicit username, the default subject when the argument is omitted, invalid usernames, a display name, a machine JWT with a fresh client identity for each run, a `username` argument together with `--binding`, `--binding` without `--project` and `--project` without `--binding`, its refusal to print a token to redirected output, and the claim list of `--verbose`. A test covers `auth jwt inspect` from the argument, `KANTHORD_TOKEN` and `cli.yaml`, a malformed token, and its output to redirected output.
 - A test asserts that generated identities carry the prefix of their entity kind and a canonical ULID portion, including `request_`, `project_` and `mission_`.
 - A test covers identity validation with a bare ULID, a wrong entity prefix and a noncanonical ULID portion, and it asserts their rejection.
 - A test asserts that every timestamp field of the emitted OpenAPI document composes the shared scalar.
@@ -938,7 +938,8 @@ engine/src/
 │   ├── contract.ts        gatewayOperations   [peers, apps]
 │   ├── client.ts          httpClient   [apps/cli, apps/worker]
 │   ├── index.ts           GatewayService, createInvocation, directClient   [apps/server]
-│   ├── service.ts  authentication.ts  invocation.ts  idempotency.ts  openapi.ts
+│   ├── auth/config.ts  auth/jwt.ts  auth/authentication.ts   [private]
+│   ├── service.ts  invocation.ts  idempotency.ts  openapi.ts
 │   ├── migrations.ts  errors.ts  request-id.ts  json.ts  constants.ts   [private]
 │   └── *.test.ts
 └── apps/

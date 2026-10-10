@@ -71,8 +71,8 @@ script=$(printf '%s' "$index" | sed -n 's/.*src="\(\/assets\/[^"]*\.js\)".*/\1/p
 curl -fsS -o /dev/null "$endpoint$script" || die "the dashboard script $script is missing"
 log "dashboard served with $script"
 
-"$binary" jwt generate smoke --config "$config" --output "$home/token.yaml" >/dev/null ||
-	die "jwt generate failed"
+"$binary" auth jwt generate smoke --config "$config" --output "$home/token.yaml" >/dev/null ||
+	die "auth jwt generate failed"
 token=$(sed -n 's/^token: //p' "$home/token.yaml")
 curl -fsS -o /dev/null -H "Authorization: Bearer $token" "$endpoint/api/healthcheck" ||
 	die "the authenticated healthcheck failed"
