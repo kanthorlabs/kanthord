@@ -82,6 +82,8 @@ Dirty work is an uncommitted change, an untracked file, a moved submodule pointe
 
 ### Protocol for one design item
 
+Before you propose a rule or a mechanism, search the design pages, their siblings and the code for an existing rule or mechanism that covers the same concern or a related one. Name what you find in the proposal. Extend the owner of that rule. Do not propose a second mechanism in another service. Example: the Intake Service already checks external requests and forwards their results, so a check of external actions belongs to Intake and not to Mission.
+
 1. Run `/explain` on the item.
 2. Take the ruling from Ulrich.
 3. Write the ruling into `docs/brainstorm/HANDOFF.md` under the owning component.
