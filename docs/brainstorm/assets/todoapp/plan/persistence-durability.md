@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/persistence-durability.test.js
 ---
+
 # Preserve committed data and bound write contention
 
 ## Requirement

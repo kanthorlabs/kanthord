@@ -22,7 +22,7 @@ In human mode, `auth jwt generate` prints only the JWT and a newline to **termin
 | `project_id`        | string, machine only    | Project identity supplied with `--project`; absent for human tokens.               |
 | `resource_identity` | string, machine only    | `worker:kanthord:<binding name>`, built from `--binding`; absent for human tokens. |
 | `iat`               | integer                 | Issued-at time in Unix seconds.                                                    |
-| `exp`               | integer                 | Expiry in Unix seconds, using `gateway.auth.token_lifetime`.                            |
+| `exp`               | integer                 | Expiry in Unix seconds, using `gateway.auth.token_lifetime`.                       |
 | `jti`               | canonical ULID string   | Fresh bare ULID identifying this token issuance.                                   |
 
 Invalid inputs, configuration failures, or redirected stdout fail with exit `1` and a [diagnostic](../errors.md#cli-diagnostics). The command saves no client file and calls no server.

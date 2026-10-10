@@ -7,6 +7,7 @@ verifications:
   - npm ci && npm run test:todos
   - npm run test:authentication
 ---
+
 # Bound and filter private TODO collections
 
 ## Requirement

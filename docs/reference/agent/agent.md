@@ -107,14 +107,14 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 gateway.request.validation_failed`   | `view` is not `final`, or only one of `project_id` and `binding_id` is present. |
 | `404 agent.catalog.not_found`             | The agent name is not in the catalog.                                           |
 | `404 project.binding.not_found`           | `binding_id` names no repository binding of the project `project_id`.           |
-| `409 agent.prompt.template_invalid`      | A prompt template file of the agent directory is invalid.                       |
+| `409 agent.prompt.template_invalid`       | A prompt template file of the agent directory is invalid.                       |
 
 The CLI checks some input before it sends the request:
 
 | CLI code                                      | Meaning                                                                |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
 | `cli.agent.get.invalid_view`                  | The `--view` value is not `final`.                                     |
-| `cli.agent.get.project_binding_pair_required` | Only one of `--project` and `--binding-id` is present.                    |
+| `cli.agent.get.project_binding_pair_required` | Only one of `--project` and `--binding-id` is present.                 |
 | `cli.agent.get.token_required`                | No option, environment variable or client file supplies a token.       |
 | `cli.agent.get.indeterminate`                 | A transport failure, timeout or malformed response. Retry the command. |
 
@@ -162,12 +162,12 @@ kanthord agent get swe@1 --project <project-id> --binding-id <binding-id>
 | -------------- | -------- | ---------------------------------- |
 | `<agent-name>` | Yes      | Catalog key; maps to `agent_name`. |
 
-| Option                   | Default / resolution                                                        | Purpose                                        |
-| ------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------- |
-| `--view <view>`          | None; the only value is `final`                                             | Answer `prompt.final` without `prompt.layers`. |
-| `--project <project-id>` | None; requires `--binding-id`                                                  | Sets `project_id`.                             |
+| Option                      | Default / resolution                                                        | Purpose                                        |
+| --------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------- |
+| `--view <view>`             | None; the only value is `final`                                             | Answer `prompt.final` without `prompt.layers`. |
+| `--project <project-id>`    | None; requires `--binding-id`                                               | Sets `project_id`.                             |
 | `--binding-id <binding-id>` | None; requires `--project`                                                  | Sets `binding_id`.                             |
-| `--token <jwt>`          | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.       |
-| `--endpoint <url>`       | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                               |
+| `--token <jwt>`             | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.       |
+| `--endpoint <url>`          | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                               |
 
 The `agent` group declares `--token` and `--endpoint`. Put them before or after the leaf command. Each option except `--endpoint` accepts one occurrence only; a repeat fails with `cli.option.duplicate`. See [client configuration](../README.md#client-configuration). The HTTP client has a 31-second deadline for this 30-second operation.

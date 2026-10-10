@@ -16,25 +16,25 @@ Engine-defined error codes use at least three nonempty, dot-separated parts:
 
 Examples used by the implementation:
 
-| Code                                             | Meaning                                                          |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| `system.config.not_found`                        | The server configuration file is absent.                         |
+| Code                                             | Meaning                                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| `system.config.not_found`                        | The server configuration file is absent.                                    |
 | `system.config.version_behind`                   | The configuration version is older than the binary. Run `kanthord upgrade`. |
-| `system.config.version_ahead`                    | The configuration version is newer than the binary.              |
-| `system.database.migration.pending`              | The database has a pending migration. Run `kanthord upgrade`.    |
-| `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary. |
-| `system.config.master_key_mismatch`              | `master_key` does not match the database. Restore the backups.   |
-| `system.context.deadline_exceeded`               | A context's deadline expired.                                    |
-| `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                               |
-| `cli.config.invalid_allowed_host`                | An `--gateway-allowed-host` value is not a host with an optional port.   |
-| `cli.worker.register.indeterminate`              | The CLI cannot determine the registration result.                |
-| `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                    |
-| `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.      |
-| `gateway.request.validation_failed`              | Operation input validation failed.                               |
-| `gateway.idempotency.conflict`                   | The key cannot be replayed for this request.                     |
-| `gateway.routing.not_found`                      | No route matches the request.                                    |
-| `gateway.openapi.not_found`                      | The requested OpenAPI fragment is not allowlisted.               |
-| `gateway.healthcheck.unhealthy`                  | At least one registered service is unavailable.                  |
+| `system.config.version_ahead`                    | The configuration version is newer than the binary.                         |
+| `system.database.migration.pending`              | The database has a pending migration. Run `kanthord upgrade`.               |
+| `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary.            |
+| `system.config.master_key_mismatch`              | `master_key` does not match the database. Restore the backups.              |
+| `system.context.deadline_exceeded`               | A context's deadline expired.                                               |
+| `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                                          |
+| `cli.config.invalid_allowed_host`                | An `--gateway-allowed-host` value is not a host with an optional port.      |
+| `cli.worker.register.indeterminate`              | The CLI cannot determine the registration result.                           |
+| `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                               |
+| `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.                 |
+| `gateway.request.validation_failed`              | Operation input validation failed.                                          |
+| `gateway.idempotency.conflict`                   | The key cannot be replayed for this request.                                |
+| `gateway.routing.not_found`                      | No route matches the request.                                               |
+| `gateway.openapi.not_found`                      | The requested OpenAPI fragment is not allowlisted.                          |
+| `gateway.healthcheck.unhealthy`                  | At least one registered service is unavailable.                             |
 
 ## API failures
 

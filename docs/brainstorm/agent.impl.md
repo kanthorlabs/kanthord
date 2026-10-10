@@ -95,13 +95,13 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The root is an object with `additionalProperties: false`.
 - All five properties below are required; none carries `default`, and the schema holds no `options`.
 
-| Property           | Schema                                                            |
-| ------------------ | ----------------------------------------------------------------- |
-| `agent_provider`   | `string`; the name of an agent provider of the enablement         |
+| Property           | Schema                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `agent_provider`   | `string`; the name of an agent provider of the enablement                                    |
 | `provider`         | `string`, enum of every platform of the [LLM platform list](llm.impl.md#platform-validators) |
-| `credential`       | `string`; a credential name                                       |
-| `model_identifier` | `string`                                                          |
-| `reasoning_effort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
+| `credential`       | `string`; a credential name                                                                  |
+| `model_identifier` | `string`                                                                                     |
+| `reasoning_effort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`                               |
 
 - The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
 - It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
@@ -173,20 +173,20 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The execution setup carries the resolved template set, so the worker application reads no template file.
 - The values of each template:
 
-| Template             | Values                                                                                  |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command` |
-| `layer-message`      | `source`, `text`                                                                        |
-| `framing-worker`     | none                                                                                    |
-| `framing-workbench`  | none                                                                                    |
-| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                     |
-| `task-revision`      | `rationale`, `results`                                                                  |
-| `criterion-revision` | `rationale`                                                                             |
-| `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                             |
-| `report`             | `objectives`, `outcomes`, `evidence`                                                    |
-| `repair`             | `marker`                                                                                |
+| Template             | Values                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`                  |
+| `layer-message`      | `source`, `text`                                                                                         |
+| `framing-worker`     | none                                                                                                     |
+| `framing-workbench`  | none                                                                                                     |
+| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                                      |
+| `task-revision`      | `rationale`, `results`                                                                                   |
+| `criterion-revision` | `rationale`                                                                                              |
+| `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                                              |
+| `report`             | `objectives`, `outcomes`, `evidence`                                                                     |
+| `repair`             | `marker`                                                                                                 |
 | `review`             | `task_id`, `criterion`, `findings`, `replies`, `diff`, `diff_truncated`, `diff_max_characters`, `marker` |
-| `fix`                | `findings`                                                                              |
+| `fix`                | `findings`                                                                                               |
 
 - `marker` is the marker that the worker parses. A replacement of `task-judgement`, `evaluation`, `repair` or `review` keeps the marker line, or the worker treats the reply as invalid.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.

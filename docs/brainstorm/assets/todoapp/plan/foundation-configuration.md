@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/foundation-configuration.test.js
 ---
+
 # Validate explicit application configuration
 
 ## Requirement

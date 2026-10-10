@@ -9,6 +9,7 @@ verifications:
   - npm ci && npm run test:todos
   - npm run test:authentication
 ---
+
 # Deliver owner-scoped TODO REST endpoints
 
 ## Requirement

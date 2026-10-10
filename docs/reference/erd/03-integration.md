@@ -105,11 +105,11 @@ erDiagram
 
 ## Tables
 
-| Table | Owner | Basis |
-| --- | --- | --- |
-| `intake_inbound` | Intake Service | Ruled: [inbounds](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbounds) and [the inbound store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-inbound-store). |
-| `intake_inbound_event` | Intake Service | Ruled: [inbound events](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbound-events), [handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff) and [the handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-handoff). |
-| `intake_outbound_request` | Intake Service | Ruled: [outbound requests](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#outbound-requests) and [the outbound record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-outbound-record). |
+| Table                     | Owner          | Basis                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `intake_inbound`          | Intake Service | Ruled: [inbounds](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbounds) and [the inbound store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-inbound-store).                                                                                                         |
+| `intake_inbound_event`    | Intake Service | Ruled: [inbound events](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbound-events), [handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff) and [the handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-handoff). |
+| `intake_outbound_request` | Intake Service | Ruled: [outbound requests](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#outbound-requests) and [the outbound record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-outbound-record).                                                                                   |
 
 The verification secret of a webhook inbound derives from `master_key` and the inbound identity, so no table holds a webhook secret.
 
@@ -162,10 +162,10 @@ A remote effect never commits with a SQLite transaction. An outbound request com
 
 ## Cross-group references
 
-| From | To | Kind |
-| --- | --- | --- |
-| `intake_inbound.project_id` | `project_project.id` | Reference, no FK. |
-| `intake_inbound.credential` | `credential.name` | Reference by name, no FK. |
-| `intake_outbound_request.project_id` | `project_project.id` | Reference, no FK. |
-| `intake_outbound_request.credential` | `credential.name` | Reference by name, no FK. |
+| From                                           | To                        | Kind                      |
+| ---------------------------------------------- | ------------------------- | ------------------------- |
+| `intake_inbound.project_id`                    | `project_project.id`      | Reference, no FK.         |
+| `intake_inbound.credential`                    | `credential.name`         | Reference by name, no FK. |
+| `intake_outbound_request.project_id`           | `project_project.id`      | Reference, no FK.         |
+| `intake_outbound_request.credential`           | `credential.name`         | Reference by name, no FK. |
 | `mission_evidence.provenance.inbound_event_id` | `intake_inbound_event.id` | Reference in JSON, no FK. |

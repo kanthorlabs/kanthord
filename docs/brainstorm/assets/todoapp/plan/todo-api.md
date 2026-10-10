@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - cd todoapp-repo && npm ci && npm run verify
 ---
+
 # Deliver a secure, maintainable TODO REST API
 
 ## Requirement

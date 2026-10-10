@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/todos-crud.test.js
 ---
+
 # Provide validated TODO lifecycle operations
 
 ## Requirement

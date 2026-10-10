@@ -48,10 +48,10 @@ The node kind determines the column.
 A new binding kind adds a row.
 
 | Binding kind | Initiative | Objective | Task |
-| --- | --- | --- | --- |
-| Repository | 0 | Exactly 1 | 0 |
-| Worker | 0 | 0 | 0 |
-| Storage | At most 1 | At most 1 | 0 |
+| ------------ | ---------- | --------- | ---- |
+| Repository   | 0          | Exactly 1 | 0    |
+| Worker       | 0          | 0         | 0    |
+| Storage      | At most 1  | At most 1 | 0    |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
@@ -423,6 +423,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
   An outcome with attempt 0 names a human assessment.
   The required external actions derive from the pinned revision of the attempt, so an evidence delete changes no derived closing event.
+
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assessment, and only an execution assessment supports `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.

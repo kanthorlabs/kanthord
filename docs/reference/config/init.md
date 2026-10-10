@@ -14,11 +14,11 @@ Success prints a confirmation to stdout and exits `0`:
 Created <path>
 ```
 
-| Output / property  | Purpose                                                                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Created <path>`   | Confirms creation and identifies the resolved configuration file path.                                                                                          |
+| Output / property  | Purpose                                                                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Created <path>`   | Confirms creation and identifies the resolved configuration file path.                                                                                           |
 | Configuration file | Contains the generated `master_key` and defaults; see [configuration properties](show.md#expected-response). Unlike `config show`, the stored key is not masked. |
-| Exit code `0`      | Configuration was created successfully.                                                                                                                         |
+| Exit code `0`      | Configuration was created successfully.                                                                                                                          |
 
 Failures exit `1` with a [diagnostic](../errors.md#cli-diagnostics). The confirmation does not print the master key.
 
@@ -43,12 +43,12 @@ kanthord config init --gateway-allowed-host homelab.example.com --gateway-base-p
 
 There are no positional arguments.
 
-| Option            | Default / resolution                                                                                                 | Purpose                                           |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `--config <path>` | `KANTHORD_CONFIG` → `$XDG_CONFIG_HOME/kanthord/kanthord.yaml` → `~/.config/kanthord/kanthord.yaml` when XDG is unset | Destination for the private server configuration. |
-| `--gateway-allowed-host <host>` | None; repeatable | Appends a lowercased `<name>` or `<name>:<port>` to the default `gateway.allowed_hosts`. Use the name that a reverse proxy or `tailscale serve` forwards. Another form fails with `cli.config.invalid_allowed_host`. |
-| `--gateway-bind <address>` | `127.0.0.1` | Sets `gateway.bind` to an IPv4 or IPv6 address. Another value fails with `system.config.invalid_field`. Use `0.0.0.0` or `::` to accept connections from other hosts. |
-| `--gateway-base-path <path>` | `/` | Sets `gateway.base_path`, the path prefix of the whole HTTP surface, for example `/s/kanthord`. The value is `/` or segments of `[A-Za-z0-9._~-]`, each after a `/`, with no trailing slash. Another value fails with `system.config.invalid_field`. |
+| Option                          | Default / resolution                                                                                                 | Purpose                                                                                                                                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--config <path>`               | `KANTHORD_CONFIG` → `$XDG_CONFIG_HOME/kanthord/kanthord.yaml` → `~/.config/kanthord/kanthord.yaml` when XDG is unset | Destination for the private server configuration.                                                                                                                                                                                                    |
+| `--gateway-allowed-host <host>` | None; repeatable                                                                                                     | Appends a lowercased `<name>` or `<name>:<port>` to the default `gateway.allowed_hosts`. Use the name that a reverse proxy or `tailscale serve` forwards. Another form fails with `cli.config.invalid_allowed_host`.                                 |
+| `--gateway-bind <address>`      | `127.0.0.1`                                                                                                          | Sets `gateway.bind` to an IPv4 or IPv6 address. Another value fails with `system.config.invalid_field`. Use `0.0.0.0` or `::` to accept connections from other hosts.                                                                                |
+| `--gateway-base-path <path>`    | `/`                                                                                                                  | Sets `gateway.base_path`, the path prefix of the whole HTTP surface, for example `/s/kanthord`. The value is `/` or segments of `[A-Za-z0-9._~-]`, each after a `/`, with no trailing slash. Another value fails with `system.config.invalid_field`. |
 
 An explicit `--config` wins over environment and default paths. The command reads no interactive input.
 

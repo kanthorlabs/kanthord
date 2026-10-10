@@ -83,12 +83,12 @@ erDiagram
 
 ## Tables
 
-| Table | Owner | Basis |
-| --- | --- | --- |
-| `tracking_trace` | Tracking Service | Derived: a trace belongs to exactly one project or to no project, it is the unit of deletion, and an ingestion resolves the project through the records of the Tracking Service, under [the trace and the project](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-and-the-project) and [ingestion](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#ingestion). |
-| `tracking_span` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the span. The columns are derived from [the trace model](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-model) and the span record of the [Tracking CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/tracking.md#span-record-fields-kind-span). |
-| `tracking_record` | Tracking Service | Derived: the Tracking Service deduplicates by the record identity that its producer mints, within the retention of the trace. The identity contract is open in HANDOFF. |
-| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [expiry](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#expiry) keeps its identity. The columns are derived, and the identity contract of a text is open in HANDOFF. |
+| Table                     | Owner            | Basis                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tracking_trace`          | Tracking Service | Derived: a trace belongs to exactly one project or to no project, it is the unit of deletion, and an ingestion resolves the project through the records of the Tracking Service, under [the trace and the project](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-and-the-project) and [ingestion](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#ingestion).         |
+| `tracking_span`           | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the span. The columns are derived from [the trace model](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-model) and the span record of the [Tracking CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/tracking.md#span-record-fields-kind-span). |
+| `tracking_record`         | Tracking Service | Derived: the Tracking Service deduplicates by the record identity that its producer mints, within the retention of the trace. The identity contract is open in HANDOFF.                                                                                                                                                                                                                                                                                       |
+| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [expiry](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#expiry) keeps its identity. The columns are derived, and the identity contract of a text is open in HANDOFF.                                                                                   |
 
 ## Constraints
 
@@ -143,8 +143,8 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 ## Cross-store references
 
-| From | To | Kind |
-| --- | --- | --- |
-| `tracking_trace.project_id` | `project_project.id` in `kanthord.db` | Correlation value, no FK. |
-| `tracking_trace.execution_id` | `scheduler_execution.id` in `kanthord.db` | Correlation value, no FK. |
+| From                                                            | To                                                 | Kind                      |
+| --------------------------------------------------------------- | -------------------------------------------------- | ------------------------- |
+| `tracking_trace.project_id`                                     | `project_project.id` in `kanthord.db`              | Correlation value, no FK. |
+| `tracking_trace.execution_id`                                   | `scheduler_execution.id` in `kanthord.db`          | Correlation value, no FK. |
 | `scheduler_execution.trace_id`, `root_span_id` in `kanthord.db` | `tracking_trace.trace_id`, `tracking_span.span_id` | Correlation value, no FK. |

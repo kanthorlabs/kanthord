@@ -92,28 +92,28 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ## Error codes
 
-| HTTP | Code | Condition |
-| --- | --- | --- |
-| 400 | `intake.inbound.event.filter_invalid` | An event delete names no filter, both filters or the state `pending`. |
-| 400 | `intake.outbound.request.filter_invalid` | An outbound request delete names no filter, both filters or the state `pending`. |
-| 400 | `intake.outbound.request.force_required` | An outbound request delete omits `force: true`. |
-| 401 | `intake.inbound.event.signature_invalid` | A webhook post fails verification. |
-| 404 | `intake.inbound.not_found` | No inbound has that identity, or a webhook post names a poll inbound. |
-| 404 | `intake.inbound.project_not_found` | The project of a create does not exist. |
-| 404 | `intake.inbound.event.not_found` | No inbound event has that identity. |
-| 404 | `intake.outbound.request.not_found` | No outbound request has that identity. |
-| 409 | `intake.inbound.events_pending` | A delete names an inbound that holds a pending event. |
-| 409 | `intake.inbound.event.in_flight` | A discard names a pending event whose handoff runs. |
-| 409 | `intake.inbound.event.state_conflict` | The state of the event permits no such transition, or a delete list names a pending event. |
-| 409 | `intake.outbound.request.discarded` | A repeat names a discarded request. |
-| 409 | `intake.outbound.request.in_flight` | A repeat or a discard names a request whose call runs. |
-| 409 | `intake.outbound.request.state_conflict` | A discard names a request that is not `pending`, or a delete list names a pending request. |
-| 409 | `intake.storage.object_mismatch` | The object check finds no object, or its size or SHA-256 differs from the asset. |
-| 422 | `intake.inbound.credential_invalid` | The credential name does not exist, or its platform does not suit the inbound. |
-| 422 | `intake.inbound.platform_refused` | The platform refuses the first request of a poll create. |
-| 422 | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table. |
-| 503 | `intake.inbound.event.capacity_exceeded` | The count of pending events is at its bound. |
-| 503 | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version. |
+| HTTP | Code                                      | Condition                                                                                  |
+| ---- | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 400  | `intake.inbound.event.filter_invalid`     | An event delete names no filter, both filters or the state `pending`.                      |
+| 400  | `intake.outbound.request.filter_invalid`  | An outbound request delete names no filter, both filters or the state `pending`.           |
+| 400  | `intake.outbound.request.force_required`  | An outbound request delete omits `force: true`.                                            |
+| 401  | `intake.inbound.event.signature_invalid`  | A webhook post fails verification.                                                         |
+| 404  | `intake.inbound.not_found`                | No inbound has that identity, or a webhook post names a poll inbound.                      |
+| 404  | `intake.inbound.project_not_found`        | The project of a create does not exist.                                                    |
+| 404  | `intake.inbound.event.not_found`          | No inbound event has that identity.                                                        |
+| 404  | `intake.outbound.request.not_found`       | No outbound request has that identity.                                                     |
+| 409  | `intake.inbound.events_pending`           | A delete names an inbound that holds a pending event.                                      |
+| 409  | `intake.inbound.event.in_flight`          | A discard names a pending event whose handoff runs.                                        |
+| 409  | `intake.inbound.event.state_conflict`     | The state of the event permits no such transition, or a delete list names a pending event. |
+| 409  | `intake.outbound.request.discarded`       | A repeat names a discarded request.                                                        |
+| 409  | `intake.outbound.request.in_flight`       | A repeat or a discard names a request whose call runs.                                     |
+| 409  | `intake.outbound.request.state_conflict`  | A discard names a request that is not `pending`, or a delete list names a pending request. |
+| 409  | `intake.storage.object_mismatch`          | The object check finds no object, or its size or SHA-256 differs from the asset.           |
+| 422  | `intake.inbound.credential_invalid`       | The credential name does not exist, or its platform does not suit the inbound.             |
+| 422  | `intake.inbound.platform_refused`         | The platform refuses the first request of a poll create.                                   |
+| 422  | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table.                                        |
+| 503  | `intake.inbound.event.capacity_exceeded`  | The count of pending events is at its bound.                                               |
+| 503  | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version.                     |
 
 ## Outbound operations and checks
 

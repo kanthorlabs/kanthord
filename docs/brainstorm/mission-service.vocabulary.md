@@ -16,10 +16,10 @@ The write resolves each identity or name to the latest revision of its binding a
 A new binding kind adds a row.
 
 | Binding kind | Initiative | Objective | Task |
-| --- | --- | --- | --- |
-| Repository | 0 | Exactly 1 | 0 |
-| Worker | 0 | 0 | 0 |
-| Storage | At most 1 | At most 1 | 0 |
+| ------------ | ---------- | --------- | ---- |
+| Repository   | 0          | Exactly 1 | 0    |
+| Worker       | 0          | 0         | 0    |
+| Storage      | At most 1  | At most 1 | 0    |
 
 ## node content
 
@@ -592,6 +592,7 @@ verifications:
   - npm run e2e
   - npm run test:reset
 ---
+
 # Add password reset
 
 ## Requirement

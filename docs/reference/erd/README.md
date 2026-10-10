@@ -14,12 +14,12 @@ An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs
 
 The schema has four functional views. Their order is the order of delivery.
 
-| View | Scope | Tables of the owners |
-| --- | --- | --- |
-| [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals. | Worker, Scheduler, Mission |
-| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests. | Intake |
-| [ERD 4: Telemetry](04-tracking.md) | Traces, spans, records and telemetry texts. | Tracking |
+| View                                             | Scope                                                                                                    | Tables of the owners                        |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
+| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals.           | Worker, Scheduler, Mission                  |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                          | Intake                                      |
+| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                              | Tracking                                    |
 
 A view holds the canonical definition of each of its tables.
 Another view shows that table as a stub: its key only, the color of its owner and a dashed border.
@@ -90,12 +90,12 @@ flowchart TB
 
 ## Dependencies between views
 
-| View | Needs | Adds |
-| --- | --- | --- |
-| ERD 1 | Nothing. | An environment and a plan. The work queue is here because the Mission Service writes it in its own transaction, and no later migration of the Scheduler Service can read Mission rows. Agent enablement is here because a native worker binding write validates it. |
-| ERD 2 | ERD 1. | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because the check of the Intake Service sets the end state of its request evidence. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
-| ERD 3 | ERD 1 and ERD 2. | The inbounds, their inbound events and the outbound requests. Delivery admission writes the end state of a request evidence, so a node in `External.Requested` reaches its end state. Only GitHub and the storage delete are ruled. |
-| ERD 4 | Nothing in its store. Every service calls the no-op interface of the Tracking Service from ERD 1. | The stored telemetry. |
+| View  | Needs                                                                                             | Adds                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ERD 1 | Nothing.                                                                                          | An environment and a plan. The work queue is here because the Mission Service writes it in its own transaction, and no later migration of the Scheduler Service can read Mission rows. Agent enablement is here because a native worker binding write validates it.                                                                                                                                                           |
+| ERD 2 | ERD 1.                                                                                            | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because the check of the Intake Service sets the end state of its request evidence. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
+| ERD 3 | ERD 1 and ERD 2.                                                                                  | The inbounds, their inbound events and the outbound requests. Delivery admission writes the end state of a request evidence, so a node in `External.Requested` reaches its end state. Only GitHub and the storage delete are ruled.                                                                                                                                                                                           |
+| ERD 4 | Nothing in its store. Every service calls the no-op interface of the Tracking Service from ERD 1. | The stored telemetry.                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Stores
 
@@ -129,14 +129,14 @@ flowchart TB
 - The basis of each table is `Ruled` when a design page names the table, or `Derived` when the view maps a ruled record to rows. The basis column of a view states when the columns of a ruled table are derived.
 - A stub has a dashed border and the color of its owner.
 
-| Owner | Color |
-| --- | --- |
-| Custody | grey |
-| Project Service | yellow |
-| Worker Service | red |
-| Mission Service | green |
-| Scheduler Service | blue |
-| Intake Service | purple |
-| Tracking Service | teal |
+| Owner             | Color  |
+| ----------------- | ------ |
+| Custody           | grey   |
+| Project Service   | yellow |
+| Worker Service    | red    |
+| Mission Service   | green  |
+| Scheduler Service | blue   |
+| Intake Service    | purple |
+| Tracking Service  | teal   |
 
 The ER diagrams color their tables with `classDef`. [viewer.html](../../viewer.html) loads Mermaid 11.17.2, which supports this notation.

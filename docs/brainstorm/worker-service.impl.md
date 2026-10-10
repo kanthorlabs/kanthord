@@ -482,6 +482,6 @@ These declarations match the error table of `engine/docs/cli/worker.md`.
 
 The `worker handover` command refuses an invalid argument locally, matching `engine/docs/cli/worker.md`.
 
-| HTTP | Code | Condition |
-| --- | --- | --- |
+| HTTP  | Code                                       | Condition                                                                     |
+| ----- | ------------------------------------------ | ----------------------------------------------------------------------------- |
 | local | `cli.worker.handover.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |

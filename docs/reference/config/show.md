@@ -30,20 +30,20 @@ gateway:
   idempotency_ttl: 86400
 ```
 
-| Property                 | Type                | Purpose                                                                                               |
-| ------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------- |
-| `version`                 | positive integer    | Configuration version; [upgrade](../upgrade.md) sets it. A file without it is version 1.        |
-| `master_key`              | string              | 32-byte base64 server secret in the file; always displayed as `[Sensitive]`.                          |
-| `log.level`              | string              | Operational log threshold: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`; defaults to `info`. |
-| `log.destination`        | string              | Sends operational logs to `stderr` (default) or `file`.                                               |
-| `gateway.bind`           | string              | Listener IP address; defaults to `127.0.0.1`.                                                         |
-| `gateway.port`           | integer             | Listener port; defaults to `31415`.                                                                   |
-| `gateway.allowed_hosts`   | string array        | Accepted Host headers, including port; defaults to `127.0.0.1:31415` and `localhost:31415`.           |
-| `gateway.allowed_origins` | string array        | Allowed CORS origins; defaults to an empty list.                                                      |
-| `gateway.base_path`       | string              | Path prefix of the whole HTTP surface; defaults to `/`.                                               |
-| `gateway.auth.version` | positive integer | Authentication version of the signing key and every client secret; defaults to `1`. |
-| `gateway.auth.token_lifetime` | nonnegative integer | JWT lifetime in seconds; defaults to `31536000`. |
-| `gateway.idempotency_ttl` | positive integer    | Process-local replay record lifetime in seconds; defaults to `86400`.                                 |
+| Property                      | Type                | Purpose                                                                                               |
+| ----------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `version`                     | positive integer    | Configuration version; [upgrade](../upgrade.md) sets it. A file without it is version 1.              |
+| `master_key`                  | string              | 32-byte base64 server secret in the file; always displayed as `[Sensitive]`.                          |
+| `log.level`                   | string              | Operational log threshold: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`; defaults to `info`. |
+| `log.destination`             | string              | Sends operational logs to `stderr` (default) or `file`.                                               |
+| `gateway.bind`                | string              | Listener IP address; defaults to `127.0.0.1`.                                                         |
+| `gateway.port`                | integer             | Listener port; defaults to `31415`.                                                                   |
+| `gateway.allowed_hosts`       | string array        | Accepted Host headers, including port; defaults to `127.0.0.1:31415` and `localhost:31415`.           |
+| `gateway.allowed_origins`     | string array        | Allowed CORS origins; defaults to an empty list.                                                      |
+| `gateway.base_path`           | string              | Path prefix of the whole HTTP surface; defaults to `/`.                                               |
+| `gateway.auth.version`        | positive integer    | Authentication version of the signing key and every client secret; defaults to `1`.                   |
+| `gateway.auth.token_lifetime` | nonnegative integer | JWT lifetime in seconds; defaults to `31536000`.                                                      |
+| `gateway.idempotency_ttl`     | positive integer    | Process-local replay record lifetime in seconds; defaults to `86400`.                                 |
 
 A load or validation failure writes a [diagnostic](../errors.md#cli-diagnostics) to stderr and exits `1` instead of printing configuration.
 

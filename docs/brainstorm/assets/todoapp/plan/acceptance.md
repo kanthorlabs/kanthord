@@ -9,6 +9,7 @@ bindings:
 verifications:
   - npm ci && npm run verify
 ---
+
 # Verify and document the integrated API release
 
 ## Requirement

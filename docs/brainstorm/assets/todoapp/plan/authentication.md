@@ -9,6 +9,7 @@ verifications:
   - npm ci && npm run test:authentication
   - npm run test:persistence
 ---
+
 # Authenticate users and authorize private routes
 
 ## Requirement

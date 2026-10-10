@@ -8,10 +8,10 @@ KanthorD does not implement the agent loop itself. It embeds [pi](https://www.np
 
 The agent catalog is static and holds two declarations. An agent name names a role, not a worker.
 
-| Agent   | Role              | Built-in tools                                     | Host tools        | Used by                    |
-| ------- | ----------------- | -------------------------------------------------- | ----------------- | -------------------------- |
-| `swe@1` | Software engineer | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `evidence-upload` | Worker `general@1`, the Workbench |
-| `re@1`  | Reviewer          | `read`, `grep`, `find`, `ls`                       | none              | Worker `reviewer@1`, the Workbench |
+| Agent   | Role              | Built-in tools                                        | Host tools        | Used by                            |
+| ------- | ----------------- | ----------------------------------------------------- | ----------------- | ---------------------------------- |
+| `swe@1` | Software engineer | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `evidence-upload` | Worker `general@1`, the Workbench  |
+| `re@1`  | Reviewer          | `read`, `grep`, `find`, `ls`                          | none              | Worker `reviewer@1`, the Workbench |
 
 `re@1` has no tool that writes a file or runs a command. Its prompt also forbids a change to the repository. The tool set enforces that rule; the prompt only states it.
 
@@ -115,10 +115,10 @@ A text inside a working message stays in that message, whatever tag or heading i
 
 ### The three layers and their sources
 
-| Layer | Sources, in order | Origin | Switches belong to |
-| ----- | ----------------- | ------ | ------------------ |
-| System | Host agent file, then the shipped `base.md`, then the custom system prompt | file, binary, database | The server |
-| Agent | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt | file, binary, database | The agent name |
+| Layer   | Sources, in order                                                                                                                                         | Origin                 | Switches belong to                       |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------- |
+| System  | Host agent file, then the shipped `base.md`, then the custom system prompt                                                                                | file, binary, database | The server                               |
+| Agent   | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt                                                     | file, binary, database | The agent name                           |
 | Working | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt, then the custom working prompt | file, binary, database | The repository binding or the agent name |
 
 - **Host agent file.** When `agent.prompt.system_file` in `~/.config/kanthord/kanthord.yaml` names a file, the host agent file is that file. Otherwise KanthorD takes the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists. A relative path resolves against `~/.local/share/kanthord`. `agent.prompt.host_file: false` turns the host agent file off for every agent and locks its switch. The UI then shows the switch as locked, and `agent.prompt.switch` refuses it.
@@ -135,14 +135,14 @@ Every switch defaults to on. On a host with `~/.claude/CLAUDE.md`, the system la
 
 The model reads the prompt from top to bottom:
 
-| # | Part | Worker execution | Workbench session |
-| - | ---- | ---------------- | ----------------- |
-| 1 | System prompt | System layer | System layer |
-| 2 | System prompt | Agent layer | Agent layer |
-| 3 | System prompt | Framing | Framing |
-| 4 | Pinned message | One message per working layer source | One message per working layer source |
-| 5 | Pinned message | Work prompt | — |
-| 6 | Conversation | Instructions and replies | Human messages and replies |
+| #   | Part           | Worker execution                     | Workbench session                    |
+| --- | -------------- | ------------------------------------ | ------------------------------------ |
+| 1   | System prompt  | System layer                         | System layer                         |
+| 2   | System prompt  | Agent layer                          | Agent layer                          |
+| 3   | System prompt  | Framing                              | Framing                              |
+| 4   | Pinned message | One message per working layer source | One message per working layer source |
+| 5   | Pinned message | Work prompt                          | —                                    |
+| 6   | Conversation   | Instructions and replies             | Human messages and replies           |
 
 The framing is a fixed paragraph that states the precedence. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
 

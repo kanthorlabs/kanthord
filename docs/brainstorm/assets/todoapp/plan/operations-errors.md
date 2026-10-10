@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/operations-errors.test.js
 ---
+
 # Normalize failures into safe, correlated API errors
 
 ## Requirement

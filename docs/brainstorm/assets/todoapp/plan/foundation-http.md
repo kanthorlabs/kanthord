@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/foundation-http.test.js
 ---
+
 # Establish public routing and safe JSON responses
 
 ## Requirement

@@ -7,6 +7,7 @@ verifications:
   - npm ci && npm run test:operations
   - npm run test:foundation
 ---
+
 # Apply secure middleware and secret-safe request logging
 
 ## Requirement

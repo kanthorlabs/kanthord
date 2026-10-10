@@ -58,13 +58,29 @@ The closed set of claims of a kanthord JWT.
 A non-secret decoded human payload:
 
 ```json
-{"sub":"ulrich","name":"Ulrich","kind":"human","iat":1758700000,"exp":1790236000,"jti":"01J8Z3N5K7Q2W4E6R8T0Y2V4X6"}
+{
+  "sub": "ulrich",
+  "name": "Ulrich",
+  "kind": "human",
+  "iat": 1758700000,
+  "exp": 1790236000,
+  "jti": "01J8Z3N5K7Q2W4E6R8T0Y2V4X6"
+}
 ```
 
 A non-secret decoded machine payload:
 
 ```json
-{"sub":"client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X7","name":"Claude Code on ulrich-mbp","kind":"client","project_id":"project_01J8Z3N5K7Q2W4E6R8T0Y2V4X8","resource_identity":"worker:kanthord:claude-main","iat":1758700000,"exp":1790236000,"jti":"01J8Z3N5K7Q2W4E6R8T0Y2V4X9"}
+{
+  "sub": "client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X7",
+  "name": "Claude Code on ulrich-mbp",
+  "kind": "client",
+  "project_id": "project_01J8Z3N5K7Q2W4E6R8T0Y2V4X8",
+  "resource_identity": "worker:kanthord:claude-main",
+  "iat": 1758700000,
+  "exp": 1790236000,
+  "jti": "01J8Z3N5K7Q2W4E6R8T0Y2V4X9"
+}
 ```
 
 A token with an `aud` claim or without `jti` fails verification.

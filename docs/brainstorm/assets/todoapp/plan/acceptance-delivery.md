@@ -6,6 +6,7 @@ verifications:
   - node --test test/acceptance-delivery.test.js
   - npm ci && npm run verify
 ---
+
 # Make deployment and maintenance reproducible
 
 ## Requirement
