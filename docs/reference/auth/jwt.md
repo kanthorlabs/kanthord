@@ -75,7 +75,7 @@ kanthord auth jwt generate ulrich --output ./ulrich.cli.yaml --endpoint https://
 
 The command creates an absent file only. An existing file fails with `system.files.publish_failed` and stays unchanged; delete it first to replace it. A file at another path is an export: commands read the default path only, so copy it there as a regular file with mode `0600` that the running user owns.
 
-`--output` with `--binding` fails with `cli.auth.jwt.output_with_binding`, and `--endpoint` without `--output` fails with `cli.auth.jwt.endpoint_without_output`. A machine token and its client secret never go into a file; paste the printed fragment instead.
+With `--binding`, `--output` writes a machine token file. The file adds `client_secret` after `token`, and the command prints neither value. `--endpoint` without `--output` fails with `cli.auth.jwt.endpoint_without_output`.
 
 ### Machine token
 

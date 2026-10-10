@@ -169,14 +169,14 @@ With `--verbose` it prints the claim list after that output.
 It prompts for nothing, requires no terminal on standard input and calls no route. Without `--output` it saves no client configuration.
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
 
-With `--output`, a human JWT goes into a new private client configuration file instead of standard output.
+With `--output`, a JWT goes into a new private client configuration file instead of standard output.
 
 - `--output` without a value selects the default path of the client configuration file. `--output <path>` selects that path.
 - The file holds `token`, and it holds `endpoint` only when `--endpoint` is given. The command validates the document against the client configuration schema before it writes.
 - The command publishes the file as `kanthord config init` publishes its file: directory `0700` when absent, temporary file `0600`, link without replacement. An existing destination fails with `system.files.publish_failed` and stays unchanged. No force option exists.
 - Standard output holds only `Created <absolute path>`, so no terminal check applies. A failed publication prints no token.
 - A file at another path is an export. Every reader reads the default path only.
-- `--output` with `--binding` fails with `cli.auth.jwt.output_with_binding` before configuration load, so a machine JWT and its client secret never go into a file.
+- With `--binding`, the file adds `client_secret` after `token`. The command prints neither value.
 - `--endpoint` without `--output` fails with `cli.auth.jwt.endpoint_without_output`. An invalid endpoint fails with `cli.config.invalid_endpoint`.
 
 `kanthord auth jwt inspect [token]` decodes a JWT locally and prints its claim list.
