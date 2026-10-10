@@ -228,7 +228,8 @@
             if (colon > 0) {
               meta[lines[i].slice(0, colon).trim()] = lines[i]
                 .slice(colon + 1)
-                .trim();
+                .trim()
+                .replace(/^(["'])(.*)\1$/, "$2");
             }
           }
           return { meta: meta, body: match[2] };
