@@ -72,6 +72,7 @@ erDiagram
         integer created_at "claim acceptance, Unix ms"
         integer ended_at "Unix ms, null before terminal write"
         text stop "JSON reason and code of a stopped release, null otherwise"
+        integer stalled "1 for a further-work release with progress false, 0 otherwise"
     }
 
     mission_attempt {
@@ -130,6 +131,17 @@ erDiagram
         integer created_at "Unix ms"
     }
 
+    mission_proposal {
+        text id PK "proposal_ + ULID"
+        text node_id FK "initiative"
+        integer attempt "attempt of the assessment"
+        text assessment_id FK "undetermined execution assessment"
+        text content "canonical JSON: objective_id, name, requirement, criterion, task"
+        text objective_node_id FK "objective that the approval creates, nullable"
+        integer approved_at "Unix ms, nullable"
+        integer created_at "Unix ms"
+    }
+
     project_binding }o..o{ worker_instance : "ref by (project_id, resource_identity), no FK"
     project_binding ||..o{ scheduler_execution : "ref worker_binding_id, no FK"
     worker_instance |o..o{ scheduler_execution : "ref runtime_identity to id, no FK"
@@ -150,6 +162,9 @@ erDiagram
     mission_node ||..o{ mission_outcome : "FK node_id"
     mission_assessment ||..o{ mission_outcome : "FK assessment_id"
 
+    mission_node ||..o{ mission_proposal : "FK node_id, FK objective_node_id"
+    mission_assessment ||..o{ mission_proposal : "FK assessment_id"
+
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
@@ -161,7 +176,7 @@ erDiagram
     class project_binding,mission_node stub
     class worker_instance worker
     class scheduler_execution scheduler
-    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome mission
+    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal mission
 ```
 
 ## Tables
@@ -175,6 +190,7 @@ erDiagram
 | `mission_evidence_asset` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content) and [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence). `content` holds the canonical JSON of the shape that `kind` names. |
 | `mission_assessment` | Mission Service | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order. |
 | `mission_outcome` | Mission Service | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). `sequence` is derived: the current outcome is the outcome with the greatest `sequence`, and neither a timestamp nor an identity establishes that order. |
+| `mission_proposal` | Mission Service | Derived from the fix-objective proposal of [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). |
 
 ## Keys and relationship notation
 
@@ -216,11 +232,12 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim sets `expired_at = created_at + wall_time_ms + 1000 × scheduler.release_reserve`, under [Scheduler configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration). The effective `wall_time_ms` comes from the worker binding row that `worker_binding_id` pins. The deadline never moves, including at a registration resume. A later configuration change affects only later claims.
 - Every execution mutation repeats the full proof in its write transaction: the claimant, a null `ended_at` and time before `expired_at`. This includes release, evidence and assessment submissions, and every operation that requires a live execution. The transaction reads the clock once at its start, and a terminal write uses that reading as `ended_at`. Equality with `expired_at` is a loss. A failed check answers 409 `scheduler.execution.not_running`. The invocation-chain proof before the handler stays in place. Of two terminal writes, only one wins, and only the winner routes the Mission Service.
 - The Mission Service checks the release predicate of [the release admission](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-release-admission) in the release transaction, before the terminal write. A steps release with no further work requires a published evidence of the open attempt, submitted by the releasing execution, that holds for an objective one `repository` asset whose `binding_id` equals the repository binding of the pinned revision, and for an initiative one `produced` asset. A reviewer release requires a current passing assessment of the attempt and no eligible unrequested required action. A failed check answers 409 `mission.release.obligation_unmet` with `details.obligation` in `evidence`, `assessment` and `request`, and it changes no execution row, no node state and no job.
-- An admitted release sets `ended_at` and answers `{ execution_id, ended_at }`. The Mission Service reads the `ExecutionRelease.further_work` and `ExecutionRelease.stop` inputs in that transaction. The row stores `stop` as JSON, and nothing stores `further_work`. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
+- An admitted release sets `ended_at` and answers `{ execution_id, ended_at }`. The Mission Service reads the `ExecutionRelease.further_work` and `ExecutionRelease.stop` inputs in that transaction. The row stores `stop` as JSON, and nothing stores `further_work`. A release with `further_work: true`, no `stop` and `progress: false` sets `stalled` to 1. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
 - The Mission Service routes a steps release in the same transaction. With no further work, it sets `Waiting` and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
 - The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested` and inserts no job. The transaction that makes the continuation condition hold inserts the evaluation job.
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
 - Every 30 s, the Scheduler settles every row whose `ended_at` is null and whose `expired_at` is reached or passed. The loss declaration sets `ended_at` to the clock reading at the start of its transaction. A loss closes no attempt. The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop`, and it hands the count to the Mission Service. A release with a `stop` counts the same rows, itself included, in the release transaction. The Mission Service consumes the count in the same transaction. Below `mission.consecutive_failure_limit`, `Executing` returns to `Available` and `Evaluating` returns to `Waiting`, and the transaction inserts the job when the node is claimable. At the limit, the node moves to `Paused`, the attempt stays open and no job exists. A finished row with no `stop` ends the count. A resume resets nothing, so it grants one more try.
+- A stalled release counts the stalled rows of the attempt after its latest finished row that is not stalled, itself included, and hands the count to the Mission Service in the release transaction. At `mission.further_work_limit`, the node moves to `Paused` instead of `Available`, the attempt stays open and no job exists. The value 0 turns the limit off.
 - No index serves the loss count. The loss declaration scans `scheduler_execution` for the rows of the attempt.
 - A claim and every Mission transition first settle each expired unsettled execution that they meet in the same transaction. A human act then checks its own precondition against the settled state. The work-pull lookup and the registration resume follow the same rule and read a `running` execution, never merely a null `ended_at`.
 - A revocation at a Mission transition before expiry sets `ended_at` in that transaction. It counts as no loss. Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
@@ -283,6 +300,12 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The outcome of an `External.Failed` closure keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
 - `evidence_ids` of an outcome holds the evidence that its assessment does not hold: the landed-commit evidence of the attempt and the landed commit of a success override. The read answers the union of that set and `evidence_ids` of the assessment.
 - An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome of the same node and attempt. No correction reaches a node in a terminal state.
+
+### Mission Service: proposals
+
+- Only an `undetermined` execution assessment of an initiative holds proposals. `objective_id` in `content` names a live objective child of that initiative.
+- The service writes the proposal rows in the transaction that closes the attempt and writes the outcome.
+- An approval sets `objective_node_id` and `approved_at` once. No other write changes a proposal row.
 
 ### Mission Service: requests
 
