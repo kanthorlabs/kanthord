@@ -23,6 +23,38 @@ Rules for every agent that works in the kanthord repository. Ulrich is the human
   - Send an ambiguous task to an Opus sub-agent at medium effort.
   - Send a task with clear instructions to a Sonnet sub-agent at high effort.
 
+## Submodules
+
+`kanthord` is a superrepo. Each submodule has its own repository, its own `main` and its own `AGENTS.md` or `README.md`.
+
+| Path                | Repository                    | Responsibility                                                                                                                |
+| ------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `engine`            | `kanthorlabs/kanthord-engine` | The kanthord daemon and CLI: Node 24, TypeScript, services, HTTP Gateway, worker application, shipped prompts and OpenAPI.    |
+| `apps`              | `kanthorlabs/kanthord-apps`   | The React dashboard: pnpm, Vite, the mock daemon and the vitest suite. It talks to the daemon on port 31415.                  |
+| `platforms/webhook` | `kanthorlabs/webhook`         | A self-hosted webhook event log on Cloudflare: signature checks, cursor scans and range pruning. It runs without the daemon.  |
+| `platforms/homelab` | `kanthorlabs/homelab`         | The home server setup: Cloudflare Tunnel, nginx routes under `/s/<service-name>`, the stats timer and the kanthord container. |
+
+The root repository holds the design set under `docs/`, the release scripts under `scripts/`, the `Makefile` and the submodule pointers.
+
+## Before new work
+
+Check the dirty work before you start any new work.
+
+1. Run `git status --short` in the root repository.
+2. Run `git submodule foreach --recursive git status --short`.
+3. Run `git fetch origin` in the root repository and in each submodule. Count the commits of `main` that are not on `origin/main`.
+
+Dirty work is an uncommitted change, an untracked file, a moved submodule pointer, or a commit that is not on `origin/main`.
+
+- If no dirty work exists, pull the latest changes before you start:
+  1. Run `git pull --ff-only` in the root repository.
+  2. Run `git submodule foreach --recursive 'git checkout main && git pull --ff-only origin main'`.
+- If dirty work exists, do not pull and do not start the new work. Investigate each change first:
+  1. Read the diff and the `git log` of each dirty repository.
+  2. Find the task that made the change. Another agent can own it, because agents share this working tree.
+  3. Advise Ulrich to commit, stash or discard each change. Give the recommendation first and the reason for it.
+  4. Wait for the ruling of Ulrich. Never discard or stash a change without that ruling.
+
 ## Design set
 
 - The design set lives in `docs/brainstorm/`. Each service or shared component has a page `<name>.md`, a vocabulary sibling `<name>.vocabulary.md` and an implementation sibling `<name>.impl.md`.
@@ -117,7 +149,7 @@ Several agents edit the same working tree in parallel, for example `docs/brainst
 
 ## Repository tooling
 
-- `kanthord` is a superrepo with the submodules `engine` (Node 24 daemon) and `apps` (pnpm + turbo, Vite React dashboard).
+- `kanthord` is a superrepo. [Submodules](#submodules) maps each submodule and its responsibility.
 - Every `make` target wraps `scripts/<category>/<command>.sh`.
 - Run `make bootstrap` first in a clone. It is idempotent.
 - `make dev` runs the engine with `node --watch` and the dashboard with Vite in the foreground. `Ctrl-C` stops both. An agent runs it as a background task.
