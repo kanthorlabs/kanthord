@@ -10,7 +10,7 @@ The catalog holds the agents `swe@1` and `re@1`. An agent name outside the catal
 
 The server composes the prompt at read time from three layers: the system layer, the agent layer and the working layer. Without a binding, the working layer is the workbench layer of the agent. It reads `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` from the workbench directory of the agent. With a project and a repository binding, the working layer is the layer of that binding. Its workspace files have the state `deferred`, because only the worker application reads a workspace.
 
-The [prompt settings](prompt.md) control the switches and the custom text of each layer. The server configuration `agent.prompt.system_file`, `agent.prompt.agent_directory` and `agent.prompt.host_file` control the file sources.
+The [prompt settings](prompt.md) control the switches and the custom text of each layer. The server configuration `agent.prompt.system_file`, `agent.prompt.agent_directory` and `agent.prompt.host_file` control the file sources. A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped prompt template of that name, for example `prompts/layer-message.md` or `prompts/framing-workbench.md`.
 
 ## Expected response
 
@@ -107,6 +107,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 gateway.request.validation_failed`   | `view` is not `final`, or only one of `project_id` and `binding_id` is present. |
 | `404 agent.catalog.not_found`             | The agent name is not in the catalog.                                           |
 | `404 project.binding.not_found`           | `binding_id` names no repository binding of the project `project_id`.           |
+| `409 agent.prompt.template_invalid`      | A prompt template file of the agent directory is invalid.                       |
 
 The CLI checks some input before it sends the request:
 

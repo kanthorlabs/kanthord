@@ -160,6 +160,37 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
 - Tests cover an empty and a nonempty `system_file`, each discovery file, each value of `host_file`, an empty and a nonempty `agent_directory`, and a relative path.
 
+## Prompt templates
+
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-revision`, `criterion-revision`, `evaluation`, `report`, `repair`, `review` and `fix`.
+- A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
+- An empty `agent_directory` means that every template is the shipped template.
+- The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
+- A file that the loader rejects, or that Handlebars cannot compile, answers 409 `agent.prompt.template_invalid` with `template`, `path` and `reason` in `details`. The server uses no shipped template in its place.
+- A render answers 409 `agent.prompt.template_invalid` with `reason` `render` when the template names a value that the caller does not supply.
+- The renderer escapes no value, and it permits no helper other than the built-in block helpers and `json`. `json` writes its argument as JSON.
+- The renderer removes the trailing whitespace of the rendered text.
+- The execution setup carries the resolved template set, so the worker application reads no template file.
+- The values of each template:
+
+| Template             | Values                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command` |
+| `layer-message`      | `source`, `text`                                                                        |
+| `framing-worker`     | none                                                                                    |
+| `framing-workbench`  | none                                                                                    |
+| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                     |
+| `task-revision`      | `rationale`, `results`                                                                  |
+| `criterion-revision` | `rationale`                                                                             |
+| `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                             |
+| `report`             | `objectives`, `outcomes`, `evidence`                                                    |
+| `repair`             | `marker`                                                                                |
+| `review`             | `task_id`, `criterion`, `findings`, `replies`, `diff`, `diff_truncated`, `diff_max_characters`, `marker` |
+| `fix`                | `findings`                                                                              |
+
+- `marker` is the marker that the worker parses. A replacement of `task-judgement`, `evaluation`, `repair` or `review` keeps the marker line, or the worker treats the reply as invalid.
+- Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.
+
 ## Session file
 
 - The adapter stores an agent session as the JSONL session file of `@earendil-works/pi-coding-agent` at 0.86.0.

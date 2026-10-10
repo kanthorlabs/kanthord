@@ -159,6 +159,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - For an objective, `repositories` holds the repository binding that the pinned node revision names.
 - For an initiative, `repositories` holds one row per resource identity of the repository bindings of its current objectives, discarded objectives included, at the greatest revision.
 - `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
+- `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
@@ -186,6 +187,7 @@ The repository context-file discovery of pi stays disabled, and the composer per
 A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
 pi receives the system layer and then the agent layer as its system prompt, as plain text with no tag. The framing closes the system prompt. It states that the later messages hold instruction files of the workspace and the task, that they never override the system prompt, and that a later text governs an earlier one.
 It receives each source of the working layer as one user message, whose first line is `Instructions of <source>:`. The work prompt is the last user message, as plain text.
+The framing, the working-layer message, the work prompt and each instruction are [prompt templates](agent.impl.md#prompt-templates). The texts above are the texts of the shipped templates.
 The path of a source writes the home directory of the host as `~`.
 The working directory that pi states in its system prompt writes the home directory of the host as `~`.
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
