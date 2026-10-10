@@ -13,7 +13,7 @@ export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
-	homelab-nginx homelab-kanthord homelab-cleanup \
+	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools
 
 help:
@@ -51,6 +51,8 @@ help:
 	@echo "                   /s/kanthord goes to the daemon. / serves the floating market homepage"
 	@echo "                   HOMELAB_HOST=name sets the host, for example homelab.example.com"
 	@echo "                   Without it, both targets read HOMELAB_HOST= from platforms/homelab/.env"
+	@echo "  homelab-stats    Install the timer that writes the CPU, RAM and disk usage"
+	@echo "                   of the homepage every 60 s, with sudo"
 	@echo "  homelab-kanthord Run the daemon container under /s/kanthord on 127.0.0.1:31416"
 	@echo "                   The first run creates its configuration in the volume"
 	@echo "                   IMAGE=name:tag (kanthord:latest) CONTAINER=name VOLUME=name"
@@ -85,6 +87,8 @@ release-image:
 
 homelab-nginx:
 	@$(MAKE) --no-print-directory -C $(HOMELAB) nginx
+homelab-stats:
+	@$(MAKE) --no-print-directory -C $(HOMELAB) stats
 homelab-kanthord:
 	@$(MAKE) --no-print-directory -C $(HOMELAB) kanthord
 homelab-cleanup:
