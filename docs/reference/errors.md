@@ -19,6 +19,9 @@ Examples used by the implementation:
 | Code                                             | Meaning                                                          |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
 | `system.config.not_found`                        | The server configuration file is absent.                         |
+| `system.config.version_behind`                   | The configuration version is older than the binary. Run `kanthord upgrade`. |
+| `system.config.version_ahead`                    | The configuration version is newer than the binary.              |
+| `system.database.migration.pending`              | The database has a pending migration. Run `kanthord upgrade`.    |
 | `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary. |
 | `system.context.deadline_exceeded`               | A context's deadline expired.                                    |
 | `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                               |

@@ -1,0 +1,91 @@
+# Upgrade configuration and data
+
+[Reference index](README.md)
+
+## Function description
+
+Bring the stored server configuration and the operational database to the versions of the installed binary. Run it after you install a new binary and before you start the server. Stop the server first.
+
+The binary is the reference of every version:
+
+- The configuration version is the root field `version` of `kanthord.yaml`. A file without the field is version 1. [`config init`](config/init.md) writes the version of the binary.
+- The database version is the migration history of each service in `kanthord.db`.
+
+The server refuses to start when one of them differs from the binary:
+
+| Condition                                                    | Diagnostic                                       | Action                                               |
+| ------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------- |
+| The configuration version is older than the binary.          | `system.config.version_behind`                   | Run `kanthord upgrade`.                              |
+| The configuration version is newer than the binary.          | `system.config.version_ahead`                    | Install the newer binary, or restore the backups.    |
+| The database has a pending migration.                        | `system.database.migration.pending`              | Run `kanthord upgrade`.                              |
+| The database history is newer than the binary or is unknown. | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups. |
+
+`config validate`, `config show` and `auth jwt generate` refuse a configuration version other than the version of the binary with the same diagnostics. A new installation needs no upgrade: the first start creates the database and applies every migration.
+
+The command runs these steps in this order:
+
+1. Read the configuration and apply each configuration step from its version in memory, then validate the result.
+2. Open `kanthord.db` of the data directory with its exclusive lock, if the file exists, and validate its migration history. A running server holds the lock, so the command fails with `system.database.initialization_failed` (`database is locked`) before it writes anything.
+3. Write the backups.
+4. Apply the pending migrations.
+5. Replace the configuration file atomically.
+
+## Expected response
+
+Success prints one line for each change to stdout and exits `0`:
+
+```text
+Backup: /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
+Backup: /home/user/.local/share/kanthord/kanthord.db.bak-20261010T080000
+Migrated scheduler from version 3 to version 4
+Renamed mission.consecutive_loss_limit to mission.consecutive_failure_limit
+Upgraded configuration version 1 to configuration version 2: /home/user/.config/kanthord/kanthord.yaml
+```
+
+| Output / property            | Purpose                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `Backup: <path>`             | A private `0600` copy of the original configuration or of the database, written before any change. The command deletes none. |
+| `Migrated <service> ...`     | The migrations that the command applied to one service.                                                                      |
+| `Renamed <old> to <new>`     | A configuration key that a configuration step renamed. Values and comments stay.                                             |
+| `Upgraded configuration ...` | The configuration versions before and after the upgrade.                                                                     |
+| `Up to date: <path>`         | Nothing changed, and the command wrote nothing.                                                                              |
+| Exit code `0`                | The configuration and the database match the binary.                                                                         |
+
+Failures exit `1` with a [diagnostic](errors.md#cli-diagnostics). A configuration that holds an old key and its new key fails with `system.config.rename_conflict`. An existing backup path fails with `system.database.backup_failed`. A failure after the backups keeps each committed migration. Run `kanthord upgrade` again to complete the remaining part.
+
+### Restore the backups
+
+To go back to the previous binary:
+
+1. Stop the server.
+2. Delete `kanthord.db-wal` and `kanthord.db-shm` in the data directory, if they exist.
+3. Copy the database backup to `kanthord.db` and the configuration backup to the configuration file. Keep mode `0600` on both, for example with `cp -p`.
+4. Install the previous binary and start the server.
+
+### Other state
+
+- The worker application refuses a server of another package version. Upgrade each worker binary together with the server.
+- A release note states a change that invalidates every JWT and client secret. Then generate new tokens with [`auth jwt generate`](auth/jwt.md).
+- In a container, stop the server container, then run `upgrade` as a one-off container on the same volume with the same `XDG_*` variables, for example `podman run --rm -v kanthord:/var/lib/kanthord kanthord:<version> upgrade`.
+
+## API shape
+
+Not available. The upgrade is a local filesystem and database operation, with no API endpoint or cURL equivalent.
+
+## CLI shape
+
+```text
+kanthord upgrade [--config <path>]
+```
+
+```sh
+kanthord upgrade --config /absolute/path/kanthord.yaml
+```
+
+There are no positional arguments.
+
+| Option            | Default / resolution                                      | Purpose                                             |
+| ----------------- | --------------------------------------------------------- | --------------------------------------------------- |
+| `--config <path>` | `KANTHORD_CONFIG` → XDG/default server configuration path | Selects the stored server configuration to upgrade. |
+
+The data directory comes from `XDG_DATA_HOME`, as for [`serve`](serve.md).

@@ -116,6 +116,6 @@ kanthord auth jwt inspect | grep exp
 | --------- | ------------------------------------------------------ | ------------------ |
 | `[token]` | `KANTHORD_TOKEN`, then the `token` field of `cli.yaml` | The JWT to decode. |
 
-Supply the issued token through `--token`, `KANTHORD_TOKEN`, or an operator-managed private `cli.yaml` when using it; see [client configuration](README.md#client-configuration).
+Supply the issued token through `--token`, `KANTHORD_TOKEN`, or an operator-managed private `cli.yaml` when using it; see [client configuration](../README.md#client-configuration).
 
 Next: [human verification](../gateway/verify.md), [worker registration](../worker/register.md).

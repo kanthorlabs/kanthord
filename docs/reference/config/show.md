@@ -11,6 +11,7 @@ Print the effective YAML configuration with sensitive fields masked. The command
 Success writes YAML to stdout and exits `0`. A configuration created with defaults is displayed as:
 
 ```yaml
+version: 2
 master_key: "[Sensitive]"
 log:
   level: info
@@ -31,6 +32,7 @@ gateway:
 
 | Property                 | Type                | Purpose                                                                                               |
 | ------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `version`                 | positive integer    | Configuration version; [upgrade](../upgrade.md) sets it. A file without it is version 1.        |
 | `master_key`              | string              | 32-byte base64 server secret in the file; always displayed as `[Sensitive]`.                          |
 | `log.level`              | string              | Operational log threshold: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`; defaults to `info`. |
 | `log.destination`        | string              | Sends operational logs to `stderr` (default) or `file`.                                               |

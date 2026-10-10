@@ -132,7 +132,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record). The LLM, Repository and Storage components each own the rows of their platforms.
 - [The credential table](#the-credential-table) defines its envelope.
 - The table `migration(service, version, applied_at)` records each migration that ran.
-- The migrations run at startup, in a fixed order of the services.
+- The start applies the migrations only to a database that records no migration. [The upgrade](#the-upgrade) applies them to every other database.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
 - A delete removes the row, and a deleted row is gone and not recoverable.
 - No table declares a `deleted_at` column or another soft-delete marker.
@@ -177,10 +177,39 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The SQL of a service names its own tables only.
 - A cross-service SQL statement in a handler is a review defect because `Transaction` exposes the raw handle.
 - The migration is forward only, and the server holds no reverse migration. A committed migration stays committed after a later failure, so the next start resumes from that prefix.
-- A downgrade needs a consistent backup that a human took before the upgrade.
-- That backup captures the effective configuration file and the whole data directory, with the server stopped, and neither source changes during the capture.
-- A clean close checkpoints the write-ahead log and can remove the sidecar files, and `-shm` is reconstructible. A sequential copy of three live files is not consistent, so the contract names the stopped server and no list of files.
+- A downgrade needs the backups that [the upgrade](#the-upgrade) writes before it changes anything.
 - The function form serves a data migration that runs cryptography, for example an upgrade of the envelope or of a label under an unchanged `master_key`, where the old key stays derivable. It implies no rotation of a secret.
+- A `Migration` receives the connection alone. A migration that needs `master_key` changes that signature, and the upgrade then passes the upgraded configuration, because the configuration steps run before the migrations.
+
+## The upgrade
+
+- The binary is the reference of every version. The configuration file and the operational database match each other when each one matches the binary. No record ties the two together.
+- The configuration version is the root field `version` of the configuration file, a positive safe integer. A file without the field holds version 1.
+- `src/config/steps.ts` holds `CONFIG_STEPS`, one step for each version after 1. Step `n` changes a document of version `n` into version `n + 1`. `CONFIG_VERSION` is 1 plus the number of steps.
+- A step is a function over the YAML document. It returns each change that it makes. `renameKey` is the helper of a key rename, and it refuses a document that holds both keys with `system.config.rename_conflict`.
+- A published step is immutable. A correction appends a step.
+- The data version is the migration history of each service, as [the migration](#the-migration) defines.
+- Every reader of the configuration file refuses a version other than `CONFIG_VERSION`. An older version fails with `system.config.version_behind`, and its message names `kanthord upgrade`. A newer version fails with `system.config.version_ahead`. A value that is not a positive safe integer fails with `system.config.invalid_field`. Each message says "configuration version", never "version" alone.
+- The start of the server validates the migration history. A database that records a migration and has a pending migration stops the start with `system.database.migration.pending`, and its message names `kanthord upgrade`. A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`.
+- `kanthord upgrade [--config <path>]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
+  1. Read the configuration file and apply the steps from its version in memory. Validate the result. A newer version stops with `system.config.version_ahead`.
+  2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history. A running server or a second upgrade holds the lock, so this step fails before any write.
+  3. If no step and no migration is pending, print `Up to date: <path>` and write nothing.
+  4. Write the backups with one UTC timestamp, while the lock is held. The original configuration goes to `<path>.bak-<timestamp>` with mode `0600`. The database goes to `kanthord.db.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. An existing backup path stops the command.
+  5. Apply the pending migrations with the runner of [the migration](#the-migration).
+  6. Replace the configuration file atomically.
+- Steps 1 to 4 change neither the configuration file nor the database. `Store.plan` runs reads only.
+- The command prints each backup path before step 5, each migrated service, each rename and the configuration versions.
+- A rerun after a success prints `Up to date: <path>`.
+- A failure in step 5 keeps the committed migrations, and the next start stops with `system.database.migration.pending`. A failure in step 6 keeps the old configuration, and the next start stops with `system.config.version_behind`. A rerun of `kanthord upgrade` completes the remaining part.
+- The command deletes no backup.
+- A restore stops the server, deletes `kanthord.db-wal` and `kanthord.db-shm`, copies the database backup to `kanthord.db` and the configuration backup to the configuration file, and keeps mode `0600` on both.
+- The state directory holds no version. A breaking change of its layout states a wipe of the state directory in the release note.
+- `cli.yaml` holds no version. A breaking change of that file states a new `kanthord auth jwt generate` in the release note.
+- An upgrade step never changes `master_key` or `gateway.auth.version`. A change of the JWT format, of a key label or of the authentication version invalidates every JWT and every client secret, and the release note states the reissue.
+- The worker application and the server run the same package version, because the worker refuses another version with `worker.version.mismatch`.
+- A removed CLI command gets no alias and no pointer. The release note names its replacement.
+- A container runs `kanthord upgrade` as a one-off container on the volume of the server, with the same `XDG_*` variables, while the server container is stopped.
 
 ## The identity and the time
 
@@ -280,7 +309,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - An absent file stops the start, and the server prints the resolved path and the command of the CLI that creates one.
 - An invalid file stops the start, and the server prints one record for each invalid field.
 - Each of those two starts exits with a non-zero status.
-- Neither the start of the server nor a command of the CLI repairs a file.
+- The start of the server repairs no file. `kanthord upgrade` is the one command that rewrites the configuration file, as [the upgrade](#the-upgrade) rules.
 - This rule covers the configuration file.
   The server writes its databases. JWT issuance is an explicit local command, which [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) rules.
 
@@ -345,6 +374,7 @@ This sibling declares the fields below.
 - Every field of the configuration file appears below with the sibling that owns it. A row gives no format and no default.
 - A dotted path determines the nesting of the document, so the index determines the shape of the file.
 - `kanthord config init` writes the whole document with every default, so this sibling holds no example.
+- `version`, which [the upgrade](#the-upgrade) declares.
 - `master_key`, which this sibling declares.
 - `log.level`, which this sibling declares.
 - `log.destination`, which this sibling declares.
@@ -453,7 +483,7 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Derive the key of each purpose from `master_key`, where the sibling of a service owns the labels of that service.
 - Open the destination of the log.
 - Take the write lock of each database file.
-- Run the migrations, in a fixed order of the services.
+- Validate the migration history. Apply the migrations only to a database that records no migration, and stop on a pending migration of any other database.
 - Register the routes of every service, which [gateway-service.impl.md](gateway-service.impl.md) owns.
 - Open the listener.
 
@@ -462,7 +492,7 @@ The composition root constructs in this order.
 - Parse the configuration.
 - Construct the log.
 - Open the store.
-- Call `store.migrate([...])` once per store with the migrations of every service, in fixed service order.
+- Call `store.plan([...])`, then `store.migrate([...])`, once per store with the migrations of every service, in fixed service order.
 - Construct the registry.
 - Construct the invocation chain.
 - Construct the six domain services with their `Dependencies`.
@@ -836,7 +866,8 @@ A process split retains these boundaries.
 - The help output of `config` and of every command of that group prints the absolute path of the configuration file that this invocation resolves.
 - That path is the path of the invocation and no path of a process, because a running server resolved its own path at its start and can hold another one.
 - The help prints that path whether the file exists or not, and it prints no field and no value.
-- A later change of the file is a hand edit by a human, and the CLI manages no edit.
+- A later change of the file is a hand edit by a human or `kanthord upgrade`, and the CLI manages no other edit.
+- `kanthord config init` writes `version` with the value `CONFIG_VERSION`.
 - `kanthord config init` reaches no server and calls no route of the RESTful API, so it opens no second entry path into the server.
 
 ## Tests
@@ -901,6 +932,8 @@ A process split retains these boundaries.
 - A test upgrades a preserved fixture of an earlier release that holds rows.
 - A test restarts after a migration sequence that committed two services and failed on the third.
 - A test covers a migration that fails in its second statement, and it asserts no row of its own and no partial schema.
+- A test starts the server on an older configuration and on an older database, asserts each refusal, runs `kanthord upgrade`, and asserts both backups, the migrated history and an `Up to date` rerun.
+- A test runs `kanthord upgrade` while another process holds the database, and it asserts no change.
 - A test covers a recorded history that holds a gap, and one that holds a version above the binary.
 - A test covers the AES-256-GCM round trip of a `credential` record, a ciphertext moved between two records, and a truncated ciphertext.
 - A test covers the derivation of the cipher key, and it asserts that two labels produce two different keys.
