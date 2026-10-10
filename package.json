@@ -8,6 +8,7 @@
   "packageManager": "pnpm@11.24.0",
   "devDependencies": {
     "esbuild": "0.28.2",
-    "postject": "1.0.0-alpha.6"
+    "postject": "1.0.0-alpha.6",
+    "prettier": "3.9.5"
   }
 }
