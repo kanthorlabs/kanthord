@@ -282,7 +282,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 
 ## The further-work release
 
-- A further-work release sends `progress: false` when the execution passed no new task.
+- A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
 - `startCheck` stores the judged commit of each task in the objective workspace. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
 
 ## The verifications
