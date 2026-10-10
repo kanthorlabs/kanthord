@@ -2,6 +2,7 @@
 
 ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 S := $(ROOT)/scripts
+HOMELAB := $(ROOT)/platforms/homelab
 
 # The daemon matches a Host and an Origin exactly, so both ports are pinned.
 # Read apps/docs/api/connectivity.md before you change one.
@@ -49,7 +50,7 @@ help:
 	@echo "  homelab-nginx    Install the nginx site of the homelab on 127.0.0.1:80 with sudo"
 	@echo "                   /s/kanthord goes to the daemon. / serves the nginx default page"
 	@echo "                   HOMELAB_HOST=name sets the host, for example homelab.example.com"
-	@echo "                   Without it, both targets read HOMELAB_HOST= from .env"
+	@echo "                   Without it, both targets read HOMELAB_HOST= from platforms/homelab/.env"
 	@echo "  homelab-kanthord Run the daemon container under /s/kanthord on 127.0.0.1:31416"
 	@echo "                   The first run creates its configuration in the volume"
 	@echo "                   IMAGE=name:tag (kanthord:latest) CONTAINER=name VOLUME=name"
@@ -83,11 +84,11 @@ release-image:
 	@$(S)/release/image.sh
 
 homelab-nginx:
-	@$(S)/homelab/nginx.sh
+	@$(MAKE) --no-print-directory -C $(HOMELAB) nginx
 homelab-kanthord:
-	@$(S)/homelab/kanthord.sh
+	@$(MAKE) --no-print-directory -C $(HOMELAB) kanthord
 homelab-cleanup:
-	@$(S)/homelab/cleanup.sh
+	@$(MAKE) --no-print-directory -C $(HOMELAB) kanthord-cleanup
 
 sync:
 	@$(S)/sync/all.sh

@@ -11,6 +11,7 @@
 | `engine` | `engine` | Node daemon. |
 | `apps` | `apps` | Dashboard and client applications. |
 | `webhook` | `platforms/webhook` | Standalone webhook log; currently documentation and deployment planning only. |
+| `homelab` | `platforms/homelab` | Public homelab setup: the nginx site and the kanthord container. |
 
 Run `make bootstrap` in a fresh clone. It initializes all submodules, attaches them to `main`, and propagates the root Git identity. Runtime setup remains limited to engine and apps.
 

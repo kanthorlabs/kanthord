@@ -6,31 +6,31 @@ ROOT=${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 ENGINE_DIR="$ROOT/engine"
 APP_DIR="$ROOT/apps"
 RUN_DIR="$ROOT/.dev"
-ENV_FILE="$ROOT/.env"
 
 ENGINE_PORT=${ENGINE_PORT:-31415}
 WEB_PORT=${WEB_PORT:-27182}
 
 # Aliases, not paths: aliases are also used in sync-state names.
-SUBMODULES="engine apps webhook"
+SUBMODULES="engine apps webhook homelab"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*"; }
 warn() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { warn "$*"; exit 1; }
 
-# repo_path <engine|apps|webhook|parent> -> repository-relative path
+# repo_path <engine|apps|webhook|homelab|parent> -> repository-relative path
 repo_path() {
 	[ "$#" -eq 1 ] || die "repo_path needs one repository alias"
 	[ -n "$1" ] || die "repository alias is empty"
 	case "$1" in
 	engine | apps) printf '%s' "$1" ;;
 	webhook) printf '%s' 'platforms/webhook' ;;
+	homelab) printf '%s' 'platforms/homelab' ;;
 	parent | .) printf '%s' '.' ;;
 	*) die "unknown repository $1" ;;
 	esac
 }
 
-# repo_dir <engine|apps|webhook|parent> -> absolute path
+# repo_dir <engine|apps|webhook|homelab|parent> -> absolute path
 repo_dir() {
 	[ -d "$ROOT" ] || die "repository root does not exist: $ROOT"
 	case "$ROOT" in /*) ;; *) die "repository root is not absolute: $ROOT" ;; esac

@@ -7,3 +7,6 @@
 [submodule "webhook"]
 	path = platforms/webhook
 	url = git@kanthorlabs.github.com:kanthorlabs/webhook.git
+[submodule "homelab"]
+	path = platforms/homelab
+	url = git@kanthorlabs.github.com:kanthorlabs/homelab.git

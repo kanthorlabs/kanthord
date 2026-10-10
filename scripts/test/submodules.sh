@@ -32,7 +32,7 @@ printf 'another ordinary directory revision\n' >>"$ROOT/platforms/webhook/README
 git -C "$ROOT" add -- platforms/webhook/README.md
 git -C "$ROOT" commit --quiet -m 'docs: revise pre-conversion fixture'
 
-for alias in engine apps webhook; do
+for alias in engine apps webhook homelab; do
 	seed="$sandbox/$alias-seed"
 	git init --quiet --initial-branch=main "$seed"
 	git -C "$seed" config user.name 'Fixture Operator'
@@ -48,6 +48,7 @@ for alias in engine apps webhook; do
 		path=platforms/webhook
 		git -C "$ROOT" rm --quiet -r -- "$path"
 	fi
+	[ "$alias" != homelab ] || path=platforms/homelab
 	git -C "$ROOT" -c protocol.file.allow=always submodule add --quiet --name "$alias" "$sandbox/$alias.git" "$path"
 done
 

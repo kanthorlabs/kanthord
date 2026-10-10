@@ -13,7 +13,7 @@ fi
 
 root=$(git rev-parse --show-toplevel)
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
-paths="engine apps platforms/webhook"
+paths="engine apps platforms/webhook platforms/homelab"
 failed=0
 
 for path in $paths; do

@@ -100,6 +100,8 @@ server {
     listen 127.0.0.1:80;
     server_name homelab.example.com;
 
+    server_tokens off;
+
     set_real_ip_from 127.0.0.1;
     real_ip_header CF-Connecting-IP;
 
@@ -148,6 +150,7 @@ server {
 - `real_ip_header CF-Connecting-IP` gives the logs and the limits the address of the client, not the address of `cloudflared`.
 - `limit_req` and `limit_conn` answer `429` to a client that sends more than 10 requests per second after a burst of 40, or that holds more than 20 connections.
 - `client_max_body_size 50m` matches the largest request body of the daemon.
+- `server_tokens off` hides the nginx version.
 - `absolute_redirect off` keeps a redirect relative, so the browser stays on HTTPS.
 - The `add_header` lines stop framing and MIME sniffing, and keep the browser on HTTPS.
 - `location ~ /\.` refuses a hidden file of the web root.
