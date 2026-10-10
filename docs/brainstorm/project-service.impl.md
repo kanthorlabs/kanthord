@@ -20,7 +20,7 @@ The GitHub action catalog holds exactly two actions.
 
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
 - `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
-- Each action implies its expected end state and takes no parameter.
+- Each action implies its expected end state. Only `pull_request` takes a parameter: the optional `landing`, `human` or `kanthord`, default `human`. With `kanthord`, the Intake Service merges the pull request when it performs the action, with the tested commit as the head guard. With `human`, a human merges. The frozen action copies `landing` with `base_branch`.
 - A repository strategy holds at most one action, because a policy configures one external action.
 - The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
 
@@ -161,6 +161,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `agent.configuration.invalid`.
 - A worker binding of a known worker with no declared agent, an external harness, that carries `entries` or `resource_budget` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
 - A strategy with more than one action refuses the write.
+- A `landing` on an action other than `pull_request` refuses the write at the `landing` path.
 
 ## Storage configuration
 

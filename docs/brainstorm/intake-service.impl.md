@@ -69,6 +69,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - The transaction that stores the batch also writes `checkpoint`. It discards the batch when the inbound row no longer exists.
 - The poll pauses beyond the capacity bound that [intake-service.md](intake-service.md#capacity-and-retention) states. It resumes when the count of pending events falls below that bound.
 - A failed request writes a span with its reason and leaves `checkpoint` unchanged.
+- The automatic detection of a merged, closed or conflicting pull request needs a poll or webhook inbound for the repository. A push event of a base branch reaches the open pull request requests on that branch through [delivery admission](mission-service.impl.md#the-request-record).
 
 ## The handoff
 
@@ -121,6 +122,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `intake.action.perform` is a `client` operation under the forwarded execution identity. It takes the configured action and its request key, maps the action to its outbound operation, and answers the `PlatformAddress` or the result class of the Repository component.
 - The action table maps `pull_request` on a `github` binding to `github.pull_request`, and `merge_push` on a git binding to `git.merge_push`. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
 - For `git.merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the network git write and removes the clone after the call. A `git.merge_push` answers the pushed commit in its `PlatformAddress`.
+- For a `pull_request` action whose frozen landing is `kanthord`, the handler merges the pull request after it creates the pull request or pushes the snapshot to a reused pull request. The merge sends the tested commit as the head guard and uses the first method that the repository allows, in the order `merge`, `squash`, `rebase`. A refused or failed merge leaves the pull request open and changes no answer.
 - `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ end_state, landed_commits }` that the platform implementation folds.
 - `intake.action.read` is a `client` operation under the forwarded execution identity. It serves the MCP read tools `github-pull-request-get` and `github-pull-request-review-comment-list`, and it returns the platform body unchanged.
 - `intake.storage.put` and `intake.storage.check` are `client` operations. The Mission Service calls them in `mission.evidence.submit` and `mission.evidence.asset.complete` with the identity of the execution.
@@ -132,7 +134,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 ### The authorization of each operation
 
 - `github.pull_request` and `git.merge_push`: the Mission Service authorizes the forwarded execution identity through its live evaluation claim, the node, the open attempt, the `FrozenAction` and the pinned binding revision. The Project resolution checks that revision for disablement and removal.
-- `github.pull_request` takes a custody release of the credential of the pinned repository binding revision, and custody pins that revision to the execution at its first use. `git.merge_push` takes no release and uses the SSH configuration of the server host.
+- `github.pull_request` takes a custody release of the credential of the pinned repository binding revision. A reuse takes the release only when the frozen landing is `kanthord`, because the merge needs the credential. Custody pins that revision to the execution at its first use. `git.merge_push` takes no release and uses the SSH configuration of the server host.
 - `s3.delete_object`: the Mission Service authorizes the forwarded human identity through the evidence asset and its storage binding revision, and custody releases the storage binding credential.
 - `intake.action.check`, `intake.action.read`, the presigned PUT and GET and the object check: the Mission Service authorizes the caller through the request evidence or the evidence asset. These operations record no outbound request.
 - A native push send and a CLI write declare their authorization with their designs.

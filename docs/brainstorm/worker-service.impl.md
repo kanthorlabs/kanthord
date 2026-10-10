@@ -124,6 +124,8 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
 - Startup resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 0.86.0 selects `fd` first.
+- The application logs one info record for each task start, task commit, task verification, task judgement, task review and node judgement. A record holds identities and results, and no agent content.
+- The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of the state directory with mode `0600`, and it keeps the newest 50 transcripts.
 - After the registration, the application logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -271,6 +273,17 @@ The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
+
+## The task review
+
+- `developer@1` reviews each task commit with `re@1` before the next task.
+- The review judges the task criterion, every node criterion item that the task touches and the default standard.
+- A blocker finding sends the fix instruction to `swe@1`, and the review runs again, up to the review round limit.
+
+## The further-work release
+
+- A further-work release sends `progress: false` when the execution passed no new task.
+- `startCheck` stores the judged commit of each task in the objective workspace. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
 
 ## The verifications
 

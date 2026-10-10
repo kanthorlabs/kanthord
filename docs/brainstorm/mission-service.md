@@ -761,6 +761,7 @@ An unblock is one atomic act.
 It names the attempt that it clears.
 It names the node revision that it expects.
 It carries a content change when the human changes the direction.
+It may carry an optional nonblank reason, as the other human controls do.
 
 The act checks the authority of the human, the blocked attempt and the expected revision.
 An unblock that carries a content change also checks the authority that a node edit requires.

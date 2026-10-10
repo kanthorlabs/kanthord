@@ -275,13 +275,21 @@ The agent judges the result against the criterion only after every verification 
 A task is complete when its verifications pass and the agent judges its criterion met.
 The execution writes no evidence, no assessment and no outcome for a task.
 
+At each steps claim on an objective, the execution first merges `origin/<base_branch>` into the node branch.
+`swe@1` resolves a merge conflict as task work.
+A conflict that stays unresolved aborts the merge and stops the execution with `operation_failed`.
+
 At its start, every execution runs the verifications of each task of the pinned revision against the head of the node branch.
 A task whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
 The execution executes every other task.
-No record of an earlier execution or an earlier attempt decides that a task is complete.
+No record of an earlier attempt decides that a task is complete.
+Inside one attempt, a task whose last judged commit equals the head of the node branch keeps that judgement, unless the rationale of the latest rework names the task.
+Its verifications still run.
 The judgement of a task at the start reads the rationale of the assessment that caused the latest rework of the attempt, or else the cause of the outcome of the cleared attempt.
 A task that the agent judges unmet with that rationale is revised with the rationale as the revision instruction.
 
+Before a release with evidence, the execution merges `origin/<base_branch>` again and runs the task verifications on the merged head.
+A conflict or a failed verification resets the node branch to its head before that merge, and the release carries further work.
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
 When every task of the revision is complete, the execution releases with no further work.
 The boundary of the budget end is the task commit.
@@ -482,6 +490,8 @@ The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
+For an initiative, the judgement may hold one fix-objective proposal for each defect inside a completed objective.
+A judgement with proposals writes an `undetermined` assessment that holds them.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the record and its currency.
 
