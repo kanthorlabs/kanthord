@@ -19,13 +19,14 @@ The server refuses to start when one of them differs from the binary:
 | The configuration version is newer than the binary.          | `system.config.version_ahead`                    | Install the newer binary, or restore the backups.    |
 | The database has a pending migration.                        | `system.database.migration.pending`              | Run `kanthord upgrade`.                              |
 | The database history is newer than the binary or is unknown. | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups. |
+| `master_key` does not match the database.                    | `system.config.master_key_mismatch`              | Restore the matching configuration file or backup.   |
 
 `config validate`, `config show` and `auth jwt generate` refuse a configuration version other than the version of the binary with the same diagnostics. A new installation needs no upgrade: the first start creates the database and applies every migration.
 
 The command runs these steps in this order:
 
 1. Read the configuration and apply each configuration step from its version in memory, then validate the result.
-2. Open `kanthord.db` of the data directory with its exclusive lock, if the file exists, and validate its migration history. A running server holds the lock, so the command fails with `system.database.initialization_failed` (`database is locked`) before it writes anything.
+2. Open `kanthord.db` of the data directory with its exclusive lock, if the file exists, and validate its migration history. A running server holds the lock, so the command fails with `system.database.initialization_failed` (`database is locked`) before it writes anything. Then check that `master_key` matches the database. A mismatch fails with `system.config.master_key_mismatch` before it writes anything.
 3. Write the backups.
 4. Apply the pending migrations.
 5. Replace the configuration file atomically.

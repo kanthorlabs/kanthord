@@ -183,7 +183,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The upgrade
 
-- The binary is the reference of every version. The configuration file and the operational database match each other when each one matches the binary. No record ties the two together.
+- The binary is the reference of every version. The configuration file and the operational database match each other when each one matches the binary. [The master_key record](custody.impl.md#the-master_key-record) of custody ties the database to the `master_key` of the file.
 - The configuration version is the root field `version` of the configuration file, a positive safe integer. A file without the field holds version 1.
 - `src/config/steps.ts` holds `CONFIG_STEPS`, one step for each version after 1. Step `n` changes a document of version `n` into version `n + 1`. `CONFIG_VERSION` is 1 plus the number of steps.
 - A step is a function over the YAML document. It returns each change that it makes. `renameKey` is the helper of a key rename, and it refuses a document that holds both keys with `system.config.rename_conflict`.
@@ -193,7 +193,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The start of the server validates the migration history. A database that records a migration and has a pending migration stops the start with `system.database.migration.pending`, and its message names `kanthord upgrade`. A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`.
 - `kanthord upgrade [--config <path>]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
   1. Read the configuration file and apply the steps from its version in memory. Validate the result. A newer version stops with `system.config.version_ahead`.
-  2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history. A running server or a second upgrade holds the lock, so this step fails before any write.
+  2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
   3. If no step and no migration is pending, print `Up to date: <path>` and write nothing.
   4. Write the backups with one UTC timestamp, while the lock is held. The original configuration goes to `<path>.bak-<timestamp>` with mode `0600`. The database goes to `kanthord.db.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. An existing backup path stops the command.
   5. Apply the pending migrations with the runner of [the migration](#the-migration).
@@ -484,6 +484,7 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Validate the migration history. Apply the migrations only to a database that records no migration, and stop on a pending migration of any other database.
+- Verify [the master_key record](custody.impl.md#the-master_key-record) of custody, and record it on a database without one.
 - Register the routes of every service, which [gateway-service.impl.md](gateway-service.impl.md) owns.
 - Open the listener.
 
@@ -493,6 +494,7 @@ The composition root constructs in this order.
 - Construct the log.
 - Open the store.
 - Call `store.plan([...])`, then `store.migrate([...])`, once per store with the migrations of every service, in fixed service order.
+- Call `enforceMasterKey(store, master_key, path)` of custody.
 - Construct the registry.
 - Construct the invocation chain.
 - Construct the six domain services with their `Dependencies`.
@@ -504,6 +506,7 @@ The composition root constructs in this order.
 The barriers of the start are below.
 
 - The migrations of every store complete before the root constructs any service.
+- The master_key record is verified before the root constructs any service, so no service holds a key that the database refuses.
 - Every domain service starts before the Gateway listener opens.
 - A `start()` calls no peer.
 - Services call peers only after every service starts.
@@ -593,7 +596,7 @@ A fatal error runs as below.
 - The exception covers that token display alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
-- A rotation of `master_key` invalidates every issued JWT, so a human obtains a newly generated token. It makes every credential store record of custody unreadable, and it makes every derived webhook secret stale.
+- A changed `master_key` against an existing database refuses the start with `system.config.master_key_mismatch`, as [the master_key record](custody.impl.md#the-master_key-record) of custody rules. A new `master_key` starts with a new data directory, and a human obtains a newly generated token.
 
 ## Scope
 
@@ -934,6 +937,7 @@ A process split retains these boundaries.
 - A test covers a migration that fails in its second statement, and it asserts no row of its own and no partial schema.
 - A test starts the server on an older configuration and on an older database, asserts each refusal, runs `kanthord upgrade`, and asserts both backups, the migrated history and an `Up to date` rerun.
 - A test runs `kanthord upgrade` while another process holds the database, and it asserts no change.
+- A test starts the server with another `master_key` against an existing database, and it asserts the refusal `system.config.master_key_mismatch`, an unchanged master_key record and migration history, and a start under the recorded key. A test runs `kanthord upgrade` with another `master_key` on a database with a pending migration, and it asserts the refusal, no backup and no migration.
 - A test covers a recorded history that holds a gap, and one that holds a version above the binary.
 - A test covers the AES-256-GCM round trip of a `credential` record, a ciphertext moved between two records, and a truncated ciphertext.
 - A test covers the derivation of the cipher key, and it asserts that two labels produce two different keys.

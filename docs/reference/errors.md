@@ -23,6 +23,7 @@ Examples used by the implementation:
 | `system.config.version_ahead`                    | The configuration version is newer than the binary.              |
 | `system.database.migration.pending`              | The database has a pending migration. Run `kanthord upgrade`.    |
 | `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary. |
+| `system.config.master_key_mismatch`              | `master_key` does not match the database. Restore the backups.   |
 | `system.context.deadline_exceeded`               | A context's deadline expired.                                    |
 | `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                               |
 | `cli.config.invalid_allowed_host`                | An `--gateway-allowed-host` value is not a host with an optional port.   |
