@@ -48,7 +48,7 @@ help:
 	@echo ""
 	@echo "homelab"
 	@echo "  homelab-nginx    Install the nginx site of the homelab on 127.0.0.1:80 with sudo"
-	@echo "                   /s/kanthord goes to the daemon. / serves the nginx default page"
+	@echo "                   /s/kanthord goes to the daemon. / serves the floating market homepage"
 	@echo "                   HOMELAB_HOST=name sets the host, for example homelab.example.com"
 	@echo "                   Without it, both targets read HOMELAB_HOST= from platforms/homelab/.env"
 	@echo "  homelab-kanthord Run the daemon container under /s/kanthord on 127.0.0.1:31416"
