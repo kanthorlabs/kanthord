@@ -76,7 +76,7 @@ function watchWorkers() {
   }
 }
 
-function watchPullRequests() {
+function watchPullRequests(quiet) {
   const list = JSON.parse(
     execFileSync(
       "gh",
@@ -98,6 +98,7 @@ function watchPullRequests() {
   for (const pr of list) {
     if (prs.get(pr.number) === pr.state) continue;
     prs.set(pr.number, pr.state);
+    if (quiet) continue;
     console.log(`${now()} PR #${pr.number}: ${pr.state} ${pr.title}`);
   }
 }
@@ -107,7 +108,7 @@ for (let tick = 0; ; tick++) {
     await watchNodes(tick === 0);
     await watchExecutions(tick === 0);
     watchWorkers();
-    if (tick % PR_EVERY_TICKS === 0) watchPullRequests();
+    if (tick % PR_EVERY_TICKS === 0) watchPullRequests(tick === 0);
   } catch (error) {
     console.log(`${now()} watch error: ${error.message}`);
   }
