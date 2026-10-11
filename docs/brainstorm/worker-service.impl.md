@@ -441,6 +441,7 @@ Abort does not prove that every descendant process stops.
 The quiescence check before workspace reuse still needs a mechanism.
 The [Repository implementation](repository.impl.md#repository-connector) states the transport's process-cancellation limit.
 The execution enforces the turn budget on pi turn events and aborts the agent when either budget ends.
+An agent that reaches its wall-time deadline ends the wall-time budget of the execution. The execution then takes the budget end, not a failure.
 The bash timeout of an agent command stays below the remaining wall-time budget and below the 10-minute command limit of a verification item. A lower timeout that the model sets stays.
 After the agent stops at budget end, the execution code, not the agent, writes the checkpoint commit, pushes and releases with further work.
 The boundary is the task commit: work that the budget ends before its task commit, or during the judgement of a passing run, takes the checkpoint; a task commit whose run failed or left an item unrun, with no later task work, takes the head-commit evidence and the release with no further work.
