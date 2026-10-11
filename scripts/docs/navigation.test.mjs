@@ -116,6 +116,7 @@ test("feature pages share one response contract and API/CLI sections", () => {
       "gateway/verify.md",
       "llm/credential.md",
       "llm/login.md",
+      "llm/model.md",
       "llm/provider.md",
       "mission/assessment.md",
       "mission/attempt.md",
