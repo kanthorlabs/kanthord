@@ -267,9 +267,10 @@ The steps execution of "Account recovery" uses a workspace with no checkout, and
 
 ## node branch
 
-The node branch is the branch that the steps method uses for one objective in one repository across its attempts.
+The node branch is the branch that the steps method uses for one objective in one repository, from the latest attempt that starts from the base branch.
 The node branch of "Add password reset" takes its name from the node identity, for example `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
-Attempt 1 and attempt 2 both work on that branch.
+Attempt 1 and attempt 2 both work on that branch when attempt 2 records the start point `node_branch`.
+When attempt 2 records the start point `base_branch`, attempt 2 starts the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2` from the base branch.
 A revision of the objective that names another repository binding starts a new node branch in that repository.
 
 ## task commit
