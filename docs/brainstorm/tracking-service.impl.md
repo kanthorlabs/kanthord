@@ -93,3 +93,16 @@ The kanthord extension of Claude Code owns the capture, the local store and the 
 The kanthord plugin of opencode owns the capture, the local store and the ingestion.
 A human authenticates the call of an ingestion, and the client identity of the extension authorizes no ingestion.
 Their packaging is an epic decision.
+
+## Claude Code hooks
+
+The kanthord extension of Claude Code obeys these rules when it registers and runs its hooks:
+
+- The extension registers only the hook events that the installed Claude Code version knows. The settings loader of Claude Code rejects an event that is newer than the running version.
+- The extension registers `SessionStart`. A resumed or an idle session sends no other event before its first prompt.
+- A turn ends at `Stop` or at `StopFailure`. After an API error or a model error, Claude Code sends `StopFailure` and no `Stop`.
+- A manual `/compact` ends at `PostCompact`, because it sends no `Stop`.
+- The extension registers no `PreCompact`. An aborted compact sends `PreCompact` and no other compact event.
+- `SubagentStart`, `SubagentStop` and `TeammateIdle` record each child agent. A child agent can run after the turn of the lead agent ends, and the execution stays active until the last child ends.
+- Each hook writes the JSON object `{}` as its output. A permission hook with an empty output fails closed.
+- A hook that runs with `CLAUDE_JOB_DIR` set captures nothing. A background session inherits the environment of the session that started it, so its capture identifies the wrong execution.
