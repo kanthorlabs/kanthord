@@ -87,7 +87,7 @@ The GitHub merge of a pull request reads the allowed merge methods of the reposi
 The [retry rules](repository.md#result-classes) use the deadline that the caller supplies.
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
 An epic decides that form for each platform.
-The read-back of the create of `github.pull_request` calls `GET /repos/{owner}/{repo}/pulls` with `state=open`, `head=<owner>:<node branch>` and `base=<base branch>`. The read-back of its reuse fetches the node branch through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <node branch>`.
+The read-back of the create of `github.pull_request` calls `GET /repos/{owner}/{repo}/pulls` with `state=open`, `head=<owner>:<node branch>` and `base=<base branch>`, where the node branch is `node_branch` of the claim. The read-back of its reuse fetches the node branch of the claim through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <node branch>`.
 The read-back of `git.merge_push` fetches the base branch through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <base branch>`.
 
 ## Repository connector
@@ -105,6 +105,8 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
 - `simple-git` kills the `git` process and not the `ssh` child of that process.
 - A git operation of the connector that fails, is aborted or reaches its deadline answers `repository.connector.git_failed`, and the message names the operation.
+- `nodeBranchOf(node_id, k)` builds the node branch name: `kanthord/<node id>` when k is 1, `kanthord/<node id>-a<k>` when k is later. It is the only builder of the name.
+- `pushNodeBranch` accepts both forms. It refuses `kanthord/<node id>/a<k>`, `-a0`, `-a1` and a leading zero such as `-a01`.
 
 ## The SSH environment
 
