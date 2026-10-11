@@ -416,13 +416,21 @@ The carrier of that attribution is an epic decision.
 - A verification item runs under the deadline `min(created_at + wall_time_ms, expired_at)` of its execution, and under its own limit of 10 minutes from its start.
 - An item whose deadline arrived does not start and has no result. A started item that the deadline or its own limit ends records `timed_out: true`.
 - The worker keeps the last 4 KiB of the combined stdout and stderr of each item. The output is not evidence. The task revision carries the output of the last item that ran.
+- An agent turn that ends with a provider error stops the execution with `provider_failed`. pi retries a transient error before the turn ends.
+- The stop code names the provider failure: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
+- A task revision after a failed verification that changes no file twice in a row stops the execution with `no_progress`. The second unchanged revision runs no verification.
+- A `provider_failed` or `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit).
 - Tests cover native and external-harness defaults, overrides for every worker binding, and positive safe integers.
   They cover turn events, wall time from `created_at`, and cleanup bounded by `expired_at`, not by the remaining budget.
+  They cover each provider failure code, a revision that changes nothing twice, and a revoked claim during a task loop and during a prompt.
 
 The execution holds a fixed `expired_at` under [Scheduler configuration](scheduler-service.impl.md#configuration).
 An external harness must release before the `expired_at` of its execution record.
 A hosted execution gets the abort in-process from the transaction that ends it.
-Every other execution learns of the end from its first refused call and aborts then.
+Every other execution learns of the end from a claim check or from its first refused call, and aborts then.
+A native execution reads its claim after each agent turn and before each task cycle.
+A claim that is not `running`, or a read that the Scheduler refuses as ended, ends the execution as `revoked`. A read that fails for another reason ends nothing.
+A pause of the node therefore stops a native execution within one agent turn.
 On revocation or loss, the execution aborts its pi session and dispatches nothing after.
 Abort does not prove that every descendant process stops.
 The quiescence check before workspace reuse still needs a mechanism.
