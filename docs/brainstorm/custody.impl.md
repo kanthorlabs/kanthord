@@ -131,7 +131,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 ## The credential handover
 
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
-- The payload is canonical JSON containing only the credential of the effective agent provider of the execution.
+- The payload is canonical JSON containing only the credential of the pinned agent selection of the execution.
 - Its sole item holds the record identity, the pi adapter id and the pi-ai credential.
 - AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
