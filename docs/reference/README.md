@@ -75,7 +75,7 @@ The [error-code reference](errors.md) defines the shared naming rule, failure en
 
 Run `kanthord` from an installed package, or `node bin/kanthord.mjs` from `engine/` after `pnpm run build`. The launcher requires Node.js `>=24.15.0 <25`. Commands declare their arguments and options and read no interactive input.
 
-`--help` describes each command. Invoking a group displays its help. The `tracking` group currently exposes help only. Human and machine tokens come from `kanthord auth jwt generate`, and `kanthord auth jwt inspect` decodes one; startup and registration issue none, and there are no kanthord login or logout commands. `llm credential login` signs in to an LLM platform, not to kanthord.
+`--help` describes each command. Invoking a group displays its help. The `tracking` group reads a trace, its spans and its telemetry texts. Human and machine tokens come from `kanthord auth jwt generate`, and `kanthord auth jwt inspect` decodes one; startup and registration issue none, and there are no kanthord login or logout commands. `llm credential login` signs in to an LLM platform, not to kanthord.
 
 ### Client configuration
 
