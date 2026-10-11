@@ -3,9 +3,9 @@
   "env_file": "engine/.env.e2e",
   "credentials": [
     {
-      "name": "e2e-openrouter",
-      "platform": "openrouter",
-      "secret_env": "E2E_LLM_OPENROUTER_KEY",
+      "name": "e2e-nvidia",
+      "platform": "nvidia",
+      "secret_env": "E2E_NVIDIA_KEY",
       "metadata": null
     }
   ],
@@ -13,28 +13,28 @@
     "swe@1": {
       "providers": [
         {
-          "name": "e2e-openrouter",
-          "provider": "openrouter",
-          "credential": "e2e-openrouter"
+          "name": "e2e-nvidia",
+          "provider": "nvidia",
+          "credential": "e2e-nvidia"
         }
       ],
       "default": {
-        "agent_provider": "e2e-openrouter",
-        "model_identifier": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "agent_provider": "e2e-nvidia",
+        "model_identifier": "z-ai/glm-5.3-flash",
         "reasoning_effort": "medium"
       }
     },
     "re@1": {
       "providers": [
         {
-          "name": "e2e-openrouter",
-          "provider": "openrouter",
-          "credential": "e2e-openrouter"
+          "name": "e2e-nvidia",
+          "provider": "nvidia",
+          "credential": "e2e-nvidia"
         }
       ],
       "default": {
-        "agent_provider": "e2e-openrouter",
-        "model_identifier": "nvidia/nemotron-3-super-120b-a12b:free",
+        "agent_provider": "e2e-nvidia",
+        "model_identifier": "z-ai/glm-5.3-flash",
         "reasoning_effort": "medium"
       }
     }
@@ -50,7 +50,9 @@
       "strategy": {
         "action": {
           "name": "pull_request",
-          "follows": { "type": "assessment_passed" }
+          "follows": {
+            "type": "assessment_passed"
+          }
         }
       },
       "ssh_credential": "github-com",
@@ -65,8 +67,16 @@
     }
   },
   "workers": [
-    { "binding": "developer", "worker": "developer@1", "instances": 1 },
-    { "binding": "reviewer", "worker": "reviewer@1", "instances": 1 }
+    {
+      "binding": "developer",
+      "worker": "developer@1",
+      "instances": 1
+    },
+    {
+      "binding": "reviewer",
+      "worker": "reviewer@1",
+      "instances": 1
+    }
   ],
   "plan": "docs/brainstorm/assets/todoapp/plan"
 }
