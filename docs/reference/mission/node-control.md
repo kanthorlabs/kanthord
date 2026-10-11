@@ -49,8 +49,11 @@ Readiness requires two conditions. For an initiative, every current objective is
 - `change` holds new `content`, a `reason` and, for an objective, the complete current task set. A task in the set has no bindings. An initiative sends no `tasks`.
 - A content change writes a revision with `change.write` `unblock` and increases the mission version.
 - With attempt `0`, `unblock` opens no attempt. Otherwise it opens the next attempt, pinned to the current revision, with the human as `opened_by`.
+- `start_point` names where the next attempt starts. `node_branch`, the default, continues the node branch of the cleared attempt. `base_branch` starts a new node branch `kanthord/<node id>-a<attempt>` from the base branch. Another value answers 400 `gateway.request.validation_failed`, and nothing is written.
+- A start from the base branch deletes, renames and force-pushes no branch. An open pull request of the earlier node branch stays open, and a human closes it. The start point of an initiative attempt has no effect.
 
 To redirect an open attempt, pause the node, block it, and unblock it with the changed content.
+To restart an open attempt from the base branch, pause the node, block it, and unblock it with `start_point: "base_branch"`.
 
 ### check
 
@@ -225,19 +228,20 @@ All operations use `POST`, access `human` (human bearer JWT), a 30-second timeou
 | `node discard`      | `/api/mission/node/:node_id/discard`  | `mission.node.discard`      | Human act                                   |
 | `node priority set` | `/api/mission/node/:node_id/priority` | `mission.node.priority.set` | `{ value, expected_mission_version }`       |
 
-| Body field                 | Type                     | Required             | Purpose                                                                                            |
-| -------------------------- | ------------------------ | -------------------- | -------------------------------------------------------------------------------------------------- |
-| `reason`                   | nonblank string          | Human act            | Reason recorded on the assessment, or the reason of the act.                                       |
-| `expected_mission_version` | positive integer         | All                  | Current mission version.                                                                           |
-| `expected_state`           | state name               | Human act            | Current state of the node.                                                                         |
-| `expected_attempt`         | integer `>= 0`           | Human act            | Current attempt number.                                                                            |
-| `target`                   | `Available` or `Waiting` | `resume`             | Resume target when no external action decides the state.                                           |
-| `result`                   | `success`                | `override`           | Asserted result; the only value.                                                                   |
-| `landed_commit`            | object                   | `override`, optional | `{ "kind": "repository", "binding_id": "binding_<ulid>", "commit": "<40 or 64 lower-case hex>" }`. |
-| `blocked_attempt`          | integer `>= 0`           | `unblock`            | Current attempt number of the blocked node.                                                        |
-| `expected_revision`        | positive integer         | `unblock`            | Current revision of the node.                                                                      |
-| `change`                   | object                   | `unblock`, optional  | `{ content, tasks?, reason }`; `tasks` holds `{ id, filename, content }`.                          |
-| `value`                    | signed safe integer      | `priority set`       | New priority.                                                                                      |
+| Body field                 | Type                           | Required             | Purpose                                                                                            |
+| -------------------------- | ------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------- |
+| `reason`                   | nonblank string                | Human act            | Reason recorded on the assessment, or the reason of the act.                                       |
+| `expected_mission_version` | positive integer               | All                  | Current mission version.                                                                           |
+| `expected_state`           | state name                     | Human act            | Current state of the node.                                                                         |
+| `expected_attempt`         | integer `>= 0`                 | Human act            | Current attempt number.                                                                            |
+| `target`                   | `Available` or `Waiting`       | `resume`             | Resume target when no external action decides the state.                                           |
+| `result`                   | `success`                      | `override`           | Asserted result; the only value.                                                                   |
+| `landed_commit`            | object                         | `override`, optional | `{ "kind": "repository", "binding_id": "binding_<ulid>", "commit": "<40 or 64 lower-case hex>" }`. |
+| `blocked_attempt`          | integer `>= 0`                 | `unblock`            | Current attempt number of the blocked node.                                                        |
+| `expected_revision`        | positive integer               | `unblock`            | Current revision of the node.                                                                      |
+| `change`                   | object                         | `unblock`, optional  | `{ content, tasks?, reason }`; `tasks` holds `{ id, filename, content }`.                          |
+| `start_point`              | `base_branch` or `node_branch` | `unblock`, optional  | Start point of the next attempt. The default is `node_branch`.                                     |
+| `value`                    | signed safe integer            | `priority set`       | New priority.                                                                                      |
 
 The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications` and `bindings` (binding IDs). Bodies accept no unknown field.
 
