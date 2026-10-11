@@ -15,7 +15,7 @@ This revision of the Worker Service supplies four workers.
 
 - **general@1**: the steps method with the native agent `swe@1`.
 - **reviewer@1**: the evaluation method with the native agent `re@1`.
-- **claude@1**: hosted by the external harness `claude-code`, declares `Available`, `Waiting` and `External.Requested`.
+- **claude-code@1**: hosted by the external harness `claude-code`, declares `Available`, `Waiting` and `External.Requested`.
 - **opencode@1**: hosted by the external harness `opencode`, declares `Available`, `Waiting` and `External.Requested`.
 
 ## host
@@ -27,7 +27,7 @@ The set is closed and it holds two values.
 - **an external harness**
 
 `general@1` and `reviewer@1` have kanthord as their host.
-`claude@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
+`claude-code@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
 
 ## placement
 
@@ -246,7 +246,7 @@ Every node holds verifications, and a method reads them.
 The [Scheduler Service](scheduler-service.vocabulary.md#instance-healthcheck) owns the term, and the Worker Service produces the check.
 The instance of `general@1` passes when its effective configuration resolves under the current worker binding and enabled agent enablement.
 It fails when the `swe@1` enablement is absent or disabled.
-The instance of `claude@1` fails when its registration is not live.
+The instance of `claude-code@1` fails when its registration is not live.
 
 ## trust boundary
 
@@ -288,5 +288,5 @@ Execution 2 runs the task verifications at the head of the node branch and conti
 
 The resource budget bounds the agent work of one execution by wall time and, when declared, turn count.
 `general@1` declares 200 turns and 2 hours, and `general-lab` overrides them with 50 turns and 30 minutes.
-`claude@1` and `opencode@1` each declare 2 hours of wall time.
+`claude-code@1` and `opencode@1` each declare 2 hours of wall time.
 The [budget contract](worker-service.impl.md#stop-and-budget) defines measurement and validation.

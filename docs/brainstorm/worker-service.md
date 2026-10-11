@@ -37,7 +37,7 @@ The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
 
 Each agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
-The Worker Service publishes the contract of `claude@1` and `opencode@1`.
+The Worker Service publishes the contract of `claude-code@1` and `opencode@1`.
 It holds the name, host, declared node states, required node format and resource budget.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
