@@ -289,6 +289,9 @@ A test checks duplicate removal, discarded objectives, base-branch heads and one
 A test checks the evidence-placement rule when an initiative's objectives name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
+The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
+When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
+The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. An initiative has none.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
@@ -300,6 +303,7 @@ Tests permit judgement only after every verification passes.
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
 - The workspace of a steps execution on an objective is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
 - The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
+- The preparation of an objective workspace adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
 - The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.
