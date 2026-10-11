@@ -32,13 +32,13 @@ function alive(pid) {
   }
 }
 
-async function watchNodes() {
+async function watchNodes(quiet) {
   const page = await api.get(`/api/mission/${state.mission_id}/node?limit=200`);
   for (const node of page.items) {
     if (node.kind === TASK_KIND) continue;
     const label = `${node.state}/a${node.attempt}`;
     const before = nodes.get(node.id);
-    if (before !== label)
+    if (!quiet && before !== label)
       console.log(
         `${now()} node ${node.filename}: ${before ?? "-"} -> ${label}`,
       );
@@ -46,7 +46,7 @@ async function watchNodes() {
   }
 }
 
-async function watchExecutions() {
+async function watchExecutions(quiet) {
   const page = await api.get(
     `/api/scheduler/project/${state.project_id}/execution?limit=50`,
   );
@@ -54,6 +54,7 @@ async function watchExecutions() {
     if (execution.ended_at === null || ended.has(execution.execution_id))
       continue;
     ended.add(execution.execution_id);
+    if (quiet) continue;
     const stop = execution.stop
       ? ` stop=${execution.stop.reason}${execution.stop.code ? `/${execution.stop.code}` : ""}`
       : "";
@@ -103,8 +104,8 @@ function watchPullRequests() {
 
 for (let tick = 0; ; tick++) {
   try {
-    await watchNodes();
-    await watchExecutions();
+    await watchNodes(tick === 0);
+    await watchExecutions(tick === 0);
     watchWorkers();
     if (tick % PR_EVERY_TICKS === 0) watchPullRequests();
   } catch (error) {
