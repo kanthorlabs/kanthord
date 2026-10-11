@@ -1,0 +1,114 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { client, mainCheckout, tokenOf } from "./api.mjs";
+
+const [run] = process.argv.slice(2);
+if (!run) throw new Error("usage: watch.mjs <run>");
+const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "../..");
+const MAIN = mainCheckout(ROOT);
+const runDir = join(MAIN, ".dev/e2e", run);
+const state = JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
+const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));
+const TICK_MS = 15000;
+const PR_EVERY_TICKS = 4;
+const PROCESS_ABSENT = "ESRCH";
+const TASK_KIND = "task";
+const now = () => new Date().toISOString().slice(11, 19);
+
+const nodes = new Map();
+const ended = new Set();
+const prs = new Map();
+const down = new Set();
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === PROCESS_ABSENT) return false;
+    throw error;
+  }
+}
+
+async function watchNodes() {
+  const page = await api.get(`/api/mission/${state.mission_id}/node?limit=200`);
+  for (const node of page.items) {
+    if (node.kind === TASK_KIND) continue;
+    const label = `${node.state}/a${node.attempt}`;
+    const before = nodes.get(node.id);
+    if (before !== label)
+      console.log(
+        `${now()} node ${node.filename}: ${before ?? "-"} -> ${label}`,
+      );
+    nodes.set(node.id, label);
+  }
+}
+
+async function watchExecutions() {
+  const page = await api.get(
+    `/api/scheduler/project/${state.project_id}/execution?limit=50`,
+  );
+  for (const execution of page.items) {
+    if (execution.ended_at === null || ended.has(execution.execution_id))
+      continue;
+    ended.add(execution.execution_id);
+    const stop = execution.stop
+      ? ` stop=${execution.stop.reason}${execution.stop.code ? `/${execution.stop.code}` : ""}`
+      : "";
+    console.log(
+      `${now()} execution ${execution.execution_id.slice(-6)} ended${stop}`,
+    );
+  }
+}
+
+function watchWorkers() {
+  for (const instance of state.instances) {
+    const up = alive(instance.pid);
+    if (!up && !down.has(instance.name))
+      console.log(
+        `${now()} worker ${instance.name} EXITED (log ${instance.log})`,
+      );
+    if (up) down.delete(instance.name);
+    else down.add(instance.name);
+  }
+}
+
+function watchPullRequests() {
+  const list = JSON.parse(
+    execFileSync(
+      "gh",
+      [
+        "pr",
+        "list",
+        "-R",
+        state.github,
+        "--base",
+        state.base_branch,
+        "--state",
+        "all",
+        "--json",
+        "number,state,title",
+      ],
+      { encoding: "utf8" },
+    ),
+  );
+  for (const pr of list) {
+    if (prs.get(pr.number) === pr.state) continue;
+    prs.set(pr.number, pr.state);
+    console.log(`${now()} PR #${pr.number}: ${pr.state} ${pr.title}`);
+  }
+}
+
+for (let tick = 0; ; tick++) {
+  try {
+    await watchNodes();
+    await watchExecutions();
+    watchWorkers();
+    if (tick % PR_EVERY_TICKS === 0) watchPullRequests();
+  } catch (error) {
+    console.log(`${now()} watch error: ${error.message}`);
+  }
+  await sleep(TICK_MS);
+}
