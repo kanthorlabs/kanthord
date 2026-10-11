@@ -6,7 +6,7 @@
 
 Check a stored LLM credential through the LLM provider of its platform. The check reports the connection result. For `openai` and `openai-compatible`, it also returns the model list of the remote. The API and `kanthord llm provider check` perform the same read operation.
 
-The check uses the current revision of the credential. It stores no result, caches nothing, and creates no idempotency record. It has no project or binding. Use the model IDs to select the approved models of an `openai-compatible` credential, then save them with [`llm credential update-metadata`](credential.md).
+The check uses the current revision of the credential. It stores no result, caches nothing, and creates no idempotency record. It has no project or binding. Use the model IDs to select the approved models of an `openai-compatible` credential, then save them with [`llm credential update-metadata`](credential.md). To check a model call, use [`llm model check`](model.md).
 
 | Platform            | Remote call                                                | Model list |
 | ------------------- | ---------------------------------------------------------- | ---------- |

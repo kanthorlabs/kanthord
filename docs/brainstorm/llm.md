@@ -47,6 +47,8 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - It maps the metadata of the credential to the options of the model runtime.
 - It performs the model inference calls of that runtime.
 - It holds every fact about an LLM platform, so the Worker Service holds none.
+- The model check runs one tool round trip through that runtime for a credential, a model identifier and a reasoning effort. It answers `ok` or a provider failure code.
+- The model check is a warning for the human. It stores nothing, and no write calls it.
 
 ## Placement
 
