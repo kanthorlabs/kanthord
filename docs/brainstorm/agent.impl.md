@@ -180,7 +180,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 | `framing-worker`     | none                                                                                                     |
 | `framing-workbench`  | none                                                                                                     |
 | `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                                      |
-| `task-revision`      | `rationale`, `results`                                                                                   |
+| `task-revision`      | `rationale`, `results`, `output`                                                                         |
 | `criterion-revision` | `rationale`                                                                                              |
 | `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                                              |
 | `report`             | `objectives`, `outcomes`, `evidence`                                                                     |
