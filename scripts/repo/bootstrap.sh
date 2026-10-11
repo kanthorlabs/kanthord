@@ -41,6 +41,7 @@ step "3/6 branches"
 "$ROOT/scripts/repo/attach.sh" || exit 1
 
 step "4/6 dependencies"
+"$ROOT/scripts/repo/install.sh" || exit 1
 "$ROOT/scripts/engine/install.sh" || exit 1
 "$ROOT/scripts/app/install.sh" || exit 1
 
