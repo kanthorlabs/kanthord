@@ -10,11 +10,11 @@ A ruling that names a package, a product or a version is deliberate, and a chang
 
 ## Native agent runtime
 
-The first version supplies the workers `general@1` and `reviewer@1`.
+The first version supplies the workers `coder@1` and `reviewer@1`.
 The workers `claude-code@1` and `opencode@1` follow with the registration of an externally hosted instance.
-The first version supplies `general@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
+The first version supplies `coder@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
 `tdd@1` follows when the runtime hosts several agents in one execution.
-The native agent `swe@1` of `general@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
+The native agent `swe@1` of `coder@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
 The adapter obtains the runtime from the [model connector](llm.impl.md#the-model-connector) of the LLM component over the credential store of the execution, and it builds the session with `createAgentSession({ modelRuntime })`.
 The first version supports a native agent of a worker at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
@@ -32,7 +32,7 @@ Every runtime setup call carries an abort signal with a deadline.
 
 - A worker template is a static server module; the registry maps worker names to templates and loads no runtime plugin.
 - A worker references the declaration of its agent in the [agent catalog](agent.impl.md#the-agent-catalog) and carries no separate configuration version.
-- `general@1` references `swe@1`; `reviewer@1` references `re@1`.
+- `coder@1` references `swe@1`; `reviewer@1` references `re@1`.
 
 ## Externally hosted worker
 
@@ -274,12 +274,6 @@ The tool register and the abstraction layer for tool instances manage the four s
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
 
-## The task review
-
-- `developer@1` reviews each task commit with `re@1` before the next task.
-- The review judges the task criterion, every node criterion item that the task touches and the default standard.
-- A blocker finding sends the fix instruction to `swe@1`, and the review runs again, up to the review round limit.
-
 ## The further-work release
 
 - A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
@@ -413,7 +407,7 @@ The carrier of that attribution is an epic decision.
 ## Stop and budget
 
 - Every worker declares `resource_budget.wall_time_ms`.
-- `general@1` and `reviewer@1` declare default `resource_budget: { turns: 200, wall_time_ms: 7200000 }`.
+- `coder@1` and `reviewer@1` declare default `resource_budget: { turns: 200, wall_time_ms: 7200000 }`.
 - `claude-code@1` and `opencode@1` declare default `resource_budget: { wall_time_ms: 7200000 }`.
 - Every worker binding can override its default through the optional `resource_budget`.
 - `wall_time_ms` and any declared `turns` are positive safe integers, including in overrides.
@@ -461,7 +455,7 @@ The handover and the report enter no transcript telemetry.
 
 ## Acceptance path
 
-The acceptance path is the `general@1` loop, the commit and the verification, the push, the release, the independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome.
+The acceptance path is the `coder@1` loop, the commit and the verification, the push, the release, the independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome.
 A scripted fake provider runs it deterministically.
 A bounded real-provider smoke run proves the real configuration.
 

@@ -130,14 +130,18 @@ The pages record only the decision. Read the owning page section before you prop
 - A list row of a revisioned record shows its effective revision as `(v<revision>)` next to its name or identity.
 - Show one revision per row. Never show a second revision field beside it.
 
-## Shared working tree and commits
+## Worktrees, branches and pull requests
 
-Several agents edit the same working tree in parallel, for example `docs/brainstorm/HANDOFF.md` and `engine/docs/cli/*`.
+Several people and agents work in parallel. Each change has its own worktree, its own branch and its own pull request.
 
 - Edit HANDOFF by quoted sentence only. Never revert a foreign change.
-- Commit design pages per step. Leave HANDOFF uncommitted until a batch ends or Ulrich asks.
+- Commit design pages per step. Commit a HANDOFF item with the change that adds, rules or removes it.
 - Stage exact paths only. Never use `git add -A`. Never stage a file with the uncommitted edits of another agent.
-- Commit directly on `main`. Do not create a branch, because a branch switch moves HEAD under the other agents.
+- Do every change in its own git worktree. Never switch the branch of the root checkout, because a branch switch moves HEAD under the other agents.
+- Create the worktree in `.dev/<name>` at the root of the repository, from `main`: `git worktree add -b <type>/<name> .dev/<name> main`. `.dev/` is ignored.
+- Run `make bootstrap` in the worktree before a build, a test or a check. A new worktree holds no submodule and no dependency.
+- Push the branch and open a pull request to `main`. Merge only after review.
+- After the merge, remove the worktree and delete the branch.
 - Write every commit subject in the format `<type>(<scope>): <subject>`. The `(<scope>)` part is optional.
 - Write the subject in the present tense, for example `feat: add hat wobble`.
 - Use only one of these types:

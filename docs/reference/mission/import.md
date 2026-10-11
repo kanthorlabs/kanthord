@@ -19,6 +19,46 @@ The import set has one of two formats:
 
 `parent` and `depends_on` name plan files inside the import set, never node IDs or paths. `bindings` holds binding names of the project. The service resolves each name to the current binding revision.
 
+### Binding inheritance
+
+A node names its bindings or inherits them. The service resolves each binding kind on its own, at write time. The first level that names a kind wins. Bindings of one kind never merge across levels.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
+flowchart LR
+    accTitle: Binding inheritance for one binding kind
+    accDescr: A new node uses the bindings of a kind that it names. Otherwise it uses those of the nearest ancestor that names the kind. Otherwise it uses the single project binding of the kind. Two or more project bindings refuse the write. An existing node keeps its stored bindings of an omitted kind.
+    start(["One binding kind<br/>of one node"]) --> existing{"Existing node<br/>omits the kind?"}
+    existing -- yes --> keep(["Keep the stored bindings"])
+    existing -- no --> own{"Node names<br/>the kind?"}
+    own -- yes --> use1(["Use the named bindings"])
+    own -- no --> ancestor{"An ancestor<br/>names the kind?"}
+    ancestor -- yes --> use2(["Use the nearest ancestor's"])
+    ancestor -- no --> project{"Project bindings<br/>of the kind"}
+    project -- "exactly 1" --> use3(["Use it"])
+    project -- "0" --> none(["None"])
+    project -- "2 or more" --> refuse(["Refuse:<br/>mission.node.bindings_invalid"])
+    classDef focal fill:#fbeae1,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
+    classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class refuse focal;
+    class keep,use1,use2,use3,none outcome;
+```
+
+After the resolution, each node kind holds these counts. A count outside the rule refuses the write with `mission.node.bindings_invalid`.
+
+| Node kind  | Repository                                       | Storage | Worker |
+| ---------- | ------------------------------------------------ | ------- | ------ |
+| Initiative | 0–1, a default for its descendants only          | 0–1     | 0      |
+| Objective  | Exactly 1                                        | 0–1     | 0      |
+| Task       | 0; the task uses the repository of its objective | 0       | 0      |
+
+- An omitted `bindings` field and `bindings: []` both inherit.
+- A project with two repositories, for example `be-repo` and `fe-repo`, needs a name on each objective or on its initiative. Otherwise the write is refused.
+- The node revision stores the resolved binding revisions. A later change of the project or of an ancestor moves no existing node. A node update, a [rebind](node.md#node-rebind) or a move of the node keeps or changes them explicitly.
+- The repository binding of an initiative is a default only. It yields no external action, no workspace and no verification target. The initiative still derives its repositories from its objectives.
+- One objective works in one repository. Work in two repositories needs two objectives, joined with `depends_on`.
+- A [mission export](mission.md#mission-export) writes the resolved binding names, so an exported plan names every binding explicitly.
+
 The import condition is state `Pending` or `Available` with attempt `0`. The import applies it to these current nodes:
 
 - Each initiative or objective with changed content. For a task with changed content, the condition applies to its objective.
@@ -195,16 +235,16 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `preview_digest`        | 64 lower-case hex chars          | Apply only | Digest from the preview.                                                               |
 | `confirmed_retirements` | array of `node_<ulid>`           | Apply only | Exactly the `retirements` set of the preview.                                          |
 
-| Entry field                        | Type                              | Required | Purpose                                                                                                                                                |
-| ---------------------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `filename`                         | string                            | Yes      | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                                                                              |
-| `kind`                             | `initiative`, `objective`, `task` | Yes      | Node kind; it cannot change for a kept node.                                                                                                           |
-| `name`, `requirement`, `criterion` | nonblank string                   | Yes      | Node content.                                                                                                                                          |
-| `verifications`                    | array of nonblank strings         | Yes      | At least one verification.                                                                                                                             |
-| `bindings`                         | array of binding names            | Yes      | An objective names exactly one repository binding and at most one storage binding. An initiative names at most one storage binding. A task names none. |
-| `id`                               | `node_<ulid>`                     | No       | Current node to keep.                                                                                                                                  |
-| `parent`                           | plan file name                    | No       | Required for an objective or a task; forbidden for an initiative.                                                                                      |
-| `depends_on`                       | array of plan file names          | No       | Dependency targets; forbidden for a task.                                                                                                              |
+| Entry field                        | Type                              | Required | Purpose                                                                                                      |
+| ---------------------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `filename`                         | string                            | Yes      | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                                    |
+| `kind`                             | `initiative`, `objective`, `task` | Yes      | Node kind; it cannot change for a kept node.                                                                 |
+| `name`, `requirement`, `criterion` | nonblank string                   | Yes      | Node content.                                                                                                |
+| `verifications`                    | array of nonblank strings         | Yes      | At least one verification.                                                                                   |
+| `bindings`                         | array of binding names            | No       | Binding names. An omitted kind inherits; see [Binding inheritance](#binding-inheritance). A task names none. |
+| `id`                               | `node_<ulid>`                     | No       | Current node to keep.                                                                                        |
+| `parent`                           | plan file name                    | No       | Required for an objective or a task; forbidden for an initiative.                                            |
+| `depends_on`                       | array of plan file names          | No       | Dependency targets; forbidden for a task.                                                                    |
 
 The body accepts no unknown field.
 

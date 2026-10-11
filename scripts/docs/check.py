@@ -86,6 +86,8 @@ def check_tree(root, boundary, public=False):
             source.read_text(),
             flags=re.MULTILINE | re.DOTALL,
         )
+        if source.suffix == ".md":
+            text = re.sub(r"(`+)[^\n]+?\1", "", text)
         text = re.sub(
             r"(<script\b[^>]*>).*?</script>", r"\1</script>", text, flags=re.DOTALL
         )

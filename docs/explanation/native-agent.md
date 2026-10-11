@@ -10,7 +10,7 @@ The agent catalog is static and holds two declarations. An agent name names a ro
 
 | Agent   | Role              | Built-in tools                                        | Host tools        | Used by                            |
 | ------- | ----------------- | ----------------------------------------------------- | ----------------- | ---------------------------------- |
-| `swe@1` | Software engineer | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `evidence-upload` | Worker `general@1`, the Workbench  |
+| `swe@1` | Software engineer | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `evidence-upload` | Worker `coder@1`, the Workbench    |
 | `re@1`  | Reviewer          | `read`, `grep`, `find`, `ls`                          | none              | Worker `reviewer@1`, the Workbench |
 
 `re@1` has no tool that writes a file or runs a command. Its prompt also forbids a change to the repository. The tool set enforces that rule; the prompt only states it.
@@ -21,7 +21,7 @@ Each declaration holds a shipped agent prompt and its tool set. A declaration ho
 
 The Agent component belongs to no service. A consumer opens an agent session for its own purpose, under its own authority:
 
-- **Worker execution.** A Worker execution of `general@1` or `reviewer@1` opens a session to do or to judge the work of one node. No human is present during the run.
+- **Worker execution.** A Worker execution of `coder@1` or `reviewer@1` opens a session to do or to judge the work of one node. No human is present during the run.
 - **Workbench session.** A human opens a session from the dashboard and talks to the agent. The agent can call KanthorD operations for the human.
 
 Both consumers use the same open path. They differ in the prompt, the tools, the budget and the session storage.
@@ -237,7 +237,7 @@ The other methods use the same session with a single call:
 - **Evaluation** (`re@1`). The worker runs the verification commands first. A failure ends the evaluation without the agent. On success, the agent receives the evidence and returns a JSON judgement.
 - **Initiative report** (`swe@1`). When every objective of an initiative ends, the agent writes a report from the objectives, the outcomes and the evidence. The worker stores the report as evidence.
 
-An agent reply that does not parse as the expected judgement ends the execution with `judgement_invalid`.
+An agent reply that does not parse as the expected judgement gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`.
 
 ### Budget
 

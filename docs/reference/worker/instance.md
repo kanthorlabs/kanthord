@@ -26,7 +26,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
       "runtime_identity": "worker_instance_01M34JC4BJ66JHP41M4MYY6PST",
       "project_id": "project_01M34JC4BJ66JHP41M4MYY6PSA",
       "resource_identity": "worker:kanthord:general",
-      "worker_name": "general@1",
+      "worker_name": "coder@1",
       "host": "kanthord",
       "placement": "worker",
       "client_id": "client_identity_01M34JC4BJ66JHP41M4MYY6PSB",
@@ -55,7 +55,7 @@ The API returns HTTP `200` with one instance record. The CLI writes the same obj
 | `runtime_identity`  | string  | Runtime identity of the instance, `worker_instance_<ulid>`.                      |
 | `project_id`        | string  | Project of the worker binding.                                                   |
 | `resource_identity` | string  | Worker binding, `worker:kanthord:<binding-name>`.                                |
-| `worker_name`       | string  | Supplied worker of the binding, for example `general@1`.                         |
+| `worker_name`       | string  | Supplied worker of the binding, for example `coder@1`.                           |
 | `host`              | string  | `kanthord` or `external-harness`.                                                |
 | `placement`         | string  | `worker`; present only when `host` is `kanthord`.                                |
 | `client_id`         | string  | Machine client identity that owns the registration, `client_identity_<ulid>`.    |

@@ -83,7 +83,7 @@ A per-kind function derives it from the binding configuration on every write, so
 The values of the first version are below.
 
 - `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`, and for the address `git@kanthorlabs.github.com:kanthorlabs/kanthord.git` of an SSH alias.
-- `worker:kanthord:general-main` for the worker binding with the binding name `general-main`.
+- `worker:kanthord:coder-main` for the worker binding with the binding name `coder-main`.
 - `storage:s3:s3.eu-central-1.amazonaws.com/atlas-evidence` for the storage binding of the bucket `atlas-evidence` at that endpoint.
 
 A submission carries `kind`, and the write uses it to select the configuration schema and the derivation. A read derives `kind` from the first part, and the validation refuses a first part outside the closed set of binding kinds.

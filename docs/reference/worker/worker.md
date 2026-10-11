@@ -11,7 +11,7 @@ The catalog contains these workers:
 | Worker          | Host               | Method or harness     | Declared node states                         |
 | --------------- | ------------------ | --------------------- | -------------------------------------------- |
 | `claude-code@1` | `external-harness` | harness `claude-code` | `Available`, `Waiting`, `External.Requested` |
-| `general@1`     | `kanthord`         | method `steps`        | `Available`                                  |
+| `coder@1`       | `kanthord`         | method `steps`        | `Available`                                  |
 | `opencode@1`    | `external-harness` | harness `opencode`    | `Available`, `Waiting`, `External.Requested` |
 | `reviewer@1`    | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              |
 
@@ -45,7 +45,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
 
 | Property                       | Type           | Purpose                                                           |
 | ------------------------------ | -------------- | ----------------------------------------------------------------- |
-| `items[].name`                 | string         | Exact worker name, for example `general@1`.                       |
+| `items[].name`                 | string         | Exact worker name, for example `coder@1`.                         |
 | `items[].host`                 | string         | `kanthord` for a native worker, `external-harness` for a harness. |
 | `items[].declared_node_states` | string array   | Node states that the worker accepts.                              |
 | `items[].required_node_format` | string array   | Node fields that the worker requires.                             |
@@ -57,7 +57,7 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
 
 ```json
 {
-  "name": "general@1",
+  "name": "coder@1",
   "host": "kanthord",
   "method": "steps",
   "agent_name": "swe@1",
@@ -159,7 +159,7 @@ curl -i 'http://127.0.0.1:31415/api/worker/catalog?limit=2' \
 | `Authorization` | Yes      | `Bearer <human-jwt>`. |
 
 ```sh
-curl -i http://127.0.0.1:31415/api/worker/catalog/general@1 \
+curl -i http://127.0.0.1:31415/api/worker/catalog/coder@1 \
   -H 'Authorization: Bearer <human-jwt>'
 ```
 
@@ -194,12 +194,12 @@ kanthord worker get <worker-name> [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
-kanthord worker get general@1
+kanthord worker get coder@1
 ```
 
-| Argument        | Purpose                                     |
-| --------------- | ------------------------------------------- |
-| `<worker-name>` | Exact worker name, for example `general@1`. |
+| Argument        | Purpose                                   |
+| --------------- | ----------------------------------------- |
+| `<worker-name>` | Exact worker name, for example `coder@1`. |
 
 | Option             | Default / resolution                                                        | Purpose                                  |
 | ------------------ | --------------------------------------------------------------------------- | ---------------------------------------- |

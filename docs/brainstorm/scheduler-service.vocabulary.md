@@ -26,7 +26,7 @@ The set of a worker is a subset of the closed set of states that admit a claim, 
 - **Waiting**
 - **External.Requested**
 
-`general@1` declares `Available`.
+`coder@1` declares `Available`.
 `reviewer@1` declares `Waiting` and `External.Requested`.
 `claude-code@1` declares `Available`, `Waiting` and `External.Requested`, so one instance of `claude-main` obtains a steps claim on "Add password reset" and later an evaluation claim on the same objective.
 

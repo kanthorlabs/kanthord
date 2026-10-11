@@ -33,7 +33,7 @@ These are the capabilities that `project-service.md` names, and the page closes 
 The name that a human chooses for a binding, unique inside its project.
 The term names no closed set.
 
-Project `atlas` names its worker binding `general-main`.
+Project `atlas` names its worker binding `coder-main`.
 A second binding with that name in `atlas` is refused.
 
 ## binding kind
