@@ -146,8 +146,9 @@ The Scheduler Service owns the section `scheduler` of the configuration file tha
 Every 30 s, the Scheduler settles every execution row whose `ended_at` is null and whose `expired_at` is reached or passed.
 This write is the loss declaration.
 It sets `ended_at` to the clock reading at the start of its transaction.
-The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop`, and it hands the count to the Mission Service.
-A release with a `stop` counts the same rows, itself included, in the release transaction.
+The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop` or with a `budget_end` stop, and it hands the count to the Mission Service.
+A `budget_end` row is no stopped row, and the count excludes it.
+A release with a `stop` other than `budget_end` counts the same rows, itself included, in the release transaction.
 The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
