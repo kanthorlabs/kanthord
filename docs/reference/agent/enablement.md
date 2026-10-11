@@ -4,7 +4,7 @@
 
 ## Function description
 
-Manage the global enablement of a catalog agent. An enablement belongs to no project, and the agent name is its key. It names the agent providers, which pair a provider kind with an LLM credential. It also holds the default configuration of the agent. A worker binding can run the agent only while its enablement is live and `enabled`.
+Manage the global enablement of a catalog agent. An enablement belongs to no project, and the agent name is its key. It names the agent providers, which pair a provider kind with an LLM credential. It also holds the default configuration of the agent and the tail of its fallback chain. A worker binding can run the agent only while its enablement is live and `enabled`.
 
 | Command   | Effect                                                                          |
 | --------- | ------------------------------------------------------------------------------- |
@@ -20,6 +20,8 @@ Every write adds a revision, and the revision increases by `1`. Every write exce
 `put` with no prior record creates the enablement in the `enabled` state. A replacement keeps the current state. A retained agent provider cannot change its provider kind. An omitted agent provider is a removal. To change only the provider list, use [the provider commands](enablement-provider.md).
 
 A configuration write validates the default configuration. The default `agent_provider` must name an agent provider of the request. Its credential must exist with the platform of the provider kind. The model must be a model of that provider kind or credential, and the reasoning effort must be a level of that model. [List the models of a credential](model.md) shows the valid pairs. `put` also checks the credential of every other agent provider in the request the same way. `put` and `enable` also validate the effective configuration of each dependent worker binding.
+
+`fallback_configurations` is required. It is an array of at most `7` complete `{ agent_provider, model_identifier, reasoning_effort }` items, and `[]` means no fallback. Each item passes the validation of the default configuration against the agent providers of the request. A repeated `agent_provider` and `model_identifier`, or an item with the `agent_provider` and `model_identifier` of the default configuration, fails with `agent.configuration.fallback_duplicate`. A worker binding entry can replace the list whole; see [the binding entries](../project/binding.md). A cooldown moves a claim to the next item; see [agent cooldowns](cooldown.md).
 
 `disable` is the stop switch of an agent. It keeps the worker bindings. A later binding write for the agent fails with `agent.enablement.unavailable`, and configuration resolution reports that code.
 
@@ -45,24 +47,35 @@ A configuration write validates the default configuration. The default `agent_pr
     "model_identifier": "claude-sonnet-4-5",
     "reasoning_effort": "high"
   },
+  "fallback_configurations": [
+    {
+      "agent_provider": "main",
+      "model_identifier": "claude-haiku-4-5",
+      "reasoning_effort": "off"
+    }
+  ],
   "revision": 1,
   "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property                                 | Type                  | Surface                  | Purpose                                                                                |
-| ---------------------------------------- | --------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `agent_name`                             | string                | API and CLI              | Catalog key of the agent.                                                              |
-| `state`                                  | string                | API and CLI              | `enabled` or `disabled`.                                                               |
-| `agent_providers`                        | array                 | API and CLI              | Agent providers. Each name and each credential is unique inside the enablement.        |
-| `agent_providers[].name`                 | string                | API and CLI              | Name of the agent provider; binding entries and the default configuration refer to it. |
-| `agent_providers[].provider`             | string                | API and CLI              | Provider kind: `openai-compatible` or a built-in provider of pi-ai 0.86.0.             |
-| `agent_providers[].credential`           | string                | API and CLI              | Credential name in custody. The record holds no secret.                                |
-| `default_configuration.agent_provider`   | string                | API and CLI              | Name of the default agent provider.                                                    |
-| `default_configuration.model_identifier` | string                | API and CLI              | Default model.                                                                         |
-| `default_configuration.reasoning_effort` | string                | API and CLI              | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.                           |
-| `revision`                               | integer               | API and CLI              | Revision of this record.                                                               |
-| `idempotency_key`                        | canonical ULID string | CLI only, mutations only | Key used for this request; reuse it to retry the same request.                         |
+| Property                                     | Type                  | Surface                  | Purpose                                                                                |
+| -------------------------------------------- | --------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `agent_name`                                 | string                | API and CLI              | Catalog key of the agent.                                                              |
+| `state`                                      | string                | API and CLI              | `enabled` or `disabled`.                                                               |
+| `agent_providers`                            | array                 | API and CLI              | Agent providers. Each name and each credential is unique inside the enablement.        |
+| `agent_providers[].name`                     | string                | API and CLI              | Name of the agent provider; binding entries and the default configuration refer to it. |
+| `agent_providers[].provider`                 | string                | API and CLI              | Provider kind: `openai-compatible` or a built-in provider of pi-ai 0.86.0.             |
+| `agent_providers[].credential`               | string                | API and CLI              | Credential name in custody. The record holds no secret.                                |
+| `default_configuration.agent_provider`       | string                | API and CLI              | Name of the default agent provider.                                                    |
+| `default_configuration.model_identifier`     | string                | API and CLI              | Default model.                                                                         |
+| `default_configuration.reasoning_effort`     | string                | API and CLI              | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.                           |
+| `fallback_configurations`                    | array                 | API and CLI              | Tail of the fallback chain, at most 7 items. `[]` means no fallback.                   |
+| `fallback_configurations[].agent_provider`   | string                | API and CLI              | Name of an agent provider of the enablement.                                           |
+| `fallback_configurations[].model_identifier` | string                | API and CLI              | Model of that agent provider.                                                          |
+| `fallback_configurations[].reasoning_effort` | string                | API and CLI              | A level of that model, from the set of `default_configuration.reasoning_effort`.       |
+| `revision`                                   | integer               | API and CLI              | Revision of this record.                                                               |
+| `idempotency_key`                            | canonical ULID string | CLI only, mutations only | Key used for this request; reuse it to retry the same request.                         |
 
 `list` returns `{ "items": [<record>, ...], "next_cursor": "<cursor>" }`. `next_cursor` is `null` on the last page.
 
@@ -84,12 +97,13 @@ API failures use the shared [error envelope](../errors.md#api-failures). The ser
 | `409 agent.enablement.revision_conflict`               | Mutations                    | `expected_revision` differs from the latest revision. `details.revision` holds that revision, or `null`.       |
 | `409 agent.enablement.provider.name_conflict`          | put                          | Two agent providers use the same name.                                                                         |
 | `409 agent.enablement.provider.credential_conflict`    | put                          | Two agent providers use the same credential.                                                                   |
-| `404 agent.enablement.provider.not_found`              | put, enable                  | The default `agent_provider` names no agent provider.                                                          |
+| `404 agent.enablement.provider.not_found`              | put, enable                  | The default or a fallback `agent_provider` names no agent provider.                                            |
 | `400 agent.configuration.credential_unsuitable`        | put, enable                  | A credential does not exist, or its platform differs from the provider kind. `put` checks each provider.       |
-| `400 agent.configuration.model_unknown`                | put, enable                  | The default model is not a model of the provider kind or credential.                                           |
-| `400 agent.configuration.reasoning_effort_unsupported` | put, enable                  | The default model does not support the reasoning effort.                                                       |
+| `400 agent.configuration.model_unknown`                | put, enable                  | The default or a fallback model is not a model of the provider kind or credential.                             |
+| `400 agent.configuration.reasoning_effort_unsupported` | put, enable                  | The default or a fallback model does not support the reasoning effort.                                         |
+| `400 agent.configuration.fallback_duplicate`           | put                          | A fallback item repeats an agent provider and model, or repeats those of the default configuration.            |
 | `409 agent.enablement.provider.fixed`                  | put                          | The request changes the provider kind of a retained agent provider.                                            |
-| `409 agent.enablement.provider.in_use`                 | put                          | A binding entry names an omitted agent provider. `details.bindings` lists the bindings.                        |
+| `409 agent.enablement.provider.in_use`                 | put                          | A binding entry or a binding tail names an omitted agent provider. `details.bindings` lists the bindings.      |
 | `409 agent.enablement.invalidates_bindings`            | put, enable                  | The change makes a dependent binding invalid. `details.bindings` lists `binding_id`, `worker_name` and `code`. |
 | `409 agent.enablement.in_use`                          | remove                       | A worker binding of a worker that runs the agent exists. `details.bindings` lists the bindings.                |
 | `413 gateway.request.body_too_large`                   | Mutations                    | The body exceeds 64 KiB.                                                                                       |
@@ -152,11 +166,12 @@ curl -s http://127.0.0.1:31415/api/agent/enablement/swe@1 \
 
 ### Create or replace an enablement
 
-| Body field              | Type    | Required                   | Purpose                                                                              |
-| ----------------------- | ------- | -------------------------- | ------------------------------------------------------------------------------------ |
-| `expected_revision`     | integer | Yes when a revision exists | Positive latest revision that the caller read, the removal revision included.        |
-| `agent_providers`       | array   | Yes, at least one item     | Complete list of `{ name, provider, credential }`; every field is a nonempty string. |
-| `default_configuration` | object  | Yes                        | `{ agent_provider, model_identifier, reasoning_effort }`.                            |
+| Body field                | Type    | Required                   | Purpose                                                                                                    |
+| ------------------------- | ------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `expected_revision`       | integer | Yes when a revision exists | Positive latest revision that the caller read, the removal revision included.                              |
+| `agent_providers`         | array   | Yes, at least one item     | Complete list of `{ name, provider, credential }`; every field is a nonempty string.                       |
+| `default_configuration`   | object  | Yes                        | `{ agent_provider, model_identifier, reasoning_effort }`.                                                  |
+| `fallback_configurations` | array   | Yes                        | At most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items; `[]` means no fallback. |
 
 The body and its objects are closed; an unknown field fails validation.
 
@@ -165,7 +180,7 @@ curl -s -X PUT http://127.0.0.1:31415/api/agent/enablement/swe@1 \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
-  -d '{"agent_providers":[{"name":"main","provider":"anthropic","credential":"<credential-name>"}],"default_configuration":{"agent_provider":"main","model_identifier":"claude-sonnet-4-5","reasoning_effort":"high"}}'
+  -d '{"agent_providers":[{"name":"main","provider":"anthropic","credential":"<credential-name>"}],"default_configuration":{"agent_provider":"main","model_identifier":"claude-sonnet-4-5","reasoning_effort":"high"},"fallback_configurations":[{"agent_provider":"main","model_identifier":"claude-haiku-4-5","reasoning_effort":"off"}]}'
 ```
 
 ### Enable, disable or remove an enablement
@@ -219,7 +234,14 @@ The `--file` of `put` holds the request body as one JSON object:
     "agent_provider": "main",
     "model_identifier": "claude-sonnet-4-5",
     "reasoning_effort": "high"
-  }
+  },
+  "fallback_configurations": [
+    {
+      "agent_provider": "main",
+      "model_identifier": "claude-haiku-4-5",
+      "reasoning_effort": "off"
+    }
+  ]
 }
 ```
 

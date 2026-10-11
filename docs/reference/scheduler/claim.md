@@ -29,6 +29,18 @@ The API returns HTTP `200` with one [`ExecutionRecord`](execution.md#executionre
   "attempt": 1,
   "pinned_revision": 3,
   "credentials": [],
+  "agent_selections": [
+    {
+      "agent_name": "swe@1",
+      "position": 0,
+      "level": "enablement",
+      "agent_provider": "main",
+      "provider": "anthropic",
+      "credential": "<credential-name>",
+      "model_identifier": "claude-sonnet-4-5",
+      "reasoning_effort": "high"
+    }
+  ],
   "claim_state": "running",
   "expired_at": 1791449400000,
   "created_at": 1791447600000,

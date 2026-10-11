@@ -43,7 +43,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `attempt` and `pinned_revision` are positive safe integers.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
-  - `agent_selections` is the list of the selections that the claim pins, one for each native agent of the worker. It is `[]` for a worker with no native agent.
+  - `agent_selections` is the list of the selections that the claim pins, one for each native agent of the worker. It is `[]` for a worker with no native agent. A null column of a row that predates it reads as `[]`.
   - A selection holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. `level` is `enablement | binding`.
   - `claim_state` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
   - `expired_at` is the fixed deadline under [Configuration](#configuration).

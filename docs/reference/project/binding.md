@@ -102,14 +102,16 @@ The schema accepts `follows` type `action_end_state` with a `binding` name, but 
 
 **Worker**
 
-| Field             | Type    | Rule                                                                                                                                                                                        |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker`          | string  | Required. Name of a declared worker.                                                                                                                                                        |
-| `instance_count`  | integer | Required. From `0` to `64`. The value `0` disables the group.                                                                                                                               |
-| `resource_budget` | object  | Optional. Positive integers `turns` and `wall_time_ms`. Refused for a worker that declares no agent.                                                                                        |
-| `entries`         | array   | Optional. Items `{ "agent", "agent_provider"?, "model_identifier"?, "reasoning_effort"? }`. Each `agent` is unique and declared by the worker. Refused for a worker that declares no agent. |
+| Field             | Type    | Rule                                                                                                                                                                                                                    |
+| ----------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `worker`          | string  | Required. Name of a declared worker.                                                                                                                                                                                    |
+| `instance_count`  | integer | Required. From `0` to `64`. The value `0` disables the group.                                                                                                                                                           |
+| `resource_budget` | object  | Optional. Positive integers `turns` and `wall_time_ms`. Refused for a worker that declares no agent.                                                                                                                    |
+| `entries`         | array   | Optional. Items `{ "agent", "agent_provider"?, "model_identifier"?, "reasoning_effort"?, "fallback_configurations"? }`. Each `agent` is unique and declared by the worker. Refused for a worker that declares no agent. |
 
 The Agent Service validates the effective configuration of each agent of the worker.
+
+An entry can name `fallback_configurations`: an array of at most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items. An entry can hold only this field; the default configuration is then the head of the chain. A named field, also `[]`, replaces the `fallback_configurations` of the enablement whole. An omitted field inherits them. `[]` means no fallback. Each item passes the validation of the default configuration. A repeated `agent_provider` and `model_identifier`, or an item with the `agent_provider` and `model_identifier` of the head of the entry, fails with `agent.configuration.fallback_duplicate`.
 
 **Storage**
 
@@ -306,6 +308,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 project.bindings.worker.field_forbidden`              | `apply`                                                                 | `entries` or `resource_budget` is set for a worker that declares no agent. `details` holds `binding` and `field`.                                                                        |
 | `400 project.bindings.worker.agent_unknown`                | `apply`                                                                 | An entry names an agent that the worker does not declare.                                                                                                                                |
 | `400 agent.configuration.invalid`                          | `apply`                                                                 | The `worker` value names no declared worker.                                                                                                                                             |
+| `400 agent.configuration.fallback_duplicate`               | `apply`                                                                 | A `fallback_configurations` list of an entry repeats an agent provider and model, or repeats those of the head of the entry.                                                             |
 | `agent.configuration.*`, `agent.enablement.*`              | `apply`                                                                 | The Agent Service refuses the effective configuration of an agent, for example a disabled agent.                                                                                         |
 | `400 project.bindings.repository.address_invalid`          | `apply`, `check`                                                        | The address does not match the form, or its SSH host does not resolve to a host of the platform.                                                                                         |
 | `400 project.bindings.repository.ssh_host_mismatch`        | `apply`, `check`                                                        | The address host differs from the SSH credential host.                                                                                                                                   |
