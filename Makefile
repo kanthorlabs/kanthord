@@ -14,7 +14,8 @@ export WEB_PORT ?= 27182
 
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
-	sync sync-status test-submodules cleanup docs-tools
+	sync sync-status test-submodules cleanup docs-tools \
+	e2e-start e2e-watch e2e-stop e2e-restart
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -70,6 +71,15 @@ help:
 	@echo "  cleanup          Delete the configuration, data, state and cache directories"
 	@echo "  docs-tools       Regenerate docs/reference/workbench/tools.md"
 	@echo "                   CHECK=1 reports only, and fails when the page is stale"
+	@echo ""
+	@echo "e2e"
+	@echo "  e2e-start        Start an e2e run against the daemon of make dev. RUN=name"
+	@echo "                   It creates credentials, enablements, a project, the base"
+	@echo "                   branch e2e/<RUN> from the fixture, the plan and the workers"
+	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
+	@echo "  e2e-watch        Print node changes, execution stops, worker exits and PRs. RUN=name"
+	@echo "  e2e-stop         Stop the workers of a run. RUN=name"
+	@echo "  e2e-restart      Restart the workers of a run on the current engine code. RUN=name"
 
 dev:
 	@$(S)/dev/run.sh
@@ -104,3 +114,11 @@ cleanup:
 	@$(S)/engine/cleanup.sh
 docs-tools:
 	@$(S)/docs/tools.sh
+e2e-start:
+	@$(S)/e2e/start.sh
+e2e-watch:
+	@$(S)/e2e/watch.sh
+e2e-stop:
+	@$(S)/e2e/stop.sh
+e2e-restart:
+	@$(S)/e2e/restart.sh

@@ -1,0 +1,82 @@
+{
+  "endpoint": "http://127.0.0.1:31415",
+  "env_file": "engine/.env.e2e",
+  "credentials": [
+    {
+      "name": "e2e-nvidia",
+      "platform": "nvidia",
+      "secret_env": "E2E_NVIDIA_KEY",
+      "metadata": null
+    }
+  ],
+  "enablements": {
+    "swe@1": {
+      "providers": [
+        {
+          "name": "e2e-nvidia",
+          "provider": "nvidia",
+          "credential": "e2e-nvidia"
+        }
+      ],
+      "default": {
+        "agent_provider": "e2e-nvidia",
+        "model_identifier": "z-ai/glm-5.3-flash",
+        "reasoning_effort": "medium"
+      }
+    },
+    "re@1": {
+      "providers": [
+        {
+          "name": "e2e-nvidia",
+          "provider": "nvidia",
+          "credential": "e2e-nvidia"
+        }
+      ],
+      "default": {
+        "agent_provider": "e2e-nvidia",
+        "model_identifier": "z-ai/glm-5.3-flash",
+        "reasoning_effort": "medium"
+      }
+    }
+  },
+  "repository": {
+    "binding": "todoapp-repo",
+    "github": "kanthorlabs/kanthord-verify",
+    "fixture_commit": "597444a",
+    "config": {
+      "available": true,
+      "platform": "github",
+      "address": "git@github.com:kanthorlabs/kanthord-verify.git",
+      "strategy": {
+        "action": {
+          "name": "pull_request",
+          "follows": {
+            "type": "assessment_passed"
+          }
+        }
+      },
+      "ssh_credential": "github-com",
+      "credential": "kanthor-verify",
+      "working_layer": {
+        "agents_md": true,
+        "agents_local_md": true,
+        "claude_md": true,
+        "claude_local_md": true,
+        "project_prompt": true
+      }
+    }
+  },
+  "workers": [
+    {
+      "binding": "developer",
+      "worker": "developer@1",
+      "instances": 1
+    },
+    {
+      "binding": "reviewer",
+      "worker": "reviewer@1",
+      "instances": 1
+    }
+  ],
+  "plan": "docs/brainstorm/assets/todoapp/plan"
+}
