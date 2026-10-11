@@ -58,6 +58,38 @@ The closed reasoning-effort set is:
 - `xhigh`
 - `max`
 
+## fallback configuration
+
+One complete configuration in a tail of a fallback chain: `agent_provider`, `model_identifier` and `reasoning_effort`.
+The term names no closed set.
+The `swe@1` enablement holds `fallback_configurations` with `{ agent_provider: "atlas-llm", model_identifier: "qwen3-coder", reasoning_effort: "off" }`.
+The `coder-solo` entry for `swe@1` holds `fallback_configurations: []`, so the chain of `coder-solo` has no tail.
+
+## fallback chain
+
+The ordered list of chain entries that the Agent component builds for one agent: the effective configuration as the head, then the tail.
+Each chain entry holds a `level`. The closed level set is:
+
+- `enablement`
+- `binding`
+
+The `swe@1` default names `openai-org` and model `gpt-6`, and its enablement tail holds `atlas-llm` with `qwen3-coder`.
+Under `coder-main`, which names no tail, the chain is `gpt-6` at position 0 and `qwen3-coder` at position 1, both at level `enablement`.
+
+## cooldown
+
+The record that excludes one credential and model identifier from a selection until its end time.
+Its code is the closed set `rate_limited`, `quota_exhausted` or `unavailable`.
+Execution 1 releases with `provider_failed` and code `rate_limited` on credential `openai-main` and model `gpt-6`.
+The cooldown lasts 60 seconds, and the next claim of `swe@1` and `re@1` selects position 1 of the chain.
+
+## agent selection
+
+The chain entry that a claim selects for one native agent and pins in the execution record.
+It holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`.
+The term names no closed set.
+The claim of Execution 2 selects position 1 of `swe@1` because position 0 cools down, and the execution runs the whole time with that selection.
+
 ## agent session
 
 One run of the agent loop of one agent for one consumer.

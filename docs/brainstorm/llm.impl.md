@@ -45,7 +45,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - An omitted value takes the default of pi 0.86.0: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
 - `context_window` and `max_tokens` are positive integers, and `max_tokens` does not exceed `context_window` after the defaults apply.
 - A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check).
-- A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it.
+- A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it. A fallback configuration is a dependent too.
 - The dependency check and the metadata update commit in one transaction; a refusal lists the dependents in `details` as `{ models: [{ model, agents }] }`.
 
 ## The LLM provider
