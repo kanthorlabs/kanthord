@@ -52,7 +52,7 @@ A worker is a template that defines how executions happen.
 Each worker provides its own method for the steps that achieve the WHAT.
 A worker name has the form `<implementation>@<version>`.
 The same name always identifies the same implementation.
-`tdd@1` and `general@1` are worker names.
+`tdd@1` and `coder@1` are worker names.
 kanthord can add more workers.
 
 The worker supplies the HOW.

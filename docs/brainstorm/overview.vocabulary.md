@@ -195,7 +195,7 @@ The Project Service vocabulary holds the cardinality of each binding kind.
 
 A resource is what a binding allocates to a project, and it exists independently of that project.
 The term names no closed set; [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the three binding kinds.
-The project of "Account recovery" binds the repository `kanthorlabs/kanthord` and the worker `general@1`.
+The project of "Account recovery" binds the repository `kanthorlabs/kanthord` and the worker `coder@1`.
 It also binds a source and the S3-compatible bucket `atlas-evidence`.
 Its [storage binding](project-service.vocabulary.md#storage-binding) allocates that bucket for object evidence.
 

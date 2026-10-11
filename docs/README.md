@@ -15,12 +15,15 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | How do I authenticate?                         | [Human JWT generation](reference/auth/jwt.md) and [verification](reference/gateway/verify.md)                                     |
 | How does the system work?                      | [Service architecture](explanation/architecture.md)                                                                               |
 | How does the native agent work?                | [Native agent explained](explanation/native-agent.md)                                                                             |
+| How does the coder@1 worker work?              | [coder@1 explained](explanation/coder-worker.md)                                                                                  |
 | How do I interpret health reports?             | [Healthchecks explained](explanation/healthchecks.md)                                                                             |
 | What do errors and IDs mean?                   | [Errors](reference/errors.md) and [identities](reference/identities.md)                                                           |
 
 ## Current scope
 
 The reference describes implemented behavior, not the full proposed product. The CLI and the API cover configuration, tokens, the Gateway, the LLM, repository and storage credentials, agents, projects, missions, the Scheduler and workers. The Tracking CLI group currently exposes help only. `serve server` runs the server; `serve worker` registers a worker instance, pulls work and executes it.
+
+Two ruled changes are documented before their implementation: the worker `coder@1` replaces `general@1` and `developer@1`, and a node inherits its bindings under the [binding inheritance](reference/mission/import.md#binding-inheritance) rule. Until the implementation lands, the server still supplies `general@1` and `developer@1`, and each objective names its repository binding.
 
 ## Documentation types
 

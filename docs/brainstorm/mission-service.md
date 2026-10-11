@@ -61,7 +61,15 @@ An addition on a node whose execution ended changes no routing of that node, bec
 The check of a landing is a platform operation of the Intake Service, and it uses the credential of a repository binding.
 
 A node names the bindings that its kind permits, and each binding kind states how many a node of each kind names.
-An initiative names no repository binding.
+A node inherits each binding kind that it does not name.
+The Mission Service resolves each kind on its own, at write time: the bindings that the node names, else those of the nearest ancestor that names the kind, else the one binding of that kind that the project holds.
+The first level that names a kind wins, and bindings of one kind never merge across levels.
+Two or more project bindings of an inherited kind refuse the write with `mission.node.bindings_invalid`.
+An omitted `bindings` field and `bindings: []` both inherit.
+An existing node keeps its stored bindings of each kind that a write omits, and a move keeps every stored binding.
+The node revision stores the resolved bindings, so a later change of the project or of an ancestor moves no existing node.
+An initiative names at most one repository binding, as a default for its descendants only.
+That binding yields no external action, no workspace and no verification target.
 A task names no repository binding, and a task acts on the repository that its objective names.
 An initiative or an objective names at most one storage binding, and its uploads use that binding.
 A task names no storage binding.
@@ -342,7 +350,7 @@ The readiness condition of Outcome and completion admits an evaluation claim.
 An executor requests no evaluation.
 Under kanthord's own harness a reviewer is a worker binding of its project.
 
-Under the workers that kanthord hosts, the execution that carries out the steps of a node never writes the assessment of that node, because `general@1` declares `Available` and `reviewer@1` declares `Waiting` and `External.Requested`.
+Under the workers that kanthord hosts, the execution that carries out the steps of a node never writes the assessment of that node, because `coder@1` declares `Available` and `reviewer@1` declares `Waiting` and `External.Requested`.
 The Mission Service supplies the criterion and the evidence.
 Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.

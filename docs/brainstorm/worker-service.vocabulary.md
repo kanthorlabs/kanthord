@@ -13,7 +13,7 @@ This file is not a design document, and `worker-service.md` stays the single sou
 The overview owns the term.
 This revision of the Worker Service supplies four workers.
 
-- **general@1**: the steps method with the native agent `swe@1`.
+- **coder@1**: the steps method with the native agent `swe@1`.
 - **reviewer@1**: the evaluation method with the native agent `re@1`.
 - **claude-code@1**: hosted by the external harness `claude-code`, declares `Available`, `Waiting` and `External.Requested`.
 - **opencode@1**: hosted by the external harness `opencode`, declares `Available`, `Waiting` and `External.Requested`.
@@ -26,7 +26,7 @@ The set is closed and it holds two values.
 - **kanthord**
 - **an external harness**
 
-`general@1` and `reviewer@1` have kanthord as their host.
+`coder@1` and `reviewer@1` have kanthord as their host.
 `claude-code@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
 
 ## placement
@@ -37,15 +37,15 @@ The set is closed and it holds two values.
 - **`server`**, which runs the instance inside the `server` application
 - **`worker`**, which runs the instance inside a `worker` application
 
-An instance of `general@1` inside the `server` application holds the `server` placement.
-An instance of `general@1` inside a `worker` application holds the `worker` placement.
+An instance of `coder@1` inside the `server` application holds the `server` placement.
+An instance of `coder@1` inside a `worker` application holds the `worker` placement.
 An instance that an external harness hosts holds no placement, because kanthord runs it never.
 
 ## steps method
 
 The steps method is the method of a worker whose executions carry out the steps of a node.
-`general@1` holds the steps method.
-A `general@1` instance of worker binding `general-main` claims "Add password reset" from `Available`.
+`coder@1` holds the steps method.
+A `coder@1` instance of worker binding `coder-main` claims "Add password reset" from `Available`.
 Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
 
 ## evaluation method
@@ -64,8 +64,8 @@ The action performer performs the network git write only.
 ## native agent
 
 A native agent is an agent loop that the Worker Service runs itself.
-The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
-The Worker Service runs `swe@1` under worker binding `general-main`.
+The agent `swe@1` of `coder@1` and the agent `re@1` of `reviewer@1` are native agents.
+The Worker Service runs `swe@1` under worker binding `coder-main`.
 Each model inference call uses the model [connector](architecture.vocabulary.md#connector) and the agent's effective configuration.
 
 ## prompt layer
@@ -80,11 +80,11 @@ The set is closed and it holds four values.
 
 The custom system prompt of the server states "Every answer is short. A commit message states the change and no reason."
 The shipped `base.md` of the system layer describes a senior software engineer.
-`general@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
+`coder@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
 `reviewer@1` declares the agent prompt of `re@1`.
 The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
-The catalog holds one prompt declaration for `swe@1`, and `general@1` references that declaration.
+The catalog holds one prompt declaration for `swe@1`, and `coder@1` references that declaration.
 
 ## work prompt
 
@@ -141,7 +141,7 @@ The closed form set is:
 - **tuning**: `model_identifier`, `reasoning_effort` or both; it keeps the default agent provider and inherits each absent value.
 - **complete**: `agent_provider`, `model_identifier` and `reasoning_effort`, all required; it inherits nothing.
 
-`general-frontier` holds the tuning entry `{ reasoning_effort: "high" }` for `swe@1`.
+`coder-frontier` holds the tuning entry `{ reasoning_effort: "high" }` for `swe@1`.
 A complete entry names `{ agent_provider: "atlas-llm", model_identifier: "qwen3-coder", reasoning_effort: "off" }`.
 An entry holds no `options`.
 
@@ -196,9 +196,9 @@ It exposes no direct platform write.
 ## runtime identity
 
 The runtime identity is the identity that the Worker Service mints for a worker instance and that names its worker binding.
-The Worker Service creates two instances for worker binding `general-main`, whose instance count is 2, and mints a runtime identity for each one.
+The Worker Service creates two instances for worker binding `coder-main`, whose instance count is 2, and mints a runtime identity for each one.
 A server restart creates two new instances with two new runtime identities.
-A revision of `general-main` that changes the model identifier of its entry replaces no instance.
+A revision of `coder-main` that changes the model identifier of its entry replaces no instance.
 
 ## heartbeat
 
@@ -218,14 +218,14 @@ A restart of `claude-code` therefore registers again.
 ## pool
 
 The pool is the instances of one worker binding.
-The pool of worker binding `general-main` holds two instances.
+The pool of worker binding `coder-main` holds two instances.
 Both are idle, both pull, and the Scheduler serves "Add password reset" to the first pull.
 The second instance keeps its pull outstanding and starts no other pull.
 
 ## compatibility declarations
 
 The compatibility declarations are the worker name, the declared node states and the required node format that an instance carries on a work pull.
-An instance of `general@1` carries the worker name `general@1`, the declared node state `Available` and the required node format.
+An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the required node format.
 An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the required node format.
 
 ## required node format
@@ -244,7 +244,7 @@ Every node holds verifications, and a method reads them.
 ## instance healthcheck
 
 The [Scheduler Service](scheduler-service.vocabulary.md#instance-healthcheck) owns the term, and the Worker Service produces the check.
-The instance of `general@1` passes when its effective configuration resolves under the current worker binding and enabled agent enablement.
+The instance of `coder@1` passes when its effective configuration resolves under the current worker binding and enabled agent enablement.
 It fails when the `swe@1` enablement is absent or disabled.
 The instance of `claude-code@1` fails when its registration is not live.
 
@@ -287,6 +287,6 @@ Execution 2 runs the task verifications at the head of the node branch and conti
 ## resource budget
 
 The resource budget bounds the agent work of one execution by wall time and, when declared, turn count.
-`general@1` declares 200 turns and 2 hours, and `general-lab` overrides them with 50 turns and 30 minutes.
+`coder@1` declares 200 turns and 2 hours, and `coder-lab` overrides them with 50 turns and 30 minutes.
 `claude-code@1` and `opencode@1` each declare 2 hours of wall time.
 The [budget contract](worker-service.impl.md#stop-and-budget) defines measurement and validation.

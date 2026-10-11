@@ -46,7 +46,7 @@ A catalog declaration supplies none of these values.
 
 The configuration that the Agent component resolves for one agent from its enablement and one optional entry.
 It holds `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`.
-Under `general-main`, a complete entry selects `atlas-llm`, which supplies provider `openai-compatible` and credential `atlas-key`.
+Under `coder-main`, a complete entry selects `atlas-llm`, which supplies provider `openai-compatible` and credential `atlas-key`.
 The model is `qwen3-coder` and the effort is `off`.
 The closed reasoning-effort set is:
 
@@ -62,7 +62,7 @@ The closed reasoning-effort set is:
 
 One run of the agent loop of one agent for one consumer.
 The term names no closed set.
-Execution 1 opens one agent session of `swe@1` under worker binding `general-main`.
+Execution 1 opens one agent session of `swe@1` under worker binding `coder-main`.
 
 ## system layer
 
@@ -117,4 +117,4 @@ The resumed session of Execution 1 holds the 40 turns, and `swe@1` continues at 
 
 A service that opens an agent session under its own authority.
 The term names no closed set.
-The Worker Service is a consumer, and Execution 1 supplies the effective configuration of `swe@1` that `general-main` resolves.
+The Worker Service is a consumer, and Execution 1 supplies the effective configuration of `swe@1` that `coder-main` resolves.

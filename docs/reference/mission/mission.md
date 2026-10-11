@@ -38,7 +38,7 @@ The application shows a login form.
 A user with valid credentials reaches the dashboard.
 ```
 
-The front matter holds `id`, `kind`, `parent`, `depends_on`, `bindings` and `verifications`. An initiative has no `parent`. A task has no `depends_on`. `parent` and `depends_on` name plan files, and `bindings` holds binding names.
+The front matter holds `id`, `kind`, `parent`, `depends_on`, `bindings` and `verifications`. An initiative has no `parent`. A task has no `depends_on`. `parent` and `depends_on` name plan files, and `bindings` holds binding names. `bindings` is optional: an omitted kind follows the [binding inheritance](import.md#binding-inheritance).
 
 **Authority:** every authenticated human holds the same authority under the server-owner ruling. Any verified human token reads any mission.
 

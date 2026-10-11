@@ -6,7 +6,7 @@
 
 A mission node is an initiative, an objective or a task. An initiative is a root. An objective belongs to one initiative. A task belongs to one objective. Each node has a plan file name that is unique among the current nodes of its mission.
 
-Node content has `name`, `requirement`, `criterion`, `verifications` and `bindings`. In the node API, `bindings` holds binding IDs of the project. The service stores the latest revision of each named binding. An objective names exactly one repository binding and at most one storage binding. An initiative names at most one storage binding. A task names no binding. No node names a worker binding.
+Node content has `name`, `requirement`, `criterion`, `verifications` and `bindings`. In the node API, `bindings` holds binding IDs of the project. The service stores the latest revision of each named binding. The service resolves the bindings at write time under the [binding inheritance](import.md#binding-inheritance) rule. `bindings: []` inherits every kind. A move keeps the stored bindings. No node names a worker binding.
 
 An initiative or an objective owns revisions, a state, attempts and a priority. A task has none of these. The content of a task is part of each revision of its objective. A task write creates a new revision of its objective. Revision numbers start at `1` for each content owner.
 
@@ -288,19 +288,19 @@ API failures use the shared [error envelope](../errors.md#api-failures). These f
 
 Command-specific failures:
 
-| HTTP status / code                       | Operation       | Meaning                                                                                                         |
-| ---------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------- |
-| `400 mission.node.bindings_invalid`      | Create, update  | A binding ID does not resolve in the project, or the count of a binding kind breaks the rule for the node kind. |
-| `409 mission.node.filename_conflict`     | Create, update  | Another current node of the mission uses the file name.                                                         |
-| `409 mission.node.create_refused`        | Create, move    | The parent has the wrong kind or mission, the parent state refuses a child, or the node is an initiative.       |
-| `409 mission.import.cycle`               | Move            | The objective move creates a dependency cycle.                                                                  |
-| `409 mission.node.retire_refused`        | Retire, preview | A node in the set fails the state and attempt condition; `details` holds `node_id`, `state` and `attempt`.      |
-| `409 mission.node.retire_has_dependents` | Retire, preview | Nonterminal dependents exist and `force` is false; `details.dependents` lists them.                             |
-| `409 mission.node.retire_mismatch`       | Retire          | `preview_digest` does not match the current retirement plan.                                                    |
-| `404 mission.binding.not_found`          | Rebind          | The binding revision is unknown or belongs to another project.                                                  |
-| `409 mission.binding.removed`            | Rebind          | The binding is removed.                                                                                         |
-| `409 mission.binding.disabled`           | Rebind          | The binding is disabled.                                                                                        |
-| `409 mission.binding.mismatch`           | Rebind          | The named node is a task or pins no earlier or equal revision of the binding.                                   |
+| HTTP status / code                       | Operation       | Meaning                                                                                                                                                                              |
+| ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `400 mission.node.bindings_invalid`      | Create, update  | A binding ID does not resolve in the project, the count of a binding kind breaks the rule for the node kind, or two or more project bindings of an inherited kind make it ambiguous. |
+| `409 mission.node.filename_conflict`     | Create, update  | Another current node of the mission uses the file name.                                                                                                                              |
+| `409 mission.node.create_refused`        | Create, move    | The parent has the wrong kind or mission, the parent state refuses a child, or the node is an initiative.                                                                            |
+| `409 mission.import.cycle`               | Move            | The objective move creates a dependency cycle.                                                                                                                                       |
+| `409 mission.node.retire_refused`        | Retire, preview | A node in the set fails the state and attempt condition; `details` holds `node_id`, `state` and `attempt`.                                                                           |
+| `409 mission.node.retire_has_dependents` | Retire, preview | Nonterminal dependents exist and `force` is false; `details.dependents` lists them.                                                                                                  |
+| `409 mission.node.retire_mismatch`       | Retire          | `preview_digest` does not match the current retirement plan.                                                                                                                         |
+| `404 mission.binding.not_found`          | Rebind          | The binding revision is unknown or belongs to another project.                                                                                                                       |
+| `409 mission.binding.removed`            | Rebind          | The binding is removed.                                                                                                                                                              |
+| `409 mission.binding.disabled`           | Rebind          | The binding is disabled.                                                                                                                                                             |
+| `409 mission.binding.mismatch`           | Rebind          | The named node is a task or pins no earlier or equal revision of the binding.                                                                                                        |
 
 The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 
