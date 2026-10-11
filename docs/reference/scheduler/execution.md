@@ -20,6 +20,15 @@ Each `execution list` call reads one page. The CLI does not follow `next_cursor`
 | `Executing`  | `true`         | None.                                                                                                               | `Available`              |
 | `Evaluating` | Either value   | A current successful assessment; otherwise `assessment`. No eligible action without a request; otherwise `request`. | `External.Requested`     |
 
+The release body can carry a `stop`, which tells why the execution ended early. A `stop` requires `further_work: true`. A `stop` with a reason other than `budget_end` counts as a failure toward `mission.consecutive_failure_limit`. A `budget_end` stop counts toward `mission.further_work_limit`. A release without a `budget_end` stop resets that count. [ERD 2](../erd/02-execution.md) holds the exact count rules.
+
+| `stop.reason`                                                                                     | `stop.code`                                                                     |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `budget_end`                                                                                      | `turns` or `wall_time`                                                          |
+| `provider_failed`                                                                                 | `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request`, `unavailable` |
+| `no_progress`                                                                                     | `null`                                                                          |
+| `operation_failed`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` | A nonempty string or `null`                                                     |
+
 A successful release sets `ended_at`, so `claim_state` becomes `finished`, and frees the live count of the binding. It wakes the pulls that wait in the project. A refused release changes no execution, node or job.
 
 A release ends an execution at most once. The gateway stores no receipt that it can replay after the end. A retry after a committed release, with the same key or a new key, fails the execution proof with `403`. To confirm the result after a lost answer, read the execution with [`claim get`](claim.md) or `execution get`; `claim_state` is `finished`.
@@ -124,6 +133,7 @@ Every timestamp is a safe integer of Unix epoch milliseconds in UTC.
 | `ended_at`                   | timestamp or `null`                                | Time of the end; `null` while the execution has not ended.                                                                                                                                       |
 | `trace_id`                   | 32 lower-case hexadecimal characters, not all zero | Trace identity that the Scheduler mints at the claim.                                                                                                                                            |
 | `root_span_id`               | 16 lower-case hexadecimal characters, not all zero | Root span identity that the Scheduler mints at the claim.                                                                                                                                        |
+| `stop`                       | `{ reason, code }` or `null`                       | Stop of the release; `null` while the execution runs and after a release with no stop.                                                                                                           |
 
 Identity formats follow the [identity reference](../identities.md).
 
@@ -213,15 +223,15 @@ curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5
 
 ### `execution release`
 
-| Item                  | Value                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                   |
-| Operation ID          | `scheduler.execution.release`                                                                           |
-| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration |
-| Timeout               | 30 seconds                                                                                              |
-| Mutation              | Yes                                                                                                     |
-| Path/query parameters | `execution_id` (path, required); no query fields                                                        |
-| Request body          | Closed JSON object `{ "further_work": <boolean> }`; `further_work` is required                          |
+| Item                  | Value                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                                                           |
+| Operation ID          | `scheduler.execution.release`                                                                                                                   |
+| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration                                         |
+| Timeout               | 30 seconds                                                                                                                                      |
+| Mutation              | Yes                                                                                                                                             |
+| Path/query parameters | `execution_id` (path, required); no query fields                                                                                                |
+| Request body          | Closed JSON object `{ "further_work": <boolean>, "stop": { "reason", "code" } \| null }`; `further_work` is required, `stop` defaults to `null` |
 
 | Header            | Required | Purpose                                                      |
 | ----------------- | -------- | ------------------------------------------------------------ |
