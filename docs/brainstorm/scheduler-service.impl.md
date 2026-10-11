@@ -37,12 +37,14 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 
 - `Job` holds `job_id`, `project_id`, `node_id` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
-- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `credentials`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
+- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `credentials`, `agent_selections`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
   - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service. Both are absent for an instance that the server hosts.
   - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinned_revision` are positive safe integers.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
+  - `agent_selections` is the list of the selections that the claim pins, one for each native agent of the worker. It is `[]` for a worker with no native agent.
+  - A selection holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. `level` is `enablement | binding`.
   - `claim_state` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
   - `expired_at` is the fixed deadline under [Configuration](#configuration).
   - `created_at` is the claim acceptance time, and `ended_at` is the end time or `null` before a terminal write.
@@ -56,6 +58,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress`.
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
   For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`.
+  A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance).
   A `stop` requires `further_work: true`, and a `stop` with `further_work: false` answers 400 `gateway.request.validation_failed`.
   The Mission Service reads both fields for routing in the release transaction. The execution row stores `stop`, and nothing stores `further_work`.
   The answer is `{ execution_id, ended_at }`.
@@ -130,6 +133,17 @@ The instance healthcheck stays out of every human inspection command under [work
   Its handler checks the claimant against the worker binding of the machine identity and the runtime identity of its live registration.
   A mismatch answers 403 `scheduler.execution.not_owner`.
 
+## The claim selection
+
+- The claim transaction asks the Agent component for the [selection](agent.impl.md#the-claim-selection) of each native agent of the worker.
+- The column `scheduler_execution.agent_selections` is `TEXT`. It holds the JSON list of the selections, which the claim writes once.
+- The execution row inserts the selections with the row. Nothing updates them later.
+- A pull that finds a `running` execution of its runtime identity returns that row and selects nothing.
+- When one agent has no chain entry without a live cooldown, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
+- `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`.
+- The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
+- Custody and the execution setup of the Worker Service read the pinned selection and never the chain.
+
 ## Configuration
 
 The Scheduler Service owns the section `scheduler` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
@@ -148,6 +162,7 @@ This write is the loss declaration.
 It sets `ended_at` to the clock reading at the start of its transaction.
 The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop`, and it hands the count to the Mission Service.
 A release with a `stop` counts the same rows, itself included, in the release transaction.
+A row with an advancing `provider_failed` stop is neutral. It neither counts nor ends the count.
 The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
@@ -183,6 +198,9 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   A registration resume meets the same row and asserts settlement before its precondition check.
   A human act also checks its precondition against the settled state.
 - Tests sweep expired steps and evaluation claims below and at `mission.consecutive_failure_limit`.
+- Tests assert that a claim pins the first chain entry without a live cooldown.
+- Tests assert that a later cooldown leaves the pin unchanged, and that a pull answers no work when every entry cools down.
+- Tests assert that an advancing `provider_failed` stop neither counts nor ends the count, and that `bad_request` and `unauthorized` count.
 - Tests release steps and evaluation claims with a `stop` below and at `mission.consecutive_failure_limit`, mix lost and stopped rows in one count, and assert that `execution get` answers the `stop`. A test refuses a `stop` with `further_work: false`.
   They assert one loss increment, the specified node state and a job only when claimable.
 - A test computes the deadline from a binding override of `wall_time_ms` and the configured reserve, including the default `600` seconds.

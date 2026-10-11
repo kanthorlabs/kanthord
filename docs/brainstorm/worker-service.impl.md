@@ -150,6 +150,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The invocation chain proves the path identity, and the server derives the setup from the proven claim.
 - The answer is `{ execution_id, worker_name, agent_name, effective_configuration, credential_id, metadata, resource_budget, repositories, prompt }`.
 - `worker_name` comes from the worker binding revision that the claim pins, and `agent_name` comes from the declaration of that worker.
+- `effective_configuration` is the pinned selection of `agent_name` in `agent_selections` of the execution. It is never the head of the chain.
 - The resolution reads the pinned worker binding revision, its entry, the current enablement and the metadata of the pinned credential revision from one snapshot.
 - The credential revision is the revision that the handover of the execution pins for the credential name of the effective configuration. The read creates no pin and selects no other revision.
 - An execution that pins no revision of that name answers 409 `worker.execution.credential_not_pinned`. A revoked pinned revision answers 409 `credential.revision.revoked`.
@@ -424,7 +425,8 @@ The carrier of that attribution is an epic decision.
 - An agent turn that ends with a provider error stops the execution with `provider_failed`. pi retries a transient error before the turn ends.
 - The stop code names the provider failure: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
 - A task revision after a failed verification that changes no file twice in a row stops the execution with `no_progress`. The second unchanged revision runs no verification.
-- A `provider_failed` or `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit).
+- A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
+- A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
 - Tests cover native and external-harness defaults, overrides for every worker binding, and positive safe integers.
   They cover turn events, wall time from `created_at`, and cleanup bounded by `expired_at`, not by the remaining budget.
   They cover each provider failure code, a revision that changes nothing twice, and a revoked claim during a task loop and during a prompt.
