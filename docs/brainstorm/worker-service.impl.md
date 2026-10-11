@@ -195,7 +195,8 @@ The working directory that pi states in its system prompt writes the home direct
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
-The binary embeds [assets/prompt/base.md](assets/prompt/base.md) as the default system prompt, and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md), as [shipped assets](architecture.impl.md#shipped-assets).
+The binary embeds `engine/static/prompt/base.md` as the default system prompt, and the agent prompts `swe@1.md` and `re@1.md` of that directory, as [shipped assets](architecture.impl.md#shipped-assets).
+The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
 The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 
