@@ -65,7 +65,10 @@ async function watchExecutions(quiet) {
 }
 
 function watchWorkers() {
-  for (const instance of state.instances) {
+  const { instances } = JSON.parse(
+    readFileSync(join(runDir, "run.json"), "utf8"),
+  );
+  for (const instance of instances) {
     const up = alive(instance.pid);
     if (!up && !down.has(instance.name))
       console.log(

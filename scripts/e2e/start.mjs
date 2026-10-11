@@ -1,14 +1,14 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
-  openSync,
   readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, tokenOf } from "./api.mjs";
+import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
 
 const [configPath, run] = process.argv.slice(2);
 if (!configPath || !run) throw new Error("usage: start.mjs <config> <run>");
@@ -34,13 +34,6 @@ function kanthord(args) {
     encoding: "utf8",
     env: withoutKanthordClient(process.env),
   });
-}
-
-function withoutKanthordClient(env) {
-  const output = { ...env };
-  for (const name of ["KANTHORD_ENDPOINT", "KANTHORD_CONFIG", "KANTHORD_TOKEN"])
-    delete output[name];
-  return output;
 }
 
 function secrets(file) {
@@ -207,25 +200,9 @@ for (const worker of config.workers)
       config.endpoint,
     ]);
     const logFile = join(runDir, `${name}.log`);
-    const child = spawn(process.execPath, ["src/main.ts", "serve", "worker"], {
-      cwd: ENGINE,
-      detached: true,
-      stdio: ["ignore", openSync(logFile, "a"), openSync(logFile, "a")],
-      env: {
-        ...withoutKanthordClient(process.env),
-        XDG_CONFIG_HOME: join(home, "config"),
-        XDG_STATE_HOME: join(home, "state"),
-        XDG_DATA_HOME: join(home, "data"),
-        XDG_CACHE_HOME: join(home, "cache"),
-        GIT_AUTHOR_NAME: "kanthord e2e",
-        GIT_AUTHOR_EMAIL: "e2e@kanthorlabs.invalid",
-        GIT_COMMITTER_NAME: "kanthord e2e",
-        GIT_COMMITTER_EMAIL: "e2e@kanthorlabs.invalid",
-      },
-    });
-    child.unref();
-    instances.push({ name, pid: child.pid, log: logFile });
-    log("worker started", { name, pid: child.pid });
+    const pid = spawnWorker(ENGINE, home, logFile);
+    instances.push({ name, pid, log: logFile });
+    log("worker started", { name, pid });
   }
 
 writeFileSync(

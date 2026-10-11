@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools \
-	e2e-start e2e-watch e2e-stop
+	e2e-start e2e-watch e2e-stop e2e-restart
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -79,6 +79,7 @@ help:
 	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
 	@echo "  e2e-watch        Print node changes, execution stops, worker exits and PRs. RUN=name"
 	@echo "  e2e-stop         Stop the workers of a run. RUN=name"
+	@echo "  e2e-restart      Restart the workers of a run on the current engine code. RUN=name"
 
 dev:
 	@$(S)/dev/run.sh
@@ -119,3 +120,5 @@ e2e-watch:
 	@$(S)/e2e/watch.sh
 e2e-stop:
 	@$(S)/e2e/stop.sh
+e2e-restart:
+	@$(S)/e2e/restart.sh
