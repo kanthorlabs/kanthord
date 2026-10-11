@@ -37,10 +37,11 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 
 - `Job` holds `job_id`, `project_id`, `node_id` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
-- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `credentials`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
+- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `node_branch`, `credentials`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
   - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service. Both are absent for an instance that the server hosts.
   - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinned_revision` are positive safe integers.
+  - `node_branch` is the node branch that the claim admission of the Mission Service answers. The claim copies it as it copies `pinned_revision`, into `scheduler_execution`, the execution record, the claim answer and `ExecutionClaim`. The migration sets `kanthord/<node id>` on every earlier row.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
   - `claim_state` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
@@ -146,8 +147,9 @@ The Scheduler Service owns the section `scheduler` of the configuration file tha
 Every 30 s, the Scheduler settles every execution row whose `ended_at` is null and whose `expired_at` is reached or passed.
 This write is the loss declaration.
 It sets `ended_at` to the clock reading at the start of its transaction.
-The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop`, and it hands the count to the Mission Service.
-A release with a `stop` counts the same rows, itself included, in the release transaction.
+The loss declaration counts the lost rows and the stopped rows of the attempt after its latest finished row with no `stop` or with a `budget_end` stop, and it hands the count to the Mission Service.
+A `budget_end` row is no stopped row, and the count excludes it.
+A release with a `stop` other than `budget_end` counts the same rows, itself included, in the release transaction.
 The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.

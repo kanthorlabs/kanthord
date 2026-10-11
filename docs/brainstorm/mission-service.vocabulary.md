@@ -171,6 +171,25 @@ The Mission Service closes attempt 1 by force and ends Execution 1.
 It writes the outcome of the objective.
 The records of attempt 1 remain records of that attempt.
 
+## start point
+
+The branch that the work of an attempt starts from.
+The value is `base_branch` or `node_branch`.
+The start point says where the work starts, not what the work is.
+
+Take "Add password reset" after a human rejects the work of attempt 1 on `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
+
+1. Attempt 1 records `base_branch`, because every attempt 1 starts from the base branch.
+2. A human blocks the objective and unblocks it with `start_point: base_branch`.
+   Attempt 2 opens and records `base_branch`.
+3. The claim of attempt 2 names the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2`.
+   The steps execution starts that branch from the base branch.
+4. A later human unblock without a start point opens attempt 3, and attempt 3 records `node_branch`.
+   Attempt 3 continues `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2`.
+
+The branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV` and its commits stay unchanged.
+The start point of an initiative attempt has no effect.
+
 ## state of a node
 
 The state of an initiative or an objective.

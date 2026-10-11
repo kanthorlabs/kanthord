@@ -298,6 +298,11 @@ Steps tests revise after a failed verification within the resource budget, commi
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
 Steps tests run every task verification at the head of the node branch at the start of an execution, and skip each task that passes.
 Tests permit judgement only after every verification passes.
+Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
+Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
+Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
+Tests assert that a judgement of attempt k-1 is not reused in attempt k.
+Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
 
 ## Workspace
 
@@ -305,6 +310,7 @@ Tests permit judgement only after every verification passes.
 - The workspace of a steps execution on an objective is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
 - The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
 - The preparation of an objective workspace adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
+- The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists, else the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
 - The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.
@@ -334,6 +340,7 @@ Inside one server process, the mutex and the reservation prevent a redispatch wi
 The outbound request of the [Intake Service](intake-service.md#outbound-requests) is the durable dispatch record.
 B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, across attempts included.
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
+The operands take the node branch from `node_branch` of the claim.
 It passes the request key `<node id>/<attempt>/<FrozenAction.key>`, and it appends the snapshot commit for `merge_push`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6`. For the reuse of a pull request, it appends the number of the reused pull request and the snapshot commit, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9`.
 
 The operation and the tool answer `{ tool_name: "repository-action-request", items: ActionResultItem[] }`.
@@ -441,6 +448,7 @@ Abort does not prove that every descendant process stops.
 The quiescence check before workspace reuse still needs a mechanism.
 The [Repository implementation](repository.impl.md#repository-connector) states the transport's process-cancellation limit.
 The execution enforces the turn budget on pi turn events and aborts the agent when either budget ends.
+An agent that reaches its wall-time deadline ends the wall-time budget of the execution. The execution then takes the budget end, not a failure.
 The bash timeout of an agent command stays below the remaining wall-time budget and below the 10-minute command limit of a verification item. A lower timeout that the model sets stays.
 After the agent stops at budget end, the execution code, not the agent, writes the checkpoint commit, pushes and releases with further work.
 The boundary is the task commit: work that the budget ends before its task commit, or during the judgement of a passing run, takes the checkpoint; a task commit whose run failed or left an item unrun, with no later task work, takes the head-commit evidence and the release with no further work.
