@@ -9,7 +9,7 @@ A worker reports to KanthorD on two channels. The state channel changes the stat
 | State     | Scheduler and Mission | Claim, claim check, evidence, release               | Decides the next state of the node  |
 | Telemetry | Tracking              | Spans of phases, tasks, turns, tool calls, progress | None. No service reads it to decide |
 
-This page is a design. The telemetry channel follows [ERD 4: Telemetry](../reference/erd/04-tracking.md) and is not implemented. The external harness path comes first.
+The telemetry channel follows [ERD 4: Telemetry](../reference/erd/04-tracking.md). The native path is implemented: the Scheduler writes the root span, and a native worker writes its spans with `tracking.telemetry.write`. The external harness path is a design.
 
 ## The state channel
 
@@ -47,7 +47,7 @@ The Scheduler opens the root span of an execution after the claim. Every span of
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
 flowchart TB
     accTitle: The span tree of one execution
-    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and judgement spans. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add turn, tool and progress spans.
+    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and judgement spans. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add turn and tool spans. An external harness adds progress spans.
     root(["Root span<br/>Scheduler"])
     root --> phase["worker.phase<br/>native"]
     phase --> task["worker.task<br/>native"]
@@ -60,7 +60,7 @@ flowchart TB
     session --> turn2["agent.turn<br/>both"]
     turn --> tool["agent.tool<br/>both"]
     turn2 --> tool2["agent.tool<br/>both"]
-    session --> progress["agent.progress<br/>both"]
+    session --> progress["agent.progress<br/>harness"]
     classDef shared fill:#fbeae1,stroke:#eb6c36,color:#2d3142;
     classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
     class turn,turn2,tool,tool2,progress shared;
@@ -71,34 +71,34 @@ flowchart TB
 
 The span operation names are a closed set, defined as an enum in code. A span holds identities and measurements in its attributes. Prose, for example a command, an output or a reply, goes into a telemetry text that the span names in `text_ids`.
 
-| Operation             | Producer | Parent                                               | Attributes                                                                                                                                                                                                                                               | Texts                                                                 |
-| --------------------- | -------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `worker.phase`        | Native   | Root                                                 | `kanthord.phase`: `prepare`, `start`, `tasks` or `finish`                                                                                                                                                                                                | None                                                                  |
-| `worker.task`         | Native   | `worker.phase`                                       | `kanthord.task.id`, `kanthord.task.result`: `complete`, `budget_end` or `stopped`                                                                                                                                                                        | None                                                                  |
-| `worker.verification` | Native   | `worker.task`, `worker.phase` or `worker.evaluation` | One span per command. `kanthord.commit`, `kanthord.verification.index`, `kanthord.verification.run`, `process.exit.code`, `kanthord.verification.signal`, `kanthord.verification.timed_out`                                                              | `command`, `output`: the last 4 KiB                                   |
-| `worker.judgement`    | Native   | `worker.task`                                        | `kanthord.commit`, `kanthord.judgement.criterion_met`, `kanthord.judgement.repaired`                                                                                                                                                                     | `rationale`                                                           |
-| `worker.evaluation`   | Native   | Root                                                 | `kanthord.commit`, `kanthord.assessment.id`, `kanthord.evaluation.result`                                                                                                                                                                                | `rationale`                                                           |
-| `harness.session`     | Harness  | Root                                                 | `gen_ai.request.model`, `kanthord.harness.session_id`                                                                                                                                                                                                    | None                                                                  |
-| `agent.turn`          | Both     | `worker.task` or `harness.session`                   | `kanthord.turn.index`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read_tokens`, `gen_ai.usage.cache_write_tokens`, `gen_ai.response.finish_reasons`, `error.type`: the provider failure code | `reply`: the last assistant text, `error`: the provider error message |
-| `agent.tool`          | Both     | `agent.turn`                                         | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `kanthord.tool.outcome`: `ok` or `error`, `kanthord.tool.duration_ms`                                                                                                                                         | `input`, `output`                                                     |
-| `agent.progress`      | Both     | `worker.task` or `harness.session`                   | `kanthord.progress.total`, `kanthord.progress.completed`, `kanthord.progress.in_progress`                                                                                                                                                                | `items`: the todo list                                                |
+| Operation             | Producer | Parent                                                     | Attributes                                                                                                                                                                                                                                                                      | Texts                                                                 |
+| --------------------- | -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `worker.phase`        | Native   | Root                                                       | `kanthord.phase`: `prepare`, `start`, `tasks` or `finish`                                                                                                                                                                                                                       | None                                                                  |
+| `worker.task`         | Native   | `worker.phase`                                             | `kanthord.task.id`, `kanthord.task.result`: `complete` or `budget_end`. A stop ends the span with the status `Error` and no result                                                                                                                                              | None                                                                  |
+| `worker.verification` | Native   | `worker.task`, `worker.phase`, `worker.evaluation` or Root | One span per command. `kanthord.commit`, `kanthord.verification.index`, `kanthord.verification.run`, `process.exit.code`, `kanthord.verification.signal`, `kanthord.verification.timed_out`                                                                                     | `command`, `output`: the last 4 KiB                                   |
+| `worker.judgement`    | Native   | `worker.task` or `worker.phase`                            | `kanthord.task.id`, `kanthord.commit`, `kanthord.judgement.reply`: `parsed`, `invalid` or `budget_end`, `kanthord.judgement.criterion_met`                                                                                                                                      | `rationale`                                                           |
+| `worker.evaluation`   | Native   | Root                                                       | `kanthord.commit`, `kanthord.evaluation.result`: the result of the judgement                                                                                                                                                                                                    | `rationale`                                                           |
+| `harness.session`     | Harness  | Root                                                       | `gen_ai.request.model`, `kanthord.harness.session_id`                                                                                                                                                                                                                           | None                                                                  |
+| `agent.turn`          | Both     | The enclosing worker span, Root, or `harness.session`      | `kanthord.agent.name`, `kanthord.turn.index`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read_tokens`, `gen_ai.usage.cache_write_tokens`, `gen_ai.response.finish_reasons`, `error.type`: the provider failure code | `reply`: the last assistant text, `error`: the provider error message |
+| `agent.tool`          | Both     | `agent.turn`                                               | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `kanthord.tool.outcome`: `ok` or `error`, `kanthord.tool.duration_ms`                                                                                                                                                                | `input`, `output`                                                     |
+| `agent.progress`      | Harness  | `harness.session`                                          | `kanthord.progress.total`, `kanthord.progress.completed`, `kanthord.progress.in_progress`                                                                                                                                                                                       | `items`: the todo list                                                |
 
-Every span also holds `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id`, `kanthord.attempt` and `kanthord.worker.name`. A span status is `Error` when its operation failed, and `Ok` otherwise. An `agent.turn` that ends with a provider error has the status `Error`.
+Every span also holds `kanthord.execution.id`, `kanthord.node.id`, `kanthord.attempt` and `kanthord.worker.name`. The trace header holds the project. A span status is `Error` when its operation failed, and `Ok` otherwise. An `agent.turn` that ends with a provider error has the status `Error`.
 
 `reviewer@1` writes `agent.turn` and `agent.tool` spans below `worker.evaluation`. The `reply` text of its last turn holds the whole review, also the parts that the assessment rationale leaves out.
 
-A turn, a tool call and a progress list have one shape for both producers. A dashboard therefore shows a native run and a harness run with the same view.
+A turn and a tool call have one shape for both producers. A dashboard therefore shows a native run and a harness run with the same view.
 
 ### Identities
 
 A producer computes each identity from the execution and a local key. A retry therefore produces the same identity, and the Tracking Service stores the record once.
 
-| Identity    | Rule                                                                                                                                                                                                |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `span_id`   | The first 16 hex characters of SHA-256 of `<execution_id>:<local key>`                                                                                                                              |
-| Local key   | `phase:<name>`, `task:<task id>`, `verification:<task id>:<cycle>:<index>:<run>`, `judgement:<task id>:<cycle>`, `evaluation`, `turn:<index>`, `tool:<call id>`, `progress:<index>`, `session:<id>` |
-| `record_id` | `<span_id>:start` or `<span_id>:end` for a span record, `<text_id>` for a text record                                                                                                               |
-| `text_id`   | `<span_id>:<text name>`, for example `<span_id>:output`. A text above 60 KiB splits into `:output.1`, `:output.2`                                                                                   |
+| Identity    | Rule                                                                                                                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `span_id`   | The first 16 hex characters of SHA-256 of `<execution_id>:<local key>`                                                                                                                                         |
+| Local key   | `phase:<name>`, `<operation>:<n>` for a task, a verification, a judgement and an evaluation, `turn:<n>`, `tool:<turn span id>:<call id>`, `progress:<n>`, `session:<id>`. `<n>` counts from 1 in the execution |
+| `record_id` | `<span_id>:start` or `<span_id>:end` for a span record, `<text_id>` for a text record                                                                                                                          |
+| `text_id`   | `<span_id>:<text name>`, for example `<span_id>:output`. A text above 15000 characters splits into `:output.1`, `:output.2`, at most 8 parts                                                                   |
 
 A start record holds `start_time`, the attributes that are known at the start, and the input texts. An end record holds `end_time`, the status, the other attributes and the output texts. No record sets a value that an earlier record set.
 
@@ -114,12 +114,14 @@ A native worker writes its records straight to the primary store of the Tracking
 | pi `turn_end`             | End of `agent.turn`. `message.usage` gives the tokens, `message.model` the model, `message.stopReason` the finish reason |
 | pi `tool_execution_start` | Start of `agent.tool`. `toolCallId` is the call id, `args` is the `input` text                                           |
 | pi `tool_execution_end`   | End of `agent.tool`. `isError` gives the outcome, `result` is the `output` text                                          |
-| Worker steps 1 to 11      | Start and end of `worker.phase`                                                                                          |
+| Worker method             | Start and end of `worker.phase`: `prepare`, `start`, `tasks`, `finish`                                                   |
 | Worker task loop          | `worker.task`, `worker.verification`, `worker.judgement`                                                                 |
 | `reviewer@1` evaluation   | `worker.evaluation`, and one `worker.verification` for each command and each rerun                                       |
 | Provider failure          | `error.type` on the end of `agent.turn` takes the `provider_failed` code; `errorMessage` is the `error` text             |
 
-A failed telemetry write never fails the execution and never delays it beyond a bound.
+The worker queues its records and sends a batch each second, or at once when 200 records wait. A batch holds at most 768 KiB. A write that has no answer is sent at most three times.
+
+The execution proof ends with the claim. The worker therefore flushes its queue for at most 5 seconds before the release and before the assessment. A record that is still queued at the end of the execution is dropped, and the worker logs the count. A failed telemetry write never fails the execution.
 
 ## The external harness path
 
@@ -190,14 +192,13 @@ Both produce the same two records, with their own call id:
 ```json
 [
   {
-    "recordId": "3b9d0c1e5a7f2264:end",
-    "executionId": "execution_01JZ8R2B…",
-    "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "record_id": "3b9d0c1e5a7f2264:end",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
     "kind": "span",
-    "spanId": "3b9d0c1e5a7f2264",
+    "span_id": "3b9d0c1e5a7f2264",
     "operation": "agent.tool",
-    "parentSpanId": "a1c2e3f405162738",
-    "endTime": 1791734520120,
+    "parent_span_id": "a1c2e3f405162738",
+    "end_time": 1791734520120,
     "status": "Ok",
     "attributes": {
       "gen_ai.tool.name": "bash",
@@ -205,14 +206,13 @@ Both produce the same two records, with their own call id:
       "kanthord.tool.outcome": "ok",
       "kanthord.tool.duration_ms": 4120
     },
-    "textIds": ["3b9d0c1e5a7f2264:output"]
+    "text_ids": ["3b9d0c1e5a7f2264:output"]
   },
   {
-    "recordId": "3b9d0c1e5a7f2264:output",
-    "executionId": "execution_01JZ8R2B…",
-    "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "record_id": "3b9d0c1e5a7f2264:output",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
     "kind": "text",
-    "textId": "3b9d0c1e5a7f2264:output",
+    "text_id": "3b9d0c1e5a7f2264:output",
     "text": "Tests: 1 passed"
   }
 ]
