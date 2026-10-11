@@ -1,60 +1,73 @@
 /* ── light palette (default) ───────────────────────────────── */
 :root {
-  --bg:           #ffffff;
-  --surface:      #f4f4f5;
-  --border:       #e4e4e7;
-  --text:         #18181b;
-  --text-muted:   #52525b;
-  --link:         #2563eb;
-  --link-hover:   #1d4ed8;
-  --code-bg:      #f0f0f0;
-  --code-text:    #18181b;
-  --stub-color:   #71717a;
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --border: #e4e4e7;
+  --text: #18181b;
+  --text-muted: #52525b;
+  --link: #2563eb;
+  --link-hover: #1d4ed8;
+  --code-bg: #f0f0f0;
+  --code-text: #18181b;
+  --stub-color: #71717a;
 }
 
 /* ── dark overrides ────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg:           #0a0a0a;
-    --surface:      #18181b;
-    --border:       #27272a;
-    --text:         #e4e4e7;
-    --text-muted:   #a1a1aa;
-    --link:         #60a5fa;
-    --link-hover:   #93c5fd;
-    --code-bg:      #1c1c1e;
-    --code-text:    #e4e4e7;
-    --stub-color:   #a1a1aa;
+    --bg: #0a0a0a;
+    --surface: #18181b;
+    --border: #27272a;
+    --text: #e4e4e7;
+    --text-muted: #a1a1aa;
+    --link: #60a5fa;
+    --link-hover: #93c5fd;
+    --code-bg: #1c1c1e;
+    --code-text: #e4e4e7;
+    --stub-color: #a1a1aa;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg:           #0a0a0a;
-  --surface:      #18181b;
-  --border:       #27272a;
-  --text:         #e4e4e7;
-  --text-muted:   #a1a1aa;
-  --link:         #60a5fa;
-  --link-hover:   #93c5fd;
-  --code-bg:      #1c1c1e;
-  --code-text:    #e4e4e7;
-  --stub-color:   #a1a1aa;
+  --bg: #0a0a0a;
+  --surface: #18181b;
+  --border: #27272a;
+  --text: #e4e4e7;
+  --text-muted: #a1a1aa;
+  --link: #60a5fa;
+  --link-hover: #93c5fd;
+  --code-bg: #1c1c1e;
+  --code-text: #e4e4e7;
+  --stub-color: #a1a1aa;
 }
 
 /* ── reset ─────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   font-size: 16px;
   line-height: 1.65;
   background: var(--bg);
   color: var(--text);
 }
 
-a { color: var(--link); }
-a:hover { color: var(--link-hover); }
+a {
+  color: var(--link);
+}
+a:hover {
+  color: var(--link-hover);
+}
 
 /* ── site header ───────────────────────────────────────────── */
 .site-header {
@@ -91,7 +104,9 @@ a:hover { color: var(--link-hover); }
   color: var(--text-muted);
 }
 .site-header nav a:hover,
-.site-header nav a[aria-current] { color: var(--link); }
+.site-header nav a[aria-current] {
+  color: var(--link);
+}
 
 /* ── main container ────────────────────────────────────────── */
 main {
@@ -101,7 +116,9 @@ main {
 }
 
 /* ── overflow utility ──────────────────────────────────────── */
-.overflow-x { overflow-x: auto; }
+.overflow-x {
+  overflow-x: auto;
+}
 
 /* ── figures ───────────────────────────────────────────────── */
 #content img {
@@ -136,18 +153,34 @@ main {
 }
 
 /* ── prose headings and text ───────────────────────────────── */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   margin-top: 1.75em;
   margin-bottom: 0.4em;
   line-height: 1.25;
   font-weight: 600;
   scroll-margin-top: 4rem;
 }
-h1 { font-size: 1.75rem; margin-top: 0; }
-h2 { font-size: 1.3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-h3 { font-size: 1.1rem; }
+h1 {
+  font-size: 1.75rem;
+  margin-top: 0;
+}
+h2 {
+  font-size: 1.3rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+h3 {
+  font-size: 1.1rem;
+}
 
-p { margin: 0.75em 0; }
+p {
+  margin: 0.75em 0;
+}
 
 code {
   font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
@@ -179,12 +212,16 @@ table {
   font-size: 0.9rem;
   margin: 1em 0;
 }
-th, td {
+th,
+td {
   padding: 0.5em 0.75em;
   border: 1px solid var(--border);
   text-align: left;
 }
-th { background: var(--surface); font-weight: 600; }
+th {
+  background: var(--surface);
+  font-weight: 600;
+}
 
 blockquote {
   margin: 1em 0;
@@ -193,7 +230,17 @@ blockquote {
   color: var(--text-muted);
 }
 
-hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
 
-ul, ol { padding-left: 1.5em; margin: 0.75em 0; }
-li { margin: 0.25em 0; }
+ul,
+ol {
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+li {
+  margin: 0.25em 0;
+}

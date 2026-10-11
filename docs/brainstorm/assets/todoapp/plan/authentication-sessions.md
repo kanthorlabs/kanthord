@@ -7,6 +7,7 @@ verifications:
   - npm ci && npm run test:authentication
   - npm run test:persistence
 ---
+
 # Enforce expiring and revocable bearer sessions
 
 ## Requirement

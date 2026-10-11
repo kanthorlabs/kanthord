@@ -419,8 +419,9 @@ The carrier of that attribution is an epic decision.
 - `wall_time_ms` and any declared `turns` are positive safe integers, including in overrides.
 - A turn is one `turn_end` event of the pi agent loop.
 - Wall time runs from `created_at` of the execution.
-- A verification item runs under the deadline `min(created_at + wall_time_ms, expired_at)` of its execution.
-- An item whose deadline arrived does not start and has no result. A started item that the deadline ends records `timed_out: true`.
+- A verification item runs under the deadline `min(created_at + wall_time_ms, expired_at)` of its execution, and under its own limit of 10 minutes from its start.
+- An item whose deadline arrived does not start and has no result. A started item that the deadline or its own limit ends records `timed_out: true`.
+- The worker keeps the last 4 KiB of the combined stdout and stderr of each item. The output is not evidence. The task revision carries the output of the last item that ran.
 - Tests cover native and external-harness defaults, overrides for every worker binding, and positive safe integers.
   They cover turn events, wall time from `created_at`, and cleanup bounded by `expired_at`, not by the remaining budget.
 
@@ -482,6 +483,6 @@ These declarations match the error table of `engine/docs/cli/worker.md`.
 
 The `worker handover` command refuses an invalid argument locally, matching `engine/docs/cli/worker.md`.
 
-| HTTP | Code | Condition |
-| --- | --- | --- |
+| HTTP  | Code                                       | Condition                                                                     |
+| ----- | ------------------------------------------ | ----------------------------------------------------------------------------- |
 | local | `cli.worker.handover.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |

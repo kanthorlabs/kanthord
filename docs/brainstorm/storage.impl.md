@@ -14,9 +14,9 @@ The module lives in `src/storage/`.
 
 The component owns a dedicated platform validator for every platform of the Storage component.
 
-| Platform | Secret shape | Metadata | Validation |
-| --- | --- | --- | --- |
-| `s3` | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
+| Platform | Secret shape    | Metadata                       | Validation                                                          |
+| -------- | --------------- | ------------------------------ | ------------------------------------------------------------------- |
+| `s3`     | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
 
 - The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` in path style to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
 - S3 metadata serves the healthcheck, not work destinations.

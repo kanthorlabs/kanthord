@@ -89,7 +89,7 @@ After the first native-agent worker runs the acceptance path.
 
 ### Gateway Service
 
-- [ ] POSTPONED 2026-09-28 by Ulrich until Ulrich rules it. Decide whether `kanthord jwt inspect` verifies the signature, the header and the closed claim set with the server configuration.
+- [ ] POSTPONED 2026-09-28 by Ulrich until Ulrich rules it. Decide whether `kanthord auth jwt inspect` verifies the signature, the header and the closed claim set with the server configuration.
 
 ### Tracking Service
 

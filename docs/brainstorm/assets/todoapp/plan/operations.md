@@ -9,6 +9,7 @@ verifications:
   - npm ci && npm run test:operations
   - npm run test:foundation
 ---
+
 # Harden errors, logging and process operation
 
 ## Requirement

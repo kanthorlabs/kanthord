@@ -1,115 +1,171 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kanthord · Documentation</title>
+    <link rel="stylesheet" href="assets/style.css" />
+    <style>
+      .hero {
+        padding: 2.5rem 0 1.5rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2rem;
+      }
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kanthord · Documentation</title>
-  <link rel="stylesheet" href="assets/style.css">
-  <style>
-    .hero {
-      padding: 2.5rem 0 1.5rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 2rem;
-    }
+      .hero h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+      }
 
-    .hero h1 {
-      font-size: 2rem;
-      margin: 0 0 0.5rem;
-    }
+      .hero p {
+        color: var(--text-muted);
+        font-size: 1.05rem;
+        margin: 0;
+        max-width: 56ch;
+      }
 
-    .hero p {
-      color: var(--text-muted);
-      font-size: 1.05rem;
-      margin: 0;
-      max-width: 56ch;
-    }
+      .scope-note {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.6rem 1rem;
+        margin-bottom: 2rem;
+      }
 
-    .scope-note {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.6rem 1rem;
-      margin-bottom: 2rem;
-    }
+      .meta-links {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 2.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
 
-    .meta-links {
-      display: flex;
-      gap: 1.5rem;
-      margin-bottom: 2.5rem;
-      flex-wrap: wrap;
-      align-items: center;
-    }
+      .meta-links a {
+        font-size: 0.9rem;
+      }
 
-    .meta-links a {
-      font-size: 0.9rem;
-    }
+      .meta-links .primary {
+        font-weight: 600;
+      }
 
-    .meta-links .primary {
-      font-weight: 600;
-    }
+      .meta-links .separator {
+        color: var(--border);
+      }
+    </style>
+  </head>
 
-    .meta-links .separator {
-      color: var(--border);
-    }
-  </style>
-</head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html">kanthord</a>
+      <nav>
+        <a href="index.html" aria-current="page">Index</a>
+        <a href="viewer.html?p=README.md">Documentation</a>
+        <a href="viewer.html?p=reference/README.md">CLI &amp; API reference</a>
+        <a href="viewer.html?p=how-to-guides/README.md">How-to guides</a>
+        <a href="viewer.html?p=explanation/README.md">Explanations</a>
+      </nav>
+    </header>
 
-<body>
-  <header class="site-header">
-    <a class="brand" href="index.html">kanthord</a>
-    <nav>
-      <a href="index.html" aria-current="page">Index</a>
-      <a href="viewer.html?p=README.md">Documentation</a>
-      <a href="viewer.html?p=reference/README.md">CLI &amp; API reference</a>
-      <a href="viewer.html?p=how-to-guides/README.md">How-to guides</a>
-      <a href="viewer.html?p=explanation/README.md">Explanations</a>
-    </nav>
-  </header>
+    <main>
+      <div class="hero">
+        <h1>Kanthord documentation</h1>
+        <p>
+          Public documentation for users, operators, and API consumers:
+          configure the daemon, use the CLI, integrate with the HTTP API, and
+          understand its behavior.
+        </p>
+      </div>
 
-  <main>
-    <div class="hero">
-      <h1>Kanthord documentation</h1>
-      <p>Public documentation for users, operators, and API consumers: configure the daemon,
-        use the CLI, integrate with the HTTP API, and understand its behavior.</p>
-    </div>
+      <p class="scope-note">
+        Start with the
+        <a href="viewer.html?p=README.md"
+          ><strong>documentation guide</strong></a
+        >
+        for the current scope and available features.
+      </p>
 
-    <p class="scope-note">
-      Start with the <a href="viewer.html?p=README.md"><strong>documentation guide</strong></a>
-      for the current scope and available features.
-    </p>
+      <h2>Operate Kanthord</h2>
+      <ul>
+        <li>
+          <a href="viewer.html?p=reference/config/init.md"
+            >Create server configuration</a
+          >
+        </li>
+        <li><a href="viewer.html?p=reference/serve.md">Run the server</a></li>
+        <li>
+          <a href="viewer.html?p=reference/upgrade.md"
+            >Upgrade configuration and data</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/auth/jwt.md"
+            >Generate a human token</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=how-to-guides/run-on-a-mac-with-tailscale.md"
+            >Run on a Mac with Tailscale</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=how-to-guides/run-on-a-vps.md">Run on a VPS</a>
+        </li>
+      </ul>
+      <h2>Understand the system</h2>
+      <ul>
+        <li>
+          <a href="viewer.html?p=explanation/architecture.md"
+            >Service architecture and components</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/erd/README.md"
+            >Database schema design and ERD map</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/erd/01-setup.md"
+            >ERD 1: Environment and planning</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/erd/02-execution.md"
+            >ERD 2: Execution</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/erd/03-integration.md"
+            >ERD 3: External integration</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/erd/04-tracking.md"
+            >ERD 4: Telemetry</a
+          >
+        </li>
+      </ul>
+      <h2>Integrate and troubleshoot</h2>
+      <ul>
+        <li>
+          <a href="viewer.html?p=reference/README.md"
+            >Browse CLI commands and API endpoints</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=explanation/healthchecks.md"
+            >Understand health reports</a
+          >
+        </li>
+        <li>
+          <a href="viewer.html?p=reference/errors.md">Interpret errors</a>
+        </li>
+      </ul>
+    </main>
 
-    <h2>Operate Kanthord</h2>
-    <ul>
-      <li><a href="viewer.html?p=reference/config/init.md">Create server configuration</a></li>
-      <li><a href="viewer.html?p=reference/serve.md">Run the server</a></li>
-      <li><a href="viewer.html?p=reference/jwt.md">Generate a human token</a></li>
-      <li><a href="viewer.html?p=how-to-guides/run-on-a-mac-with-tailscale.md">Run on a Mac with Tailscale</a></li>
-      <li><a href="viewer.html?p=how-to-guides/run-on-a-vps.md">Run on a VPS</a></li>
-    </ul>
-    <h2>Understand the system</h2>
-    <ul>
-      <li><a href="viewer.html?p=explanation/architecture.md">Service architecture and components</a></li>
-      <li><a href="viewer.html?p=reference/erd/README.md">Database schema design and ERD map</a></li>
-      <li><a href="viewer.html?p=reference/erd/01-setup.md">ERD 1: Environment and planning</a></li>
-      <li><a href="viewer.html?p=reference/erd/02-execution.md">ERD 2: Execution</a></li>
-      <li><a href="viewer.html?p=reference/erd/03-integration.md">ERD 3: External integration</a></li>
-      <li><a href="viewer.html?p=reference/erd/04-tracking.md">ERD 4: Telemetry</a></li>
-    </ul>
-    <h2>Integrate and troubleshoot</h2>
-    <ul>
-      <li><a href="viewer.html?p=reference/README.md">Browse CLI commands and API endpoints</a></li>
-      <li><a href="viewer.html?p=explanation/healthchecks.md">Understand health reports</a></li>
-      <li><a href="viewer.html?p=reference/errors.md">Interpret errors</a></li>
-    </ul>
-
-  </main>
-
-  <footer class="site-footer">
-    Kanthord · public documentation · kanthord.kanthorlabs.com
-  </footer>
-</body>
-
+    <footer class="site-footer">
+      Kanthord · public documentation · kanthord.kanthorlabs.com
+    </footer>
+  </body>
 </html>

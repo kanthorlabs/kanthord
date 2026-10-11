@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/todos-isolation.test.js
 ---
+
 # Enforce ownership and atomic conditional writes
 
 ## Requirement

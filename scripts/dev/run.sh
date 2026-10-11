@@ -49,6 +49,8 @@ if [ "${FRESH:-0}" = "1" ]; then
 	log "removed the engine data"
 fi
 
+(cd "$ENGINE_DIR" && node src/main.ts upgrade) || die "kanthord upgrade failed"
+
 prefix() {
 	while IFS= read -r line; do
 		printf '[%s] %s\n' "$1" "$line"

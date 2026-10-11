@@ -167,18 +167,18 @@ The basis column states the source of each table.
 A ruled table has its name and its columns in a design page.
 A derived table maps a ruled record to rows, and this page proposes that mapping.
 
-| Table | Owner | Basis |
-| --- | --- | --- |
-| `credential` | Custody | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table). |
-| `project_project` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
-| `project_binding` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
-| `agent_prompt` | Agent component | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings). |
-| `agent_enablement` | Agent component | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
-| `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). |
-| `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name). |
-| `mission_node_revision` | Mission Service | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions). |
-| `mission_dependency` | Mission Service | Derived from the dependency [edge kind](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#edge-kind). |
-| `scheduler_job` | Scheduler Service | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts). |
+| Table                   | Owner             | Basis                                                                                                                                                                                                                                                                             |
+| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `credential`            | Custody           | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table).     |
+| `project_project`       | Project Service   | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
+| `project_binding`       | Project Service   | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
+| `agent_prompt`          | Agent component   | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings).                                                                                                                                                        |
+| `agent_enablement`      | Agent component   | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
+| `mission_mission`       | Mission Service   | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas).                                                                                                                     |
+| `mission_node`          | Mission Service   | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name).                                                                             |
+| `mission_node_revision` | Mission Service   | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions).                                                                                                                                            |
+| `mission_dependency`    | Mission Service   | Derived from the dependency [edge kind](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#edge-kind).                                                                                                                               |
+| `scheduler_job`         | Scheduler Service | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts).                                                                                            |
 
 ## Keys and relationship notation
 
@@ -280,13 +280,13 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 ## Cross-group references
 
-| From | To | Kind |
-| --- | --- | --- |
-| `mission_mission.project_id` | `project_project.id` | Reference, no FK. |
-| `mission_node_revision.bindings` | `project_binding.id` | Reference in JSON, no FK. Each item pins one row. An objective names exactly one repository binding, and an initiative or an objective names at most one storage binding. |
-| `project_binding.config` | `credential.name` | Reference in JSON by name, no FK. |
-| `project_binding.config` | `agent_enablement.agent_name` | Reference through the catalog agents of the worker, no FK. |
-| `project_binding.config` | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK. |
-| `agent_enablement.agent_providers` | `credential.name` | Reference in JSON by name, no FK. |
-| `scheduler_job.node_id` | `mission_node.id` | Reference, no FK. |
-| `scheduler_job.project_id` | `project_project.id` | Reference, no FK. |
+| From                               | To                                 | Kind                                                                                                                                                                      |
+| ---------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mission_mission.project_id`       | `project_project.id`               | Reference, no FK.                                                                                                                                                         |
+| `mission_node_revision.bindings`   | `project_binding.id`               | Reference in JSON, no FK. Each item pins one row. An objective names exactly one repository binding, and an initiative or an objective names at most one storage binding. |
+| `project_binding.config`           | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                                                         |
+| `project_binding.config`           | `agent_enablement.agent_name`      | Reference through the catalog agents of the worker, no FK.                                                                                                                |
+| `project_binding.config`           | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK.                                                                                                                     |
+| `agent_enablement.agent_providers` | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                                                         |
+| `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                                                         |
+| `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                                                         |

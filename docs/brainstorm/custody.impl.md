@@ -61,9 +61,20 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody uses the derived cipher key of the [credential table](architecture.impl.md#the-credential-table), never `master_key` directly.
 - The handover keys derive from the [client secret](gateway-service.impl.md#the-client-secret) of the machine JWT through `crypto.hkdfSync` with SHA-256 and an empty salt.
 - The info of the handover key is `handover/server-to-worker/v1`, and the info of the refresh-report key is `handover/worker-to-server/v1`.
-- A manual replacement of `master_key` makes stored credentials unreadable.
-- A human enters each secret again into its existing record; entity references stay valid.
+- A replacement of `master_key` refuses the start, as [the master_key record](#the-master_key-record) rules.
 - [The verification secret](intake-service.impl.md#the-verification-secret) of the Intake Service owns the webhook secret derivation.
+
+## The master_key record
+
+- Custody owns the table `custody_master_key(id, verifier, created_at)`, and it holds one row with `id` 1.
+- `verifier` holds `HKDF(master_key, info = "custody/key-check/v1")`, 32 bytes. The row holds no `master_key` and no cipher key, and the verifier derives neither.
+- `enforceMasterKey(store, master_key, path)` runs in one transaction at the start of the server, after the migrations and before the construction of any service. It compares the stored verifier with the derived one in constant time. A match starts. A difference refuses the start with `system.config.master_key_mismatch`, and the transaction writes nothing. A database without the row records the verifier of the `master_key` that starts it.
+- The message names the database path, the configuration path and the remedy: restore the configuration file that created this database, or restore the database backup that matches the configuration file. It prints no key.
+- `verifyMasterKey(store, master_key, path)` is the read-only half. It answers `false` for a database without the table or the row, and it refuses a difference with the same diagnostic. [The upgrade](architecture.impl.md#the-upgrade) calls it after the history check and before any backup, with the `master_key` of the upgraded configuration.
+- A database without the record accepts the first `master_key` that starts it. A database of an earlier binary gains the table through `kanthord upgrade`, and the next start records the key.
+- No command rotates `master_key`. A new `master_key` starts with a new data directory.
+- A change of `gateway.auth.version` changes no verifier, because the label holds no authentication version.
+- The `worker` application holds no `master_key` and reads no database, so it holds no record.
 
 ## The protected facility
 
@@ -172,6 +183,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Tests assert that `release` refuses a consumed grant, a fabricated grant and an inbound operation under another service identity, and that `drop()` clears the buffer after a success and after a failure.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
 - Tests assert no secret in outputs, logs, transcripts or errors.
+- Tests cover the master_key record: the first start records it once, the recorded key starts again, another key refuses `enforceMasterKey` and `verifyMasterKey` with `system.config.master_key_mismatch` and keeps the row, and `verifyMasterKey` answers `false` without the table.
 
 ## Serialized credential budget
 

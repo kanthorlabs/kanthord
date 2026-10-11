@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - npm run test:e2e
 ---
+
 # Exercise the running API as independent clients
 
 ## Requirement

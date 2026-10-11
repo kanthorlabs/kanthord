@@ -35,7 +35,10 @@ function enableDiagramPan(panel) {
     if (event.pointerType !== "mouse" || event.button !== 0 || !event.isPrimary)
       return;
     if (event.target.closest("a, button")) return;
-    if (panel.scrollWidth <= panel.clientWidth && panel.scrollHeight <= panel.clientHeight)
+    if (
+      panel.scrollWidth <= panel.clientWidth &&
+      panel.scrollHeight <= panel.clientHeight
+    )
       return;
 
     start = {
@@ -79,12 +82,16 @@ function enableDiagramPan(panel) {
     endPan(event);
     dragged = false;
   });
-  panel.addEventListener("click", (event) => {
-    if (!dragged) return;
-    event.preventDefault();
-    event.stopPropagation();
-    dragged = false;
-  }, true);
+  panel.addEventListener(
+    "click",
+    (event) => {
+      if (!dragged) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragged = false;
+    },
+    true,
+  );
 }
 
 export function enableDiagramZoom(diagram) {

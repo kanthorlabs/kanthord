@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/persistence-migrations.test.js
 ---
+
 # Maintain transactional SQLite migrations
 
 ## Requirement

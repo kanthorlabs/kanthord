@@ -14,10 +14,10 @@ The implementation uses `simple-git` at 3.36.0.
 
 The component owns a dedicated platform validator for every platform of the Repository component.
 
-| Platform | Secret shape | Metadata | Validation |
-| --- | --- | --- | --- |
-| `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
-| `ssh` | `none` | `{ host, hostname, port, identity_file }` | `ssh -G -- <host>` |
+| Platform | Secret shape | Metadata                                  | Validation                              |
+| -------- | ------------ | ----------------------------------------- | --------------------------------------- |
+| `github` | `api_key`    | None                                      | `GET https://api.github.com/rate_limit` |
+| `ssh`    | `none`       | `{ host, hostname, port, identity_file }` | `ssh -G -- <host>`                      |
 
 - A second shape for GitHub is another platform, for example `github-app`.
 - The GitHub rate-limit probe reports `rate-limit read` and spends no rate limit.
@@ -55,9 +55,9 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 
 A git-only platform has an SSH host set and no platform implementation.
 
-| Platform | SSH host set |
-| --- | --- |
-| `gitlab` | `gitlab.com`, `altssh.gitlab.com` |
+| Platform    | SSH host set                            |
+| ----------- | --------------------------------------- |
+| `gitlab`    | `gitlab.com`, `altssh.gitlab.com`       |
 | `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` |
 
 - A repository binding of a git-only platform names no `credential`, because no credential platform exists for it.

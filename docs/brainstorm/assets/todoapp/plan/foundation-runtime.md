@@ -7,6 +7,7 @@ verifications:
   - npm ci && npm run test:foundation
   - npm run lint && npm run format:check
 ---
+
 # Provide a reproducible Node 24 runtime
 
 ## Requirement

@@ -16,20 +16,20 @@ The platform validators and the model connector use the contracts of `@earendil-
 The component owns a dedicated platform validator for every [LLM platform](llm.vocabulary.md#llm-platform).
 Each platform validator declares its secret shape, metadata schema and validation. A platform holds exactly one secret shape, and a second shape for the same remote is another platform, for example `anthropic-subscription` or `openai-codex`.
 
-| Platform | Secret shape | Metadata | Check |
-| --- | --- | --- | --- |
-| `github-copilot` | `oauth` | None | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token |
-| `openai-codex` | `oauth` | None | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
-| `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
-| `openai-compatible` | `api_key` | `base_url`, `models` | `GET <base_url>/models` |
-| `openrouter` | `api_key` | None | `GET https://openrouter.ai/api/v1/key` |
-| `openai` | `api_key` | None | `GET https://api.openai.com/v1/models` |
-| `amazon-bedrock` | `api_key` | `region` | None |
-| `google-vertex` | `api_key` | `project`, `location` | None |
-| `azure-openai-responses` | `api_key` | `resource_name` | None |
-| `cloudflare-workers-ai` | `api_key` | `account_id` | None |
-| `cloudflare-ai-gateway` | `api_key` | `account_id`, `gateway_id` | None |
-| `opencode-go` | `api_key` | None | One model call to `deepseek-v4-flash` with the prompt "What time is it?" |
+| Platform                 | Secret shape | Metadata                   | Check                                                                                  |
+| ------------------------ | ------------ | -------------------------- | -------------------------------------------------------------------------------------- |
+| `github-copilot`         | `oauth`      | None                       | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token    |
+| `openai-codex`           | `oauth`      | None                       | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
+| `anthropic`              | `api_key`    | None                       | `GET https://api.anthropic.com/v1/models`                                              |
+| `openai-compatible`      | `api_key`    | `base_url`, `models`       | `GET <base_url>/models`                                                                |
+| `openrouter`             | `api_key`    | None                       | `GET https://openrouter.ai/api/v1/key`                                                 |
+| `openai`                 | `api_key`    | None                       | `GET https://api.openai.com/v1/models`                                                 |
+| `amazon-bedrock`         | `api_key`    | `region`                   | None                                                                                   |
+| `google-vertex`          | `api_key`    | `project`, `location`      | None                                                                                   |
+| `azure-openai-responses` | `api_key`    | `resource_name`            | None                                                                                   |
+| `cloudflare-workers-ai`  | `api_key`    | `account_id`               | None                                                                                   |
+| `cloudflare-ai-gateway`  | `api_key`    | `account_id`, `gateway_id` | None                                                                                   |
+| `opencode-go`            | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"               |
 
 - Every other `KnownProvider` of pi-ai 0.86.0 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams` and `xiaomi-token-plan-sgp`.
 - A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform that no page names yet.

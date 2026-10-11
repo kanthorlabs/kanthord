@@ -9,6 +9,7 @@ verifications:
   - npm ci && npm run test:persistence
   - npm run test:foundation
 ---
+
 # Persist accounts, sessions and TODOs in SQLite
 
 ## Requirement

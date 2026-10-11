@@ -48,10 +48,10 @@ The node kind determines the column.
 A new binding kind adds a row.
 
 | Binding kind | Initiative | Objective | Task |
-| --- | --- | --- | --- |
-| Repository | 0 | Exactly 1 | 0 |
-| Worker | 0 | 0 | 0 |
-| Storage | At most 1 | At most 1 | 0 |
+| ------------ | ---------- | --------- | ---- |
+| Repository   | 0          | Exactly 1 | 0    |
+| Worker       | 0          | 0         | 0    |
+| Storage      | At most 1  | At most 1 | 0    |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
@@ -423,6 +423,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
   An outcome with attempt 0 names a human assessment.
   The required external actions derive from the pinned revision of the attempt, so an evidence delete changes no derived closing event.
+
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assessment, and only an execution assessment supports `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
@@ -534,7 +535,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Every revision and version counter of the server starts at 1.
 - Every `version`, `revision`, `expected*Version` and `expected*Revision` field holds a positive safe integer.
 - A count is no revision. The attempt starts at 0.
-- `gateway.token_version` keeps its default of 1.
+- `gateway.auth.version` keeps its default of 1.
 - A mission starts at mission version 1, and a node starts at node revision 1.
 - A node takes its next node revision on every content change.
 - These writes increment the mission version when they change the structure of the mission or the content of a node:
@@ -776,7 +777,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that every revision and version counter starts at 1 and every such field requires a positive safe integer.
-- A test asserts that the attempt starts at 0 and the default of `gateway.token_version` stays 1.
+- A test asserts that the attempt starts at 0 and the default of `gateway.auth.version` stays 1.
 - A test asserts one mission version increment for each graph write, even when the write touches several nodes.
 - A test asserts no mission version increment for each non-graph write and for a write with no structure or content change.
 - A test asserts that each content change creates the next node revision.

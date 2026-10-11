@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/authentication-accounts.test.js
 ---
+
 # Store password-protected accounts without role escalation
 
 ## Requirement

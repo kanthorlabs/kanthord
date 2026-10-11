@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/authentication-authorization.test.js
 ---
+
 # Separate public, authenticated and administrator routes
 
 ## Requirement

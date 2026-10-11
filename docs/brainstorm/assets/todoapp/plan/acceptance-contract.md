@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/acceptance-contract.test.js
 ---
+
 # Publish and verify the complete REST contract
 
 ## Requirement

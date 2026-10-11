@@ -22,14 +22,14 @@ todoapp/
 
 There are 25 plan files: one initiative, six objectives and eighteen tasks. All six objectives belong to `todo-api.md`.
 
-| Objective | Depends on | Deliverable |
-| --- | --- | --- |
-| foundation | none | Node 24, Express 5, configuration and HTTP conventions |
-| persistence | foundation | SQLite migrations and repository boundaries |
-| authentication | persistence | Accounts, bearer sessions and role authorization |
-| todos | authentication | Owner-scoped REST API and optimistic concurrency |
-| operations | foundation | Error handling, secure middleware, logging and shutdown |
-| acceptance | todos, operations | OpenAPI, integrated tests and operations runbook |
+| Objective      | Depends on        | Deliverable                                             |
+| -------------- | ----------------- | ------------------------------------------------------- |
+| foundation     | none              | Node 24, Express 5, configuration and HTTP conventions  |
+| persistence    | foundation        | SQLite migrations and repository boundaries             |
+| authentication | persistence       | Accounts, bearer sessions and role authorization        |
+| todos          | authentication    | Owner-scoped REST API and optimistic concurrency        |
+| operations     | foundation        | Error handling, secure middleware, logging and shutdown |
+| acceptance     | todos, operations | OpenAPI, integrated tests and operations runbook        |
 
 Operations and persistence can become available together. Tasks are unordered final-state requirements, not separately scheduled steps. The initiative waits for its child objectives; it does not depend explicitly on them, and no objective depends on its own initiative.
 

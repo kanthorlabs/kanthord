@@ -5,6 +5,7 @@ bindings: []
 verifications:
   - node --test test/operations-lifecycle.test.js
 ---
+
 # Expose readiness and shut down within a deadline
 
 ## Requirement

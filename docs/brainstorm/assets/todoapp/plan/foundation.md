@@ -8,6 +8,7 @@ verifications:
   - npm ci && npm run test:foundation
   - npm run lint && npm run format:check
 ---
+
 # Establish the Express API foundation
 
 ## Requirement
