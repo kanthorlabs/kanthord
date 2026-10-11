@@ -514,7 +514,8 @@ While it does not hold, the initiative in `Available` holds no job.
 ### Consecutive failure limit
 
 The consecutive failures of an attempt are its lost executions and its stopped executions after its latest finished execution with no stop.
-A stopped execution is an execution whose release carries a `stop`.
+A stopped execution is an execution whose release carries a `stop` other than `budget_end`.
+A release with a `budget_end` stop is no failure and does not count toward the limit. It ends the count as a finished execution with no stop does.
 The Scheduler Service counts them at each loss declaration and at each release with a `stop`, and it hands the count to the Mission Service.
 A revocation at a Mission transition before the expiry of the claim is no loss.
 A human act can meet a claim whose `ended_at` is null and whose `expired_at` is reached or passed.
