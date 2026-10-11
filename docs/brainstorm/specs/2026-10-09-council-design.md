@@ -32,14 +32,14 @@ The human reviews and edits the plan files, then imports them. The import is the
 
 ## Agents
 
-| Agent name | Perspective | Question it answers |
-| --- | --- | --- |
-| `council@1` | Triage, questioning, synthesis | How complex is the idea, where do the roles agree and conflict, which direction follows? |
-| `po@1` | Value, scope, priority | What comes first, what is cut, how is success measured? |
-| `designer@1` | Experience, flow, error states | Which steps does a user take, and where do they stumble? |
-| `user@1` | End user, candid | Do I need this, and what makes me leave? |
-| `architect@1` | Technology, risk, cost | Which parts does it touch, and what is hard to reverse? |
-| `security@1` | Attack surface, sensitive data, authority | What can be abused, and what can leak? |
+| Agent name    | Perspective                               | Question it answers                                                                      |
+| ------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `council@1`   | Triage, questioning, synthesis            | How complex is the idea, where do the roles agree and conflict, which direction follows? |
+| `po@1`        | Value, scope, priority                    | What comes first, what is cut, how is success measured?                                  |
+| `designer@1`  | Experience, flow, error states            | Which steps does a user take, and where do they stumble?                                 |
+| `user@1`      | End user, candid                          | Do I need this, and what makes me leave?                                                 |
+| `architect@1` | Technology, risk, cost                    | Which parts does it touch, and what is hard to reverse?                                  |
+| `security@1`  | Attack surface, sensitive data, authority | What can be abused, and what can leak?                                                   |
 
 Each role prompt states who the role is and what it cares about. It requires a fixed answer frame per question: `answer`, `confidence`, `assumptions`. The fixed frame lets the synthesis merge answers mechanically.
 
@@ -55,11 +55,11 @@ Each role prompt states who the role is and what it cares about. It requires a f
 
 ### Complexity selects roles and rounds
 
-| Complexity | Roles | Rounds |
-| --- | --- | --- |
-| `S` | `po@1`, `user@1` | 1 |
-| `M` | `po@1`, `user@1`, `designer@1`, `architect@1` | 1 |
-| `L` | `po@1`, `user@1`, `designer@1`, `architect@1`, `security@1` | 2 |
+| Complexity | Roles                                                       | Rounds |
+| ---------- | ----------------------------------------------------------- | ------ |
+| `S`        | `po@1`, `user@1`                                            | 1      |
+| `M`        | `po@1`, `user@1`, `designer@1`, `architect@1`               | 1      |
+| `L`        | `po@1`, `user@1`, `designer@1`, `architect@1`, `security@1` | 2      |
 
 ### Isolation
 
@@ -77,14 +77,14 @@ Each role prompt states who the role is and what it cares about. It requires a f
 
 The command refuses a configuration instead of handling its edge case.
 
-| Code | Condition |
-| --- | --- |
-| `cli.council.token_required` | No human token is configured. |
-| `cli.council.agent_not_enabled` | One of the six agents has no enablement or a disabled one. The command refuses before any model call and lists every missing agent. |
-| `cli.council.output_directory_not_empty` | `<dir>` exists and is not empty. The command never overwrites and never merges. |
-| `cli.council.agent_session_failed` | A workbench session of the run fails: a refused operation, a run error, a pending approval, or no end of the run within 10 minutes. The command aborts the run, writes nothing, not even `council.md`. |
-| `cli.council.answer_invalid` | An answer holds no JSON value that matches the schema of its step. The command writes nothing. |
-| `cli.council.plan_file_invalid` | A rendered plan file does not read back unchanged, or a `parent` or a `depends_on` names no file of the set. The command writes nothing. |
+| Code                                     | Condition                                                                                                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cli.council.token_required`             | No human token is configured.                                                                                                                                                                          |
+| `cli.council.agent_not_enabled`          | One of the six agents has no enablement or a disabled one. The command refuses before any model call and lists every missing agent.                                                                    |
+| `cli.council.output_directory_not_empty` | `<dir>` exists and is not empty. The command never overwrites and never merges.                                                                                                                        |
+| `cli.council.agent_session_failed`       | A workbench session of the run fails: a refused operation, a run error, a pending approval, or no end of the run within 10 minutes. The command aborts the run, writes nothing, not even `council.md`. |
+| `cli.council.answer_invalid`             | An answer holds no JSON value that matches the schema of its step. The command writes nothing.                                                                                                         |
+| `cli.council.plan_file_invalid`          | A rendered plan file does not read back unchanged, or a `parent` or a `depends_on` names no file of the set. The command writes nothing.                                                               |
 
 Each code must also stand on the `engine/docs/cli/` page of the command group before the command ships.
 
