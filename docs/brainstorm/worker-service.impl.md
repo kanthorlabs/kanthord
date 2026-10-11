@@ -195,7 +195,8 @@ The working directory that pi states in its system prompt writes the home direct
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
-The binary embeds [assets/prompt/base.md](assets/prompt/base.md) as the default system prompt, and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md), as [shipped assets](architecture.impl.md#shipped-assets).
+The binary embeds `engine/static/prompt/base.md` as the default system prompt, and the agent prompts `swe@1.md` and `re@1.md` of that directory, as [shipped assets](architecture.impl.md#shipped-assets).
+The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
 The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 
@@ -289,6 +290,9 @@ A test checks duplicate removal, discarded objectives, base-branch heads and one
 A test checks the evidence-placement rule when an initiative's objectives name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
+The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
+When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
+The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. An initiative has none.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
@@ -300,6 +304,7 @@ Tests permit judgement only after every verification passes.
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
 - The workspace of a steps execution on an objective is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
 - The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
+- The preparation of an objective workspace adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
 - The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.

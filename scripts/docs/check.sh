@@ -8,3 +8,4 @@ node --test "$REPO/scripts/docs/"*.test.mjs
 python3 "$REPO/scripts/docs/check.test.py"
 python3 "$REPO/scripts/docs/build.test.py"
 CHECK=1 "$REPO/scripts/docs/tools.sh"
+sh "$REPO/scripts/docs/prompts.sh"
