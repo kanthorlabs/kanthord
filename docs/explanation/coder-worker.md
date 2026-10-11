@@ -138,6 +138,9 @@ A budget end carries the `budget_end` stop only when no task completed in that e
 | A verification fails                               | `swe@1` gets the failed command, the results and the last 4 KiB of its output.              |
 | A verification command runs longer than 10 minutes | The worker kills the command. The command counts as failed, and later commands do not run.  |
 | A judgement reply has no valid marker line         | One repair turn. A second invalid reply stops with `judgement_invalid`.                     |
+| A model call fails at the provider                 | The turn ends with the error, and the worker stops with `provider_failed` and its code.     |
+| Two revisions in a row change no file              | The worker stops with `no_progress` and does not verify the unchanged head again.           |
+| The node is paused during the execution            | The claim check after the next turn or before the next task ends the execution as revoked.  |
 | A rework after a `criterion-not-met` assessment    | The start check gives the rationale to each task that it names.                             |
 | The budget ends inside a task                      | The worker writes a checkpoint commit, pushes and releases. The next execution resumes.     |
 
