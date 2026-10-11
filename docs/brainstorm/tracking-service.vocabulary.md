@@ -44,7 +44,7 @@ A span attribute holds one named value on a span.
 The value kind is string, boolean, integer, floating-point number or an array of one primitive kind.
 The attribute `kanthord.project.id` identifies project `Billing`.
 The attribute `kanthord.repository.id` identifies repository `acme/api`.
-Identity attributes can identify workers `general@1`, `reviewer@1` and `claude@1`.
+Identity attributes can identify workers `general@1`, `reviewer@1` and `claude-code@1`.
 The binding identity can identify `claude-main`.
 
 ## span event

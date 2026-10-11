@@ -8,12 +8,12 @@ Read the catalog of supplied workers. The catalog is fixed in the server binary.
 
 The catalog contains these workers:
 
-| Worker       | Host               | Method or harness     | Declared node states                         |
-| ------------ | ------------------ | --------------------- | -------------------------------------------- |
-| `claude@1`   | `external-harness` | harness `claude-code` | `Available`, `Waiting`, `External.Requested` |
-| `general@1`  | `kanthord`         | method `steps`        | `Available`                                  |
-| `opencode@1` | `external-harness` | harness `opencode`    | `Available`, `Waiting`, `External.Requested` |
-| `reviewer@1` | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              |
+| Worker          | Host               | Method or harness     | Declared node states                         |
+| --------------- | ------------------ | --------------------- | -------------------------------------------- |
+| `claude-code@1` | `external-harness` | harness `claude-code` | `Available`, `Waiting`, `External.Requested` |
+| `general@1`     | `kanthord`         | method `steps`        | `Available`                                  |
+| `opencode@1`    | `external-harness` | harness `opencode`    | `Available`, `Waiting`, `External.Requested` |
+| `reviewer@1`    | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              |
 
 `worker list` returns a page of summaries in ascending worker-name order. `worker get` returns the full declaration of one worker. Both operations are read-only.
 
@@ -27,7 +27,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
 {
   "items": [
     {
-      "name": "claude@1",
+      "name": "claude-code@1",
       "host": "external-harness",
       "declared_node_states": ["Available", "Waiting", "External.Requested"],
       "required_node_format": [
@@ -77,7 +77,7 @@ An external harness has `harness` in place of `method` and `agent_name`, and its
 
 ```json
 {
-  "name": "claude@1",
+  "name": "claude-code@1",
   "host": "external-harness",
   "harness": "claude-code",
   "resource_budget": { "wall_time_ms": 7200000 },
