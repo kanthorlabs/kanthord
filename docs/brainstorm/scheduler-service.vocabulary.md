@@ -15,7 +15,7 @@ The term names no closed set.
 
 Worker binding `tdd-main` is a claimant through each of its `tdd@1` instances, with its instance count.
 Two `tdd@1` instances of `tdd-main` are one claimant.
-Worker binding `claude-main` of `claude@1`, whose instances the external harness `claude-code` hosts and registers, is another claimant.
+Worker binding `claude-main` of `claude-code@1`, whose instances the external harness `claude-code` hosts and registers, is another claimant.
 
 ## declared node states
 
@@ -28,7 +28,7 @@ The set of a worker is a subset of the closed set of states that admit a claim, 
 
 `general@1` declares `Available`.
 `reviewer@1` declares `Waiting` and `External.Requested`.
-`claude@1` declares `Available`, `Waiting` and `External.Requested`, so one instance of `claude-main` obtains a steps claim on "Add password reset" and later an evaluation claim on the same objective.
+`claude-code@1` declares `Available`, `Waiting` and `External.Requested`, so one instance of `claude-main` obtains a steps claim on "Add password reset" and later an evaluation claim on the same objective.
 
 ## work pull
 

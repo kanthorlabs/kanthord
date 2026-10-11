@@ -1,6 +1,6 @@
 # How the native agent works
 
-A native agent is an LLM agent that KanthorD runs inside its own process. An external harness, for example `claude@1` or `opencode@1`, runs a third-party agent program instead. This page explains how KanthorD builds a native agent, what the agent can see and do, and where its limits are.
+A native agent is an LLM agent that KanthorD runs inside its own process. An external harness, for example `claude-code@1` or `opencode@1`, runs a third-party agent program instead. This page explains how KanthorD builds a native agent, what the agent can see and do, and where its limits are.
 
 KanthorD does not implement the agent loop itself. It embeds [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent` 0.86.0) as the runtime. pi supplies the loop, the built-in tools, the session file and the resume. KanthorD supplies the configuration, the credentials, the prompt, the tool set and the budget. KanthorD builds only what pi does not serve.
 
