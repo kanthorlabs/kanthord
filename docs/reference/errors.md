@@ -31,6 +31,7 @@ Examples used by the implementation:
 | `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                               |
 | `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.                 |
 | `gateway.request.validation_failed`              | Operation input validation failed.                                          |
+| `gateway.client.answer_invalid`                  | An answer with the expected status fails the operation output schema.       |
 | `gateway.idempotency.conflict`                   | The key cannot be replayed for this request.                                |
 | `gateway.routing.not_found`                      | No route matches the request.                                               |
 | `gateway.openapi.not_found`                      | The requested OpenAPI fragment is not allowlisted.                          |
@@ -51,7 +52,7 @@ HTTP and direct clients use the same failure envelope:
 }
 ```
 
-A declared failure preserves its originating code, HTTP status and safe details. Unknown exceptions become `gateway.invocation.unknown` with status `500` and no exception text or details. A malformed response, including an invalid error code or a request ID outside the [identity contract](identities.md#request-ids), produces an indeterminate client result rather than a declared failure.
+A declared failure preserves its originating code, HTTP status and safe details. Unknown exceptions become `gateway.invocation.unknown` with status `500` and no exception text or details. A malformed error envelope, including an invalid error code or a request ID outside the [identity contract](identities.md#request-ids), produces an indeterminate client result rather than a declared failure. An answer with the expected status whose body fails the operation output schema produces the declared failure `gateway.client.answer_invalid` with the received status.
 
 Responses and OpenAPI use the same error-code format. Bare uppercase codes are not accepted; there are no legacy aliases.
 

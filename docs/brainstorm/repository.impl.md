@@ -71,6 +71,7 @@ A git-only platform has an SSH host set and no platform implementation.
 - `cursor` is base64url canonical JSON `{ page, per_page }`.
 - A differing `limit` answers 400 `repository.platform.github.cursor_page_size_mismatch`.
 - `next_cursor` is null when no `rel="next"` link exists.
+- Review list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews` with `per_page` 100. It follows the `next` link for at most 30 pages and answers every review in order. The pull request check calls it after the pull request read.
 - Tool discovery embeds each endpoint's dereferenced response schema under `result`.
 - The build extracts those schemas from `@octokit/openapi` at 23.0.2.
 - A result class answers 502 `repository.platform.github.<class>` with `details: { status }` and the GitHub message. `status` holds the HTTP status of GitHub when the failure carries one, and null otherwise.
@@ -82,7 +83,7 @@ The platform connector is a registry keyed by the platform value of the binding.
 The registry uses static registration and loads no runtime plugin.
 The GitHub implementation decodes a GitHub webhook payload into GitHub event types.
 Every method returns a discriminated union: the success with the result of the operation, or the result class.
-The check method folds the state of an external object into `expected`, `other`, `conflict` or `none` against the expected end state that its caller names, and it answers the landed commits of an `expected` repository result. The GitHub fold answers `conflict` for an open pull request whose `mergeable_state` is `dirty`.
+The check method folds the state of an external object into `expected`, `other`, `conflict` or `none` against the expected end state that its caller names, and it answers the landed commits of an `expected` repository result. The GitHub fold answers `other` for an open pull request with a current change request. A change request is current when it is the latest `APPROVED`, `CHANGES_REQUESTED` or `DISMISSED` review of its reviewer and names the head commit. The GitHub fold answers `conflict` for another open pull request whose `mergeable_state` is `dirty`.
 The GitHub merge of a pull request reads the allowed merge methods of the repository, then calls `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` with the head guard `sha`.
 The [retry rules](repository.md#result-classes) use the deadline that the caller supplies.
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
@@ -105,6 +106,7 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
 - `simple-git` kills the `git` process and not the `ssh` child of that process.
 - A git operation of the connector that fails, is aborted or reaches its deadline answers `repository.connector.git_failed`, and the message names the operation.
+- `fetchAndCheckout(directory, branch, base_branch, pushed, ...)` answers `repository.node_branch.missing` when the remote node branch is missing and either `pushed` is true or the workspace held `refs/remotes/origin/<branch>` before the fetch. [worker-service.impl.md](worker-service.impl.md#workspace) names the records behind `pushed`.
 - `nodeBranchOf(node_id, k)` builds the node branch name: `kanthord/<node id>` when k is 1, `kanthord/<node id>-a<k>` when k is later. It is the only builder of the name.
 - `pushNodeBranch` accepts both forms. It refuses `kanthord/<node id>/a<k>`, `-a0`, `-a1` and a leading zero such as `-a01`.
 

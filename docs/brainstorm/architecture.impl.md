@@ -822,6 +822,8 @@ Both adapters implement one transport-neutral value and error contract.
 - A [credential release](custody.impl.md#the-release-of-a-secret) is a call of the shared custody component inside the process and no operation result, so it crosses no adapter.
 - A client returns `Completed`, `Failure` or `Indeterminate`.
 - An indeterminate result appears on either adapter because one caller implementation runs in every application.
+- An answer with the expected status whose body fails the output schema is the failure `gateway.client.answer_invalid` with the received status. The answer arrived, so the result is not indeterminate.
+- A transport failure, a body that cannot be read and an error answer that fails the error envelope schema stay indeterminate.
 
 Cross-service references tolerate a deleted target.
 
@@ -909,6 +911,7 @@ A process split retains these boundaries.
 - It asserts 404 and no route in the emitted OpenAPI directory for each.
 - A test covers a service identity calling an operation without authorization from its owning service, and it asserts the refusal.
 - A test covers a mutation whose answer the caller loses, and it asserts the indeterminate result.
+- A test covers an expected answer with an unknown field, and it asserts the failure `gateway.client.answer_invalid` with the received status and the idempotency key.
 - A test covers a caller that supplies an identity value that no authority minted, and it asserts the refusal.
 - A test covers a parse error on a line that holds a secret, and it asserts that the diagnostic prints no value.
 - A test covers a `file` destination that the server cannot open, and it asserts a non-zero status.

@@ -161,6 +161,7 @@ Several people and agents work in parallel. Each change has its own worktree, it
 - `make dev` runs the engine with `node --watch` and the dashboard with Vite in the foreground. `Ctrl-C` stops both. An agent runs it as a background task.
 - `make sync` publishes the submodules.
 - `make e2e-start RUN=<name>` starts a live e2e run against the daemon of `make dev`. `make e2e-watch`, `make e2e-stop` and `make e2e-restart` take the same `RUN`. The run files live in `.dev/e2e/<name>/`.
+- Move the engine under a live e2e run only when no claim is in progress. Then run `make e2e-restart RUN=<name>` in the same step.
 - The daemon listens on port 31415. The web app listens on port 27182 at `http://localhost:27182`.
 - Check the web app in a browser with the `ego-browser` skill. The `chrome-devtools` MCP server cannot connect, because another Chrome holds port 9222.
 - Emulate a phone width with `page.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })`. Ask Ulrich for a human token when the saved instance refuses its token.

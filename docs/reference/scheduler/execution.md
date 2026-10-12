@@ -29,6 +29,8 @@ The release body can carry a `stop`, which tells why the execution ended early. 
 | `no_progress`                                                                                     | `null`                                                                          |
 | `operation_failed`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` | A nonempty string or `null`                                                     |
 
+A steps execution whose node branch is missing at the repository after a recorded push sends `operation_failed` with the code `repository.node_branch.missing`.
+
 A successful release sets `ended_at`, so `claim_state` becomes `finished`, and frees the live count of the binding. It wakes the pulls that wait in the project. A refused release changes no execution, node or job.
 
 A release ends an execution at most once. The gateway stores no receipt that it can replay after the end. A retry after a committed release, with the same key or a new key, fails the execution proof with `403`. To confirm the result after a lost answer, read the execution with [`claim get`](claim.md) or `execution get`; `claim_state` is `finished`.

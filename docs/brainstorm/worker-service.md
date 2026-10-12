@@ -263,6 +263,9 @@ The node branch of an attempt is the branch of the latest attempt k, at or befor
 The node branch takes its name from the node identity, in the form `kanthord/<node identity>` when k is 1, and `kanthord/<node identity>-a<k>` when k is later.
 The claim names the node branch, and the execution reads it from the claim.
 The first execution on that branch creates it from the base branch that the [repository strategy](project-service.md#repository-configuration-and-policy) names.
+When a record shows an earlier push of the node branch and the repository holds no such branch, the execution stops with `operation_failed` and the code `repository.node_branch.missing`.
+That execution never starts the node branch again from the base branch.
+A human restores the branch at the repository, or restarts the attempt from the base branch through an [unblock](mission-service.md#the-unblock) with the start point `base_branch`.
 No act deletes, renames or force-pushes a node branch.
 The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
 Every commit that the execution makes is attributable to its task and its attempt.

@@ -133,7 +133,8 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - `SIGINT` and `SIGTERM` stop further startup and further work pulls.
 - A stop aborts the outstanding work pull. A claim that commits during that abort has no worker until its lease expires, and settlement then declares it lost.
 - The application deregisters only a registration whose runtime identity it knows.
-- The application deregisters at a stop only when no execution is live. An upgrade stops the old process before it starts the new one.
+- The application deregisters at a stop only when no execution is live and no work pull answer failed its schema. An upgrade stops the old process before it starts the new one.
+- A work pull answer that fails its schema ends the pull loop with `gateway.client.answer_invalid`. The application deregisters nothing and exits 1. A restart with the same client identity inside the heartbeat window resumes the same registration and the same claim.
 - It exits 0 after a successful deregistration or after the 404 that ends its registration. Any other deregistration or cleanup failure exits 1 without a retry.
 - An execution that ends with a release or a closure leaves the instance registered, and the application pulls again. A release with a `stop` is a release. An execution that ends with no release and no closure exits 1.
 - A stop during a live execution exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
@@ -141,6 +142,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - `SIGHUP` reopens nothing.
 - B9 owns shutdown during a live execution or a registration with no answer, and a stop deadline in those cases.
 - Tests cover the option resolution, the refusal of `--config`, the startup order, each startup failure, the ready record, deregistration before exit, a failed deregistration, the abort of the outstanding work pull at a stop and the watchdog of a settled state.
+- A test covers a claim answer with an unknown field. It asserts one pull, the exit with `gateway.client.answer_invalid`, no deregistration, and a restart that resumes the same claim and completes the handover.
 
 ## The execution setup
 
@@ -301,6 +303,7 @@ Steps tests run every task verification at the head of the node branch at the st
 Tests permit judgement only after every verification passes.
 Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
 Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
+Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`.
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
 Tests assert that a judgement of attempt k-1 is not reused in attempt k.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
@@ -312,6 +315,10 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
 - The preparation of an objective workspace adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
 - The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists, else the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
+- Two records show an earlier push of the node branch. The first is the remote-tracking ref `refs/remotes/origin/<node branch>` of the objective workspace before the fetch. The second is an evidence of the claimed attempt with a `repository` asset of the repository binding. The preparation reads that evidence through `execution.evidence.list`.
+- When either record exists and the remote node branch is missing, `fetchAndCheckout` refuses with `repository.node_branch.missing` and keeps the checkout. The execution stops with `operation_failed` and that code.
+- When the workspace holds the remote-tracking ref, `fetchAndCheckout` checks the remote node branch with `git ls-remote` before `git fetch --prune`. A refusal therefore keeps the ref, and the next execution refuses again.
+- A first execution of a node branch has neither record and starts from the base branch. An attempt with the start point `base_branch` has a new node branch name, so a missing earlier node branch does not refuse it.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
 - The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.
