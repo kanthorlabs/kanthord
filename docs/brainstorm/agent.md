@@ -64,13 +64,72 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Disablement refuses every later resolution, including a complete entry, so the instance healthcheck fails and no claim follows.
 - The worker binding remains, and disablement recalls no handover in flight.
 - Removal of an enablement is refused while any worker binding depends on its agent.
-- Removal of an agent provider is refused while a default configuration or entry names it.
+- Removal of an agent provider is refused while a default configuration, an entry or a fallback configuration names it.
 - A removal refusal lists its dependents.
 - The check and removal are atomic.
 - The [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) preserves the shared invariants with the Project Service and the Worker Service.
 - Each agent provider has a report-only [resource healthcheck](agent.impl.md#agent-provider-healthcheck).
 - That check belongs to the health report, not the liveness answer or claim path.
 - A human reads the models that an agent provider serves, with the reasoning efforts of each model. The list holds exactly the values that the validation accepts.
+
+## Fallback chain
+
+- The [fallback chain](agent.vocabulary.md#fallback-chain) of an agent is an ordered list of configurations. Its first item is the head, and the rest is the tail.
+- The head is the [effective configuration](agent.vocabulary.md#effective-configuration). The tail is the list `fallback_configurations`.
+- Two levels hold a tail: the enablement, with level `enablement`, and the [entry](worker-service.vocabulary.md#entry) of a worker binding, with level `binding`.
+- A [fallback configuration](agent.vocabulary.md#fallback-configuration) is a complete `{ agent_provider, model_identifier, reasoning_effort }`.
+- Each fallback configuration passes the validation of the default configuration.
+- A tail holds at most 7 fallback configurations, so a chain holds at most 8 entries.
+- An enablement requires `fallback_configurations`. The value `[]` means no fallback.
+- An entry can name `fallback_configurations`. An entry can hold only that field. The head is then the default configuration.
+- `fallback_configurations` is an overridable field of `swe@1` and `re@1`.
+- The tail is the `fallback_configurations` of the entry when the entry names that field, else the `fallback_configurations` of the enablement.
+- An omitted field inherits. A named field, also `[]`, replaces the tail of the enablement whole. A tail never merges across levels.
+- This is the rule of the [binding inheritance](mission-service.md#mission-structure-and-nodes): the first level that names a field wins.
+- The head and the tail resolve independently.
+- The chain is the head, then the tail. A later chain entry with the same agent provider and model identifier as an earlier chain entry is dropped.
+- A duplicate agent provider and model identifier inside one level answers 400 `agent.configuration.fallback_duplicate`.
+- A fallback configuration with the agent provider and model identifier of the head of its level answers the same code.
+- The enablement write validates each fallback configuration and calls no model check.
+- A read-only model check warns on a chain entry before an enablement write.
+
+### Advance
+
+- An advance moves the selection of an agent to the next chain entry without a live cooldown.
+- A release with the stop reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` advances the chain.
+- The Scheduler Service calls the component in the release transaction. The component writes a cooldown for the pinned selection of that execution.
+- The codes `bad_request` and `unauthorized` do not advance the chain. They count as failures.
+- An advancing stop is neutral for the [consecutive failure limit](mission-service.md#consecutive-failure-limit). It neither counts nor ends the count.
+
+### Cooldown
+
+- A [cooldown](agent.vocabulary.md#cooldown) belongs to one credential and one model identifier.
+- `swe@1`, `re@1` and every project share that key.
+- The duration is the base of the code, doubled for each strike after the first, up to the maximum.
+- A repeated advance on the same key adds one strike.
+- A cooldown is live while its end time is later than the clock. An expired cooldown keeps its strikes until a success.
+- A release with no `provider_failed` stop deletes the cooldown of its pinned selection.
+- A human clears a cooldown on the agent page or with the CLI. A clear deletes the cooldown.
+
+### Selection
+
+- The claim scans the chain of each native agent of the worker. It selects the first chain entry without a live cooldown.
+- An earlier chain entry returns at the next claim after its cooldown expires.
+- When every entry of one agent cools down, the claim answers no work.
+- That answer creates no block, no pause and no failed execution.
+- The claim pins each selection in the execution record. A selection is an [agent selection](agent.vocabulary.md#agent-selection).
+- The model inference authorization of custody and the execution setup of the Worker Service read the pin, and never the head.
+- A switch of the selection happens only at the next execution.
+- The pin of a credential revision stays unchanged.
+
+### Views
+
+- The agent configuration views add `chain` and `active_position`. These are the agent view of this component and the project agent configuration views.
+- `chain` lists each chain entry with its position, its level, its agent provider, provider, credential, model identifier, reasoning effort and cooldown. Position 0 is the head.
+- `active_position` is the position that the next claim selects. It is null when every chain entry cools down.
+- When every chain entry cools down, the view carries `cooling` with the code `agent.configuration.chain_cooling` and the earliest end time. Otherwise `cooling` is null.
+- An invalid configuration answers an empty `chain`.
+- The agent page shows the chain with a cooldown badge on each cooling entry and a Clear action.
 
 ## Prompt composer
 

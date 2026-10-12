@@ -143,6 +143,9 @@ The closed form set is:
 
 `coder-frontier` holds the tuning entry `{ reasoning_effort: "high" }` for `swe@1`.
 A complete entry names `{ agent_provider: "atlas-llm", model_identifier: "qwen3-coder", reasoning_effort: "off" }`.
+An entry can also hold `fallback_configurations`, a list of at most 7 complete configurations. It replaces the fallback configurations of the enablement whole, and `[]` means no fallback.
+An entry that holds only `fallback_configurations` keeps the default configuration as its head.
+`coder-solo` holds the entry `{ fallback_configurations: [] }` for `swe@1`, so `swe@1` has no fallback under `coder-solo`.
 An entry holds no `options`.
 
 ## action performer

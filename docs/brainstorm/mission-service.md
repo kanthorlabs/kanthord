@@ -64,6 +64,7 @@ A node names the bindings that its kind permits, and each binding kind states ho
 A node inherits each binding kind that it does not name.
 The Mission Service resolves each kind on its own, at write time: the bindings that the node names, else those of the nearest ancestor that names the kind, else the one binding of that kind that the project holds.
 The first level that names a kind wins, and bindings of one kind never merge across levels.
+The fallback tail of an agent follows the same replace rule, under the [fallback chain](agent.md#fallback-chain) of the Agent component.
 Two or more project bindings of an inherited kind refuse the write with `mission.node.bindings_invalid`.
 An omitted `bindings` field and `bindings: []` both inherit.
 An existing node keeps its stored bindings of each kind that a write omits, and a move keeps every stored binding.
@@ -522,6 +523,7 @@ A human act can meet a claim whose `ended_at` is null and whose `expired_at` is 
 The Mission Service first consumes its loss declaration in the same transaction, under [Scheduler liveness](scheduler-service.md#liveness).
 The human act then checks its own precondition against the settled state.
 A finished execution of the attempt with no stop ends the count: a release with no stop, an assessment end or a revocation.
+A stop that [advances the fallback chain](agent.md#advance) is neutral. It neither counts nor ends the count.
 A human resume resets nothing, so it grants one more try.
 Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss or a release with a `stop` that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.

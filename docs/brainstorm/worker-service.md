@@ -48,8 +48,8 @@ The Worker Service supplies the model [connector](architecture.vocabulary.md#con
 An execution and its agent reach a git platform through the [Repository component](repository.md#boundary) for git transport and through the Intake Service for platform reads, and through nothing else.
 A native agent reaches a provider through the model connector alone.
 The model connector resolves the binding through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the requester's identity.
-For each native model inference call, the Worker Service resolves the agent's [effective configuration](agent.vocabulary.md#effective-configuration) through the Agent component.
-The model connector uses that configuration with the material that [custody](custody.md#secret-use-and-handover) releases or hands over.
+For each native model inference call, the Worker Service reads the [agent selection](agent.vocabulary.md#agent-selection) that the claim pinned.
+The model connector uses the [effective configuration](agent.vocabulary.md#effective-configuration) of that selection with the material that [custody](custody.md#secret-use-and-handover) releases or hands over.
 An execution honours every value of the effective configuration of its agent.
 A local git operation runs in the workspace and passes through no connector.
 An agent holds no repository credential.
@@ -59,7 +59,7 @@ An agent holds no repository credential.
 - The [Agent component](agent.md#agent-configuration) owns the agent enablement, the agent provider, the default configuration and the resolution of the effective configuration.
 - A worker binding holds optional per-agent [entries](worker-service.vocabulary.md#entry).
 - An entry selects only an agent provider of that agent's enablement.
-- The Worker Service resolves the effective configuration through the Agent component, with the entry of the worker binding, when a worker works on a node.
+- The claim pins the selection that the Agent component resolves with the entry of the worker binding. The Worker Service reads that pin when a worker works on a node.
 - A worker binding write is refused when any agent of its worker has no enabled agent enablement.
 - The refusal names the agent.
 - A tuning entry follows unchanged fields of the default configuration at its next resolution.

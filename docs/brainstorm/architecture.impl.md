@@ -389,6 +389,10 @@ This sibling declares the fields below.
 - `agent.prompt.system_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
 - `agent.prompt.host_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
 - `agent.prompt.agent_directory`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
+- `agent.cooldown.rate_limited_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
+- `agent.cooldown.unavailable_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
+- `agent.cooldown.quota_exhausted_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
+- `agent.cooldown.max_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
 - `worker.heartbeat_window`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `mission.consecutive_failure_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.

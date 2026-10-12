@@ -103,6 +103,7 @@ test("feature pages share one response contract and API/CLI sections", () => {
     paths.map((path) => path.split(sep).join("/")),
     [
       "agent/agent.md",
+      "agent/cooldown.md",
       "agent/enablement-provider.md",
       "agent/enablement.md",
       "agent/model.md",

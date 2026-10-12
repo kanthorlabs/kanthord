@@ -129,7 +129,8 @@ The Scheduler rechecks every admission condition before it satisfies that pull.
 A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
 
 An instance healthcheck establishes no liveness, no idleness, no operation authorization and no proof of success.
-An unreachable provider creates no block condition and authorizes no model or provider substitution.
+An unreachable provider creates no block condition.
+Only the [fallback chain](agent.md#fallback-chain) of the Agent component substitutes a model or a provider.
 
 ## Claims and counts
 
@@ -137,7 +138,10 @@ The claim operation is one atomic operation.
 Only a work pull invokes it.
 Selection and claim form one acquisition operation without an unprotected gap.
 The operation rechecks the Mission state, the readiness condition, the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
-The claim resolves no binding, and it validates no effective configuration of an agent.
+The claim reads the [fallback chain](agent.md#fallback-chain) of each native agent of the worker.
+It selects the first chain entry with no live cooldown and pins that selection in the execution record.
+When every chain entry of an agent has a live cooldown, the claim returns no work and creates no block, no pause and no execution.
+The claim validates no effective configuration of an agent.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
 The Scheduler takes the instance healthcheck once more immediately before the claim commits.
@@ -157,6 +161,7 @@ The execution record holds these fields.
 - The pinned node revision.
 - The node branch of the attempt, which the claim admission of the Mission Service answers.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
+- The agent selections that the claim pins: one chain entry for each native agent of the worker. A later cooldown changes no pinned selection.
 - The fixed deadline.
 - The trace identity of the execution.
 - The root span identity of the execution.
@@ -196,6 +201,7 @@ The Scheduler introduces no project-wide cap.
 A release ends the execution.
 The [Mission Service](mission-service.md#state-transitions) routes a release by `further_work` and `stop`, and it leaves the attempt open.
 A release with a `stop` names the reason that ended the execution, and the execution row keeps it.
+A release writes or deletes the cooldown of the pinned selection through the [Agent component](agent.md#advance) in its transaction.
 A release names no wait.
 No job exists while a node waits.
 The Mission Service inserts the job in the transaction that makes the node claimable, and it deletes the job in the transaction that makes the node unclaimable.

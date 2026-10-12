@@ -6,7 +6,7 @@
 
 Receive the provider credential of a running execution as a sealed envelope. The caller is a registered worker instance that holds a live claim on the execution.
 
-The server reads the worker binding of the execution and the effective agent configuration. It then releases the credential revision that the execution pins. If the execution pins no revision yet, the handover pins the newest live revision of that credential. The server seals the credential with AES-256-GCM before the response.
+The server reads the worker binding of the execution and the agent selection that its claim pinned. It then releases the credential revision that the execution pins. If the execution pins no revision yet, the handover pins the newest live revision of that credential. The server seals the credential with AES-256-GCM before the response.
 
 The seal key derives from the client secret of the caller's client identity. The additional authenticated data binds the envelope to the execution identity and the runtime identity. The worker opens the envelope with a key that it derives from the same client secret.
 

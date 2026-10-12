@@ -71,25 +71,25 @@ Change or inspect one agent provider of a live [agent enablement](enablement.md)
 
 API failures use the shared [error envelope](../errors.md#api-failures). The server checks the catalog, then the record, then the revision, then the provider.
 
-| HTTP status / code                                  | Commands           | Meaning                                                                                                        |
-| --------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`           | All                | Missing, invalid, expired or banned token, or a machine token.                                                 |
-| `400 gateway.request.validation_failed`             | All                | The input breaks the schema, for example an unknown provider kind or an unknown field.                         |
-| `400 gateway.idempotency.invalid_key`               | add, remove        | Missing or malformed idempotency key, checked after schema validation.                                         |
-| `409 gateway.idempotency.conflict`                  | add, remove        | The key belongs to a different request of the same caller.                                                     |
-| `404 agent.catalog.not_found`                       | All                | The agent name is not in the catalog.                                                                          |
-| `404 agent.enablement.not_found`                    | All                | The agent has no live enablement.                                                                              |
-| `409 agent.enablement.revision_conflict`            | add, remove        | `expected_revision` differs from the latest revision. `details.revision` holds that revision.                  |
-| `409 agent.enablement.provider.name_conflict`       | add                | An agent provider already uses the name.                                                                       |
-| `409 agent.enablement.provider.credential_conflict` | add                | An agent provider already uses the credential. `details` holds `credential` and `agent_provider`.              |
-| `400 agent.configuration.credential_unsuitable`     | add                | The credential does not exist, or its platform differs from the provider kind.                                 |
-| `404 agent.enablement.provider.not_found`           | remove, model list | The provider name names no agent provider of the enablement.                                                   |
-| `400 agent.enablement.provider.required`            | remove             | The provider is the last agent provider.                                                                       |
-| `409 agent.enablement.provider.in_use`              | remove             | The default configuration or a binding entry names the provider. `details.dependents` lists them.              |
-| `409 agent.enablement.invalidates_bindings`         | add, remove        | The change makes a dependent binding invalid. `details.bindings` lists `binding_id`, `worker_name` and `code`. |
-| `413 gateway.request.body_too_large`                | add, remove        | The body exceeds 64 KiB.                                                                                       |
+| HTTP status / code                                  | Commands           | Meaning                                                                                                                     |
+| --------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`           | All                | Missing, invalid, expired or banned token, or a machine token.                                                              |
+| `400 gateway.request.validation_failed`             | All                | The input breaks the schema, for example an unknown provider kind or an unknown field.                                      |
+| `400 gateway.idempotency.invalid_key`               | add, remove        | Missing or malformed idempotency key, checked after schema validation.                                                      |
+| `409 gateway.idempotency.conflict`                  | add, remove        | The key belongs to a different request of the same caller.                                                                  |
+| `404 agent.catalog.not_found`                       | All                | The agent name is not in the catalog.                                                                                       |
+| `404 agent.enablement.not_found`                    | All                | The agent has no live enablement.                                                                                           |
+| `409 agent.enablement.revision_conflict`            | add, remove        | `expected_revision` differs from the latest revision. `details.revision` holds that revision.                               |
+| `409 agent.enablement.provider.name_conflict`       | add                | An agent provider already uses the name.                                                                                    |
+| `409 agent.enablement.provider.credential_conflict` | add                | An agent provider already uses the credential. `details` holds `credential` and `agent_provider`.                           |
+| `400 agent.configuration.credential_unsuitable`     | add                | The credential does not exist, or its platform differs from the provider kind.                                              |
+| `404 agent.enablement.provider.not_found`           | remove, model list | The provider name names no agent provider of the enablement.                                                                |
+| `400 agent.enablement.provider.required`            | remove             | The provider is the last agent provider.                                                                                    |
+| `409 agent.enablement.provider.in_use`              | remove             | The default configuration, a fallback configuration or a binding entry names the provider. `details.dependents` lists them. |
+| `409 agent.enablement.invalidates_bindings`         | add, remove        | The change makes a dependent binding invalid. `details.bindings` lists `binding_id`, `worker_name` and `code`.              |
+| `413 gateway.request.body_too_large`                | add, remove        | The body exceeds 64 KiB.                                                                                                    |
 
-An item of `details.dependents` is `{ "kind": "default_configuration" }` or `{ "binding_id": "<binding-id>", "worker_name": "<worker-name>" }`.
+An item of `details.dependents` is `{ "kind": "default_configuration" }`, `{ "kind": "fallback_configurations" }` or `{ "binding_id": "<binding-id>", "worker_name": "<worker-name>" }`. A binding item covers an entry head and an entry `fallback_configurations`.
 
 The CLI checks some input before it sends the request. `<command>` is `add`, `remove` or `model.list`.
 

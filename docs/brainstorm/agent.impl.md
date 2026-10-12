@@ -22,7 +22,7 @@ A mechanism here never overrides a rule there.
 - `agent list` answers one summary per catalog agent: `agent_name`, `worker_names` and `enablement`.
 - `agent get` answers `prompt`, `configuration_schema`, `overridable_fields` and `enablement`.
 - `enablement` is null when no record exists.
-- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools` and `enablement`, the agent enablement or `null`. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## The prompt answer
@@ -51,12 +51,13 @@ A mechanism here never overrides a rule there.
 - A `put` or a `provider.add` that names the name of another agent provider of the same enablement answers 409 `agent.enablement.provider.name_conflict`.
 - A `put` or a `provider.add` that names a credential of another agent provider of the same enablement answers 409 `agent.enablement.provider.credential_conflict`. A `provider.add` names the credential and the holding agent provider in `details`.
 - It checks the override allowlist before the merge, then validates the complete effective configuration.
-- `overridable_fields` of `swe@1` and `re@1` is `["agent_provider", "model_identifier", "reasoning_effort"]`.
+- `overridable_fields` of `swe@1` and `re@1` is `["agent_provider", "model_identifier", "reasoning_effort", "fallback_configurations"]`.
 - `validateEntry` refuses a worker whose agent has no enabled enablement, and names that agent.
 - This refusal occurs inside the worker binding write transaction.
 - An enablement change calls `entriesOfAgent(tx, agentName)` of the Project Service in the transaction of its commit.
 - It validates every dependent worker binding and lists invalid bindings in its refusal.
 - Removal checks all dependents in that same transaction.
+- A dependent of an agent provider is the default configuration, an entry or a fallback configuration. [The fallback chain](#the-fallback-chain) lists the dependents.
 - [The collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) requires co-location of the two owners.
 - A resolution reads the worker binding, entry, enablement and credential metadata from one snapshot, and it records the revisions of the binding, the entry and the enablement.
 - The span of each native model inference call carries the worker binding and the agent enablement as identity attributes. Each value is the row id that the resolution read, so the span records the revisions of the binding, the entry and the enablement.
@@ -106,6 +107,97 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
 - It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
 - JSON Schema validates no cross-field lookup; the Agent component enforces it.
+
+## The fallback chain
+
+- The column `agent_enablement.fallback_configurations` is `TEXT NOT NULL DEFAULT '[]'`. It holds a JSON list of `{ agent_provider, model_identifier, reasoning_effort }`.
+- An enablement write requires `fallback_configurations`. A write without the field answers 400 `gateway.request.validation_failed`.
+- The entry of a worker binding holds the optional field `fallback_configurations` with the same shape.
+- A list holds at most 7 items. A longer list answers 400 `gateway.request.validation_failed`.
+- Every item passes the validation of the default configuration. The write validates an item of an enablement against the agent providers of that enablement.
+- The write validates an item of an entry against the agent providers of the enablement of its agent.
+- A duplicate agent provider and model identifier inside one list answers 400 `agent.configuration.fallback_duplicate`.
+- An item with the agent provider and model identifier of the head of its level answers the same code. The head of the enablement is its default configuration.
+- The resolution reads the snapshot of [the validation](#agent-configuration-validation). The head is the effective configuration.
+- The tail is `fallback_configurations` of the entry when the entry names the field, else that of the enablement. The tail never merges.
+- The chain is the head and the tail. The resolution drops a later chain entry with the agent provider and model identifier of an earlier chain entry.
+- The chain holds at most 8 entries. Each chain entry holds its level, `enablement` or `binding`.
+- An entry that names only `fallback_configurations` keeps the default configuration as its head. The allowlist of `overridable_fields` admits the field.
+- A removal of an agent provider answers 409 `agent.enablement.provider.in_use` while a tail names it.
+- `details.dependents` holds `{ kind: "fallback_configurations" }` for the tail of the enablement, and `{ binding_id, worker_name }` for the tail of an entry.
+- [LLM metadata](llm.impl.md#platform-validators) refuses the removal of a model that a tail names. A tail item is a dependent of that model.
+- Tests cover inheritance, replacement, `[]`, the drop of a duplicate, the limit of 7 and each refusal.
+- Tests cover an enablement write without the field, a provider removal that a tail blocks and a model removal that a tail blocks.
+
+## The chain view
+
+- `chain` is a list of `{ position, level, agent_provider, provider, credential, model_identifier, reasoning_effort, cooldown }`. Position 0 is the head.
+- `cooldown` is `null` or `{ cooldown_id, code, strikes, until_at }`. It reads the row with the credential and model of the chain entry.
+- `active_position` is the position of the first chain entry whose cooldown is absent or expired. It is `null` when every chain entry has a live cooldown.
+- `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", until_at }` when `active_position` is `null`. `until_at` is the earliest `until_at` of the chain.
+- The `agent.get` view of an agent builds the chain from the enablement alone. An absent enablement answers `chain: []`, `active_position: null` and `cooling: null`.
+- The project agent configuration views build the chain from the effective configuration and the entry of the worker binding. An invalid configuration answers `chain: []`.
+- The views read the clock once for each answer.
+- Tests cover a chain with no cooldown, one cooling entry, every entry cooling, an expired cooldown and an invalid configuration.
+
+## The agent cooldown
+
+- The table `agent_cooldown` of [ERD 1](../reference/erd/01-setup.md) holds one row for each key.
+- `id` uses `agent_cooldown_<ulid>`. `credential` is a credential name. `model_identifier` is a model identifier.
+- `code` is `rate_limited`, `quota_exhausted` or `unavailable`. `strikes` is a positive integer.
+- `started_at`, `until_at` and `execution_id` hold the time of the latest advance, its end time and the execution that caused it.
+- The only index is the unique index on `(credential, model_identifier)`.
+- The duration is `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. `until_at` is `started_at` plus the duration.
+- `base(code)` is the value of `agent.cooldown.rate_limited_ms`, `agent.cooldown.quota_exhausted_ms` or `agent.cooldown.unavailable_ms`.
+- A cooldown is live when `until_at` is later than the clock reading of the transaction.
+- The Agent component owns this table. No other service writes it.
+
+### Configuration
+
+The Agent component owns these keys of the section `agent`.
+
+- `agent.cooldown.rate_limited_ms` holds the base duration for `rate_limited`, in milliseconds. It is a positive safe integer and defaults to `60000`.
+- `agent.cooldown.unavailable_ms` holds the base duration for `unavailable`, in milliseconds. It is a positive safe integer and defaults to `60000`.
+- `agent.cooldown.quota_exhausted_ms` holds the base duration for `quota_exhausted`, in milliseconds. It is a positive safe integer and defaults to `3600000`.
+- `agent.cooldown.max_ms` holds the maximum duration, in milliseconds. It is a positive safe integer and defaults to `86400000`.
+
+### The release write
+
+- The Scheduler Service calls the Agent component in the release transaction of an execution. The call carries the pinned selection of the agent of the execution and the `stop`.
+- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` writes the cooldown of the key of the pinned selection.
+- A write on an absent key inserts a row with `strikes` 1. A write on an existing key sets `code`, `execution_id` and `started_at`, adds 1 to `strikes` and sets `until_at`.
+- A `stop` with the code `bad_request` or `unauthorized` writes no cooldown.
+- A release with no `stop`, or with a `stop` of another reason, deletes the row of the key of the pinned selection.
+- An advancing `stop` is neutral for the failure count, as [the failure count](scheduler-service.impl.md#loss-settlement) states.
+- The write logs `agent.fallback.cooldown_started`. A delete of a row logs `agent.fallback.cooldown_cleared`.
+
+### The claim selection
+
+- The claim transaction calls the Agent component with the pinned worker binding row and the native agents of the worker.
+- The component builds the chain of each agent, reads the rows of `agent_cooldown` and returns the first chain entry with no live cooldown.
+- When every chain entry of one agent has a live cooldown, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution.
+- The claim stores the selections in `scheduler_execution.agent_selections`. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
+- The claim logs `agent.fallback.selected` for each selection.
+- The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection.
+- Tests cover the selection of the first free entry, the return of an earlier entry after its cooldown expires and the no-work answer.
+
+### The operator operations
+
+- `agent.cooldown.list` is `GET /api/agent/cooldown`, `human`, `unary`, `mutation: false`.
+- It answers `{ items: [{ cooldown_id, credential, model_identifier, code, strikes, started_at, until_at, execution_id }] }`. It lists the live rows and the expired rows.
+- `agent.cooldown.clear` is `DELETE /api/agent/cooldown/:cooldown_id`, `human`, `unary`, `mutation: true`. It answers 204 and logs `agent.fallback.cooldown_cleared`.
+- A `cooldown_id` that names no row answers 404 `agent.cooldown.not_found`.
+- The CLI commands are `kanthord agent cooldown list` and `kanthord agent cooldown clear <cooldown-id>`.
+- The static path `/api/agent/cooldown` does not match `GET /api/agent/:agent_name`.
+- Tests cover the list with live and expired rows, a clear and the 404.
+
+### The cooldown tests
+
+- Tests cover the cooldown write, the strikes, the maximum for each code and the codes that do not advance.
+- Tests cover the reset by a release with no `provider_failed` stop and the shared key across agents and projects.
+- A test asserts that a later cooldown leaves the pin of a live execution unchanged.
+- Tests cover the neutral advancing stop, the pin in the execution record and the migrations of the three columns.
+- A test runs a fake provider that completes the execution on the first chain entry.
 
 ## Agent provider healthcheck
 

@@ -15,6 +15,8 @@ The Scheduler processes a pull in this order:
 3. When the binding group already runs as many executions as its instance count, the pull admits no claim.
 4. Otherwise, the Scheduler reads the project queue in queue order. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
 
+For each native agent, the claim selects the first fallback chain entry with no live cooldown. It pins the selection in `agent_selections` of the execution. When every entry of one agent has a live cooldown, the pull admits no claim and answers `no-work`. That answer creates no block, no pause and no failed execution. A later cooldown changes no pinned selection; see [agent cooldowns](../agent/cooldown.md).
+
 A claim creates one execution with a fixed deadline. `expired_at` is `created_at`, plus the wall time of the binding or the worker declaration, plus `scheduler.release_reserve` seconds (default `600`). After `expired_at`, the claim is lost.
 
 When step 3 or step 4 admits no claim, the request waits. A wakeup for the project, for example after a release or a Mission or Project change, makes it try again. The 30-second loss sweep also wakes every pull that waits. It answers `no-work` when the 90-second window ends. It answers at once in these cases:
@@ -53,6 +55,18 @@ The API returns HTTP `200` with one of two objects.
     "pinned_revision": 3,
     "node_branch": "kanthord/node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
     "credentials": [],
+    "agent_selections": [
+      {
+        "agent_name": "swe@1",
+        "position": 0,
+        "level": "enablement",
+        "agent_provider": "main",
+        "provider": "anthropic",
+        "credential": "<credential-name>",
+        "model_identifier": "claude-sonnet-4-5",
+        "reasoning_effort": "high"
+      }
+    ],
     "claim_state": "running",
     "expired_at": 1791449400000,
     "created_at": 1791447600000,
