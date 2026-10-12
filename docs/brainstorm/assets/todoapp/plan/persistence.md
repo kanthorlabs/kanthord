@@ -8,6 +8,7 @@ bindings:
 verifications:
   - npm ci && npm run test:persistence
   - npm run test:foundation
+  - npm run lint && npm run format:check
 ---
 
 # Persist accounts, sessions and TODOs in SQLite

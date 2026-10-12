@@ -8,6 +8,9 @@ bindings:
 verifications:
   - npm ci && npm run test:todos
   - npm run test:authentication
+  - npm run test:persistence
+  - npm run test:foundation
+  - npm run lint && npm run format:check
 ---
 
 # Deliver owner-scoped TODO REST endpoints
