@@ -106,6 +106,7 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
 - `simple-git` kills the `git` process and not the `ssh` child of that process.
 - A git operation of the connector that fails, is aborted or reaches its deadline answers `repository.connector.git_failed`, and the message names the operation.
+- `fetchAndCheckout(directory, branch, base_branch, pushed, ...)` answers `repository.node_branch.missing` when the remote node branch is missing and either `pushed` is true or the workspace held `refs/remotes/origin/<branch>` before the fetch. [worker-service.impl.md](worker-service.impl.md#workspace) names the records behind `pushed`.
 - `nodeBranchOf(node_id, k)` builds the node branch name: `kanthord/<node id>` when k is 1, `kanthord/<node id>-a<k>` when k is later. It is the only builder of the name.
 - `pushNodeBranch` accepts both forms. It refuses `kanthord/<node id>/a<k>`, `-a0`, `-a1` and a leading zero such as `-a01`.
 

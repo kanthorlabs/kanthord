@@ -74,6 +74,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - Every operand comes from the records.
 - No generic push exists.
 - A push of the steps execution targets the node branch of its claim only.
+- The checkout of a node branch that a record shows as pushed, and that the repository no longer holds, refuses with `repository.node_branch.missing`. It never falls back to the base branch.
 - The node-branch push accepts `kanthord/<node id>` and `kanthord/<node id>-a<k>` with k above 1 and no leading zero. It refuses every other name.
 - A merge or a push into the base branch is a configured repository action.
 - The [action performer](worker-service.md#evaluation-and-required-external-actions) owns eligibility, operand derivation, serialization and the request key for a configured action.
