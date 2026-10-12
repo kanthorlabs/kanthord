@@ -303,6 +303,7 @@ Steps tests run every task verification at the head of the node branch at the st
 Tests permit judgement only after every verification passes.
 Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
 Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
+Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`.
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
 Tests assert that a judgement of attempt k-1 is not reused in attempt k.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
@@ -314,6 +315,10 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
 - The preparation of an objective workspace adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
 - The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists, else the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
+- Two records show an earlier push of the node branch. The first is the remote-tracking ref `refs/remotes/origin/<node branch>` of the objective workspace before the fetch. The second is an evidence of the claimed attempt with a `repository` asset of the repository binding. The preparation reads that evidence through `execution.evidence.list`.
+- When either record exists and the remote node branch is missing, `fetchAndCheckout` refuses with `repository.node_branch.missing` and keeps the checkout. The execution stops with `operation_failed` and that code.
+- When the workspace holds the remote-tracking ref, `fetchAndCheckout` checks the remote node branch with `git ls-remote` before `git fetch --prune`. A refusal therefore keeps the ref, and the next execution refuses again.
+- A first execution of a node branch has neither record and starts from the base branch. An attempt with the start point `base_branch` has a new node branch name, so a missing earlier node branch does not refuse it.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
 - The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.
