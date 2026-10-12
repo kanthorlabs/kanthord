@@ -98,7 +98,10 @@ After the first native-agent worker runs the acceptance path.
 
 ### Tracking Service
 
-- [ ] POSTPONED 2026-09-29 by Ulrich until the audit action is added. Added 2026-09-29 from the evidence redesign. Design the audit record of a human act, for example a content removal or a pending cleanup, so that a human who regrets a delete reads what it removed. A delete removes the row, and `architecture.impl.md` bans a soft delete.
+- [ ] POSTPONED 2026-09-29 by Ulrich until the audit action is added. Added 2026-09-29 from the evidence redesign. Design the audit record of a human act, for example a content removal or a pending cleanup, so that a human who regrets a delete reads what it removed. A delete removes the row, and `architecture.impl.md` bans a soft delete. Added 2026-10-12 from the harness-1 run: the reason of an unblock, a pause, a resume and a ready is validated and stored nowhere. Only a block, a discard and an override store their reason, in the outcome.
+- [ ] Added 2026-10-12 from the worker tracing. Review the values that the implementation chose without a ruling: `EXECUTION_RECORD_LIMIT` 50000, the refusal reason enum, the dispositions `Stored` and `Refused`, the root producer `scheduler`, and the root end status `Error` on a stop or a loss.
+- [ ] Added 2026-10-12 from the worker tracing. `kanthord upgrade` does not migrate `tracking.db`. A fresh file migrates at the server start. Add the upgrade path before the second tracking migration.
+- [ ] Added 2026-10-12 from the worker tracing. The `steps` initiative method writes only verification spans, no `worker.phase` and no `worker.task` span.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await the OpenTelemetry mapping and the canonical identity-attribute registry. RULED 2026-10-11 by Ulrich: [worker-contract.md](../explanation/worker-contract.md#identities) rules the span, record and text identities of worker records, the split of a text above 60 KiB, and the attribute names of the worker span catalog. Execution identity validation awaits the Scheduler contract.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion and reads await byte and count limits, execution bounds, local-log and segment bounds, and `fsync` bounds. Large transcript and chunk contracts also remain open.
@@ -109,6 +112,30 @@ After the first native-agent worker runs the acceptance path.
 
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
+- [ ] Added 2026-10-12 from the harness-1 run. `make sync` pushes the root `main` directly in phase 8, and the `main` ruleset accepts a change only through a pull request. Decide whether `make sync` keeps a parent push.
+
+### End-to-end run harness-1
+
+Ulrich stopped the run on 2026-10-12. The items below come from `.dev/notes.md`. Read `scripts/e2e/` and `docs/brainstorm/assets/todoapp/plan` first.
+
+- [ ] Added 2026-10-12. Resume or replace the run. State: `foundation`, `operations`, `persistence` and `authentication` are Completed. `todos` is Paused on attempt 1 with one commit `0fccccf`. `todo-api` is Available. `acceptance` is Pending. The workers `coder-1` and `reviewer-1` are stopped. To resume, run `make e2e-restart RUN=harness-1`, then resume `todos` with target `Available`. Run data is in `.dev/e2e/harness-1`.
+- [ ] Added 2026-10-12. The run needs a provider with enough quota (S47). On 2026-10-12 every free provider was exhausted: the OpenRouter daily cap of 1,000 requests (reset 00:00 UTC), the NVIDIA rate limit, both Codex accounts and every Qwen free model. The fallback chain then spent more time in cooldown than in work. Decide between a wait for the OpenRouter reset, the paid `E2E_ANTHROPIC_KEY` and the unused `E2E_LLM_OPENCODE_KEY`.
+- [ ] Added 2026-10-12. Merge without a human step (S12 layer 2). Add a GitHub poll inbound so that a merge of a PR on the base branch completes the node with no manual `node check`. Add an auto-merge option and a model rotation command. Each merge still needs a full todo app check by hand: every suite, lint, the format check, the scratch-file check and the secret check.
+- [ ] Added 2026-10-12. Run the fresh attempt of S23 live: a human block, then an unblock with `start_point: "base_branch"`, then a native steps execution and a review on the branch `kanthord/<node id>-a<k>`. The engine e2e layer covers only the server path.
+- [ ] Added 2026-10-12. `tool-table.test.ts` "host tools require working rg and prefer fd over fdfind" fails under host load with `fd: not found` after about 19 s. It passes alone.
+
+### Findings of the harness-1 run
+
+Each item names its owner. Read the owning design document before taking an item.
+
+- [ ] Added 2026-10-12. Worker Service (S16). The pull loop claims again at once after a `provider_failed` stop. Check whether the cooldown of the fallback chain now bounds this. If not, keep a backoff after a stop.
+- [ ] Added 2026-10-12. Worker and Project Services (S25 gap). A fresh workspace that continues an attempt with no repository evidence starts from the base branch with no signal, although the remote node branch is gone.
+- [ ] Added 2026-10-12. Intake Service (S17). The merge of a `kanthord` landing runs inside the outbound call. A crash after the merge and before the finalize makes the create read-back find no open PR, so the repeat answers `unknown_outcome` although the PR merged. Decide whether to finalize before the merge.
+- [ ] Added 2026-10-12. Intake Service (S18). The base-push recheck skips a request when a `branch_push` also matches a `merge_push` request exactly, so a conflicting PR request stays unchecked. This needs two bindings on one repository. Run the base path as well.
+- [ ] Added 2026-10-12. Project Service (S21). `POST .../binding/<worker binding>/verify` answers `project.binding.not_found`. Return a code that names the worker binding.
+- [ ] Added 2026-10-12. Agent component (S28). The chain view shows an expired cooldown row (`until_at` in the past), and `active_position` skips it. Decide whether the view keeps the row for the dashboard to badge only a live `until_at`, or answers null for an expired row. `agent.impl.md` section The chain view records the first reading.
+- [ ] Added 2026-10-12. `apps` (S19). After an unblock, the proposal of the earlier attempt keeps the badge "proposed". Show a "superseded" badge when `proposal.attempt` is below the attempt of the initiative.
+- [ ] Added 2026-10-12. Council. Engine PR #37 and root PR #53 wait for the review of the team. Open: the eslint `apps-cli` allowance for the mission `plan-file.ts` and `parser.ts`, the six council agents are not in `agent.impl.md`, and council has no live run.
 
 ### B9, failure and recovery
 
