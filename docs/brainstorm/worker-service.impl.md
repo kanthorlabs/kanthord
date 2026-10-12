@@ -294,6 +294,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - The requested-changes text stops at 4 KiB.
 - The requested-changes text is the prior rationale. It enters the task judgement of the start check and the criterion revision of each task that the agent judges unmet.
 - When the read finds no current change request, the prior rationale is the rationale of the cleared assessment.
+- A change request forces no task revision. The agent judgement decides each task. When the agent judges every task met, the execution pushes an unchanged head. The change request stays current on that head, so the next node check blocks the node again on the same change request.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
 
 ## The verifications
