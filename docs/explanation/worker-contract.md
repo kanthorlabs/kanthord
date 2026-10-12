@@ -35,6 +35,8 @@ The release body holds `further_work` and an optional `stop`. A `stop` requires 
 | `no_progress`                                                                                     | `null`                                                                          |
 | `operation_failed`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` | Any text or `null`                                                              |
 
+A native steps execution whose node branch is gone after a recorded push stops with `operation_failed` and the code `repository.node_branch.missing`.
+
 An external harness releases before `expired_at` of its claim. The claim has no renewal.
 
 ## The telemetry channel
