@@ -472,6 +472,10 @@ Three acts open an attempt.
 - a human unblock, which opens the next attempt
 
 The attempt names the actor of the act that opens it.
+The attempt records its start point, `base_branch` or `node_branch`.
+Attempt 1 records `base_branch`.
+A later attempt records the start point that its unblock names.
+The start point of an initiative attempt has no effect, because an initiative has no node branch.
 An execution pins the attempt that it starts under.
 The required external actions of an attempt follow from the binding row that its pinned node revision names.
 Every record names its attempt, and it stays the record of that attempt forever.
@@ -511,7 +515,8 @@ While it does not hold, the initiative in `Available` holds no job.
 ### Consecutive failure limit
 
 The consecutive failures of an attempt are its lost executions and its stopped executions after its latest finished execution with no stop.
-A stopped execution is an execution whose release carries a `stop`.
+A stopped execution is an execution whose release carries a `stop` other than `budget_end`.
+A release with a `budget_end` stop is no failure and does not count toward the limit. It ends the count as a finished execution with no stop does.
 The Scheduler Service counts them at each loss declaration and at each release with a `stop`, and it hands the count to the Mission Service.
 A revocation at a Mission transition before the expiry of the claim is no loss.
 A human act can meet a claim whose `ended_at` is null and whose `expired_at` is reached or passed.
@@ -772,6 +777,9 @@ It names the attempt that it clears.
 It names the node revision that it expects.
 It carries a content change when the human changes the direction.
 It may carry an optional nonblank reason, as the other human controls do.
+It may carry an optional start point.
+The start point `node_branch` continues the node branch of the cleared attempt, and it is the default.
+The start point `base_branch` starts the next attempt from the base branch on a new node branch.
 
 The act checks the authority of the human, the blocked attempt and the expected revision.
 An unblock that carries a content change also checks the authority that a node edit requires.
@@ -791,8 +799,10 @@ An unblock names the human as the opener of the attempt that it opens.
 Every human direction enters the node revision.
 The unblock carries that change.
 The attempt carries no direction of its own.
+Its start point says where the work starts, not what the work is.
 
 A human who redirects a node that holds an open attempt pauses the node, blocks it and unblocks it with the content change.
+A human who restarts the open attempt from the base branch pauses the node, blocks it and unblocks it with the start point `base_branch`.
 
 Outcome and completion owns the routing of the opened attempt to `Available` or to `Pending`.
 

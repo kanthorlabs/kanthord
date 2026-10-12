@@ -20,6 +20,15 @@ Each `execution list` call reads one page. The CLI does not follow `next_cursor`
 | `Executing`  | `true`         | None.                                                                                                               | `Available`              |
 | `Evaluating` | Either value   | A current successful assessment; otherwise `assessment`. No eligible action without a request; otherwise `request`. | `External.Requested`     |
 
+The release body can carry a `stop`, which tells why the execution ended early. A `stop` requires `further_work: true`. A `stop` with a reason other than `budget_end` counts as a failure toward `mission.consecutive_failure_limit`. A `budget_end` stop counts toward `mission.further_work_limit`. A release without a `budget_end` stop resets that count. [ERD 2](../erd/02-execution.md) holds the exact count rules.
+
+| `stop.reason`                                                                                     | `stop.code`                                                                     |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `budget_end`                                                                                      | `turns` or `wall_time`                                                          |
+| `provider_failed`                                                                                 | `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request`, `unavailable` |
+| `no_progress`                                                                                     | `null`                                                                          |
+| `operation_failed`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` | A nonempty string or `null`                                                     |
+
 A successful release sets `ended_at`, so `claim_state` becomes `finished`, and frees the live count of the binding. It wakes the pulls that wait in the project. A refused release changes no execution, node or job.
 
 A release ends an execution at most once. The gateway stores no receipt that it can replay after the end. A retry after a committed release, with the same key or a new key, fails the execution proof with `403`. To confirm the result after a lost answer, read the execution with [`claim get`](claim.md) or `execution get`; `claim_state` is `finished`.
@@ -44,6 +53,7 @@ The API returns HTTP `200` with one `ExecutionRecord`. The CLI writes the same o
   },
   "attempt": 1,
   "pinned_revision": 3,
+  "node_branch": "kanthord/node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
   "credentials": [],
   "agent_selections": [
     {
@@ -127,6 +137,7 @@ Every timestamp is a safe integer of Unix epoch milliseconds in UTC.
 | `claimant.name`              | string of 1 to 64 characters, optional             | Display name of the registration. Present together with `client_id`.                                                                                                                                                                                                                         |
 | `attempt`                    | positive safe integer                              | Attempt of the node that this execution serves.                                                                                                                                                                                                                                              |
 | `pinned_revision`            | positive safe integer                              | Node revision that the attempt pins.                                                                                                                                                                                                                                                         |
+| `node_branch`                | string                                             | Node branch of the attempt: `kanthord/<node id>`, or `kanthord/<node id>-a<k>` after an unblock with `start_point: "base_branch"` at attempt k. The execution reads and pushes only this branch.                                                                                             |
 | `credentials`                | array of `credential_<ulid>`                       | Credentials that the execution pins; `[]` at the claim.                                                                                                                                                                                                                                      |
 | `agent_selections`           | array of objects                                   | Agent selections that the claim pins, one for each native agent of the worker. Each item holds `agent_name`, `position`, `level` (`enablement` or `binding`), `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. `[]` for a worker with no native agent. |
 | `claim_state`                | `running`, `lost` or `finished`                    | `running`: not ended and before `expired_at`. `finished`: ended before `expired_at`. `lost`: ended at or after `expired_at`, or not ended and `expired_at` has passed.                                                                                                                       |
@@ -135,6 +146,7 @@ Every timestamp is a safe integer of Unix epoch milliseconds in UTC.
 | `ended_at`                   | timestamp or `null`                                | Time of the end; `null` while the execution has not ended.                                                                                                                                                                                                                                   |
 | `trace_id`                   | 32 lower-case hexadecimal characters, not all zero | Trace identity that the Scheduler mints at the claim.                                                                                                                                                                                                                                        |
 | `root_span_id`               | 16 lower-case hexadecimal characters, not all zero | Root span identity that the Scheduler mints at the claim.                                                                                                                                                                                                                                    |
+| `stop`                       | `{ reason, code }` or `null`                       | Stop of the release; `null` while the execution runs and after a release with no stop.                                                                                                                                                                                                       |
 
 Identity formats follow the [identity reference](../identities.md).
 
@@ -224,15 +236,15 @@ curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5
 
 ### `execution release`
 
-| Item                  | Value                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                   |
-| Operation ID          | `scheduler.execution.release`                                                                           |
-| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration |
-| Timeout               | 30 seconds                                                                                              |
-| Mutation              | Yes                                                                                                     |
-| Path/query parameters | `execution_id` (path, required); no query fields                                                        |
-| Request body          | Closed JSON object `{ "further_work": <boolean> }`; `further_work` is required                          |
+| Item                  | Value                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                                                           |
+| Operation ID          | `scheduler.execution.release`                                                                                                                   |
+| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration                                         |
+| Timeout               | 30 seconds                                                                                                                                      |
+| Mutation              | Yes                                                                                                                                             |
+| Path/query parameters | `execution_id` (path, required); no query fields                                                                                                |
+| Request body          | Closed JSON object `{ "further_work": <boolean>, "stop": { "reason", "code" } \| null }`; `further_work` is required, `stop` defaults to `null` |
 
 | Header            | Required | Purpose                                                      |
 | ----------------- | -------- | ------------------------------------------------------------ |

@@ -241,10 +241,11 @@ It fetches the external content that the request evidence addresses through `int
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
-The workspace of the steps method on an objective is a checkout of the repository that the pinned revision names, on the node branch.
+The workspace of the steps method on an objective is a checkout of the repository that the pinned revision names, on the node branch of its attempt.
 The Worker Service keys that workspace by the objective and the repository binding of the pinned revision.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
-Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch at the repository through the Repository component.
+Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch of its attempt at the repository through the Repository component.
+When the checkout holds another branch, the execution also removes the ignored files of that branch.
 The Worker Service removes it after a bounded retention since the last execution of that objective ended.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
 The workspace of the steps method on an initiative holds no checkout.
@@ -257,9 +258,12 @@ The storage credential stays in server custody.
 The MCP server exposes no upload write.
 
 The rules of the four paragraphs below hold for the steps method on an objective.
-The steps method uses one node branch for each objective and repository binding, and it continues that branch across attempts.
-The node branch takes its name from the node identity, in the form `kanthord/<node identity>`.
+The steps method uses one node branch for each objective and repository binding.
+The node branch of an attempt is the branch of the latest attempt k, at or before it, that records the [start point](mission-service.md#attempt) `base_branch`.
+The node branch takes its name from the node identity, in the form `kanthord/<node identity>` when k is 1, and `kanthord/<node identity>-a<k>` when k is later.
+The claim names the node branch, and the execution reads it from the claim.
 The first execution on that branch creates it from the base branch that the [repository strategy](project-service.md#repository-configuration-and-policy) names.
+No act deletes, renames or force-pushes a node branch.
 The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
 Every commit that the execution makes is attributable to its task and its attempt.
 The execution uses the [node-branch push](repository.md#write-operations) of the Repository component before every release.
@@ -512,6 +516,7 @@ Before it performs a request, the action performer reads the request evidence of
 The request reuses the external object of a request evidence of an earlier attempt when three conditions hold.
 That request evidence names the same requirement key.
 The remote thing fulfils the operands of the current request.
+For a pull request, the operands include the node branch of the claim as the head.
 The remote thing is open: the platform still accepts on it the network git write that the action requires.
 An end state of the earlier action does not close the remote thing by itself.
 A reuse performs, through the Intake Service, the network git write that the action requires and no platform write.
@@ -520,6 +525,8 @@ In both cases the action performer submits the request to the Mission Service th
 It uses the `PlatformAddress` that the Intake Service answers, or the address of the request evidence that the request reuses.
 That submission is the accepted request of the action.
 The address correlates the request evidence of one external object across attempts.
+After a start from the base branch, an open pull request of the earlier node branch does not fulfil the operands, so the action performer requests a new pull request.
+kanthord leaves the earlier pull request open, and a human closes it.
 
 For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.
@@ -648,6 +655,7 @@ sequenceDiagram
 ```
 
 The sequence diagram below shows the next attempt after a block: the resume of the tasks and the reuse of the pull request.
+The diagram shows an unblock with the default start point `node_branch`.
 
 ```mermaid
 sequenceDiagram

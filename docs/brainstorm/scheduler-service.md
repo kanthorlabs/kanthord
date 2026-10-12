@@ -159,6 +159,7 @@ The execution record holds these fields.
 - For a registered instance, the client identity and the display name of its credential. The execution record reads both from the registration of its runtime identity through the Worker Service, also after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
 - The node and its attempt.
 - The pinned node revision.
+- The node branch of the attempt, which the claim admission of the Mission Service answers.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
 - The agent selections that the claim pins: one chain entry for each native agent of the worker. A later cooldown changes no pinned selection.
 - The fixed deadline.

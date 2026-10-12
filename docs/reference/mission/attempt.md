@@ -66,16 +66,17 @@ The answer is one `Attempt` record.
 
 ### `Attempt`
 
-| Property                    | Type                        | Purpose                                                                                                             |
-| --------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `node_id`                   | `node_<ulid>`               | Node that owns the attempt.                                                                                         |
-| `attempt`                   | positive safe integer       | Attempt number. The first attempt is `1`.                                                                           |
-| `node_revision`             | positive safe integer       | Node revision that the attempt pins.                                                                                |
-| `required_external_actions` | array of `FrozenAction`     | Actions derived from the pinned revision, sorted by `key`. Empty for an initiative.                                 |
-| `opened_at`                 | Unix milliseconds           | Time that the attempt opened.                                                                                       |
-| `closed_at`                 | Unix milliseconds or `null` | Time that the attempt closed; `null` while the attempt is open.                                                     |
-| `outcome_ids`               | array of `outcome_<ulid>`   | Outcomes of the attempt.                                                                                            |
-| `opened_by`                 | `Actor`                     | Actor that opened the attempt. A claim, `ready` or `resume` opens attempt 1; only an unblock opens a later attempt. |
+| Property                    | Type                           | Purpose                                                                                                                                                 |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node_id`                   | `node_<ulid>`                  | Node that owns the attempt.                                                                                                                             |
+| `attempt`                   | positive safe integer          | Attempt number. The first attempt is `1`.                                                                                                               |
+| `node_revision`             | positive safe integer          | Node revision that the attempt pins.                                                                                                                    |
+| `start_point`               | `base_branch` or `node_branch` | Branch that the work of the attempt starts from. Attempt 1 records `base_branch`. An unblock records the value that it names, `node_branch` by default. |
+| `required_external_actions` | array of `FrozenAction`        | Actions derived from the pinned revision, sorted by `key`. Empty for an initiative.                                                                     |
+| `opened_at`                 | Unix milliseconds              | Time that the attempt opened.                                                                                                                           |
+| `closed_at`                 | Unix milliseconds or `null`    | Time that the attempt closed; `null` while the attempt is open.                                                                                         |
+| `outcome_ids`               | array of `outcome_<ulid>`      | Outcomes of the attempt.                                                                                                                                |
+| `opened_by`                 | `Actor`                        | Actor that opened the attempt. A claim, `ready` or `resume` opens attempt 1; only an unblock opens a later attempt.                                     |
 
 `Actor` has one of three forms, selected by `kind`:
 

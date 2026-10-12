@@ -78,6 +78,27 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - No raw key reaches `llm.provider.check`. The [pre-save check](architecture.impl.md#the-pre-save-check) is the only credential operation that takes a typed secret, and the LLM component runs it through `LlmProvider.check`.
 - A human approves models through a [credential metadata revision](#platform-validators).
 
+## The model check
+
+- `llm.model.check` is a server-wide read operation under `human` access, with no project or binding.
+- Its route is `POST /api/llm/model/check`, and its input is `{ credential, model_identifier, reasoning_effort }`.
+- The route declares the body schema, so invalid input answers the Gateway code `gateway.request.validation_failed`.
+- It accepts a credential of every LLM platform, `openai-compatible` included.
+- The component builds the model runtime with the [model connector](#the-model-connector) from the material that custody releases. The check and an execution use one runtime path for every platform.
+- The check stores nothing, pins no credential revision and caches nothing. The enablement write does not call it.
+- HTTP 404 `llm.model.credential_not_found` reports an unknown credential or a credential of another component.
+- HTTP 400 `llm.model.model_unknown` reports a model outside the model list of the credential. HTTP 400 `llm.model.reasoning_unsupported` reports a reasoning effort outside the supported levels of the model.
+- The check runs one tool round trip: a user message, one declared tool `check_tool`, a tool call of the model, a tool result `ready` and a final reply.
+- The reasoning effort `off` sends no `reasoning` option. Every other effort goes to the model call as `reasoning`.
+- HTTP 200 holds `{ result, message }`. `result` is `ok` or one provider failure code: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
+- `message` is `null` for `ok`. Otherwise `message` is the error text of the model call, redacted with the secrets of the credential and cut to 300 characters.
+- The LLM component owns the classifier of the error text. The Worker Service uses the same classifier for the stop code of `provider_failed`.
+- The classifier maps quota text to `quota_exhausted`, status 429 to `rate_limited`, 401 and 403 to `unauthorized`, every other 4xx to `bad_request`, and every other text to `unavailable`.
+- A first reply without a call of `check_tool` answers `bad_request` with the message `The model did not call the tool.`
+- An expired OAuth access token answers `unauthorized` with the message `The access token is expired.` without a model call. The check never refreshes OAuth.
+- A check that the 50 s deadline or the cancellation of the caller ends answers `unavailable`.
+- The check is a warning for the dashboard and the CLI before an enablement write.
+
 ## The approved models
 
 - The LLM component answers the approved models of a credential to the [Agent configuration validation](agent.impl.md#agent-configuration-validation): the `models` metadata of an `openai-compatible` credential, with the defaults applied.
@@ -172,6 +193,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests cover the check of every LLM provider, its `connection` mapping, the healthcheck status mapping, expired OAuth and forbidden calls.
 - Tests assert that a refused model call maps 401 and 403 to `unauthorized` through the status in `errorMessage`.
 - Tests assert that `LLM_PROVIDERS` and `verifiable` agree, and that `llm.provider.check` refuses a platform without a check.
+- Tests cover the model check: the tool round trip, a reply without a tool call, each provider failure code, redaction of the secrets, an unknown model, an unsupported reasoning effort, an expired OAuth access token and the `openai-compatible` runtime path.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.

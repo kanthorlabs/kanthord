@@ -75,6 +75,13 @@ An import carries no priority.
 
 ## The attempt
 
+- `StartPoint` is an enum in code with the values `base_branch` and `node_branch`. The column `mission_attempt.start_point` holds it with no `CHECK` constraint.
+- Attempt 1 records `base_branch`, whatever act opens it. An unblock records the value of its optional body field `start_point`, and `node_branch` when the field is absent. The request schema refuses another value with 400 `gateway.request.validation_failed`, and the act writes nothing.
+- The `Attempt` read answers `start_point`.
+- The claim admission answers `node_branch` next to `attempt` and `node_revision`. The node branch of attempt N is the branch of the latest attempt k <= N that records `base_branch`. `nodeBranchOf(node_id, k)` of the Repository component builds `kanthord/<node id>` for k = 1 and `kanthord/<node id>-a<k>` for a later k.
+- The lookup of k reads `mission_attempt` through its primary key `(node_id, attempt)`. No other index exists for it.
+- The migration sets `start_point` to `base_branch` for attempt 1 and to `node_branch` for every later attempt.
+
 `FrozenAction` is the read shape of a required external action.
 The service derives it from the policy of the `project_binding` row that the pinned revision of the attempt names.
 
@@ -271,7 +278,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 
 - `mission.proposal.list` uses `GET /api/mission/node/:node_id/proposal` with `human` access, and it answers a page of proposals with an optional `attempt` filter.
 - `mission.proposal.approve` uses `POST /api/mission/proposal/:proposal_id/approve` with `human` access. Its body holds `expected_mission_version` and an optional nonblank `reason`.
-- In one transaction, the approval creates the objective under the initiative with the bindings of `objective_id`, creates its one task, unblocks the initiative into a new attempt and sets `objective_node_id` and `approved_at` of the proposal.
+- In one transaction, the approval creates the objective under the initiative with the bindings of `objective_id`, creates its one task, unblocks the initiative into a new attempt with the default start point `node_branch` and sets `objective_node_id` and `approved_at` of the proposal.
 - The initiative stays unclaimable until the new objective reaches a terminal state, under the existing routing of an initiative with a nonterminal child.
 - An approved proposal answers 409 `mission.proposal.already_approved`. An initiative that is not `Blocked` in the attempt of the proposal answers 409 `mission.node.state_conflict`.
 - A human rejects a proposal with the existing unblock or discard.
@@ -742,6 +749,11 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert that a loss or a release with a `stop` below `mission.consecutive_failure_limit` returns the node to `Available` or `Waiting` with a job, that the loss or the stop that reaches it moves the node to `Paused` with no job, no outcome and the attempt open, that lost and stopped executions count together, that a release with no stop ends the count, that an advancing `provider_failed` stop neither counts nor ends the count, and that a resume after the limit grants one more try.
 - Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfied_ids` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
+- Tests assert that an unblock with `start_point: base_branch` opens an attempt that records it, that an unblock without the field records `node_branch`, and that another value answers 400 and writes nothing.
+- Tests assert that attempt 1 records `base_branch` when a claim, a ready act or a resume to `Waiting` opens it, and that a proposal approval records `node_branch`.
+- Tests assert that the claim admission answers `kanthord/<node id>` before the first restart, and `kanthord/<node id>-a<k>` for restart attempt k and for each later attempt that continues it. A steps claim and an evaluation claim of one attempt answer the same value.
+- Tests assert that `attempt get` and `attempt list` answer `start_point`, and that the migration sets the ruled values.
+- Tests assert that, after a restart, an event for the pull request of the earlier node branch answers `duplicate` or `unmatched` and changes no state.
 - Tests assert that a current `criterion-not-met` execution assessment below `mission.rework_limit` moves the node to `Available` with a job, ends the claim, keeps the attempt open and writes no outcome. They assert `Blocked` with an outcome at the limit, at once for `undetermined` and below the limit when the attempt holds a request evidence, that the next attempt counts from zero, and that `execution rework-assessment get` answers the latest `criterion-not-met` assessment of the claimed attempt or 404.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `include_retired`.

@@ -53,6 +53,7 @@ The API returns HTTP `200` with one of two objects.
     },
     "attempt": 1,
     "pinned_revision": 3,
+    "node_branch": "kanthord/node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
     "credentials": [],
     "agent_selections": [
       {

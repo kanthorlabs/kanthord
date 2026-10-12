@@ -2,7 +2,7 @@
 
 A native agent is an LLM agent that KanthorD runs inside its own process. An external harness, for example `claude-code@1` or `opencode@1`, runs a third-party agent program instead. This page explains how KanthorD builds a native agent, what the agent can see and do, and where its limits are.
 
-KanthorD does not implement the agent loop itself. It embeds [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent` 0.86.0) as the runtime. pi supplies the loop, the built-in tools, the session file and the resume. KanthorD supplies the configuration, the credentials, the prompt, the tool set and the budget. KanthorD builds only what pi does not serve.
+KanthorD does not implement the agent loop itself. It embeds [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent` 1.0.3) as the runtime. pi supplies the loop, the built-in tools, the session file and the resume. KanthorD supplies the configuration, the credentials, the prompt, the tool set and the budget. KanthorD builds only what pi does not serve.
 
 ## The two agents
 
@@ -264,7 +264,7 @@ The human can change the agent provider, the model and the reasoning effort betw
 ## Limitations
 
 - **No resume for a Worker execution.** A Worker execution keeps its session in memory. When the worker process ends, the conversation is lost, and a new attempt starts a new session.
-- **No transcript storage.** The worker hands the transcript of each execution to a transcript sink at the end. The current sink discards it.
+- **Transcript on the worker host only.** At the end of each execution, the worker appends the transcript to `<state>/transcripts/<execution_id>.jsonl` with mode 0600 and keeps the newest 50 files. The server receives no transcript.
 - **No sandbox.** `bash` and the file tools run on the host with the rights of the KanthorD process. The tool set of `re@1` limits what the reviewer can do. The working directory of `swe@1` is only its default location, not a boundary.
 - **No approval in a Worker execution.** Only the Workbench asks a human before a call that changes state.
 - **Static catalog.** A new agent or a change of a tool set requires a new KanthorD release. A prompt change does not: the agent directory and the custom prompts override the shipped text.
