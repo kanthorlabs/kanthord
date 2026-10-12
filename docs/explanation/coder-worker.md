@@ -100,6 +100,8 @@ The code sketch leaves out the loop, the budget checks and the claim checks. Ste
 
 The workspace and the node branch survive between attempts. The start check decides which tasks still need work, so a new execution does not redo finished work.
 
+A rework is an execution of an attempt with a `criterion-not-met` assessment. Before the task checks, the start check of a rework runs the node verifications once. When a node verification fails, `swe@1` chooses the task that is most related to the failure. That task is pending with a criterion revision that holds the failure and the last 4 KiB of its output. An invalid choice selects the last task of the plan. Every other task follows the diagram below.
+
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
 flowchart TB
@@ -246,6 +248,7 @@ A budget end carries the `budget_end` stop only when no task completed in that e
 | The node branch is gone after a recorded push      | The worker stops with `operation_failed` and `repository.node_branch.missing`.              |
 | The node is paused during the execution            | The claim check after the next turn or before the next task ends the execution as revoked.  |
 | A rework after a `criterion-not-met` assessment    | The start check gives the rationale to each task that it names.                             |
+| A node verification fails at a rework              | `swe@1` chooses one task. That task is revised with the failure output.                     |
 | An unblock after a change request on the PR        | The start check judges each task against the requested changes of the reviewers.            |
 | The budget ends inside a task                      | The worker writes a checkpoint commit, pushes and releases. The next execution resumes.     |
 
