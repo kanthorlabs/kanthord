@@ -8,6 +8,8 @@ bindings:
 verifications:
   - npm ci && npm run test:authentication
   - npm run test:persistence
+  - npm run test:foundation
+  - npm run lint && npm run format:check
 ---
 
 # Authenticate users and authorize private routes

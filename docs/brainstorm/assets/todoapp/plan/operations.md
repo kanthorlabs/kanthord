@@ -8,6 +8,7 @@ bindings:
 verifications:
   - npm ci && npm run test:operations
   - npm run test:foundation
+  - npm run lint && npm run format:check
 ---
 
 # Harden errors, logging and process operation
