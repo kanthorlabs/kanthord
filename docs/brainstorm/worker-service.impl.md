@@ -297,6 +297,21 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - A change request forces no task revision. The agent judgement decides each task. When the agent judges every task met, the execution pushes an unchanged head. The change request stays current on that head, so the next node check blocks the node again on the same change request.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
 
+## The node check of a rework
+
+- A rework is an execution of an attempt that has a `criterion-not-met` assessment. `mission.execution.rework_assessment.get` answers that assessment.
+- The start check of a rework runs the node verifications once, before the task checks. Another execution runs no node verification at its start.
+- The run uses the verification runner of the task checks, with `COMMAND_LIMIT_MS` per command and one `worker.verification` span per command. It runs no rerun.
+- The run logs `node verified` with the head commit, the result and the exit codes.
+- When every node verification passes, the start check continues as before.
+- When a node verification fails, the failure text is the failed verification report: the failed command, its result and the last 4 KiB of its output.
+- The agent receives one `task-choice` instruction with the failure text and the filename, the name and the criterion of each task. The reply names one task by its filename.
+- The worker parses the reply once, with no repair turn. A reply with no valid marker line, or with a filename outside the task set, selects the last task in plan order.
+- The run logs `task chosen` with the task identity, the head commit and `fallback`.
+- The chosen task is pending with the criterion revision of the failure text. It gets no judgement at the start check, and its judged commit does not skip it.
+- Every other task keeps the rules of the start check.
+- When the budget ends during the node check or the choice turn, the execution releases with further work and no checkpoint commit.
+
 ## The verifications
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
@@ -320,6 +335,8 @@ Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that contin
 Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`.
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
 Tests assert that a judgement of attempt k-1 is not reused in attempt k.
+Rework tests assert that a failed node verification revises the chosen task only, that an invalid choice revises the last task, and that passing node verifications change nothing.
+Tests assert that an execution that is not a rework runs no node verification at its start.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
 
 ## Workspace

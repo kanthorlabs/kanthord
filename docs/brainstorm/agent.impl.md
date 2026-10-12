@@ -254,7 +254,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-revision`, `criterion-revision`, `evaluation`, `report`, `repair`, `review` and `fix`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-choice`, `task-revision`, `criterion-revision`, `evaluation`, `report`, `repair`, `review` and `fix`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
@@ -272,6 +272,7 @@ The Agent component owns these keys of the section `agent`.
 | `framing-worker`     | none                                                                                                     |
 | `framing-workbench`  | none                                                                                                     |
 | `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                                      |
+| `task-choice`        | `failure`, `tasks[].filename`, `tasks[].name`, `tasks[].criterion`, `marker`                             |
 | `task-revision`      | `rationale`, `results`, `output`                                                                         |
 | `criterion-revision` | `rationale`                                                                                              |
 | `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                                              |
@@ -280,7 +281,7 @@ The Agent component owns these keys of the section `agent`.
 | `review`             | `task_id`, `criterion`, `findings`, `replies`, `diff`, `diff_truncated`, `diff_max_characters`, `marker` |
 | `fix`                | `findings`                                                                                               |
 
-- `marker` is the marker that the worker parses. A replacement of `task-judgement`, `evaluation`, `repair` or `review` keeps the marker line, or the worker treats the reply as invalid.
+- `marker` is the marker that the worker parses. A replacement of `task-judgement`, `task-choice`, `evaluation`, `repair` or `review` keeps the marker line, or the worker treats the reply as invalid.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.
 
 ## Session file

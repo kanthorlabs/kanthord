@@ -294,6 +294,8 @@ Inside one attempt, a task whose last judged commit equals the head of the node 
 Its verifications still run.
 The judgement of a task at the start reads the rationale of the assessment that caused the latest rework of the attempt, or else the cause of the outcome of the cleared attempt.
 A task that the agent judges unmet with that rationale is revised with the rationale as the revision instruction.
+At the start of a rework, the execution also runs the verifications of the node against the head of the node branch.
+When a node verification fails, the agent chooses the task that is most related to the failure, and the execution revises that task with the failure.
 
 Before a release with evidence, the execution merges `origin/<base_branch>` again and runs the task verifications on the merged head.
 A conflict or a failed verification resets the node branch to its head before that merge, and the release carries further work.
