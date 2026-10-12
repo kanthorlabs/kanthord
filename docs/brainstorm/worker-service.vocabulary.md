@@ -11,12 +11,11 @@ This file is not a design document, and `worker-service.md` stays the single sou
 ## worker
 
 The overview owns the term.
-This revision of the Worker Service supplies four workers.
+This revision of the Worker Service supplies three workers.
 
 - **coder@1**: the steps method with the native agent `swe@1`.
 - **reviewer@1**: the evaluation method with the native agent `re@1`.
 - **claude-code@1**: hosted by the external harness `claude-code`, declares `Available`, `Waiting` and `External.Requested`.
-- **opencode@1**: hosted by the external harness `opencode`, declares `Available`, `Waiting` and `External.Requested`.
 
 ## host
 
@@ -27,7 +26,7 @@ The set is closed and it holds two values.
 - **an external harness**
 
 `coder@1` and `reviewer@1` have kanthord as their host.
-`claude-code@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
+`claude-code@1` has the external harness `claude-code` as its host.
 
 ## placement
 
@@ -292,5 +291,5 @@ Execution 2 runs the task verifications at the head of the node branch and conti
 
 The resource budget bounds the agent work of one execution by wall time and, when declared, turn count.
 `coder@1` declares 200 turns and 2 hours, and `coder-lab` overrides them with 50 turns and 30 minutes.
-`claude-code@1` and `opencode@1` each declare 2 hours of wall time.
+`claude-code@1` declares 2 hours of wall time.
 The [budget contract](worker-service.impl.md#stop-and-budget) defines measurement and validation.

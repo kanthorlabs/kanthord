@@ -11,7 +11,7 @@ A ruling that names a package, a product or a version is deliberate, and a chang
 ## Native agent runtime
 
 The first version supplies the workers `coder@1` and `reviewer@1`.
-The workers `claude-code@1` and `opencode@1` follow with the registration of an externally hosted instance.
+The worker `claude-code@1` follows with the registration of an externally hosted instance.
 The first version supplies `coder@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
 `tdd@1` follows when the runtime hosts several agents in one execution.
 The native agent `swe@1` of `coder@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
@@ -36,7 +36,7 @@ Every runtime setup call carries an abort signal with a deadline.
 
 ## Externally hosted worker
 
-The kanthord extension of Claude Code and the kanthord plugin of opencode register the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
+The kanthord extension of Claude Code registers the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
 Their design, and the packaging of the `/work` orchestration skill that they carry, are epic decisions.
 
 ## The identities of the Worker Service
@@ -421,7 +421,7 @@ The carrier of that attribution is an epic decision.
 
 - Every worker declares `resource_budget.wall_time_ms`.
 - `coder@1` and `reviewer@1` declare default `resource_budget: { turns: 200, wall_time_ms: 7200000 }`.
-- `claude-code@1` and `opencode@1` declare default `resource_budget: { wall_time_ms: 7200000 }`.
+- `claude-code@1` declares default `resource_budget: { wall_time_ms: 7200000 }`.
 - Every worker binding can override its default through the optional `resource_budget`.
 - `wall_time_ms` and any declared `turns` are positive safe integers, including in overrides.
 - A turn is one `turn_end` event of the pi agent loop.

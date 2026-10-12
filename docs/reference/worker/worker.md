@@ -12,7 +12,6 @@ The catalog contains these workers:
 | --------------- | ------------------ | --------------------- | -------------------------------------------- |
 | `claude-code@1` | `external-harness` | harness `claude-code` | `Available`, `Waiting`, `External.Requested` |
 | `coder@1`       | `kanthord`         | method `steps`        | `Available`                                  |
-| `opencode@1`    | `external-harness` | harness `opencode`    | `Available`, `Waiting`, `External.Requested` |
 | `reviewer@1`    | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              |
 
 `worker list` returns a page of summaries in ascending worker-name order. `worker get` returns the full declaration of one worker. Both operations are read-only.

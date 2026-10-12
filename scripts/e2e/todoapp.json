@@ -68,8 +68,8 @@
   },
   "workers": [
     {
-      "binding": "developer",
-      "worker": "developer@1",
+      "binding": "coder",
+      "worker": "coder@1",
       "instances": 1
     },
     {

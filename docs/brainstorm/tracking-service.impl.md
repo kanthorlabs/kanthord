@@ -88,9 +88,8 @@ The start of the retention of a telemetry text is an epic decision.
 
 ## Capture and packaging
 
-The capture points are the hooks of Claude Code and the plugin interface of opencode.
+The capture points are the hooks of Claude Code.
 The kanthord extension of Claude Code owns the capture, the local store and the ingestion.
-The kanthord plugin of opencode owns the capture, the local store and the ingestion.
 A human authenticates the call of an ingestion, and the client identity of the extension authorizes no ingestion.
 Their packaging is an epic decision.
 
