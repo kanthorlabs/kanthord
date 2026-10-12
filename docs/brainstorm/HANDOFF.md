@@ -76,7 +76,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 
 ### Worker Service
 
-- [ ] RULED 2026-10-11 by Ulrich. Rename the worker `general@1` to `coder@1`, which holds only `swe@1` and the method `steps`. Remove the worker `developer@1`, the method `reviewed_steps`, the `review` and `fix` prompt templates and the task review code. The native workers are `coder@1` and `reviewer@1`; `RELEASED_WORKER_NAMES` lists both. The design pages and `docs/` already state the result; update the engine code, the tests, `engine/docs/cli/worker.md` and the `apps` worker lists.
+- [x] RULED 2026-10-11 by Ulrich. Rename the worker `general@1` to `coder@1`, which holds only `swe@1` and the method `steps`. Remove the worker `developer@1`, the method `reviewed_steps`, the `review` and `fix` prompt templates and the task review code. The native workers are `coder@1` and `reviewer@1`; `RELEASED_WORKER_NAMES` lists both. The design pages and `docs/` already state the result; update the engine code, the tests, `engine/docs/cli/worker.md` and the `apps` worker lists.
 - [ ] Decide whether an objective names a worker binding, so that one worker binding claims it. Today any worker binding whose worker declares the node state claims any node, so work in two repositories cannot use different models or prompts. Ulrich deferred this on 2026-10-11.
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.

@@ -107,7 +107,7 @@ A successful push to main does not establish achievement of the objective.
 
 ## External harness
 
-`claude-code` and `opencode` are the external harnesses.
+`claude-code` is the external harness.
 kanthord's own harness holds the first priority; an external harness holds the second priority.
 An external harness supports ongoing integration and maintenance with an existing system.
 
