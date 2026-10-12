@@ -283,6 +283,19 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
 - `startCheck` stores the judged commit of each task in the objective workspace. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
 
+## The unblock reads
+
+- At the start of the steps method on an objective, the execution reads the prior rationale. The rationale of the latest rework assessment of the attempt comes first.
+- With no rework assessment, an execution of attempt 2 or later reads `mission.execution.clearedOutcome.get`.
+- When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
+- `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
+- For each `pull_request` action with the resolution `other-end`, the read calls `intake.action.read` through the direct adapter. It uses the method `github-pull-request-change-request-get` and the request evidence of that action.
+- The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request. It also holds the path, the line and the body of each review comment of that change request.
+- The requested-changes text stops at 4 KiB.
+- The requested-changes text is the prior rationale. It enters the task judgement of the start check and the criterion revision of each task that the agent judges unmet.
+- When the read finds no current change request, the prior rationale is the rationale of the cleared assessment.
+- A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
+
 ## The verifications
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).

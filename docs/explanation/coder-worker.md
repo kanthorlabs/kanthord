@@ -27,7 +27,7 @@ flowchart TB
     claim(["Claim: node Available → Executing"]) --> s1
     subgraph prepare ["Prepare"]
         s1["<b>1</b> Read the pinned revision"] --> kind{"Node has tasks?"}
-        kind -- yes --> s2["<b>2</b> Read the prior rationale<br/>of the rework or cleared assessment"]
+        kind -- yes --> s2["<b>2</b> Read the prior rationale<br/>of the rework, the change request<br/>or the cleared assessment"]
         s2 --> s3["<b>3</b> Prepare the workspace<br/>check out kanthord/&lt;node_id&gt;"]
         s3 --> s4["<b>4</b> Open swe@1"]
     end
@@ -246,6 +246,7 @@ A budget end carries the `budget_end` stop only when no task completed in that e
 | The node branch is gone after a recorded push      | The worker stops with `operation_failed` and `repository.node_branch.missing`.              |
 | The node is paused during the execution            | The claim check after the next turn or before the next task ends the execution as revoked.  |
 | A rework after a `criterion-not-met` assessment    | The start check gives the rationale to each task that it names.                             |
+| An unblock after a change request on the PR        | The start check judges each task against the requested changes of the reviewers.            |
 | The budget ends inside a task                      | The worker writes a checkpoint commit, pushes and releases. The next execution resumes.     |
 
 ## Examples of the edge cases
