@@ -16,6 +16,12 @@ const PR_EVERY_TICKS = 4;
 const PROCESS_ABSENT = "ESRCH";
 const TASK_KIND = "task";
 const now = () => new Date().toISOString().slice(11, 19);
+const ghEnv = {
+  ...process.env,
+  GH_TOKEN:
+    process.env.GH_TOKEN ||
+    execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim(),
+};
 
 const nodes = new Map();
 const ended = new Set();
@@ -95,7 +101,7 @@ function watchPullRequests(quiet) {
         "--json",
         "number,state,title",
       ],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: ghEnv },
     ),
   );
   for (const pr of list) {
