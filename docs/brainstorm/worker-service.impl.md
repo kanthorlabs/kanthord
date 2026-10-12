@@ -133,7 +133,8 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - `SIGINT` and `SIGTERM` stop further startup and further work pulls.
 - A stop aborts the outstanding work pull. A claim that commits during that abort has no worker until its lease expires, and settlement then declares it lost.
 - The application deregisters only a registration whose runtime identity it knows.
-- The application deregisters at a stop only when no execution is live. An upgrade stops the old process before it starts the new one.
+- The application deregisters at a stop only when no execution is live and no work pull answer failed its schema. An upgrade stops the old process before it starts the new one.
+- A work pull answer that fails its schema ends the pull loop with `gateway.client.answer_invalid`. The application deregisters nothing and exits 1. A restart with the same client identity inside the heartbeat window resumes the same registration and the same claim.
 - It exits 0 after a successful deregistration or after the 404 that ends its registration. Any other deregistration or cleanup failure exits 1 without a retry.
 - An execution that ends with a release or a closure leaves the instance registered, and the application pulls again. A release with a `stop` is a release. An execution that ends with no release and no closure exits 1.
 - A stop during a live execution exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
@@ -141,6 +142,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - `SIGHUP` reopens nothing.
 - B9 owns shutdown during a live execution or a registration with no answer, and a stop deadline in those cases.
 - Tests cover the option resolution, the refusal of `--config`, the startup order, each startup failure, the ready record, deregistration before exit, a failed deregistration, the abort of the outstanding work pull at a stop and the watchdog of a settled state.
+- A test covers a claim answer with an unknown field. It asserts one pull, the exit with `gateway.client.answer_invalid`, no deregistration, and a restart that resumes the same claim and completes the handover.
 
 ## The execution setup
 
