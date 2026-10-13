@@ -22,7 +22,7 @@ The Worker Service supplies the workers.
 A worker declares its name, its host, the node states that its instances claim and its required node format.
 A worker that kanthord hosts also declares its method and its agents, at least one.
 It references the [catalog declaration](agent.md#agent-catalog) of each agent.
-A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
+A worker that an external harness hosts declares none of those, because its method is the harness launcher and the harness program.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
 Every agent of a kanthord-hosted worker is [in the catalog](agent.vocabulary.md#in-the-catalog) of the [Agent component](agent.md#agent-catalog).
 A worker reads no other project configuration.
@@ -31,7 +31,7 @@ Compatibility reads the node revision that the [work-pull rules](scheduler-servi
 Every worker of this page requires the same node format.
 
 A method is the worker's own.
-Two methods of kanthord exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
+Two methods of kanthord exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the harness launcher and the harness program.
 The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
@@ -251,7 +251,7 @@ The workspace of the evaluation method is fresh, and the Worker Service removes 
 The workspace of the steps method on an initiative holds no checkout.
 
 The kanthord component on the file's host serves `evidence upload <path>`.
-That component is the server, the `worker` application or the harness extension.
+That component is the server, the `worker` application or the harness launcher.
 It opens the path safely inside the execution workspace and uses the Mission Service's presigned-transfer flow.
 It returns the evidence identity and object URI, never the presigned URL, to the agent.
 The storage credential stays in server custody.

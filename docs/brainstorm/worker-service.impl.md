@@ -36,8 +36,9 @@ Every runtime setup call carries an abort signal with a deadline.
 
 ## Externally hosted worker
 
-The kanthord extension of Claude Code registers the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
-Their design, and the packaging of the `/work` orchestration skill that they carry, are epic decisions.
+The harness launcher `kanthord serve harness` registers the instance under its client identity, sends the heartbeat, issues the work pull, runs `claude -p` per instruction, checks the claim after each run, drives the execution operations, and releases.
+The launcher owns the process group of Claude Code.
+The use of the MCP server by the launcher is an epic decision.
 
 ## The identities of the Worker Service
 
@@ -61,7 +62,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - A test checks both sides of the heartbeat window and asserts that the resource healthcheck changes no registration or instance healthcheck.
 - A sweep every 30 s ends every registration whose last heartbeat is older than `worker.heartbeat_window`.
 - A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
-- The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.
+- The idle backoff of an instance stays under the window, and the sibling of the harness launcher states its interval.
 - A registration that ends by expiry frees the slot of its binding.
 - The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. It ends every live registration of the group in the transaction of the caller and opens no transaction. A removed or unavailable worker binding holds no live registration.
 - A registration of a binding with no free slot, or of an unavailable binding, answers 409 `worker.instance.slot_unavailable`, the code of the resume.
@@ -92,7 +93,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - Every target that is no live registration of the caller answers 404 `worker.instance.not_found`. This includes an unknown or ended identity, another client's instance, a server-placement instance and a newer registration of the same client identity, which stays intact. A delayed request for an ended runtime identity never ends a newer registration.
 - The answer is 200 `{ runtime_identity, registered: false }`.
 - A retry with the same `Idempotency-Key`, caller and target replays the recorded answer after the end, inside one process and the TTL. The operation declares no `replayGuard`. Authentication grants no bypass for a revoked credential or unavailable binding.
-- A retry after a restart runs the handler again. It ends the registration when the registration is still live, and it answers 404 when the registration already ended. The worker application and harness extension read that 404 after their own call as the end of their registration.
+- A retry after a restart runs the handler again. It ends the registration when the registration is still live, and it answers 404 when the registration already ended. The worker application and harness launcher read that 404 after their own call as the end of their registration.
 - The operation proves no process stop, releases no execution and authorizes no workspace reuse. A live execution follows the [Scheduler liveness rules](scheduler-service.md#liveness). Physical stop and capacity reuse stay B9 SC5 and W5.
 - Tests assert end and slot release in one transaction, same-key replay after the end, a post-restart retry that ends a live registration or answers 404 for an ended one, and 404 for each non-owned target. They assert that a newer registration stays intact, no server-placement instance ends through the route, and the worker application calls it at graceful stop.
 
@@ -241,7 +242,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 ## Evidence upload
 
 The `worker` application serves `evidence upload` locally for a file on its host.
-The server and the harness extension serve the same helper on their own hosts.
+The server and the harness launcher serve the same helper on their own hosts.
 The helper safely opens the path inside the execution workspace.
 It refuses path traversal, symbolic-link escapes and path replacement races.
 A refused path answers `worker.evidence_upload.path_refused`, whose `details.reason` is `outside_workspace`, `symbolic_link`, `not_regular` or `replaced`.

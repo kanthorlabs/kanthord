@@ -261,7 +261,7 @@ flowchart TB
 | Configuration files        | The XDG configuration directory holds `kanthord.yaml` and client `cli.yaml`. The server never reads the client configuration.                                                                                                              |
 | State files                | The XDG state directory holds operational logs and execution workspaces. A native worker's workspace lives on its execution host.                                                                                                          |
 | Cache                      | Rebuildable artifacts belong here. The current server creates no cache files.                                                                                                                                                              |
-| External telemetry capture | Harness extensions own their local capture logs, segments and ingestion cursors. These are not server-side Tracking components.                                                                                                            |
+| External telemetry capture | Harness launchers own their local capture logs, segments and ingestion cursors. These are not server-side Tracking components.                                                                                                             |
 
 **No distributed transaction is implied.** Ordinary operations commit their own work. Project–Mission creation and Mission–Scheduler state/queue collaborations explicitly share synchronous transactions to preserve their invariants. Remote effects cannot commit atomically with SQLite.
 

@@ -56,7 +56,7 @@ One process repairs a log, and that process is the writer.
 A reader that meets an unparsable last line reports an incomplete tail, and it repairs nothing.
 The repair before an append keeps damage in the tail, so no interior record becomes malformed.
 The log is a sequence of segments.
-The extension rotates a segment at a bound.
+The launcher rotates a segment at a bound.
 It discards the oldest whole segment when the local bound is reached.
 A single segment cannot discard its oldest records.
 A rotation syncs the directory of the log, because a new segment name needs durable filesystem metadata.
@@ -68,8 +68,8 @@ It imports no record after that endpoint.
 A segment that the local bound discards removes records before their import.
 The ingestion reports such a record as discarded, and never as retained.
 A cursor beside the log holds the position of the last acknowledged record.
-The extension keeps every record after that position.
-The extension updates the cursor after the Tracking Service answers, and a crash before that update repeats a delivery.
+The launcher keeps every record after that position.
+The launcher updates the cursor after the Tracking Service answers, and a crash before that update repeats a delivery.
 A batch carries a bounded record count and a bounded byte count.
 
 ## Span persistence
@@ -89,19 +89,19 @@ The start of the retention of a telemetry text is an epic decision.
 ## Capture and packaging
 
 The capture points are the hooks of Claude Code.
-The kanthord extension of Claude Code owns the capture, the local store and the ingestion.
-A human authenticates the call of an ingestion, and the client identity of the extension authorizes no ingestion.
+The harness launcher of Claude Code owns the capture, the local store and the ingestion.
+A human authenticates the call of an ingestion, and the client identity of the launcher authorizes no ingestion.
 Their packaging is an epic decision.
 
 ## Claude Code hooks
 
-The kanthord extension of Claude Code obeys these rules when it registers and runs its hooks:
+The harness launcher of Claude Code obeys these rules when it registers and runs its hooks:
 
-- The extension registers only the hook events that the installed Claude Code version knows. The settings loader of Claude Code rejects an event that is newer than the running version.
-- The extension registers `SessionStart`. A resumed or an idle session sends no other event before its first prompt.
+- The launcher registers only the hook events that the installed Claude Code version knows. The settings loader of Claude Code rejects an event that is newer than the running version.
+- The launcher registers `SessionStart`. A resumed or an idle session sends no other event before its first prompt.
 - A turn ends at `Stop` or at `StopFailure`. After an API error or a model error, Claude Code sends `StopFailure` and no `Stop`.
 - A manual `/compact` ends at `PostCompact`, because it sends no `Stop`.
-- The extension registers no `PreCompact`. An aborted compact sends `PreCompact` and no other compact event.
+- The launcher registers no `PreCompact`. An aborted compact sends `PreCompact` and no other compact event.
 - `SubagentStart`, `SubagentStop` and `TeammateIdle` record each child agent. A child agent can run after the turn of the lead agent ends, and the execution stays active until the last child ends.
 - Each hook writes the JSON object `{}` as its output. A permission hook with an empty output fails closed.
 - A hook that runs with `CLAUDE_JOB_DIR` set captures nothing. A background session inherits the environment of the session that started it, so its capture identifies the wrong execution.

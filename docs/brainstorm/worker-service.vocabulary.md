@@ -212,10 +212,10 @@ The set of signals that count as a heartbeat is closed.
 - An MCP request.
 - An explicit heartbeat request.
 
-The `claude-code` instance of worker binding `claude-main` pulls work every 60 s while idle, so every pull is its heartbeat.
-While it runs a 20-minute MCP tool call, it sends an explicit heartbeat request.
+The harness launcher of worker binding `claude-main` pulls work every 60 s while idle, so every pull is its heartbeat.
+While Claude Code runs a 20-minute turn, the launcher sends an explicit heartbeat request every 60 s.
 When the laptop of Ulrich sleeps, no heartbeat arrives inside the window, and the registration ends.
-A restart of `claude-code` therefore registers again.
+A restart of the launcher therefore registers again.
 
 ## pool
 

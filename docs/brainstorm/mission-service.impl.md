@@ -332,7 +332,7 @@ Repository evidence remains an address, not an upload of repository content.
 
 Object evidence uses one presigned-transfer strategy for every placement and every co-location.
 The host-local helper serves `evidence upload <path>` inside the execution workspace.
-The host component is the server, the `worker` application or the harness extension.
+The host component is the server, the `worker` application or the harness launcher.
 It opens the path safely and refuses any path or symbolic-link escape from that workspace.
 The file path is local input, not an evidence address.
 

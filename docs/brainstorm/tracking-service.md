@@ -114,19 +114,19 @@ The [Scheduler Service](scheduler-service.md#topology-and-work-queue) owns the m
 
 ## The external harness
 
-The kanthord extension of an external harness program captures what that program exposes.
+The kanthord harness launcher of an external harness program captures what that program exposes.
 It captures all exposed content, including authored prose.
 The capture is best effort.
 A harness that exposes less produces less telemetry.
 That changes no rule of the system.
-The extension stores its capture on its own host.
-The extension records the trace identity and the root span identity of its execution with its captures.
+The launcher stores its capture on its own host.
+The launcher records the trace identity and the root span identity of its execution with its captures.
 Those identities are references that the server minted, and they assert nothing.
 The local store is no kanthord record.
 Only an ingested record is a kanthord record.
 The local store is bounded.
 The bound discards the oldest records.
-The extension counts a discard and ingests that count.
+The launcher counts a discard and ingests that count.
 That count is telemetry, so it can be lost.
 
 ## Ingestion
@@ -136,8 +136,8 @@ An ingestion is a finite import.
 It imports the records that the local store holds when it starts.
 It ends when every one of those records holds a disposition, or when it cannot continue.
 It reports its result, and the count of the records that stay retained tells the human whether to issue another ingestion.
-A record that the extension appends after an ingestion starts waits for the next ingestion.
-The Tracking Service runs no uploader, and the extension holds no scheduler.
+A record that the launcher appends after an ingestion starts waits for the next ingestion.
+The Tracking Service runs no uploader, and the launcher schedules no ingestion.
 An ingestion carries no project.
 The Tracking Service resolves the trace identity of a record through its own records, and that resolution gives the project.
 A record states its execution identity and its trace identity, and the two agree.
@@ -161,7 +161,7 @@ A duplicate is `Stored`.
 `Refused` states that the record is never acceptable.
 The refusal covers a structural condition only.
 A record that names a trace other than the trace of its execution is `Refused`.
-The extension deletes its local copy on the disposition of the record.
+The launcher deletes its local copy on the disposition of the record.
 
 ## Ingestion authority
 

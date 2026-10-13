@@ -111,9 +111,9 @@ A successful push to main does not establish achievement of the objective.
 kanthord's own harness holds the first priority; an external harness holds the second priority.
 An external harness supports ongoing integration and maintenance with an existing system.
 
-An external harness supplies its HOW through its own orchestration skill, usually named `/work`.
+An external harness supplies its HOW through its own program, which the kanthord harness launcher starts per execution.
 It reaches kanthord's initiative, objective, and task model through the CLI or the API.
-An external harness is a worker that the harness hosts: a human starts its program, and the kanthord extension of that program registers a worker instance of a worker binding of the project under its client identity.
+An external harness is a worker that the harness hosts: a human starts the kanthord harness launcher, which registers a worker instance of a worker binding of the project under its client identity and starts the harness program per execution.
 Its instances acquire work through the work pull, like every worker instance, and its worker declares `Available`, `Waiting` and `External.Requested`, so an instance of it can carry out the steps of a node, evaluate it and request its external actions, through separate claims.
 The node content is its only input, and kanthord configures no agent, no prompt and no tool of an external harness.
 Its method can adapt dynamically to the capabilities and availability of its agents.

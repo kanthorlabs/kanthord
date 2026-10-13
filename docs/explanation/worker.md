@@ -152,11 +152,11 @@ The steps in plain words:
 
 ## The three workers
 
-| Worker          | Host                           | Method        | Agent            | Claims from                                  | Job                                                                    |
-| --------------- | ------------------------------ | ------------- | ---------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
-| `coder@1`       | KanthorD (native)              | `steps`       | `swe@1`          | `Available`                                  | Does the tasks of an objective, or writes the report of an initiative. |
-| `reviewer@1`    | KanthorD (native)              | `evaluation`  | `re@1`           | `Waiting`, `External.Requested`              | Judges the result, then requests the pull request.                     |
-| `claude-code@1` | External harness (Claude Code) | Its own skill | None of KanthorD | `Available`, `Waiting`, `External.Requested` | Does the work in a third-party agent program.                          |
+| Worker          | Host                           | Method               | Agent            | Claims from                                  | Job                                                                    |
+| --------------- | ------------------------------ | -------------------- | ---------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| `coder@1`       | KanthorD (native)              | `steps`              | `swe@1`          | `Available`                                  | Does the tasks of an objective, or writes the report of an initiative. |
+| `reviewer@1`    | KanthorD (native)              | `evaluation`         | `re@1`           | `Waiting`, `External.Requested`              | Judges the result, then requests the pull request.                     |
+| `claude-code@1` | External harness (Claude Code) | The harness launcher | None of KanthorD | `Available`, `Waiting`, `External.Requested` | Does the work in a third-party agent program.                          |
 
 A **native** worker runs its agent inside KanthorD on the [pi runtime](native-agent.md). An **external harness** runs a third-party agent program, and KanthorD configures none of its agent, prompt or tools. Both kinds use the same claim, evidence and release operations. This page and the two pages below it cover the native workers.
 
