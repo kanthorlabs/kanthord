@@ -14,12 +14,13 @@ The flow has three commands:
 
 ### Platforms and modes
 
-| Platform         | Login modes         | Default mode |
-| ---------------- | ------------------- | ------------ |
-| `github-copilot` | `device`            | `device`     |
-| `openai-codex`   | `browser`, `device` | `browser`    |
+| Platform                 | Login modes         | Default mode |
+| ------------------------ | ------------------- | ------------ |
+| `github-copilot`         | `device`            | `device`     |
+| `openai-codex`           | `browser`, `device` | `browser`    |
+| `anthropic-subscription` | `copy_code`         | `copy_code`  |
 
-A platform with one mode ignores the requested mode. In `browser` mode, the address is an authorization URL and the code is `null`. In `device` mode, the address is a verification URL and the code is the user code.
+A platform with one mode ignores the requested mode. In `browser` mode, the address is an authorization URL and the code is `null`. In `device` mode, the address is a verification URL and the code is the user code. In `copy_code` mode, the address is an authorization URL, the code is `null`, and the human submits the `code#state` value that the provider shows.
 
 ### Session rules
 

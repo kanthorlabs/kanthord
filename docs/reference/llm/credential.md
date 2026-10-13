@@ -18,20 +18,21 @@ A name whose platform belongs to another component, for example a repository cre
 
 Each platform has one secret shape, an optional metadata schema, and an optional LLM provider. A platform with a provider is `verifiable`.
 
-| Platform                | Secret shape | Metadata                     | Capability           | Verifiable |
-| ----------------------- | ------------ | ---------------------------- | -------------------- | ---------- |
-| `github-copilot`        | `oauth`      | `null`                       | `copilot token read` | Yes        |
-| `openai-codex`          | `oauth`      | `null`                       | `model call`         | Yes        |
-| `anthropic`             | `api_key`    | `null`                       | `model-list read`    | Yes        |
-| `openai-compatible`     | `api_key`    | `{ base_url, models }`       | `model-list read`    | Yes        |
-| `openrouter`            | `api_key`    | `null`                       | `key read`           | Yes        |
-| `openai`                | `api_key`    | `null`                       | `model-list read`    | Yes        |
-| `opencode-go`           | `api_key`    | `null`                       | `model call`         | Yes        |
-| `amazon-bedrock`        | `api_key`    | `{ region }`                 | `none`               | No         |
-| `google-vertex`         | `api_key`    | `{ project, location }`      | `none`               | No         |
-| `azure`                 | `api_key`    | `{ resource_name }`          | `none`               | No         |
-| `cloudflare-workers-ai` | `api_key`    | `{ account_id }`             | `none`               | No         |
-| `cloudflare-ai-gateway` | `api_key`    | `{ account_id, gateway_id }` | `none`               | No         |
+| Platform                 | Secret shape | Metadata                     | Capability           | Verifiable |
+| ------------------------ | ------------ | ---------------------------- | -------------------- | ---------- |
+| `github-copilot`         | `oauth`      | `null`                       | `copilot token read` | Yes        |
+| `openai-codex`           | `oauth`      | `null`                       | `model call`         | Yes        |
+| `anthropic-subscription` | `oauth`      | `null`                       | `model call`         | Yes        |
+| `anthropic`              | `api_key`    | `null`                       | `model-list read`    | Yes        |
+| `openai-compatible`      | `api_key`    | `{ base_url, models }`       | `model-list read`    | Yes        |
+| `openrouter`             | `api_key`    | `null`                       | `key read`           | Yes        |
+| `openai`                 | `api_key`    | `null`                       | `model-list read`    | Yes        |
+| `opencode-go`            | `api_key`    | `null`                       | `model call`         | Yes        |
+| `amazon-bedrock`         | `api_key`    | `{ region }`                 | `none`               | No         |
+| `google-vertex`          | `api_key`    | `{ project, location }`      | `none`               | No         |
+| `azure`                  | `api_key`    | `{ resource_name }`          | `none`               | No         |
+| `cloudflare-workers-ai`  | `api_key`    | `{ account_id }`             | `none`               | No         |
+| `cloudflare-ai-gateway`  | `api_key`    | `{ account_id, gateway_id }` | `none`               | No         |
 
 The other platforms have the secret shape `api_key`, metadata `null`, capability `none`, and no provider: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
 
