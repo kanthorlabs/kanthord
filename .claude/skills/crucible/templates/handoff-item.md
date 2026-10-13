@@ -1,0 +1,1 @@
+- [ ] Added <YYYY-MM-DD> from <the task that found the gap>. <Imperative sentence: what the code must do, as the design page requires>. [<design page>](<design-page>.md#<anchor>) requires it. `<symbol>` of `<engine/src/path.ts>` <what the code does today>. [<explanation page>](../explanation/<page>.md#<anchor>) states the gap.
