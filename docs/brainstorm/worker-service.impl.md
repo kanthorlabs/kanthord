@@ -14,7 +14,7 @@ The first version supplies the workers `coder@1` and `reviewer@1`.
 The worker `claude-code@1` follows with the registration of an externally hosted instance.
 The first version supplies `coder@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
 `tdd@1` follows when the runtime hosts several agents in one execution.
-The native agent `swe@1` of `coder@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
+The native agent `swe@1` of `coder@1` runs `@earendil-works/pi-coding-agent` at 1.0.3 in-process behind a kanthord-owned adapter.
 The adapter obtains the runtime from the [model connector](llm.impl.md#the-model-connector) of the LLM component over the credential store of the execution, and it builds the session with `createAgentSession({ modelRuntime })`.
 The first version supports a native agent of a worker at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
@@ -23,7 +23,7 @@ The adapter persists no settings file in that directory or in `~/.pi`.
 The [Agent implementation](agent.impl.md#session-file) rules the session file.
 It disables the discovery of user extensions, skills, prompt templates and themes.
 It disables the version check, the install telemetry and the provider catalog refresh.
-It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` at 0.86.0.
+It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` at 1.0.3.
 An execution of an externally hosted worker has no native agent, and a read of its [execution setup](#the-execution-setup) answers 409 `worker.execution.no_native_agent`.
 A pi version bump affects the workers that run on it and the credential shape of the handover.
 Every runtime setup call carries an abort signal with a deadline.
@@ -123,8 +123,8 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 0.86.0 selects `fd` first.
-- The application logs one info record for each task start, task commit, task verification, task judgement, task review and node judgement. A record holds identities and results, and no agent content.
+- Startup resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 1.0.3 selects `fd` first.
+- The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
 - The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of the state directory with mode `0600`, and it keeps the newest 50 transcripts.
 - After the registration, the application logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.

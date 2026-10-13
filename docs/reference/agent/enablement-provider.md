@@ -16,7 +16,7 @@ Change or inspect one agent provider of a live [agent enablement](enablement.md)
 
 `provider remove` keeps at least one agent provider. It refuses a provider that the default configuration or a binding entry names. To change the credential of an agent provider or the default configuration, use `enablement put`.
 
-`provider model list` reads the enablement in either state. A built-in provider kind lists the models of pi-ai 0.86.0 with the supported thinking levels of each model. The `openai-compatible` kind lists the approved models in the metadata of the credential. [List the models of a credential](model.md) answers the same shape before an enablement names the credential.
+`provider model list` reads the enablement in either state. A built-in provider kind lists the models of pi-ai 1.0.3 with the supported thinking levels of each model. The `openai-compatible` kind lists the approved models in the metadata of the credential. [List the models of a credential](model.md) answers the same shape before an enablement names the credential.
 
 ## Expected response
 
@@ -126,12 +126,12 @@ No operation takes query parameters.
 
 ### Add a provider
 
-| Body field          | Type    | Required | Purpose                                                                    |
-| ------------------- | ------- | -------- | -------------------------------------------------------------------------- |
-| `expected_revision` | integer | Yes      | Positive latest revision that the caller read.                             |
-| `name`              | string  | Yes      | Nonempty name of the new agent provider.                                   |
-| `provider`          | string  | Yes      | Provider kind: `openai-compatible` or a built-in provider of pi-ai 0.86.0. |
-| `credential`        | string  | Yes      | Nonempty credential name in custody.                                       |
+| Body field          | Type    | Required | Purpose                                                                   |
+| ------------------- | ------- | -------- | ------------------------------------------------------------------------- |
+| `expected_revision` | integer | Yes      | Positive latest revision that the caller read.                            |
+| `name`              | string  | Yes      | Nonempty name of the new agent provider.                                  |
+| `provider`          | string  | Yes      | Provider kind: `openai-compatible` or a built-in provider of pi-ai 1.0.3. |
+| `credential`        | string  | Yes      | Nonempty credential name in custody.                                      |
 
 The body is closed; an unknown field fails validation.
 

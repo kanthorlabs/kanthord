@@ -6,7 +6,7 @@
 
 List the models and reasoning efforts that one LLM credential offers for one agent provider kind. The read needs no [enablement](enablement.md). Use it to choose a `model_identifier` and a `reasoning_effort` before you write an enablement.
 
-The credential must exist in custody, and its platform must equal the provider kind. A built-in provider kind lists the models of pi-ai 0.86.0 with the supported thinking levels of each model. The `openai-compatible` kind lists the approved models in the metadata of the credential. The read makes no remote call and changes no state.
+The credential must exist in custody, and its platform must equal the provider kind. A built-in provider kind lists the models of pi-ai 1.0.3 with the supported thinking levels of each model. The `openai-compatible` kind lists the approved models in the metadata of the credential. The read makes no remote call and changes no state.
 
 [List the models of an enablement provider](enablement-provider.md#list-the-models-of-a-provider) answers the same shape for a provider that an enablement already names.
 
@@ -62,10 +62,10 @@ A declared failure makes the CLI exit `1` and print `<code>: request failed (HTT
 | Mutation        | No                         |
 | Request body    | None                       |
 
-| Parameter    | In    | Required | Purpose                                                                                                   |
-| ------------ | ----- | -------- | --------------------------------------------------------------------------------------------------------- |
-| `provider`   | query | Yes      | Agent provider kind: `openai-compatible` or a built-in provider of pi-ai 0.86.0, for example `anthropic`. |
-| `credential` | query | Yes      | Credential name in custody.                                                                               |
+| Parameter    | In    | Required | Purpose                                                                                                  |
+| ------------ | ----- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `provider`   | query | Yes      | Agent provider kind: `openai-compatible` or a built-in provider of pi-ai 1.0.3, for example `anthropic`. |
+| `credential` | query | Yes      | Credential name in custody.                                                                              |
 
 | Header          | Required | Purpose               |
 | --------------- | -------- | --------------------- |

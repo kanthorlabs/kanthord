@@ -9,40 +9,40 @@ This file is not a design document, and `llm.md` stays the single source of trut
 A mechanism here never overrides a rule there.
 
 The module lives in `src/llm/`.
-The platform validators and the model connector use the contracts of `@earendil-works/pi-ai` at 0.86.0.
+The platform validators and the model connector use the contracts of `@earendil-works/pi-ai` at 1.0.3.
 
 ## Platform validators
 
 The component owns a dedicated platform validator for every [LLM platform](llm.vocabulary.md#llm-platform).
 Each platform validator declares its secret shape, metadata schema and validation. A platform holds exactly one secret shape, and a second shape for the same remote is another platform, for example `anthropic-subscription` or `openai-codex`.
 
-| Platform                 | Secret shape | Metadata                   | Check                                                                                  |
-| ------------------------ | ------------ | -------------------------- | -------------------------------------------------------------------------------------- |
-| `github-copilot`         | `oauth`      | None                       | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token    |
-| `openai-codex`           | `oauth`      | None                       | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
-| `anthropic`              | `api_key`    | None                       | `GET https://api.anthropic.com/v1/models`                                              |
-| `openai-compatible`      | `api_key`    | `base_url`, `models`       | `GET <base_url>/models`                                                                |
-| `openrouter`             | `api_key`    | None                       | `GET https://openrouter.ai/api/v1/key`                                                 |
-| `openai`                 | `api_key`    | None                       | `GET https://api.openai.com/v1/models`                                                 |
-| `amazon-bedrock`         | `api_key`    | `region`                   | None                                                                                   |
-| `google-vertex`          | `api_key`    | `project`, `location`      | None                                                                                   |
-| `azure-openai-responses` | `api_key`    | `resource_name`            | None                                                                                   |
-| `cloudflare-workers-ai`  | `api_key`    | `account_id`               | None                                                                                   |
-| `cloudflare-ai-gateway`  | `api_key`    | `account_id`, `gateway_id` | None                                                                                   |
-| `opencode-go`            | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"               |
+| Platform                | Secret shape | Metadata                   | Check                                                                                  |
+| ----------------------- | ------------ | -------------------------- | -------------------------------------------------------------------------------------- |
+| `github-copilot`        | `oauth`      | None                       | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token    |
+| `openai-codex`          | `oauth`      | None                       | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
+| `anthropic`             | `api_key`    | None                       | `GET https://api.anthropic.com/v1/models`                                              |
+| `openai-compatible`     | `api_key`    | `base_url`, `models`       | `GET <base_url>/models`                                                                |
+| `openrouter`            | `api_key`    | None                       | `GET https://openrouter.ai/api/v1/key`                                                 |
+| `openai`                | `api_key`    | None                       | `GET https://api.openai.com/v1/models`                                                 |
+| `amazon-bedrock`        | `api_key`    | `region`                   | None                                                                                   |
+| `google-vertex`         | `api_key`    | `project`, `location`      | None                                                                                   |
+| `azure`                 | `api_key`    | `resource_name`            | None                                                                                   |
+| `cloudflare-workers-ai` | `api_key`    | `account_id`               | None                                                                                   |
+| `cloudflare-ai-gateway` | `api_key`    | `account_id`, `gateway_id` | None                                                                                   |
+| `opencode-go`           | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"               |
 
-- Every other `KnownProvider` of pi-ai 0.86.0 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams` and `xiaomi-token-plan-sgp`.
+- Every other `KnownProvider` of pi-ai 1.0.3 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
 - A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform that no page names yet.
 - The `api_key` of `amazon-bedrock` is a Bedrock bearer token, and the `api_key` of `google-vertex` is a Google Cloud API key.
 - A platform that authenticates through the host, for example an AWS profile or Google ADC, takes no credential record.
-- Each metadata field of `amazon-bedrock`, `google-vertex`, `azure-openai-responses`, `cloudflare-workers-ai` and `cloudflare-ai-gateway` is a required nonblank string.
+- Each metadata field of `amazon-bedrock`, `google-vertex`, `azure`, `cloudflare-workers-ai` and `cloudflare-ai-gateway` is a required nonblank string.
 - An official OpenAI record is an `openai` record.
 - An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
 - `openai-compatible.base_url` uses `https` or `http`, with no query, no fragment and no trailing slash.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it answers 409 `llm.metadata.base_url_fixed`, and a rotation can set a new one.
 - The first revision of an `openai-compatible` credential starts with `models: []`.
 - Each approved model holds a required `id` and optional `context_window`, `max_tokens` and `reasoning_levels`. An `id` is unique inside `models`.
-- An omitted value takes the default of pi 0.86.0: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
+- An omitted value takes the default of pi 1.0.3: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
 - `context_window` and `max_tokens` are positive integers, and `max_tokens` does not exceed `context_window` after the defaults apply.
 - A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check).
 - A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it. A fallback configuration is a dependent too.
@@ -153,7 +153,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - It puts the metadata into the `env` of the API key credential that the store answers. It maps each metadata field to the pi-ai variable name:
   - `amazon-bedrock`: `region` to `AWS_REGION`.
   - `google-vertex`: `project` to `GOOGLE_CLOUD_PROJECT` and `location` to `GOOGLE_CLOUD_LOCATION`.
-  - `azure-openai-responses`: `resource_name` to `AZURE_OPENAI_RESOURCE_NAME`.
+  - `azure`: `resource_name` to `AZURE_OPENAI_RESOURCE_NAME`.
   - `cloudflare-workers-ai`: `account_id` to `CLOUDFLARE_ACCOUNT_ID`.
   - `cloudflare-ai-gateway`: `account_id` to `CLOUDFLARE_ACCOUNT_ID` and `gateway_id` to `CLOUDFLARE_GATEWAY_ID`.
 - The `env` stays inside the model connector. The custody execution store and a refresh report never carry it.
@@ -167,7 +167,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The environment-variable list is empty; the execution store supplies the credential.
 - Each metadata model becomes a pi model with provider `openai-compatible` and the metadata base URL.
 - The model carries `api: "openai-responses"`, `context_window`, `max_tokens` and the established reasoning levels.
-- The model builder applies the defaults of pi 0.86.0 to each value that the metadata omits: `context_window` `128000`, `max_tokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
+- The model builder applies the defaults of pi 1.0.3 to each value that the metadata omits: `context_window` `128000`, `max_tokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
 - Input defaults to `["text"]`, and all cost rates are zero.
 - The model list enters `createProvider`, and `setProvider` registers the provider.
 - The model connector builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
