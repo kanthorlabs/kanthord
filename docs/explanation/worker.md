@@ -23,30 +23,32 @@ The rest of this page explains each of these sentences.
 
 The terms below appear on every worker page. Each term has exactly one meaning.
 
-| Term            | Meaning                                                                                                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mission         | All the work of one project, as a graph of nodes.                                                                                                                |
-| Node            | One vertex of the mission: an initiative, an objective or a task.                                                                                                |
-| Initiative      | A root node. It groups objectives. Its work is a report on the outcomes of its objectives.                                                                       |
-| Objective       | A node that holds tasks and works on one repository. Most worker activity is on an objective.                                                                    |
-| Task            | One step of an objective. A task has a criterion and verifications, but no state. A worker never claims a task alone.                                            |
-| Requirement     | The text that states what the node must achieve.                                                                                                                 |
-| Criterion       | The text that states how to judge the result.                                                                                                                    |
-| Verification    | One bash command that checks the result, for example `npm test`. Exit code 0 is a pass.                                                                          |
-| Node revision   | One version of the content of a node. An execution reads the revision that its attempt pins, so a later edit does not change a running execution.                |
-| Attempt         | One try at a node. It holds one or more executions. The first claim opens attempt 1. A human unblock opens the next attempt.                                     |
-| Worker          | A template that defines how work happens: its method, its agents, the node states that it claims and its default budget. `coder@1` and `reviewer@1` are workers. |
-| Worker binding  | The project configuration that turns a worker on for one project. It sets the instance count, the model of each agent and an optional budget.                    |
-| Worker instance | One running copy of a worker. It pulls work and holds at most one execution at a time.                                                                           |
-| Claim           | The grant of one node to one instance. It has a fixed deadline, `expired_at`.                                                                                    |
-| Execution       | The work under one claim, from the claim to the release. It has an identity, for example `execution_01JZ8R2B…`.                                                  |
-| Agent           | An LLM participant that the worker drives, for example `swe@1`. The agent edits and judges. It decides nothing about the node.                                   |
-| Node branch     | The git branch of an objective, `kanthord/<node_id>`. Every execution of the objective continues on it.                                                          |
-| Evidence        | A result that an execution records, for example the head commit of the node branch.                                                                              |
-| Assessment      | The judgement of the evidence against the criterion: `success`, `criterion-not-met` or `undetermined`.                                                           |
-| Outcome         | The final record of an attempt. A successful outcome completes the node.                                                                                         |
-| Release         | The end of an execution that returns the node to the Mission Service, with `further_work: true` or `false`.                                                      |
-| Budget          | The resource limit of one execution: 200 agent turns and 2 hours of wall time by default.                                                                        |
+| Term                 | Meaning                                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission              | All the work of one project, as a graph of nodes.                                                                                                                |
+| Node                 | One vertex of the mission: an initiative, an objective or a task.                                                                                                |
+| Initiative           | A root node. It groups objectives. Its work is a report on the outcomes of its objectives.                                                                       |
+| Objective            | A node that holds tasks and works on one repository. Most worker activity is on an objective.                                                                    |
+| Task                 | One step of an objective. A task has a criterion and verifications, but no state. A worker never claims a task alone.                                            |
+| Requirement          | The text that states what the node must achieve.                                                                                                                 |
+| Criterion            | The text that states how to judge the result.                                                                                                                    |
+| Verification         | One bash command that checks the result, for example `npm test`. Exit code 0 is a pass.                                                                          |
+| Node revision        | One version of the content of a node. An execution reads the revision that its attempt pins, so a later edit does not change a running execution.                |
+| Attempt              | One try at a node. It holds one or more executions. The first claim opens attempt 1. A human unblock opens the next attempt.                                     |
+| Worker               | A template that defines how work happens: its method, its agents, the node states that it claims and its default budget. `coder@1` and `reviewer@1` are workers. |
+| Worker binding       | The project configuration that turns a worker on for one project. It sets the instance count, the model of each agent and an optional budget.                    |
+| Worker instance      | One running copy of a worker. It pulls work and holds at most one execution at a time.                                                                           |
+| Claim                | The grant of one node to one instance. It has a fixed deadline, `expired_at`.                                                                                    |
+| Execution            | The work under one claim, from the claim to the release. It has an identity, for example `execution_01JZ8R2B…`.                                                  |
+| Agent                | An LLM participant that the worker drives, for example `swe@1`. The agent edits and judges. It decides nothing about the node.                                   |
+| Node branch          | The git branch of an objective, `kanthord/<node_id>`. Every execution of the objective continues on it.                                                          |
+| Evidence             | A result that an execution records, for example the head commit of the node branch.                                                                              |
+| Assessment           | The judgement of the evidence against the criterion: `success`, `criterion-not-met` or `undetermined`.                                                           |
+| Outcome              | The final record of an attempt. A successful outcome completes the node.                                                                                         |
+| Release              | The end of an execution that returns the node to the Mission Service, with `further_work: true` or `false`.                                                      |
+| Budget               | The resource limit of one execution: 200 agent turns and 2 hours of wall time by default.                                                                        |
+| Stop                 | The reason in a release that the execution ended early, for example `{ "reason": "budget_end", "code": "turns" }`. A release with no stop has `stop: null`.      |
+| Revision instruction | A message from the worker to the agent that asks for more work on a task, for example after a failed verification. It is not a node revision.                    |
 
 ## Who does what
 
@@ -98,6 +100,7 @@ Three facts explain most of the diagram:
 - **Two workers, two claims.** `coder@1` and `reviewer@1` never share a claim. The coder does the work and releases. The reviewer judges later in its own execution, from a clean checkout.
 - **Further work is normal.** One execution does not need to finish the objective. When the budget ends, the coder pushes a checkpoint and releases with `further_work: true`. The node returns to `Available`, and the next execution continues on the same node branch.
 - **A conflict sends the work back.** A pull request that conflicts with the base branch returns the node to `Available` in the same attempt. `coder@1` merges the base at its next start and resolves the conflict.
+- **The merge comes from outside.** After the reviewer opens a pull request, no worker acts until the pull request ends. The Intake Service checks the pull request on the git host. A human starts that check with [`kanthord mission node check`](../reference/mission/node-control.md#check). An Intake inbound of the repository, when one is configured, starts it on an event of the git host. A merge moves the node to `External.Success`, and the Mission Service then completes it with the passing assessment of the attempt. A closed pull request, or a pull request with a change request, moves the node to `External.Failed` and then to `Blocked`.
 - **A human closes the loop.** A node in `Blocked` waits for a human. The human reads the reason, edits the node or not, and unblocks it. The unblock opens the next attempt.
 
 Two more states can interrupt any step. A human can pause a node, which sets `Paused` and stops a running execution within one agent turn. The Mission Service also pauses a node that fails too often, as [Limits that stop a loop](#limits-that-stop-a-loop) explains. `Discarded` and `Completed` are the two final states.
@@ -188,13 +191,13 @@ Each of these stops counts toward `mission.consecutive_failure_limit`. A `provid
 
 Without limits, a node could cycle between the coder and the reviewer forever. Three limits in the server configuration stop that. Each limit counts inside one attempt.
 
-| Limit                               | Default | Counts                                                                                | At the limit                                              |
-| ----------------------------------- | ------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `mission.rework_limit`              | 2       | `criterion-not-met` assessments that returned the node to `Available`                 | The next `criterion-not-met` moves the node to `Blocked`. |
-| `mission.further_work_limit`        | 3       | Releases in a row whose budget ended before any task completed                        | The node moves to `Paused`.                               |
-| `mission.consecutive_failure_limit` | 3       | Executions in a row, coder or reviewer, that stopped on a failure or lost their claim | The node moves to `Paused`.                               |
+| Limit                               | Default | Counts                                                                                | At the limit                                                                                                                             |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `mission.rework_limit`              | 2       | `criterion-not-met` assessments that returned the node to `Available`                 | With the default, the first two `criterion-not-met` assessments of an attempt cause a rework, and the third moves the node to `Blocked`. |
+| `mission.further_work_limit`        | 3       | Releases in a row with the stop `budget_end`, which means that no task completed      | The third such release in a row moves the node to `Paused`.                                                                              |
+| `mission.consecutive_failure_limit` | 3       | Executions in a row, coder or reviewer, that stopped on a failure or lost their claim | The third failure in a row moves the node to `Paused`.                                                                                   |
 
-A stop because the provider is busy (`rate_limited`, `quota_exhausted` or `unavailable`) does not count as a failure. It moves the agent to the next model of its fallback chain instead. [How the native agent works](native-agent.md#configuration-which-model-answers) explains the fallback chain.
+A **failure** is a lost claim or a release with any stop except `budget_end` and a busy provider. The failure stops are `operation_failed`, `no_progress`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` and `provider_failed` with the code `bad_request` or `unauthorized`. A release with no stop resets the count. A stop because the provider is busy (`rate_limited`, `quota_exhausted` or `unavailable`) does not count as a failure. It moves the agent to the next model of its fallback chain instead. [How the native agent works](native-agent.md#configuration-which-model-answers) explains the fallback chain.
 
 ## Rules that hold in every execution
 
@@ -206,12 +209,37 @@ These rules explain most behavior that looks surprising at first.
 - **Git is the memory of the work.** The node branch carries the work from one execution to the next. A budget end writes a checkpoint commit and pushes it, so no work is lost.
 - **No history rewrite.** No execution deletes, renames or force-pushes a node branch. No execution rewrites a commit that it pushed, because a record can name that commit.
 - **One instance, one execution.** An instance holds at most one execution at a time. One `kanthord serve worker` process hosts one instance. An instance count of 3 needs 3 processes, each with its own machine token.
+- **A lost claim is a failure.** A claim that reaches `expired_at` with no release is lost. The Scheduler ends the execution and returns the node to `Available` (or `Waiting` for a reviewer claim). The loss counts toward `mission.consecutive_failure_limit`. The worker process that still runs learns of the loss at its next call and stops.
+
+## Where the state lives
+
+The agent forgets everything at the end of an execution. The next execution reads the state from these places:
+
+| State                                                  | Where it lives                                 | Durable                 |
+| ------------------------------------------------------ | ---------------------------------------------- | ----------------------- |
+| The work: every task commit and checkpoint commit      | The node branch on the git remote              | Yes                     |
+| The node state, the attempt and the pinned revision    | The Mission Service                            | Yes                     |
+| The evidence, the assessments and their rationales     | The Mission Service                            | Yes                     |
+| The claim, its deadline and the selected model         | The Scheduler execution record                 | Yes                     |
+| The task judgements of the last execution on this host | `judged-tasks.json` in the workspace           | No, a cache of one host |
+| The checkout itself                                    | `workspaces/` on the worker host               | No, a cache of one host |
+| The agent conversation                                 | Memory, then `transcripts/` on the worker host | No, never read again    |
+
+The start check of `coder@1` runs every task verification again on the head of the node branch. It therefore needs only the durable rows. The caches save agent turns, and their loss repeats no work.
+
 - **Tasks are not scheduled.** The Scheduler grants an objective or an initiative. The worker orders and runs the tasks inside its own execution.
 - **Telemetry decides nothing.** The worker writes spans of its phases, tasks, turns and tool calls. No service reads them to move a node. Only the release and the records move a node.
 
 ## Where a worker runs
 
-Today every native instance runs as a separate `kanthord serve worker --endpoint <url> --token <token>` process. The process can run on the server host or on another host. The host needs `git`, `rg` and `fd`, because the agent tools `grep` and `find` call them.
+Today every native instance runs as a separate `kanthord serve worker --endpoint <url> --token <token>` process. The process can run on the server host or on another host.
+
+To run 3 instances of `coder@1` for one project:
+
+1. Enable the agent `swe@1` with a provider and a model. See [agent enablement](../reference/agent/enablement.md).
+2. Add a worker binding with `"worker": "coder@1"` and `"instance_count": 3` to the project. See [project bindings](../reference/project/binding.md).
+3. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
+4. Start one `kanthord serve worker` process with each token. The host needs `git`, `rg` and `fd`, because the agent tools `grep` and `find` call them.
 
 The process keeps its files in the state directory of its host, `~/.local/state/kanthord/`:
 

@@ -187,7 +187,12 @@ The sources in detail:
 
 ### Precedence
 
-The position of a layer is its authority. The system prompt governs every message, and a later text governs an earlier text of the same part. The precedence, from highest to lowest, is:
+Two rules decide which text wins a conflict:
+
+1. The system prompt outranks every message after it.
+2. Inside one part, a later text wins over an earlier text. Inside the system prompt, the agent layer comes after the system layer, so it wins. Among the messages, the work prompt comes after the working layer, so it wins.
+
+So the position decides the rank inside a part, but the part decides first. The working layer comes late in the sequence, but it is a message, so it ranks below the whole system prompt. The precedence, from highest to lowest, is:
 
 - Worker execution: agent layer, system layer, work prompt, working layer.
 - Workbench session: agent layer, system layer, working layer.
