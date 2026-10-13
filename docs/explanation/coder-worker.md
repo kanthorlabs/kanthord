@@ -19,7 +19,7 @@ Read [How a worker works](worker.md) first. That page defines the terms of this 
 ## In short
 
 - One execution of `coder@1` works on one objective. It can finish the objective, or stop at the budget and leave the rest to the next execution.
-- All work goes to the node branch. The node branch is the only memory between two executions.
+- All work goes to the node branch. The node branch, the records of the Mission Service and a local judgement cache are the only memory between two executions.
 - At the start, the worker checks which tasks are already done, so a new execution never redoes finished work.
 - For each open task, `swe@1` edits files. The worker commits, runs the verification commands of the task and, when they pass, asks `swe@1` whether the criterion is met.
 - A failed command or an unmet criterion goes back to `swe@1` as a revision instruction. The loop repeats until the task is complete or the budget ends.
@@ -164,7 +164,7 @@ The sections below explain each phase, and then every way that a run can differ 
 
 1. The assessment that caused the latest rework of this attempt. `reviewer@1` wrote it with the result `criterion-not-met`.
 2. The requested changes of the reviewers on the pull request, when the earlier attempt ended because a reviewer requested changes. The worker reads them through the Intake Service, at most 4 KiB.
-3. The assessment that closed the earlier attempt, after a human unblock.
+3. The assessment that closed the earlier attempt, after a human unblock. After a pull request that closed with no change request, this is the passing assessment, so it holds no failure reason.
 
 On attempt 1 with no rework, no prior rationale exists.
 
@@ -188,16 +188,19 @@ The base branch can move while the node waits. The worker merges `origin/<base_b
 
 The workspace and the node branch survive between executions. The start check decides which tasks still need work, so a new execution does not redo finished work and does not trust work that a later change broke.
 
-The start check runs the verifications of each task on the head of the node branch. For each task, the first matching row below decides:
+The start check runs the verifications of each task on the head of the node branch. For each task, the first matching row below decides. Row 0 applies only in a rework, as the next paragraphs explain.
 
-| #   | Condition                                                                                                          | Result                                                                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| 1   | A verification of the task fails.                                                                                  | Pending. The task starts with its plain work prompt.                                                   |
-| 2   | The task was judged met at this same head, in this attempt and revision, and the prior rationale does not name it. | Skipped. The judgement still holds.                                                                    |
-| 3   | The prior rationale names the task.                                                                                | Pending. The task starts with the prior rationale as its revision instruction.                         |
-| 4   | Any other passing task.                                                                                            | `swe@1` judges the criterion now, with the prior rationale as context. Met: skipped. Not met: pending. |
+| #   | Condition                                                                                                          | Result                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | In a rework, `swe@1` chose this task for a failed verification of the objective.                                   | Pending. The task starts with that failure as its revision instruction.                                                                                                      |
+| 1   | A verification of the task fails.                                                                                  | Pending. The task starts with its plain work prompt.                                                                                                                         |
+| 2   | The task was judged met at this same head, in this attempt and revision, and the prior rationale does not name it. | Skipped. The judgement still holds.                                                                                                                                          |
+| 3   | The prior rationale names the task.                                                                                | Pending. The task starts with the prior rationale as its revision instruction.                                                                                               |
+| 4   | Any other passing task.                                                                                            | `swe@1` judges the criterion now, with the prior rationale as context. Met: skipped. Not met: pending, with the prior rationale as its revision instruction when one exists. |
 
 The prior rationale **names** a task when its text holds the task id. `reviewer@1` lists each unmet task id in its assessment for this reason.
+
+A rationale can name no task. `re@1` names the objective id for an unmet objective criterion or a default-standard violation, and a failed-verification rationale names only the command. Then no task is pending by name. A task whose own verification fails is still pending at row 1. `swe@1` judges each other passing task at row 4, with the rationale as context. When `swe@1` judges every task met, no task is pending, and the execution releases the same head. The next review can then reach `mission.rework_limit` and move the node to `Blocked`.
 
 The worker keeps its judgements in `judged-tasks.json` in the workspace. The file is a cache of the host: a fresh clone on another host has no file, so row 4 judges each passing task again.
 
@@ -251,12 +254,12 @@ Each pass through the loop does these things:
 
 1. **Claim check.** The worker reads its claim. A claim that is not running, for example after a human pause, ends the execution as revoked.
 2. **Work.** The worker sends the work prompt of the task, or a revision instruction. `swe@1` reads files, edits files and runs commands until it ends its turns. One turn is one reply of the model with the tool calls of that reply. Each turn counts toward the budget of 200.
-3. **Commit.** The worker commits every change with the message `kanthord: task <task_id> attempt <n>`. A revision that changes no file makes no commit.
+3. **Commit.** The worker commits every change with the message `kanthord: task <task_id> attempt <n>`. A revision that changes no file makes no commit. The same is true when the agent committed its own change with `git commit`: the worker finds nothing to commit.
 4. **Verify.** The worker runs each verification command of the task on the head, in order, with `bash -c` in the workspace. The first failure stops the run. Each command has a limit of 10 minutes, and the remaining budget can cut it shorter. The worker then discards every change that the commands made, so a test run never leaks into the next commit.
 5. **Judge.** Only after every command passes, the worker asks `swe@1` to judge the criterion. The reply must end with one `kanthord-judgement:` line that holds JSON. A reply with no valid line gets one repair turn. A second invalid reply stops the execution with `judgement_invalid`.
 6. **Decide.** A met criterion completes the task. The worker writes the judged commit to `judged-tasks.json` and takes the next pending task.
 
-The worker guards the loop against an agent that makes no progress. When `swe@1` answers two revision instructions in a row after a failed verification and changes no file, the worker stops with `no_progress`. It does not verify the unchanged head again, because the same head gives the same result.
+The worker guards the loop against an agent that makes no progress. After a failed verification, a revision that changes no file counts as unchanged. After the first unchanged revision, the worker verifies the head again. After the second unchanged revision in a row, it stops with `no_progress` before it verifies, because the same head gives the same result. An agent commit also counts as unchanged, because the worker finds nothing to commit.
 
 `coder@1` holds no review of its own. The judgement of `swe@1` only ends the task loop. The review of `reviewer@1`, after the release, is the only review of the objective.
 
@@ -268,7 +271,7 @@ The worker guards the loop against an agent that makes no progress. When `swe@1`
 - When the base moved and merges with no conflict, the worker runs the verifications of every task on the merged head. When all pass, the merge commit stays.
 - When the merge has a conflict, or a verification fails on the merged head, the worker resets the node branch to its head before the merge. It then releases with `further_work: true`. The next execution merges at step 5, where `swe@1` can resolve the conflict.
 
-**Step 9** pushes the node branch. Every end of an execution pushes, except a revocation.
+**Step 9** pushes the node branch. Every end after step 4 pushes, except a revocation. A stop before the workspace exists, for example `repository.node_branch.missing`, has nothing to push.
 
 **Step 10** submits the head commit of the node branch as the evidence of the objective. `reviewer@1` checks out exactly this commit.
 
@@ -278,14 +281,14 @@ The worker guards the loop against an agent that makes no progress. When `swe@1`
 
 The release body decides the next state of the node. A release with `further_work: true` returns the node to `Available` for the next `coder@1` execution. A release with `further_work: false` moves the node to `Waiting` for `reviewer@1`.
 
-| End                                                                               | What the worker does                             | Release body                                                               | Next node state                       |
-| --------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------- |
-| Every task complete, the final merge passes                                       | Push, submit the head commit                     | `further_work: false`                                                      | `Waiting`                             |
-| The final merge conflicts or a verification fails on it                           | Reset the merge, push                            | `further_work: true`                                                       | `Available`                           |
-| The budget ends while `swe@1` works, or during the judgement of a passing run     | Abort the agent, write a checkpoint commit, push | `further_work: true`, `stop` only when no task completed in this execution | `Available`, or `Paused` at the limit |
-| The budget ends right after a task commit whose verifications failed              | Push, submit the head commit                     | `further_work: false`                                                      | `Waiting`                             |
-| A stop: `provider_failed`, `no_progress`, `judgement_invalid`, `operation_failed` | Abort the agent, write a checkpoint commit, push | `further_work: true`, `stop` with the reason                               | `Available`, or `Paused` at the limit |
-| The claim is revoked, for example by a pause                                      | Abort the agent. No push                         | No release                                                                 | Set by the human act                  |
+| End                                                                                                      | What the worker does                             | Release body                                                               | Next node state                               |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- | --------------------------------------------- |
+| Every task complete, the final merge passes                                                              | Push, submit the head commit                     | `further_work: false`                                                      | `Waiting`                                     |
+| The final merge conflicts or a verification fails on it                                                  | Reset the merge, push                            | `further_work: true`                                                       | `Available`                                   |
+| The budget ends while `swe@1` works, or during the judgement of a passing run                            | Abort the agent, write a checkpoint commit, push | `further_work: true`, `stop` only when no task completed in this execution | `Available`, or `Paused` at the limit         |
+| The wall time ends while the worker commits or verifies a task, and a verification fails or does not run | Push, submit the head commit                     | `further_work: false`                                                      | `Waiting`, or `Available` when the base moved |
+| A stop: `provider_failed`, `no_progress`, `judgement_invalid`, `operation_failed`                        | Abort the agent, write a checkpoint commit, push | `further_work: true`, `stop` with the reason                               | `Available`, or `Paused` at the limit         |
+| The claim is revoked, for example by a pause                                                             | Abort the agent. No push                         | No release                                                                 | Set by the human act                          |
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
@@ -310,7 +313,7 @@ flowchart LR
 Three rules of the budget end need attention:
 
 - **The checkpoint commit is not a result.** It saves the work in progress as `kanthord: checkpoint of task <task_id> attempt <n>`. It proves no verification and completes no task. The next execution finds the task pending at its start check and continues it.
-- **The task commit is the boundary.** When the budget ends right after a task commit whose verifications failed, the worker writes no checkpoint. It releases that head with `further_work: false`, like a finished run. `reviewer@1` then finds the failed verification and writes `criterion-not-met`, so the node comes back as a rework with that rationale.
+- **The task commit is the boundary.** When the budget ends before the task commit, the worker writes a checkpoint. When the budget ends after the task commit, during a verification run that then fails or does not finish, the worker writes no checkpoint. It releases that head with `further_work: false`, like a finished run. `reviewer@1` then finds the failed verification and writes `criterion-not-met`, so the node comes back as a rework with that rationale. Only the wall time can end the budget at this point, because the worker runs no agent turn between the commit and the verification. The same rule applies when the wall time ends during the verification runs of the start check. When the base branch moved, the worker cannot verify the merge with no budget left, so it resets the merge and releases with `further_work: true`.
 - **The `budget_end` stop marks a stalled execution.** The release carries `stop: { "reason": "budget_end" }` only when no task completed in that execution. Such releases count toward `mission.further_work_limit`. A release without that stop resets the count.
 
 All cleanup after a budget end, the checkpoint commit, the push and the release, runs under `expired_at`, not under the spent budget. The claim keeps a reserve of 10 minutes after the budget for this cleanup.
@@ -326,14 +329,14 @@ All cleanup after a budget end, the checkpoint commit, the push and the release,
 | A verification command runs longer than 10 minutes | The worker kills the command. The command counts as failed, and later commands do not run.                              |
 | A judgement reply has no valid marker line         | One repair turn. A second invalid reply stops with `judgement_invalid`.                                                 |
 | A model call fails at the provider                 | The turn ends with the error, and the worker stops with `provider_failed` and its code.                                 |
-| Two revisions in a row change no file              | The worker stops with `no_progress` and does not verify the unchanged head again.                                       |
+| Two revisions in a row change no file              | The worker stops with `no_progress` before it verifies the unchanged head a third time.                                 |
 | The node branch is gone after a recorded push      | The worker stops with `operation_failed` and `repository.node_branch.missing`.                                          |
 | The node is paused during the execution            | The claim check after the next turn or before the next task ends the execution as revoked.                              |
 | A rework after a `criterion-not-met` assessment    | The start check gives the rationale to each task that it names.                                                         |
 | A node verification fails at a rework              | `swe@1` chooses one task. That task is revised with the failure output.                                                 |
 | An unblock after a change request on the PR        | The start check judges each task against the requested changes of the reviewers.                                        |
 | The budget ends inside a task                      | The worker writes a checkpoint commit, pushes and releases. The next execution resumes.                                 |
-| The budget ends right after a failed verification  | The worker releases the head with `further_work: false`. The reviewer judges it.                                        |
+| The wall time ends during a task verification      | The worker releases the head with `further_work: false`. The reviewer judges it.                                        |
 | The next execution runs on another host            | The worker clones the repository and checks out the pushed node branch. The start check judges the passing tasks again. |
 
 ## Examples of the edge cases
@@ -387,7 +390,7 @@ The 200th turn ends while `swe@1` works on the second task. The first task is co
 { "further_work": true, "stop": null }
 ```
 
-The stop is `null` because one task completed in this execution. The node moves to `Available`. The next execution skips the first task at the start check, because it was judged met at the same head, attempt and revision.
+The stop is `null` because one task completed in this execution. The node moves to `Available`. The next execution judges the first task again at the start check, because the checkpoint commit moved the head after its judgement. A met judgement skips the task, so no work repeats. The judgement costs one agent turn.
 
 When no task completes before the budget ends, the release carries the stop, and the count toward `mission.further_work_limit` grows:
 
@@ -395,9 +398,9 @@ When no task completes before the budget ends, the release carries the stop, and
 { "further_work": true, "stop": { "reason": "budget_end", "code": "turns" } }
 ```
 
-### The budget ends right after a failed verification
+### The wall time ends during a verification
 
-The worker commits the second task, and `grep -q '/healthz' docs/api.md` exits with code 1. The 200th turn ended during that work, so no turn remains for a revision. The task commit is the boundary: the worker writes no checkpoint, pushes, submits the head commit and releases:
+The worker commits the second task and runs `grep -q '/healthz' docs/api.md`. The 2-hour wall time ends while the command runs. The worker kills the command, and the run counts as failed. No budget remains for a revision. The task commit is the boundary: the worker writes no checkpoint, pushes, submits the head commit and releases:
 
 ```json
 { "further_work": false, "stop": null }
@@ -454,7 +457,7 @@ When a human adds an open objective during the execution, the worker releases wi
 | A model with a credential    | `ModelRuntime.create`, then `runtime.getModel`                            | Step 4. The runtime reads the secret from the custody handover. It makes no network call.     |
 | A session in the workspace   | `createAgentSession` with `SessionManager.inMemory`                       | Step 4. The session lives in memory. A new execution opens a new session.                     |
 | The task in every model call | The `context` hook and a guard on `agent.streamFunction`                  | The worker pins the work prompt of the current task, so that a compaction does not remove it. |
-| A turn of work               | `session.prompt(text)`, then `session.waitForIdle()`                      | Steps 5 to 8. The worker sends the work prompt or an instruction and waits for the agent.     |
+| A turn of work               | `session.prompt(text)`, then `session.waitForIdle()`                      | Steps 5 to 7. The worker sends the work prompt or an instruction and waits for the agent.     |
 | The reply                    | `session.getLastAssistantText()`                                          | The worker parses the `kanthord-judgement:` line from the last reply.                         |
 | A provider failure           | The last assistant message with `stopReason: "error"`                     | The worker maps `errorMessage` to a code and stops with `provider_failed`.                    |
 | The turn budget              | `session.subscribe` for `turn_end`, and an override of `agent.finishTurn` | Each `turn_end` counts one turn. After each turn the worker checks the budget and the claim.  |
@@ -497,5 +500,6 @@ The worker process also writes one JSON log line to stderr for each task start, 
 - **One review, at the objective.** `coder@1` judges each task itself. Only `reviewer@1` reviews the work, and only after the release.
 - **One repository.** An objective works on its one repository binding. Work in two repositories needs two objectives.
 - **No memory in the agent.** Each execution starts a new agent conversation. Only the node branch, the records of the Mission Service and the local `judged-tasks.json` carry over.
-- **A stalled node pauses.** An execution that completes no task before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`.
+- **A stalled objective pauses.** An execution that completes no task before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`. An initiative budget end releases with no stop and does not count.
+- **The agent can use git.** `swe@1` has `bash`, and its commands run with the git and SSH configuration of the host. Nothing blocks a `git commit` or a `git push` by the agent. The worker does not depend on it: an agent commit leaves the worker nothing to commit, and after a failed verification that counts as an unchanged revision.
 - **Workspace reuse on one host.** The worker holds the workspace of an objective for one execution at a time. Today that hold covers the executions of one worker process only. Two worker processes on the same host share the `workspaces/` directory, so an execution can reuse a workspace in which a lost earlier execution of another process still runs a command.

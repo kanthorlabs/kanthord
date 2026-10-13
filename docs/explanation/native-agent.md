@@ -42,7 +42,7 @@ Both consumers use the same open path. They differ in these points:
 | Point                | Worker execution                            | Workbench session                                    |
 | -------------------- | ------------------------------------------- | ---------------------------------------------------- |
 | Working directory    | The workspace of the execution              | `~/.local/state/kanthord/workbench/<agent_name>`     |
-| Last pinned message  | The work prompt of the current task         | None                                                 |
+| Last pinned message  | The work prompt of the task or the node     | None                                                 |
 | Extra tools          | `evidence-upload` for `swe@1`               | KanthorD operation tools                             |
 | Approval of a change | None, because no human is present           | The human approves each operation that changes state |
 | Budget               | 200 turns and 2 hours                       | None                                                 |
@@ -75,7 +75,7 @@ The effective configuration is the head of a **fallback chain**. The fallback li
 4. A repeated failure on the same entry doubles the cooldown, up to one day. A release with no provider failure clears it.
 5. When every entry cools down, the work pull answers "no work". No node blocks or pauses.
 
-A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. The agent page of the dashboard and `kanthord agent cooldown list` show the cooldowns, and a human can clear one.
+A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. `kanthord agent cooldown list` shows the cooldowns, and `kanthord agent cooldown clear <cooldown-id>` clears one. The agent page of the dashboard is to show a cooldown badge on each cooling chain entry, with a Clear action. That page does not show them yet, so use the CLI.
 
 ## From configuration to a running session
 

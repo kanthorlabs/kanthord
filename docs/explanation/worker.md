@@ -52,26 +52,27 @@ The terms below appear on every worker page. Each term has exactly one meaning.
 
 A worker is one of several actors. Each actor owns one concern, and no actor does the job of another one.
 
-| Actor                    | Owns                                                                                       | Does not own                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| Human                    | The WHAT: the requirement, the criterion and the verifications. Pause, unblock, override.  | How the work is done.                            |
-| Mission Service          | The node states, the attempts, the evidence, the assessments and the outcomes.             | Which instance does the work.                    |
-| Scheduler Service        | The work queue, the claim, its deadline and the execution record.                          | The content of the work.                         |
-| Worker (the code)        | The method: the order of the steps, git, the verifications, the decision that a task ends. | The node state. It only releases.                |
-| Agent (`swe@1`, `re@1`)  | The file edits and the judgement of a criterion, inside one session.                       | Git, the verifications, the release, the budget. |
-| Project Service, custody | The bindings, the credentials and the model configuration.                                 | The execution.                                   |
+| Actor                    | Owns                                                                                                   | Does not own                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Human                    | The WHAT: the requirement, the criterion and the verifications. Pause, unblock, override.              | How the work is done.                                 |
+| Mission Service          | The node states, the attempts, the evidence, the assessments and the outcomes.                         | Which instance does the work.                         |
+| Scheduler Service        | The work queue, the claim, its deadline and the execution record.                                      | The content of the work.                              |
+| Worker Service           | The registration, the heartbeat, the credential handover, the execution setup and the action requests. | The node state and the claim.                         |
+| Worker (the code)        | The method: the order of the steps, git, the verifications, the decision that a task ends.             | The node state. It releases or submits an assessment. |
+| Agent (`swe@1`, `re@1`)  | The file edits and the judgement of a criterion, inside one session.                                   | Git, the verifications, the release, the budget.      |
+| Project Service, custody | The bindings, the credentials and the model configuration.                                             | The execution.                                        |
 
 The most important line is the split between the worker and the agent. The agent can claim that its work is done. The worker does not trust that claim. The worker commits the work itself, runs the verification commands itself, and asks the agent for a judgement only after every command passes.
 
 ## The life of an objective
 
-A node moves through states. Each worker claims only from the states that it declares: `coder@1` claims `Available`, and `reviewer@1` claims `Waiting` and `External.Requested`. No worker sets a state. A worker releases, and the Mission Service picks the next state from the release.
+A node moves through states. Each worker claims only from the states that it declares: `coder@1` claims `Available`, and `reviewer@1` claims `Waiting` and `External.Requested`. No worker sets a state directly. A worker releases or submits an assessment, and the Mission Service picks the next state from it.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
 flowchart LR
     accTitle: The life of an objective
-    accDescr: Pending becomes Available when its dependencies complete. coder@1 claims Available and the node is Executing. A release with further work returns it to Available. A release with no further work moves it to Waiting. reviewer@1 claims Waiting and the node is Evaluating. criterion-not-met below the rework limit returns it to Available. A success with no external action completes the node. A success with an external action opens a pull request and moves the node to External.Requested, then External.Success and Completed. A criterion-not-met at the limit, an undetermined assessment or a failed external action moves the node to Blocked. A human unblock opens the next attempt.
+    accDescr: Pending becomes Available when its dependencies complete. coder@1 claims Available and the node is Executing. A release with further work returns it to Available. A release with no further work moves it to Waiting. reviewer@1 claims Waiting and the node is Evaluating. criterion-not-met below the rework limit returns it to Available. A success with no external action completes the node. A success with an external action opens a pull request and moves the node to External.Requested, then External.Success and Completed. A pull request that conflicts with the base returns the node to Available. reviewer@1 claims External.Requested again when a chained action becomes eligible. A criterion-not-met at the limit, an undetermined assessment or a failed external action moves the node to Blocked. A human unblock opens the next attempt.
     pending(["Pending"]) -- "dependencies Completed" --> available(["Available"])
     available -- "coder@1 claims" --> executing["Executing<br/>coder@1 works"]
     executing -- "release<br/>further_work: true" --> available
@@ -81,6 +82,8 @@ flowchart LR
     evaluating -- "success,<br/>no external action" --> completed(["Completed"])
     evaluating -- "success,<br/>pull request opened" --> requested(["External.Requested"])
     requested -- "merged" --> success(["External.Success"]) --> completed
+    requested -- "pull request conflicts<br/>with the base" --> available
+    requested -- "next chained action<br/>eligible: reviewer@1 claims" --> evaluating
     requested -- "closed or<br/>changes requested" --> failed(["External.Failed"]) --> blocked
     evaluating -- "criterion-not-met at the limit,<br/>or undetermined" --> blocked(["Blocked"])
     blocked -- "human unblock:<br/>next attempt" --> available
@@ -94,6 +97,7 @@ Three facts explain most of the diagram:
 
 - **Two workers, two claims.** `coder@1` and `reviewer@1` never share a claim. The coder does the work and releases. The reviewer judges later in its own execution, from a clean checkout.
 - **Further work is normal.** One execution does not need to finish the objective. When the budget ends, the coder pushes a checkpoint and releases with `further_work: true`. The node returns to `Available`, and the next execution continues on the same node branch.
+- **A conflict sends the work back.** A pull request that conflicts with the base branch returns the node to `Available` in the same attempt. `coder@1` merges the base at its next start and resolves the conflict.
 - **A human closes the loop.** A node in `Blocked` waits for a human. The human reads the reason, edits the node or not, and unblocks it. The unblock opens the next attempt.
 
 Two more states can interrupt any step. A human can pause a node, which sets `Paused` and stops a running execution within one agent turn. The Mission Service also pauses a node that fails too often, as [Limits that stop a loop](#limits-that-stop-a-loop) explains. `Discarded` and `Completed` are the two final states.
@@ -109,38 +113,39 @@ sequenceDiagram
     accDescr: The worker process registers, then pulls work. The Scheduler grants a claim and the Mission Service pins the revision. The worker takes the credentials and the setup, runs its method with the agent, checks its claim after each turn, records evidence and releases. The Mission Service routes the node.
     autonumber
     participant W as Worker process<br/>(kanthord serve worker)
+    participant WS as Worker Service
     participant S as Scheduler
     participant M as Mission Service
     participant A as Agent (pi)
 
-    W->>S: Register, then heartbeat every 60 s
+    W->>WS: Register, then heartbeat every 60 s
     W->>S: Pull work (waits up to 90 s)
     S->>M: Claim the node: open the attempt, pin the revision
     S-->>W: Execution: execution_id, node, attempt,<br/>revision, node branch, expired_at
-    W->>S: Take the credentials (handover) and read the setup
+    W->>WS: Take the credentials (handover) and read the setup
     loop The method: steps or evaluation
         W->>A: Prompt or instruction
         A-->>W: Edits and reply
         W->>S: Check the claim after each turn
     end
     W->>M: Submit evidence (or an assessment)
-    W->>S: Release: further_work, stop
+    W->>S: Release: further_work, stop<br/>(reviewer@1: only after a success with an action)
     S->>M: Route the node to its next state
     Note over W: The instance is idle and pulls again
 ```
 
 The steps in plain words:
 
-1. **Register.** The process starts with a machine token. The token names the project and the worker binding. The process registers one instance and sends a heartbeat every 60 seconds.
+1. **Register.** The process starts with a machine token. The token names the project and the worker binding. The process registers one instance with the Worker Service and sends a heartbeat every 60 seconds.
 2. **Pull.** The instance asks for work. The Scheduler answers when a node in a declared state is ready, or answers "no work" after 90 seconds.
 3. **Claim.** The Scheduler grants the node. The Mission Service opens attempt 1 when the node has no attempt, and pins the node revision. The claim holds a fixed deadline: `expired_at` is the start time, plus the wall-time budget, plus a reserve of 10 minutes for the cleanup.
-4. **Setup.** The process receives the credentials of the execution through the credential handover. It then reads the execution setup: the worker name, the model configuration, the composed prompt, the prompt templates, the repository and the budget. The process reads no configuration file of its own.
+4. **Setup.** The process receives the credentials of the execution through the credential handover of the Worker Service. It then reads the execution setup: the worker name, the model configuration, the composed prompt, the prompt templates, the repository and the budget. The process reads no configuration file of its own.
 5. **Method.** The process runs the method of its worker: `steps` for `coder@1`, `evaluation` for `reviewer@1`. The method opens one agent session and drives it.
 6. **Claim check.** After each agent turn and before each task, the process reads its claim. A claim that is no longer running ends the execution at once as revoked. A revoked execution pushes nothing and releases nothing, because the node is no longer its own.
 7. **Report.** The method records evidence or an assessment in the Mission Service.
-8. **Release.** The process releases the claim with `further_work` and an optional `stop`. The Mission Service picks the next node state. The instance is idle again and pulls the next node.
+8. **Release.** `coder@1` releases the claim with `further_work` and an optional `stop`, and the Mission Service picks the next node state. `reviewer@1` releases only after a success that requires an external action. Its other assessments move the node and end the claim at once, with no release. Either way, the instance is idle again and pulls the next node.
 
-[What a worker reports to KanthorD](worker-contract.md) lists each operation of this cycle and the telemetry that the worker writes beside it.
+[What a worker reports to KanthorD](worker-contract.md) lists the claim, evidence and release operations of this cycle and the telemetry that the worker writes beside it.
 
 ## The three workers
 
@@ -162,19 +167,32 @@ A **native** worker runs its agent inside KanthorD on the [pi runtime](native-ag
 4. It records the results as evidence.
 5. When a command failed, it writes a `criterion-not-met` assessment at once, with no agent. The rationale names the command and holds the last 4 KiB of its output.
 6. When every command passed, the agent `re@1` judges the evidence against the criterion of the objective, each task criterion and the default standard. `re@1` can read files but cannot write a file or run a command. It reads no `AGENTS.md` or `CLAUDE.md` of the workspace, because the candidate under review wrote those files.
-7. It submits the assessment. A `success` with no required external action completes the node. A `success` with a required action, for example a pull request, makes the reviewer request the action through the Intake Service and release. The node then waits in `External.Requested` until the action ends.
+7. It submits the assessment. The assessment itself moves the node: the reviewer does not release, except in one case. A `success` with no required external action completes the node. A `success` with a required action, for example a pull request, makes the reviewer request the action through the Intake Service and release. The node then waits in `External.Requested` until the action ends.
 
-A `criterion-not-met` assessment returns the node to `coder@1` as a **rework**, in the same attempt, while the attempt holds fewer reworks than the limit. The next `coder@1` execution reads the rationale of that assessment and revises the tasks that it names.
+A `criterion-not-met` assessment returns the node to `coder@1` as a **rework**, in the same attempt, while the attempt holds fewer reworks than the limit and no requested action. The next `coder@1` execution reads the rationale of that assessment. It revises the tasks whose ids the rationale names, and it judges the other tasks again with the rationale as context. An `undetermined` assessment, or a `criterion-not-met` at the limit, moves the node to `Blocked`.
+
+**A chained action.** A project can require two actions in order, for example a pull request and then a second action that follows its merge. When the first action reaches its expected end, the node is claimable again in `External.Requested`. `reviewer@1` claims it, requests the next eligible action and releases. This claim performs no evaluation, because a current passing assessment already stands. Today `reviewer@1` runs the full evaluation again at this claim. A `criterion-not-met` there blocks the node, because the attempt already holds a requested action.
+
+**When the reviewer fails.** A reviewer execution can stop before it has an assessment. It then releases with `further_work: true` and a stop, and the node returns to `Waiting` for the next reviewer execution:
+
+| Stop                | Cause                                                               |
+| ------------------- | ------------------------------------------------------------------- |
+| `assessment_absent` | The budget ends before the assessment.                              |
+| `judgement_invalid` | `re@1` gives a second reply with no valid judgement line.           |
+| `action_unsettled`  | The request of an external action fails or has an uncertain result. |
+| `operation_failed`  | Any other failure, for example a failed checkout.                   |
+
+Each of these stops counts toward `mission.consecutive_failure_limit`. A `provider_failed` stop of the reviewer follows the same rules as for `coder@1`.
 
 ## Limits that stop a loop
 
 Without limits, a node could cycle between the coder and the reviewer forever. Three limits in the server configuration stop that. Each limit counts inside one attempt.
 
-| Limit                               | Default | Counts                                                                | At the limit                                              |
-| ----------------------------------- | ------- | --------------------------------------------------------------------- | --------------------------------------------------------- |
-| `mission.rework_limit`              | 2       | `criterion-not-met` assessments that returned the node to `Available` | The next `criterion-not-met` moves the node to `Blocked`. |
-| `mission.further_work_limit`        | 3       | Releases in a row whose budget ended before any task completed        | The node moves to `Paused`.                               |
-| `mission.consecutive_failure_limit` | 3       | Executions in a row that stopped on a failure or lost their claim     | The node moves to `Paused`.                               |
+| Limit                               | Default | Counts                                                                                | At the limit                                              |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `mission.rework_limit`              | 2       | `criterion-not-met` assessments that returned the node to `Available`                 | The next `criterion-not-met` moves the node to `Blocked`. |
+| `mission.further_work_limit`        | 3       | Releases in a row whose budget ended before any task completed                        | The node moves to `Paused`.                               |
+| `mission.consecutive_failure_limit` | 3       | Executions in a row, coder or reviewer, that stopped on a failure or lost their claim | The node moves to `Paused`.                               |
 
 A stop because the provider is busy (`rate_limited`, `quota_exhausted` or `unavailable`) does not count as a failure. It moves the agent to the next model of its fallback chain instead. [How the native agent works](native-agent.md#configuration-which-model-answers) explains the fallback chain.
 
@@ -182,7 +200,7 @@ A stop because the provider is busy (`rate_limited`, `quota_exhausted` or `unava
 
 These rules explain most behavior that looks surprising at first.
 
-- **The worker decides, the agent works.** Only the worker code commits, runs a verification, pushes, records evidence and releases. The agent cannot mark a task complete.
+- **The worker decides, the agent works.** The worker code commits, runs the verifications that count, pushes, records evidence and releases. The agent cannot mark a task complete. The worker does not depend on the agent for git: `swe@1` has `bash`, so nothing blocks a `git commit` by the agent, but the worker commits whatever the agent leaves.
 - **Commands before opinions.** The agent judges a criterion only after every verification of the task passes. A failed command never reaches a judgement.
 - **A fresh agent for each execution.** Each execution opens a new agent session with an empty conversation. The execution can lose its claim or its process at any time, so nothing durable lives in the agent. The next execution rebuilds its context from the node branch and from the records of the Mission Service.
 - **Git is the memory of the work.** The node branch carries the work from one execution to the next. A budget end writes a checkpoint commit and pushes it, so no work is lost.
