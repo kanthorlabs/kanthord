@@ -122,7 +122,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A login session is a runtime record of the component with identity `login_session_<ulid>`.
 - It holds platform, mode, initial human identity, credential name, state, address, code, failure reason and expiry.
 - Expiry falls 15 minutes after start.
-- The interaction adapter answers `select` with `browser` or `device_code`; an unsupported option fails the session.
+- The interaction adapter answers `select` with `browser`, `device_code` or `copy_code`; an unsupported option fails the session.
 - It records `auth_url` as the address and `device_code` as the code and address.
 - It records `info` and `progress` as the last message.
 - The GitHub Copilot login of pi-ai first asks for a GitHub Enterprise domain with the placeholder `company.ghe.com`. While the session holds no address, the adapter answers that one prompt with the empty value, which selects github.com.
@@ -141,8 +141,9 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A remote browser can return its redirect URL or code through `llm.credential.login_code` when its loopback callback fails.
 - In the container image, the OpenAI Codex callback listener binds `[::]:1455`, which accepts IPv4 and IPv6, and the run publishes port 1455. A browser on the container host reaches the listener, and the login completes with no extra step.
 - Device mode needs no listener; pi-ai polls until success, failure or expiry.
+- `anthropic-subscription` offers only `copy_code` mode. The address is the authorization URL and the code is `null`. The human submits the `code#state` value that `platform.claude.com` shows through `llm.credential.login_code`. Copy-code mode needs no listener.
 - The component permits at most one pending session per platform and human identity; another start answers 409.
-- The component takes an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot and OpenAI Codex providers.
+- The component takes an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot, OpenAI Codex and Anthropic providers.
 - The component keeps `refresh`, `access` and `expires` of a pi OAuth credential and drops every other field before validation. The OpenAI Codex login adds `accountId`, and the runtime derives it from the access token.
 - Completion writes the first revision through custody inside the pi-ai `CredentialStore.modify` call. The transaction checks the session state again, so an expired or failed session stores nothing. The session ends only after the commit.
 - The session record holds no token, and a failed or expired session stores nothing.

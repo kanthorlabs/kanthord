@@ -52,6 +52,7 @@ Its closed mode set is:
 
 - `browser`
 - `device`
+- `copy_code`
 
 A platform offers only the modes that it supports.
 Ulrich starts `copilot-login` in device mode and enters code `ABCD-1234` at `https://github.com/login/device`.
