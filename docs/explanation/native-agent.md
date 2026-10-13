@@ -159,19 +159,19 @@ The same order, as a table:
 | 3   | System prompt  | Framing                              | Framing                              |
 | 4   | Pinned message | One message per working layer source | One message per working layer source |
 | 5   | Pinned message | Work prompt                          | —                                    |
-| 6   | Conversation   | Instructions and replies             | Human messages and replies           |
+| 6   | Conversation   | Later instructions and replies       | Human messages and replies           |
 
-The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
+The model receives the work prompt once, at row 5. Row 6 holds what comes after it: the revision instructions, the judgement instructions and the replies of the agent. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
 
 ### The three layers
 
 The prompt of a native agent has three **layers**. Each layer has one owner and one purpose:
 
-| Layer   | Purpose                                                              | Owner                                    | Sources, in order                                                                                                                                         |
-| ------- | -------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| System  | The conventions of the operator and the default standard of the work | The server                               | Host agent file, then the shipped `base.md`, then the custom system prompt                                                                                |
-| Agent   | The role of the agent and its rules                                  | The agent name                           | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt                                                     |
-| Working | The language and conventions of one repository                       | The repository binding or the agent name | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt, then the custom working prompt |
+| Layer   | Purpose                                                              | Owner                                    | Sources, in order                                                                                                                                                                          |
+| ------- | -------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| System  | The conventions of the operator and the default standard of the work | The server                               | Host agent file, then the shipped `base.md`, then the custom system prompt                                                                                                                 |
+| Agent   | The role of the agent and its rules                                  | The agent name                           | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt                                                                                      |
+| Working | The language and conventions of one repository                       | The repository binding or the agent name | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt (`workbench.md`, Workbench only), then the custom working prompt |
 
 Each layer joins an ordered list of **sources**. A source comes from a file, from the binary or from the database. Each source has one on/off switch, and the composer joins every source that is on, present and valid. No source has a merge or override mode: to replace a shipped text, switch it off and switch your own source on. Every switch defaults to on. On a host with `~/.claude/CLAUDE.md`, the system layer therefore holds that file and the shipped `base.md`. Switch one of them off when the two repeat each other.
 

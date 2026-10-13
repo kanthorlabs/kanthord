@@ -68,7 +68,7 @@ The most important line is the split between the worker and the agent. The agent
 
 ## The life of an objective
 
-A node moves through states. Each worker claims only from the states that it declares: `coder@1` claims `Available`, and `reviewer@1` claims `Waiting` and `External.Requested`. No worker sets a state directly. A worker releases or submits an assessment, and the Mission Service picks the next state from it.
+A node moves through states. Each worker claims only from the states that it declares: `coder@1` claims `Available`, and `reviewer@1` claims `Waiting` and `External.Requested`. No worker sets a state directly. A worker releases or submits an assessment, and the Mission Service picks the next state from it. The Mission Service makes every move of the diagram, also the moves that no worker causes, for example `Pending` to `Available` when the last dependency completes.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
@@ -141,7 +141,7 @@ The steps in plain words:
 
 1. **Register.** The process starts with a machine token. The token names the project and the worker binding. The process registers one instance with the Worker Service and sends a heartbeat every 60 seconds.
 2. **Pull.** The instance asks for work. The Scheduler answers when a node in a declared state is ready, or answers "no work" after 90 seconds.
-3. **Claim.** The Scheduler grants the node. The Mission Service opens attempt 1 when the node has no attempt, and pins the node revision. The claim holds a fixed deadline: `expired_at` is the start time, plus the wall-time budget, plus a reserve of 10 minutes for the cleanup.
+3. **Claim.** The Scheduler grants the node. The Mission Service opens attempt 1 when the node has no attempt, and pins the node revision. The claim holds a fixed deadline: `expired_at` is the start time, plus the wall-time budget of the binding, plus `scheduler.release_reserve`, 10 minutes by default, for the cleanup.
 4. **Setup.** The process receives the credentials of the execution through the credential handover of the Worker Service. It then reads the execution setup: the worker name, the model configuration, the composed prompt, the prompt templates, the repository and the budget. The process reads no configuration file of its own.
 5. **Method.** The process runs the method of its worker: `steps` for `coder@1`, `evaluation` for `reviewer@1`. The method opens one agent session and drives it.
 6. **Claim check.** After each agent turn and before each task, the process reads its claim. A claim that is no longer running ends the execution at once as revoked. A revoked execution pushes nothing and releases nothing, because the node is no longer its own.
@@ -197,7 +197,7 @@ Without limits, a node could cycle between the coder and the reviewer forever. T
 | `mission.further_work_limit`        | 3       | Releases in a row with the stop `budget_end`, which means that no task completed      | The third such release in a row moves the node to `Paused`.                                                                              |
 | `mission.consecutive_failure_limit` | 3       | Executions in a row, coder or reviewer, that stopped on a failure or lost their claim | The third failure in a row moves the node to `Paused`.                                                                                   |
 
-A **failure** is a lost claim or a release with any stop except `budget_end` and a busy provider. The failure stops are `operation_failed`, `no_progress`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` and `provider_failed` with the code `bad_request` or `unauthorized`. A release with no stop resets the count. A stop because the provider is busy (`rate_limited`, `quota_exhausted` or `unavailable`) does not count as a failure. It moves the agent to the next model of its fallback chain instead. [How the native agent works](native-agent.md#configuration-which-model-answers) explains the fallback chain.
+A human resumes a `Paused` node with [`kanthord mission node resume`](../reference/mission/node-control.md#resume), which grants one more try and resets no count. A **failure** is a lost claim or a release with any stop except `budget_end` and a busy provider. The failure stops are `operation_failed`, `no_progress`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` and `provider_failed` with the code `bad_request` or `unauthorized`. A release with no stop resets the count. A stop because the provider is busy (`rate_limited`, `quota_exhausted` or `unavailable`) does not count as a failure. It moves the agent to the next model of its fallback chain instead. [How the native agent works](native-agent.md#configuration-which-model-answers) explains the fallback chain.
 
 ## Rules that hold in every execution
 
@@ -221,6 +221,7 @@ The agent forgets everything at the end of an execution. The next execution read
 | The node state, the attempt and the pinned revision    | The Mission Service                            | Yes                     |
 | The evidence, the assessments and their rationales     | The Mission Service                            | Yes                     |
 | The claim, its deadline and the selected model         | The Scheduler execution record                 | Yes                     |
+| The cooldown of a busy model                           | The Agent component on the server              | Yes                     |
 | The task judgements of the last execution on this host | `judged-tasks.json` in the workspace           | No, a cache of one host |
 | The checkout itself                                    | `workspaces/` on the worker host               | No, a cache of one host |
 | The agent conversation                                 | Memory, then `transcripts/` on the worker host | No, never read again    |
@@ -243,12 +244,12 @@ To run 3 instances of `coder@1` for one project:
 
 The process keeps its files in the state directory of its host, `~/.local/state/kanthord/`:
 
-| Path                                 | Content                                                                                                                                      |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaces/<node_id>/<binding_id>/` | The checkout of one objective. The next execution of the objective on this host reuses it. The process removes it 7 days after its last use. |
-| `workspaces/<execution_id>/`         | The fresh directory of one evaluation or initiative execution. The process removes it at the end.                                            |
-| `transcripts/<execution_id>.jsonl`   | The agent conversation of one execution, mode `0600`. The process keeps the newest 50.                                                       |
-| `pi/`                                | The private directory of the pi runtime. It is separate from any pi installation of the user.                                                |
+| Path                                 | Content                                                                                                                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaces/<node_id>/<binding_id>/` | The checkout of one objective. The next execution of the objective on this host reuses it. The process removes it 7 days after its last use.                                     |
+| `workspaces/<execution_id>/`         | The fresh directory of one evaluation or initiative execution. The process removes it at the end.                                                                                |
+| `transcripts/<execution_id>.jsonl`   | The agent conversation of one execution, mode `0600`. The process keeps the newest 50.                                                                                           |
+| `pi/`                                | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here. |
 
 The workspace and the transcript are local conveniences, not records. Another host can take the next execution of the same objective. It then clones the repository and checks out the pushed node branch.
 
