@@ -32,7 +32,10 @@ Each platform validator declares its secret shape, metadata schema and validatio
 | `opencode-go`           | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"               |
 
 - Every other `KnownProvider` of pi-ai 1.0.3 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
-- A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform that no page names yet.
+- A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform.
+- `anthropic-subscription` is the OAuth login of the pi provider `anthropic`. The dashboard labels it "Anthropic (Claude Pro/Max)".
+- `piProviderId` maps a platform to its pi adapter id. `anthropic-subscription` maps to `anthropic`, and every other platform maps to itself.
+- The custody handover item, the model connector, the model check, the agent model list and the OAuth login use the pi adapter id. Every other field keeps the platform.
 - The `api_key` of `amazon-bedrock` is a Bedrock bearer token, and the `api_key` of `google-vertex` is a Google Cloud API key.
 - A platform that authenticates through the host, for example an AWS profile or Google ADC, takes no credential record.
 - Each metadata field of `amazon-bedrock`, `google-vertex`, `azure`, `cloudflare-workers-ai` and `cloudflare-ai-gateway` is a required nonblank string.
