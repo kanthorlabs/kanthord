@@ -148,7 +148,7 @@ The steps in plain words:
 7. **Report.** The method records evidence or an assessment in the Mission Service.
 8. **Release.** `coder@1` releases the claim with `further_work` and an optional `stop`, and the Mission Service picks the next node state. `reviewer@1` releases only after a success that requires an external action. Its other assessments move the node and end the claim at once, with no release. Either way, the instance is idle again and pulls the next node.
 
-[What a worker reports to KanthorD](worker-contract.md) lists the claim, evidence and release operations of this cycle and the telemetry that the worker writes beside it.
+[What a worker reports to KanthorD](worker-contract.md) lists each operation of this cycle and the telemetry that the worker writes beside it.
 
 ## The three workers
 
