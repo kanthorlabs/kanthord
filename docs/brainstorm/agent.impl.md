@@ -10,7 +10,7 @@ A mechanism here never overrides a rule there.
 
 ## Runtime reuse
 
-- The runtime is `@earendil-works/pi-coding-agent` at 1.0.3.
+- The runtime is `@earendil-works/pi-coding-agent` at 1.1.0.
 - A design of a consumer starts from the capability of pi that serves it, and it states the gap that kanthord builds.
 
 ## The agent catalog
@@ -67,7 +67,7 @@ A mechanism here never overrides a rule there.
 Provider definitions contain no auth types; the [LLM component](llm.impl.md#platform-validators) owns those types, and custody owns suitability.
 
 - A provider is a member of the [agent provider set](agent.vocabulary.md#agent-provider).
-- Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 1.0.3.
+- Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 1.1.0.
 - A model identifier belongs to `getBuiltinModels(provider)` or to the [approved models](llm.impl.md#the-approved-models) that the LLM component answers for an `openai-compatible` credential.
 - An empty `models` list permits no model selection.
 - The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoning_levels`, which defaults to `["off"]`.
@@ -285,7 +285,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Session file
 
-- The adapter stores an agent session as the JSONL session file of `@earendil-works/pi-coding-agent` at 1.0.3.
+- The adapter stores an agent session as the JSONL session file of `@earendil-works/pi-coding-agent` at 1.1.0.
 - The session file lives under `sessions/` of the pi agent directory that `PI_CODING_AGENT_DIR` names.
 - pi appends each entry of the session to that file.
 - A resume opens that file through the `SessionManager` of pi.

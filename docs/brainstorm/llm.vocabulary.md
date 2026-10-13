@@ -18,7 +18,7 @@ A [platform](architecture.vocabulary.md#platform) at which a model credential au
 The set is closed and the [platform table](llm.impl.md#platform-validators) holds it:
 
 - `openai-compatible`
-- every `KnownProvider` of `@earendil-works/pi-ai` at 1.0.3, for example `openai`, `anthropic`, `github-copilot` and `groq`
+- every `KnownProvider` of `@earendil-works/pi-ai` at 1.1.0, for example `openai`, `anthropic`, `github-copilot` and `groq`
 
 Each provider of an agent provider maps to one LLM platform.
 The pi adapter id `openai-compatible` names no platform.

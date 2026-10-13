@@ -450,7 +450,7 @@ When a human adds an open objective during the execution, the worker releases wi
 
 ## Under the hood: how coder@1 drives pi
 
-`swe@1` runs on the pi SDK, `@earendil-works/pi-coding-agent` 1.0.3. The [native agent](native-agent.md) page explains the configuration, the prompt layers and the tool set. This section shows which pi calls `coder@1` makes and what it reads back.
+`swe@1` runs on the pi SDK, `@earendil-works/pi-coding-agent` 1.1.0. The [native agent](native-agent.md) page explains the configuration, the prompt layers and the tool set. This section shows which pi calls `coder@1` makes and what it reads back.
 
 | Need of the worker           | pi API                                                                    | What the worker does with it                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |

@@ -9,7 +9,7 @@ This file is not a design document, and `llm.md` stays the single source of trut
 A mechanism here never overrides a rule there.
 
 The module lives in `src/llm/`.
-The platform validators and the model connector use the contracts of `@earendil-works/pi-ai` at 1.0.3.
+The platform validators and the model connector use the contracts of `@earendil-works/pi-ai` at 1.1.0.
 
 ## Platform validators
 
@@ -32,7 +32,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 | `cloudflare-ai-gateway`  | `api_key`    | `account_id`, `gateway_id` | None                                                                                       |
 | `opencode-go`            | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"                   |
 
-- Every other `KnownProvider` of pi-ai 1.0.3 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
+- Every other `KnownProvider` of pi-ai 1.1.0 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
 - A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform.
 - `anthropic-subscription` is the OAuth login of the pi provider `anthropic`. The dashboard labels it "Anthropic (Claude Pro/Max)".
 - `piProviderId` maps a platform to its pi adapter id. `anthropic-subscription` maps to `anthropic`, and every other platform maps to itself.
@@ -46,7 +46,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The base URL is fixed for the life of a revision. A metadata edit that changes it answers 409 `llm.metadata.base_url_fixed`, and a rotation can set a new one.
 - The first revision of an `openai-compatible` credential starts with `models: []`.
 - Each approved model holds a required `id` and optional `context_window`, `max_tokens` and `reasoning_levels`. An `id` is unique inside `models`.
-- An omitted value takes the default of pi 1.0.3: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
+- An omitted value takes the default of pi 1.1.0: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
 - `context_window` and `max_tokens` are positive integers, and `max_tokens` does not exceed `context_window` after the defaults apply.
 - A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check).
 - A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it. A fallback configuration is a dependent too.
@@ -172,7 +172,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The environment-variable list is empty; the execution store supplies the credential.
 - Each metadata model becomes a pi model with provider `openai-compatible` and the metadata base URL.
 - The model carries `api: "openai-responses"`, `context_window`, `max_tokens` and the established reasoning levels.
-- The model builder applies the defaults of pi 1.0.3 to each value that the metadata omits: `context_window` `128000`, `max_tokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
+- The model builder applies the defaults of pi 1.1.0 to each value that the metadata omits: `context_window` `128000`, `max_tokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
 - Input defaults to `["text"]`, and all cost rates are zero.
 - The model list enters `createProvider`, and `setProvider` registers the provider.
 - The model connector builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
