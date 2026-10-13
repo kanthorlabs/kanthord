@@ -13,16 +13,20 @@ The telemetry channel follows [ERD 4: Telemetry](../reference/erd/04-tracking.md
 
 ## The state channel
 
-Every worker calls the same operations. A native worker calls them through the worker application. An external harness calls them through the CLI with its machine token.
+Every worker calls the same operations, except the two rows marked native only. A native worker calls them through the worker application. An external harness calls them through the CLI with its machine token.
 
-| Moment                | Operation                     | Reference                                        |
-| --------------------- | ----------------------------- | ------------------------------------------------ |
-| Start of the instance | `worker.register`             | [register](../reference/worker/register.md)      |
-| Every 60 seconds      | `worker.heartbeat`            | [heartbeat](../reference/worker/heartbeat.md)    |
-| Wait for work         | `scheduler.work.pull`         | [work](../reference/scheduler/work.md)           |
-| Before each step      | `scheduler.claim.get`         | [claim](../reference/scheduler/claim.md)         |
-| A result to keep      | `mission.evidence.submit`     | [evidence](../reference/mission/evidence.md)     |
-| End of the execution  | `scheduler.execution.release` | [execution](../reference/scheduler/execution.md) |
+| Moment                                                      | Operation                     | Reference                                                                           |
+| ----------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| Start of the instance                                       | `worker.register`             | [register](../reference/worker/register.md)                                         |
+| Every 60 seconds                                            | `worker.heartbeat`            | [heartbeat](../reference/worker/heartbeat.md)                                       |
+| Wait for work                                               | `scheduler.work.pull`         | [work](../reference/scheduler/work.md)                                              |
+| After the claim, native only                                | `worker.handover`             | [handover](../reference/worker/handover.md)                                         |
+| After the handover, native only                             | `worker.execution.setup.get`  | No CLI leaf. The worker application reads it.                                       |
+| Before each step                                            | `scheduler.claim.get`         | [claim](../reference/scheduler/claim.md)                                            |
+| A result to keep                                            | `mission.evidence.submit`     | [evidence](../reference/mission/evidence.md)                                        |
+| A judgement of a reviewer                                   | `mission.assessment.submit`   | [assessment](../reference/mission/assessment.md)                                    |
+| After a passing assessment that requires an external action | `worker.action.request`       | No CLI leaf. An external harness calls the action performer tool of the MCP server. |
+| End of the execution                                        | `scheduler.execution.release` | [execution](../reference/scheduler/execution.md)                                    |
 
 The claim answers the execution record. Its `execution_id`, `trace_id` and `root_span_id` are the three values that the telemetry channel needs.
 

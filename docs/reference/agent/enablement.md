@@ -65,7 +65,7 @@ A configuration write validates the default configuration. The default `agent_pr
 | `state`                                      | string                | API and CLI              | `enabled` or `disabled`.                                                               |
 | `agent_providers`                            | array                 | API and CLI              | Agent providers. Each name and each credential is unique inside the enablement.        |
 | `agent_providers[].name`                     | string                | API and CLI              | Name of the agent provider; binding entries and the default configuration refer to it. |
-| `agent_providers[].provider`                 | string                | API and CLI              | Provider kind: `openai-compatible` or a built-in provider of pi-ai 0.86.0.             |
+| `agent_providers[].provider`                 | string                | API and CLI              | Provider kind: `openai-compatible` or a built-in provider of pi-ai 1.0.3.              |
 | `agent_providers[].credential`               | string                | API and CLI              | Credential name in custody. The record holds no secret.                                |
 | `default_configuration.agent_provider`       | string                | API and CLI              | Name of the default agent provider.                                                    |
 | `default_configuration.model_identifier`     | string                | API and CLI              | Default model.                                                                         |

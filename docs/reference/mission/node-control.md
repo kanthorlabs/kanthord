@@ -59,8 +59,6 @@ To restart an open attempt from the base branch, pause the node, block it, and u
 
 `node check` checks each unresolved external request of the open attempt through the Intake service. Each result commits in its own transaction. An expected end adds landed-commit evidence. A node in `External.Requested` can move to `External.Success` or `External.Failed`, and then close its attempt. A request whose node has a live claim is not changed.
 
-**Current limitation:** the standalone server wires no Intake check. Each request then appears in `failures`, and no end state changes.
-
 ### priority set
 
 `priority set` writes the priority of a nonterminal initiative or objective without a live claim. Any signed safe integer is valid. The default priority is `0`. The write keeps no history, records no actor or reason, and does not change the mission version.

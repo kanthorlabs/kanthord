@@ -1,8 +1,21 @@
 # How the native agent works
 
-A native agent is an LLM agent that KanthorD runs inside its own process. An external harness, for example `claude-code@1`, runs a third-party agent program instead. This page explains how KanthorD builds a native agent, what the agent can see and do, and where its limits are.
+[Explanations](README.md)
+
+A native agent is an LLM agent that KanthorD runs inside its own process. A worker drives it: the worker sends it a task, the agent edits files with its tools, and the worker reads its last reply. An external harness, for example `claude-code@1`, runs a third-party agent program instead.
+
+Read [How a worker works](worker.md) first. That page explains where the agent sits in an execution. This page explains how KanthorD builds the agent, what the agent can see and do, and where its limits are.
 
 KanthorD does not implement the agent loop itself. It embeds [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent` 1.0.3) as the runtime. pi supplies the loop, the built-in tools, the session file and the resume. KanthorD supplies the configuration, the credentials, the prompt, the tool set and the budget. KanthorD builds only what pi does not serve.
+
+## In short
+
+- Two agents exist: `swe@1` writes code, and `re@1` reviews code with read-only tools.
+- A human picks the provider, the model and the reasoning effort of each agent. The agent itself holds none of these values.
+- When a provider is busy, the next execution uses the next model of a fallback chain.
+- The prompt has three layers: the system layer, the agent layer and the working layer. The model reads them in that order, and the task comes last.
+- The tool set, not the prompt, limits what an agent can do. A tool outside the set does not exist for the agent.
+- In a worker execution, the agent has a budget of 200 turns and 2 hours, and its conversation lives in memory only.
 
 ## The two agents
 
@@ -24,7 +37,45 @@ The Agent component belongs to no service. A consumer opens an agent session for
 - **Worker execution.** A Worker execution of `coder@1` or `reviewer@1` opens a session to do or to judge the work of one node. No human is present during the run.
 - **Workbench session.** A human opens a session from the dashboard and talks to the agent. The agent can call KanthorD operations for the human.
 
-Both consumers use the same open path. They differ in the prompt, the tools, the budget and the session storage.
+Both consumers use the same open path. They differ in these points:
+
+| Point                | Worker execution                            | Workbench session                                    |
+| -------------------- | ------------------------------------------- | ---------------------------------------------------- |
+| Working directory    | The workspace of the execution              | `~/.local/state/kanthord/workbench/<agent_name>`     |
+| Last pinned message  | The work prompt of the task or the node     | None                                                 |
+| Extra tools          | `evidence-upload` for `swe@1`               | KanthorD operation tools                             |
+| Approval of a change | None, because no human is present           | The human approves each operation that changes state |
+| Budget               | 200 turns and 2 hours                       | None                                                 |
+| Conversation storage | In memory, lost at the end of the execution | A pi session file that survives a restart            |
+
+## Configuration: which model answers
+
+An agent is usable only when a human enables it. The **agent enablement** is global to the server and keyed by agent name. It holds:
+
+- One or more **agent providers**. Each one pairs a provider platform, for example `anthropic` or `openai-compatible`, with one credential.
+- One **default configuration**: an agent provider, a model identifier and a reasoning effort.
+- A **fallback list**: up to 7 more configurations, tried in order when a provider is busy. An empty list means no fallback.
+
+A consumer can supply an **entry** that overrides any of these fields. A Worker execution takes the entry from its worker binding. A Workbench session takes the values that the human picked. The Agent component merges the entry over the default and validates the whole result:
+
+- The agent provider exists in the enablement.
+- Custody accepts the credential for the platform.
+- The model belongs to the built-in model list of the platform. For `openai-compatible`, the model belongs to the approved models of the credential.
+- The reasoning effort is one of the levels that the model supports.
+
+The result is the **effective configuration**. The same check runs at enablement write, at worker binding write and at resolution. A configuration that passes once can therefore fail later only when a human changes the enablement or the credential. An enablement change that breaks a worker binding is refused, so that case does not occur in practice. Disablement is the only stop switch: it refuses every later resolution.
+
+### The fallback chain
+
+The effective configuration is the head of a **fallback chain**. The fallback list is its tail. A worker binding entry that names its own fallback list replaces the list of the enablement whole; the two lists never merge.
+
+1. At each claim, the Scheduler picks the first chain entry that has no live cooldown. The execution record pins that selection, and the execution uses it until it ends.
+2. A worker execution that stops with `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` puts the credential and model of its selection into a **cooldown**.
+3. The next claim skips a cooling entry. When the cooldown ends, the next claim returns to the earlier entry.
+4. A repeated failure on the same entry doubles the cooldown, up to one day. A release with no provider failure clears it.
+5. When every entry cools down, the work pull answers "no work". No node blocks or pauses.
+
+A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. `kanthord agent cooldown list` shows the cooldowns, and `kanthord agent cooldown clear <cooldown-id>` clears one. The agent page of the dashboard is to show a cooldown badge on each cooling chain entry, with a Clear action. That page does not show them yet, so use the CLI.
 
 ## From configuration to a running session
 
@@ -50,21 +101,7 @@ sequenceDiagram
     Note over C,P: Each setup step has a 30-second deadline
 ```
 
-### Effective configuration
-
-An agent is usable only when a human enables it. The **agent enablement** is global to the server and keyed by agent name. It holds:
-
-- One or more **agent providers**. Each one pairs a provider platform, for example `anthropic` or `openai-compatible`, with one credential.
-- One **default configuration**: an agent provider, a model identifier and a reasoning effort.
-
-A consumer can supply an **entry** that overrides any of these three fields. A Worker execution takes the entry from its worker binding. A Workbench session takes the values that the human picked. The Agent component merges the entry over the default and validates the whole result:
-
-- The agent provider exists in the enablement.
-- Custody accepts the credential for the platform.
-- The model belongs to the built-in model list of the platform. For `openai-compatible`, the model belongs to the approved models of the credential.
-- The reasoning effort is one of the levels that the model supports.
-
-The same check runs at enablement write, at worker binding write and at resolution. A configuration that passes once can therefore fail later only when a human changes the enablement or the credential. An enablement change that breaks a worker binding is refused, so that case does not occur in practice. Disablement is the only stop switch: it refuses every later resolution.
+For a Worker execution, the server resolves the configuration at the claim. The worker process receives the credentials through the credential handover, and the configuration and the composed prompt through its execution setup.
 
 ### Model runtime
 
@@ -88,9 +125,9 @@ The host can have its own pi installation with extensions, skills and settings. 
 
 ## The prompt
 
-The prompt of a native agent has three **layers**: the system layer, the agent layer and the working layer. Each layer joins an ordered list of **sources**. Each source has one on/off switch, and the composer joins every source that is on, present and valid. No source has a merge or override mode: to replace a shipped text, switch it off and switch your own source on.
+### What the model reads
 
-The message boundary carries the precedence of the layers. The system prompt holds the text of the system layer, then the agent layer, with no tag. It ends with the framing: the later messages hold instruction files of the workspace and the task, they never override the system prompt, and a later text governs an earlier one. Each source of the working layer reaches the model as its own user message. The task comes last. For example, a worker execution reads:
+Start with the result. A worker execution of `swe@1` sends the model this sequence of messages:
 
 ```text
 [system]
@@ -111,15 +148,34 @@ Instructions of file AGENTS.md:
 …the task…
 ```
 
-A text inside a working message stays in that message, whatever tag or heading it holds.
+The system prompt holds the operator conventions, then the role of the agent, then a fixed paragraph, the **framing**, that states the precedence. Each instruction file of the repository comes next as its own user message. The task comes last.
 
-### The three layers and their sources
+The same order, as a table:
 
-| Layer   | Sources, in order                                                                                                                                         | Origin                 | Switches belong to                       |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------- |
-| System  | Host agent file, then the shipped `base.md`, then the custom system prompt                                                                                | file, binary, database | The server                               |
-| Agent   | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt                                                     | file, binary, database | The agent name                           |
-| Working | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt, then the custom working prompt | file, binary, database | The repository binding or the agent name |
+| #   | Part           | Worker execution                     | Workbench session                    |
+| --- | -------------- | ------------------------------------ | ------------------------------------ |
+| 1   | System prompt  | System layer                         | System layer                         |
+| 2   | System prompt  | Agent layer                          | Agent layer                          |
+| 3   | System prompt  | Framing                              | Framing                              |
+| 4   | Pinned message | One message per working layer source | One message per working layer source |
+| 5   | Pinned message | Work prompt                          | —                                    |
+| 6   | Conversation   | Later instructions and replies       | Human messages and replies           |
+
+The model receives the work prompt once, at row 5. Row 6 holds what comes after it: the revision instructions, the judgement instructions and the replies of the agent. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
+
+### The three layers
+
+The prompt of a native agent has three **layers**. Each layer has one owner and one purpose:
+
+| Layer   | Purpose                                                              | Owner                                    | Sources, in order                                                                                                                                                                          |
+| ------- | -------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| System  | The conventions of the operator and the default standard of the work | The server                               | Host agent file, then the shipped `base.md`, then the custom system prompt                                                                                                                 |
+| Agent   | The role of the agent and its rules                                  | The agent name                           | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt                                                                                      |
+| Working | The language and conventions of one repository                       | The repository binding or the agent name | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt (`workbench.md`, Workbench only), then the custom working prompt |
+
+Each layer joins an ordered list of **sources**. A source comes from a file, from the binary or from the database. Each source has one on/off switch, and the composer joins every source that is on, present and valid. No source has a merge or override mode: to replace a shipped text, switch it off and switch your own source on. Every switch defaults to on. On a host with `~/.claude/CLAUDE.md`, the system layer therefore holds that file and the shipped `base.md`. Switch one of them off when the two repeat each other.
+
+The sources in detail:
 
 - **Host agent file.** When `agent.prompt.system_file` in `~/.config/kanthord/kanthord.yaml` names a file, the host agent file is that file. Otherwise KanthorD takes the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists. A relative path resolves against `~/.local/share/kanthord`. `agent.prompt.host_file: false` turns the host agent file off for every agent and locks its switch. The UI then shows the switch as locked, and `agent.prompt.switch` refuses it.
 - **Agent directory.** `agent.prompt.agent_directory` names a directory, for example `~/workdir`. The agent layer of `swe@1` then reads `~/workdir/swe@1.md`. The subdirectory `prompts` holds replacements of the shipped prompt templates, for example `~/workdir/prompts/evaluation.md`.
@@ -129,35 +185,35 @@ A text inside a working message stays in that message, whatever tag or heading i
 - **Working layer of a Worker execution.** It joins the four files of the workspace, then the `project_prompt` of the repository binding. It has no shipped prompt. The binding holds its five switches in `working_layer`, and a switch change creates a binding revision.
 - **Working layer of a Workbench session.** It joins the four files of the workbench directory, the shipped `workbench.md`, then the custom workbench prompt.
 
-Every switch defaults to on. On a host with `~/.claude/CLAUDE.md`, the system layer therefore holds that file and the shipped `base.md`. Switch one of them off when the two repeat each other.
-
-### The order that the model reads
-
-The model reads the prompt from top to bottom:
-
-| #   | Part           | Worker execution                     | Workbench session                    |
-| --- | -------------- | ------------------------------------ | ------------------------------------ |
-| 1   | System prompt  | System layer                         | System layer                         |
-| 2   | System prompt  | Agent layer                          | Agent layer                          |
-| 3   | System prompt  | Framing                              | Framing                              |
-| 4   | Pinned message | One message per working layer source | One message per working layer source |
-| 5   | Pinned message | Work prompt                          | —                                    |
-| 6   | Conversation   | Instructions and replies             | Human messages and replies           |
-
-The framing is a fixed paragraph that states the precedence. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
-
 ### Precedence
 
-The position of a layer is its authority. The system prompt governs every message, and a later text governs an earlier text of the same part. The precedence, from highest to lowest, is:
+Two rules decide which text wins a conflict:
+
+1. The system prompt outranks every message after it.
+2. Inside one part, a later text wins over an earlier text. Inside the system prompt, the agent layer comes after the system layer, so it wins. Among the messages, the work prompt comes after the working layer, so it wins.
+
+So the position decides the rank inside a part, but the part decides first. The working layer comes late in the sequence, but it is a message, so it ranks below the whole system prompt. The precedence, from highest to lowest, is:
 
 - Worker execution: agent layer, system layer, work prompt, working layer.
 - Workbench session: agent layer, system layer, working layer.
 
-No message revokes an obligation of the agent layer or the system layer. The working layer comes last because it comes from the repository, and the candidate under review can write it. No layer authorizes an operation: the tool set and the authority of the consumer decide what the agent can do.
+No message revokes an obligation of the agent layer or the system layer. The working layer comes last because it comes from the repository, and the candidate under review can write it. A text inside a working message stays in that message, whatever tag or heading it holds.
+
+No layer authorizes an operation: the tool set and the authority of the consumer decide what the agent can do.
 
 ### Where each layer is composed
 
 The server composes the system layer and the agent layer for every consumer. A Worker execution receives them as `prompt.final` in its execution setup. The worker application reads no home file. It reads only the agent files of its own workspace, with the switches of `repositories[].working_layer`, and adds the `project_prompt`. An evaluation reads no file of the workspace, because the candidate under review wrote those files.
+
+### Why the working layer is pinned
+
+The working layer and the work prompt are **pinned**. Before each model call, a pi `context` hook inserts them as messages directly after the system prompt. A second guard on the stream function re-inserts any pinned text that is missing from the request.
+
+Pinning has two effects. A pinned text survives when pi compacts a long conversation, because KanthorD inserts it again on each call. The work prompt can also change between tasks without a new session: each `prompt` or `instruct` call sets the current work, and the next model call carries it.
+
+### Limits of a source
+
+KanthorD rejects a source that is larger than 32 KiB, that is not UTF-8, that holds control characters, that is not a regular file, that lies outside its working directory, or that takes longer than 10 seconds to read. A rejected source adds no text, and the composer continues with the next source. The **composition record** lists every selected source with its SHA-256 digest and every rejected source with its reason.
 
 ### Reading the composed prompt
 
@@ -169,22 +225,12 @@ The server composes the system layer and the agent layer for every consumer. A W
 - The queries `project_id` and `binding_id` select the working layer of one repository binding. Without them, the working layer is the workbench working layer of the agent.
 - The CLI reads it with `kanthord agent get swe@1`, adds `--view final` for the final prompt only, or `--project <project-id> --binding-id <binding-id>` for a binding.
 
-### Limits of a source
-
-KanthorD rejects a source that is larger than 32 KiB, that is not UTF-8, that holds control characters, that is not a regular file, that lies outside its working directory, or that takes longer than 10 seconds to read. A rejected source adds no text, and the composer continues with the next source. The **composition record** lists every selected source with its SHA-256 digest and every rejected source with its reason.
-
-### Why the working layer is pinned
-
-The working layer and the work prompt are **pinned**. Before each model call, a pi `context` hook inserts them as messages directly after the system prompt. A second guard on the stream function re-inserts any pinned text that is missing from the request.
-
-Pinning has two effects. A pinned text survives when pi compacts a long conversation, because KanthorD inserts it again on each call. The work prompt can also change between tasks without a new session: each `prompt` or `instruct` call sets the current work, and the next model call carries it.
-
 ## Tools
 
 The agent receives only the tools of its declaration. A tool outside the allowlist does not exist for the agent.
 
 - **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` need `rg` and `fd` on the host; the worker refuses to start without them.
-- **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key from the environment of each command, so a command cannot read the credentials of the agent. In a Worker execution, the timeout of each command is capped at the remaining budget.
+- **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key from the environment of each command, so a command cannot read the credentials of the agent. In a Worker execution, the timeout of each command is capped at the remaining budget and at 10 minutes.
 - **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidence_id`, `asset_id` and `uri`.
 - **Operation tools** (Workbench only) expose KanthorD operations. Each call runs with the identity of the human who sent the last message. The [operation tool reference](../reference/workbench/tools.md) lists every tool.
 
@@ -213,41 +259,23 @@ A Worker execution opens one session per claim, in a workspace that the worker p
 - `prompt(work)` sends the work prompt as the user message.
 - `instruct(work, text)` pins the work prompt and sends another instruction, for example a revision request.
 
-After each call, the worker reads the last reply of the agent. The worker, not the agent, decides when the work is done.
+After each call, the worker reads the last reply of the agent. The worker, not the agent, decides when the work is done. When the worker needs a decision from the agent, for example a judgement of a criterion, the instruction asks for one last line that starts with `kanthord-judgement:` and holds JSON. A reply that does not parse gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`.
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
-flowchart TB
-    accTitle: One task in the steps method
-    accDescr: The agent works on the task, the worker commits and runs the verification commands, then asks the agent to judge the criterion. Failure leads to a revision instruction until the budget ends.
-    start([Task]) --> work["Agent works on the task<br/>prompt or instruct"]
-    work --> commit["Worker commits the workspace"]
-    commit --> verify{"Verification<br/>commands pass?"}
-    verify -- no --> fix["Revision instruction<br/>with the failed results"] --> work
-    verify -- yes --> judge["Agent judges the criterion<br/>JSON judgement"]
-    judge --> met{"Criterion met?"}
-    met -- no --> revise["Revision instruction<br/>with the rationale"] --> work
-    met -- yes --> done([Task complete])
-    classDef stop fill:#fbeae1,stroke:#eb6c36,color:#2d3142;
-    class done stop;
-```
+Each method uses the session in its own way:
 
-The other methods use the same session with a single call:
-
-- **Evaluation** (`re@1`). The worker runs the verification commands first. A failure ends the evaluation without the agent. On success, the agent receives the evidence and returns a JSON judgement.
-- **Initiative report** (`swe@1`). When every objective of an initiative ends, the agent writes a report from the objectives, the outcomes and the evidence. The worker stores the report as evidence.
-
-An agent reply that does not parse as the expected judgement gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`.
+- **Steps** (`coder@1` with `swe@1`). The agent works on each task, and the worker commits, verifies and asks for a judgement. [How the coder@1 worker works](coder-worker.md#tasks-step-7) shows the loop.
+- **Evaluation** (`reviewer@1` with `re@1`). The worker runs the verification commands first. A failure ends the evaluation without the agent. On success, the agent receives the evidence and returns a JSON judgement.
+- **Initiative report** (`coder@1` with `swe@1`). When every objective of an initiative ends, the agent writes a report from the objectives, the outcomes and the evidence. The worker stores the report as evidence.
 
 ### Budget
 
-Each native worker has a resource budget of 200 turns and 2 hours of wall time. The wall deadline is also capped by the expiry of the claim. When the budget ends:
+Each native worker has a resource budget of 200 turns and 2 hours of wall time. A worker binding can override both values. One turn is one reply of the model with the tool calls of that reply. The wall time counts from the claim, and the wall deadline is also capped by the expiry of the claim. When the budget ends:
 
 - pi stops after the current turn, and KanthorD aborts the session.
 - Each later `bash` command is refused.
 - The worker method stops and releases or ends the execution.
 
-A cancellation of the execution, for example a server shutdown, also aborts the session.
+A cancellation of the execution, for example a revoked claim or a server shutdown, also aborts the session.
 
 ## A session inside the Workbench
 
@@ -264,7 +292,7 @@ The human can change the agent provider, the model and the reasoning effort betw
 ## Limitations
 
 - **No resume for a Worker execution.** A Worker execution keeps its session in memory. When the worker process ends, the conversation is lost, and a new attempt starts a new session.
-- **Transcript on the worker host only.** At the end of each execution, the worker appends the transcript to `<state>/transcripts/<execution_id>.jsonl` with mode 0600 and keeps the newest 50 files. The server receives no transcript.
+- **Transcript on the worker host only.** At the end of each execution, the worker appends the transcript to `<state>/transcripts/<execution_id>.jsonl` with mode 0600 and keeps the newest 50 files. The server receives no transcript. The telemetry spans `agent.turn` and `agent.tool` carry the last reply of each turn and the input and output of each tool call.
 - **No sandbox.** `bash` and the file tools run on the host with the rights of the KanthorD process. The tool set of `re@1` limits what the reviewer can do. The working directory of `swe@1` is only its default location, not a boundary.
 - **No approval in a Worker execution.** Only the Workbench asks a human before a call that changes state.
 - **Static catalog.** A new agent or a change of a tool set requires a new KanthorD release. A prompt change does not: the agent directory and the custom prompts override the shipped text.

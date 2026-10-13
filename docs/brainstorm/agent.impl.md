@@ -10,7 +10,7 @@ A mechanism here never overrides a rule there.
 
 ## Runtime reuse
 
-- The runtime is `@earendil-works/pi-coding-agent` at 0.86.0.
+- The runtime is `@earendil-works/pi-coding-agent` at 1.0.3.
 - A design of a consumer starts from the capability of pi that serves it, and it states the gap that kanthord builds.
 
 ## The agent catalog
@@ -67,7 +67,7 @@ A mechanism here never overrides a rule there.
 Provider definitions contain no auth types; the [LLM component](llm.impl.md#platform-validators) owns those types, and custody owns suitability.
 
 - A provider is a member of the [agent provider set](agent.vocabulary.md#agent-provider).
-- Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
+- Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 1.0.3.
 - A model identifier belongs to `getBuiltinModels(provider)` or to the [approved models](llm.impl.md#the-approved-models) that the LLM component answers for an `openai-compatible` credential.
 - An empty `models` list permits no model selection.
 - The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoning_levels`, which defaults to `["off"]`.
@@ -254,7 +254,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-choice`, `task-revision`, `criterion-revision`, `evaluation`, `report`, `repair`, `review` and `fix`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-choice`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `report` and `repair`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
@@ -265,28 +265,27 @@ The Agent component owns these keys of the section `agent`.
 - The execution setup carries the resolved template set, so the worker application reads no template file.
 - The values of each template:
 
-| Template             | Values                                                                                                   |
-| -------------------- | -------------------------------------------------------------------------------------------------------- |
-| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`                  |
-| `layer-message`      | `source`, `text`                                                                                         |
-| `framing-worker`     | none                                                                                                     |
-| `framing-workbench`  | none                                                                                                     |
-| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                                      |
-| `task-choice`        | `failure`, `tasks[].filename`, `tasks[].name`, `tasks[].criterion`, `marker`                             |
-| `task-revision`      | `rationale`, `results`, `output`                                                                         |
-| `criterion-revision` | `rationale`                                                                                              |
-| `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                                              |
-| `report`             | `objectives`, `outcomes`, `evidence`                                                                     |
-| `repair`             | `marker`                                                                                                 |
-| `review`             | `task_id`, `criterion`, `findings`, `replies`, `diff`, `diff_truncated`, `diff_max_characters`, `marker` |
-| `fix`                | `findings`                                                                                               |
+| Template             | Values                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command` |
+| `layer-message`      | `source`, `text`                                                                        |
+| `framing-worker`     | none                                                                                    |
+| `framing-workbench`  | none                                                                                    |
+| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                     |
+| `task-choice`        | `failure`, `tasks[].filename`, `tasks[].name`, `tasks[].criterion`, `marker`            |
+| `task-revision`      | `rationale`, `results`, `output`                                                        |
+| `criterion-revision` | `rationale`                                                                             |
+| `conflict`           | `base_branch`, `files`                                                                  |
+| `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                             |
+| `report`             | `objectives`, `outcomes`, `evidence`                                                    |
+| `repair`             | `marker`                                                                                |
 
-- `marker` is the marker that the worker parses. A replacement of `task-judgement`, `task-choice`, `evaluation`, `repair` or `review` keeps the marker line, or the worker treats the reply as invalid.
+- `marker` is the marker that the worker parses. A replacement of `task-judgement`, `task-choice`, `evaluation` or `repair` keeps the marker line, or the worker treats the reply as invalid.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.
 
 ## Session file
 
-- The adapter stores an agent session as the JSONL session file of `@earendil-works/pi-coding-agent` at 0.86.0.
+- The adapter stores an agent session as the JSONL session file of `@earendil-works/pi-coding-agent` at 1.0.3.
 - The session file lives under `sessions/` of the pi agent directory that `PI_CODING_AGENT_DIR` names.
 - pi appends each entry of the session to that file.
 - A resume opens that file through the `SessionManager` of pi.

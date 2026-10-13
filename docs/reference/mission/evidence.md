@@ -34,8 +34,6 @@ A delete without `force` requires that the node of the evidence and each of its 
 
 The list and get operations change nothing. Each list call reads one page. The CLI does not follow `next_cursor`.
 
-**Current limitation:** the standalone Server wires no object storage. An operation that calls object storage answers `503 mission.evidence.storage_unavailable`, so no `object` asset exists there.
-
 ## Expected response
 
 ### `evidence list`
@@ -221,7 +219,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `409 mission.evidence.request_asset_refused`    | `evidence asset delete`               | The asset is the `platform` asset of a request evidence.                                                                                                                                                                      |
 | `409 mission.evidence.content_repository`       | `content get`                         | The asset is a `repository` address. Details hold `evidence_id` and `address`.                                                                                                                                                |
 | `409 mission.evidence.content_platform`         | `content get`                         | The asset is a `platform` address. Details hold `evidence_id` and `address`.                                                                                                                                                  |
-| `503 mission.evidence.storage_unavailable`      | `submit`, both deletes, `content get` | The operation needs object storage for an `object` asset, and the Server wires none.                                                                                                                                          |
+| `503 mission.evidence.storage_unavailable`      | `submit`, both deletes, `content get` | The operation needs object storage for an `object` asset, and no object storage is available.                                                                                                                                 |
 | `504 gateway.invocation.timeout`                | All                                   | The operation did not complete in 30 seconds.                                                                                                                                                                                 |
 
 The CLI checks some input before it sends a request. Each local failure exits `1` and sends no request.

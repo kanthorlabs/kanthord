@@ -33,7 +33,7 @@ Each platform has one secret shape, an optional metadata schema, and an optional
 | `cloudflare-workers-ai` | `api_key`    | `{ account_id }`             | `none`               | No         |
 | `cloudflare-ai-gateway` | `api_key`    | `{ account_id, gateway_id }` | `none`               | No         |
 
-The other platforms have the secret shape `api_key`, metadata `null`, capability `none`, and no provider: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams` and `xiaomi-token-plan-sgp`.
+The other platforms have the secret shape `api_key`, metadata `null`, capability `none`, and no provider: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
 
 Every metadata field is a nonblank string, except `openai-compatible.models`. Metadata objects are closed. A platform without metadata requires the explicit value `null`.
 

@@ -14,6 +14,7 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | How do I reach it from a phone or a domain?    | [Mac with Tailscale](how-to-guides/run-on-a-mac-with-tailscale.md), [VPS](how-to-guides/run-on-a-vps.md)                          |
 | How do I authenticate?                         | [Human JWT generation](reference/auth/jwt.md) and [verification](reference/gateway/verify.md)                                     |
 | How does the system work?                      | [Service architecture](explanation/architecture.md)                                                                               |
+| How does a worker do the work of a node?       | [Workers explained](explanation/worker.md)                                                                                        |
 | How does the native agent work?                | [Native agent explained](explanation/native-agent.md)                                                                             |
 | How does the coder@1 worker work?              | [coder@1 explained](explanation/coder-worker.md)                                                                                  |
 | How do I interpret health reports?             | [Healthchecks explained](explanation/healthchecks.md)                                                                             |
