@@ -34,8 +34,6 @@ A delete without `force` requires that the node of the evidence and each of its 
 
 The list and get operations change nothing. Each list call reads one page. The CLI does not follow `next_cursor`.
 
-**Current limitation:** the standalone Server wires no object storage. An operation that calls object storage answers `503 mission.evidence.storage_unavailable`, so no `object` asset exists there.
-
 ## Expected response
 
 ### `evidence list`
