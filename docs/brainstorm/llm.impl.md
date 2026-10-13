@@ -16,20 +16,21 @@ The platform validators and the model connector use the contracts of `@earendil-
 The component owns a dedicated platform validator for every [LLM platform](llm.vocabulary.md#llm-platform).
 Each platform validator declares its secret shape, metadata schema and validation. A platform holds exactly one secret shape, and a second shape for the same remote is another platform, for example `anthropic-subscription` or `openai-codex`.
 
-| Platform                | Secret shape | Metadata                   | Check                                                                                  |
-| ----------------------- | ------------ | -------------------------- | -------------------------------------------------------------------------------------- |
-| `github-copilot`        | `oauth`      | None                       | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token    |
-| `openai-codex`          | `oauth`      | None                       | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
-| `anthropic`             | `api_key`    | None                       | `GET https://api.anthropic.com/v1/models`                                              |
-| `openai-compatible`     | `api_key`    | `base_url`, `models`       | `GET <base_url>/models`                                                                |
-| `openrouter`            | `api_key`    | None                       | `GET https://openrouter.ai/api/v1/key`                                                 |
-| `openai`                | `api_key`    | None                       | `GET https://api.openai.com/v1/models`                                                 |
-| `amazon-bedrock`        | `api_key`    | `region`                   | None                                                                                   |
-| `google-vertex`         | `api_key`    | `project`, `location`      | None                                                                                   |
-| `azure`                 | `api_key`    | `resource_name`            | None                                                                                   |
-| `cloudflare-workers-ai` | `api_key`    | `account_id`               | None                                                                                   |
-| `cloudflare-ai-gateway` | `api_key`    | `account_id`, `gateway_id` | None                                                                                   |
-| `opencode-go`           | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"               |
+| Platform                 | Secret shape | Metadata                   | Check                                                                                      |
+| ------------------------ | ------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `github-copilot`         | `oauth`      | None                       | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token        |
+| `openai-codex`           | `oauth`      | None                       | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?"     |
+| `anthropic-subscription` | `oauth`      | None                       | One model call to `claude-haiku-5-5` with 1 output token and the prompt "What time is it?" |
+| `anthropic`              | `api_key`    | None                       | `GET https://api.anthropic.com/v1/models`                                                  |
+| `openai-compatible`      | `api_key`    | `base_url`, `models`       | `GET <base_url>/models`                                                                    |
+| `openrouter`             | `api_key`    | None                       | `GET https://openrouter.ai/api/v1/key`                                                     |
+| `openai`                 | `api_key`    | None                       | `GET https://api.openai.com/v1/models`                                                     |
+| `amazon-bedrock`         | `api_key`    | `region`                   | None                                                                                       |
+| `google-vertex`          | `api_key`    | `project`, `location`      | None                                                                                       |
+| `azure`                  | `api_key`    | `resource_name`            | None                                                                                       |
+| `cloudflare-workers-ai`  | `api_key`    | `account_id`               | None                                                                                       |
+| `cloudflare-ai-gateway`  | `api_key`    | `account_id`, `gateway_id` | None                                                                                       |
+| `opencode-go`            | `api_key`    | None                       | One model call to `deepseek-v4-flash` with the prompt "What time is it?"                   |
 
 - Every other `KnownProvider` of pi-ai 1.0.3 is a platform with `api_key`, no metadata and no check: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, `xiaomi-token-plan-sgp`, `meta` and `typesafe`.
 - A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform.
@@ -56,16 +57,16 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `LlmProvider` is a TypeScript interface with one method, `check(secret, metadata, context, observe)`. `observe` is optional and receives the failure reason without material.
 - `check` answers `{ connection, models }`. `connection` is `ok`, `unauthorized`, `unreachable` or `invalid_response`. `models` is a list of `{ id, owned_by, created }`, or null when the call reads no model list. `owned_by` and `created` are null when the remote leaves them out.
 - The check of `openai-compatible` and of `openai` answers `models` from the OpenAI list shape of `GET /models`. Every other check answers `models: null`.
-- Each LLM provider declares its capability: `copilot token read` for `github-copilot`, `model call` for `openai-codex` and `opencode-go`, `model-list read` for `anthropic`, `openai-compatible` and `openai`, and `key read` for `openrouter`. A platform without an LLM provider has the capability `none`.
+- Each LLM provider declares its capability: `copilot token read` for `github-copilot`, `model call` for `openai-codex`, `anthropic-subscription` and `opencode-go`, `model-list read` for `anthropic`, `openai-compatible` and `openai`, and `key read` for `openrouter`. A platform without an LLM provider has the capability `none`.
 - The LLM component answers the capability of the LLM provider of a credential to the agent provider healthcheck.
 - `LLM_PROVIDERS` maps a platform to its `LlmProvider`. The map holds exactly the platforms with a check in the [platform table](#platform-validators), and a platform outside the map has no implementation.
 - `verifiable` of the [platform list](architecture.impl.md#the-platform-list) is true exactly for a platform in `LLM_PROVIDERS`.
 - `check` maps a reply to `ok`, 401 or 403 to `unauthorized`, a network failure or the deadline to `unreachable`, and every other answer to `invalid_response`.
 - A model call through pi-ai calls no `onResponse` on a refused request. The check of a model call reads the HTTP status from the `<status>:` or `<status> ` prefix of the `errorMessage` of the pi-ai reply. A failed model call without a status maps to `unreachable`.
 - The `opencode-go` check passes a session id, so that pi-ai sends the header `x-opencode-session`. OpenCode Go refuses a call without it with 400 `MissingSessionID`.
-- Each model that a check calls is a named constant in `src/llm/`, for example the constants of `gpt-5.6-luna` for `openai-codex` and `deepseek-v4-flash` for `opencode-go`. No code compares or sends a model name as a raw string.
+- Each model that a check calls is a named constant in `src/llm/`, for example the constants of `gpt-5.6-luna` for `openai-codex`, `claude-haiku-5-5` for `anthropic-subscription` and `deepseek-v4-flash` for `opencode-go`. No code compares or sends a model name as a raw string.
 - The credential healthcheck, the agent provider healthcheck and the provider check call `check`. A healthcheck maps `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` and `invalid_response` to `unknown`.
-- Ulrich accepts the token cost of the `openai-codex` check and of the `opencode-go` check.
+- Ulrich accepts the token cost of the `openai-codex` check, of the `anthropic-subscription` check and of the `opencode-go` check.
 
 ## The provider check
 
@@ -183,7 +184,8 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The [LLM providers](#the-llm-provider) supply the checks.
 - No check refreshes an OAuth record; an expired access token answers `unreachable` without a remote call, and the healthcheck reports `unknown`.
 - Credential and agent provider healthchecks share an implementation where appropriate, not ownership.
-- The `openai-codex` check and the `opencode-go` check make a model call.
+- The `openai-codex` check, the `anthropic-subscription` check and the `opencode-go` check make a model call.
+- The `anthropic-subscription` check builds its call as the `openai-codex` check does, under the pi provider `anthropic`.
 - The `openai-codex` check builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. The store lives for the call, and nothing writes back to custody.
 - A pi call with an OAuth credential carries no `apiKey` option. pi takes the API key path whenever the options hold the `apiKey` key, even with a `null` value.
 - The `opencode-go` check builds its call through the pi `opencode-go` provider with the stored API key and the smallest token limit.
