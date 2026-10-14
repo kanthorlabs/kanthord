@@ -108,6 +108,14 @@ async function watchInstances(quiet) {
       console.log(`${now()} instance ${id}: ${before ?? "-"} -> ${label}`);
     runtimeStates.set(id, label);
   }
+  const listed = new Set(
+    (page?.items ?? []).map((inst) => inst.runtime_identity),
+  );
+  for (const id of [...runtimeStates.keys()]) {
+    if (listed.has(id)) continue;
+    runtimeStates.delete(id);
+    if (!quiet) console.log(`${now()} instance ${id} -> gone`);
+  }
 }
 
 function watchPullRequests(quiet) {

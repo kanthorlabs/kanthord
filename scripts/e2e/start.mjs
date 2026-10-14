@@ -233,12 +233,8 @@ const runState = {
 };
 
 if (placement === "server") {
-  const binding_counts = {};
-  for (const worker of config.workers)
-    binding_counts[worker.binding] = worker.instances;
-  runState.binding_counts = binding_counts;
   log("workers managed by the daemon pool", {
-    bindings: Object.keys(binding_counts),
+    bindings: config.workers.map((worker) => worker.binding),
   });
 } else {
   const instances = [];
