@@ -27,6 +27,15 @@ export function tokenOf(cliFile) {
   return match[1].trim();
 }
 
+export function readEnvFile(file) {
+  const values = {};
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (match) values[match[1]] = match[2].replace(/^(["'])(.*)\1$/, "$2");
+  }
+  return values;
+}
+
 export function client(endpoint, token) {
   async function call(method, path, body) {
     const headers = { authorization: `Bearer ${token}` };

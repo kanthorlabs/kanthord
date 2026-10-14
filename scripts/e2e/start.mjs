@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { client, mainCheckout, tokenOf } from "./api.mjs";
+import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
 
 const [configPath, run] = process.argv.slice(2);
@@ -36,29 +36,38 @@ function kanthord(args) {
   });
 }
 
-function secrets(file) {
-  const values = {};
-  for (const line of readFileSync(resolve(MAIN, file), "utf8").split("\n")) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (match) values[match[1]] = match[2].replace(/^(["'])(.*)\1$/, "$2");
-  }
-  return values;
-}
-
 const humanFile = join(runDir, "human.cli.yaml");
 kanthord(["auth", "jwt", "generate", `e2e-${run}`, "--output", humanFile]);
 const api = client(config.endpoint, tokenOf(humanFile));
 log("human token issued", { file: humanFile });
 
-const env = secrets(config.env_file);
+const env = readEnvFile(resolve(MAIN, config.env_file));
+function secretOf(name) {
+  if (!env[name]) throw new Error(`${config.env_file} lacks ${name}`);
+  return env[name];
+}
+
+async function sshMetadata(host) {
+  const { items } = await api.get("/api/repository/credential/ssh/discover");
+  const alias = items.find((item) => item.host === host);
+  if (!alias || alias.state === "refused")
+    throw new Error(
+      `~/.ssh/config holds no usable Host ${host}: ${alias?.reason ?? "absent"}`,
+    );
+  return {
+    host,
+    hostname: alias.hostname,
+    port: alias.port,
+    identity_file: alias.identity_file,
+  };
+}
+
 for (const credential of config.credentials) {
   if (await api.get(`/api/llm/credential/${credential.name}`)) {
     log("credential exists", { name: credential.name });
     continue;
   }
-  const key = env[credential.secret_env];
-  if (!key)
-    throw new Error(`${config.env_file} lacks ${credential.secret_env}`);
+  const key = secretOf(credential.secret_env);
   const models = credential.metadata?.models ?? null;
   const metadata =
     models === null
@@ -81,6 +90,23 @@ for (const credential of config.credentials) {
   log("credential created", { name: credential.name });
 }
 
+for (const credential of config.repository_credentials) {
+  if (await api.get(`/api/repository/credential/${credential.name}`)) {
+    log("credential exists", { name: credential.name });
+    continue;
+  }
+  const record =
+    credential.platform === "ssh"
+      ? { metadata: await sshMetadata(credential.host), secret: {} }
+      : { metadata: null, secret: { key: secretOf(credential.secret_env) } };
+  await api.post("/api/repository/credential", {
+    name: credential.name,
+    platform: credential.platform,
+    ...record,
+  });
+  log("credential created", { name: credential.name });
+}
+
 for (const [agent, enablement] of Object.entries(config.enablements)) {
   const current = await api.get(`/api/agent/enablement/${agent}`);
   const providers = [...(current?.agent_providers ?? [])];
@@ -95,6 +121,10 @@ for (const [agent, enablement] of Object.entries(config.enablements)) {
   log("enablement set", { agent, ...enablement.default });
 }
 
+const githubTokenEnv = config.repository_credentials.find(
+  (credential) => credential.name === config.repository.config.credential,
+).secret_env;
+const ghEnv = { ...process.env, GH_TOKEN: secretOf(githubTokenEnv) };
 const fixture = execFileSync(
   "gh",
   [
@@ -103,7 +133,7 @@ const fixture = execFileSync(
     "--jq",
     ".sha",
   ],
-  { encoding: "utf8" },
+  { encoding: "utf8", env: ghEnv },
 ).trim();
 execFileSync(
   "gh",
@@ -115,7 +145,7 @@ execFileSync(
     "-f",
     `sha=${fixture}`,
   ],
-  { stdio: "ignore" },
+  { stdio: "ignore", env: ghEnv },
 );
 log("base branch pushed", { branch: baseBranch, commit: fixture.slice(0, 7) });
 
@@ -211,6 +241,8 @@ writeFileSync(
     {
       run,
       endpoint: config.endpoint,
+      env_file: config.env_file,
+      github_token_env: githubTokenEnv,
       github: config.repository.github,
       base_branch: baseBranch,
       project_id: project.id,

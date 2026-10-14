@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { client, mainCheckout, tokenOf } from "./api.mjs";
+import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 
 const [run] = process.argv.slice(2);
 if (!run) throw new Error("usage: watch.mjs <run>");
@@ -16,12 +16,12 @@ const PR_EVERY_TICKS = 4;
 const PROCESS_ABSENT = "ESRCH";
 const TASK_KIND = "task";
 const now = () => new Date().toISOString().slice(11, 19);
-const ghEnv = {
-  ...process.env,
-  GH_TOKEN:
-    process.env.GH_TOKEN ||
-    execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim(),
-};
+const githubToken = readEnvFile(resolve(MAIN, state.env_file))[
+  state.github_token_env
+];
+if (!githubToken)
+  throw new Error(`${state.env_file} lacks ${state.github_token_env}`);
+const ghEnv = { ...process.env, GH_TOKEN: githubToken };
 
 const nodes = new Map();
 const ended = new Set();
