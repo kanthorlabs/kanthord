@@ -38,7 +38,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `Job` holds `job_id`, `project_id`, `node_id` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
 - `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `node_branch`, `credentials`, `agent_selections`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
-  - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service. Both are absent for an instance that the server hosts.
+  - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service.
   - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinned_revision` are positive safe integers.
   - `node_branch` is the node branch that the claim admission of the Mission Service answers. The claim copies it as it copies `pinned_revision`, into `scheduler_execution`, the execution record, the claim answer and `ExecutionClaim`. The migration sets `kanthord/<node id>` on every earlier row.
@@ -212,7 +212,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.
 - A test revokes a claim before expiry and asserts `finished`, no loss increment and the transaction reading as `ended_at`.
 - Tests cover all three derived claim states before, at and after the deadline, with and without `ended_at`.
-- Tests assert an in-process abort for a hosted execution and an abort on the first refused call for every other execution.
+- Tests assert an abort on the first refused call for an execution at each placement.
 - A test calls `claim get` from another worker binding or runtime identity and asserts 403 `scheduler.execution.not_owner`.
   Through both adapters, it calls the release of an ended claim and asserts the 403 of the execution proof before the handler.
   After a lost release answer and a refused retry, the owner reads `finished` through `claim get`.

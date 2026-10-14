@@ -83,7 +83,7 @@ After the release and the readiness condition, a `reviewer@1` instance obtains a
 
 The record of an execution that the Scheduler Service holds.
 For a registered instance, it names the client identity and the display name of its credential through the registration of its runtime identity.
-It holds neither for an instance that the server hosts.
+Every instance registers, so the record names both at every placement.
 Both are attribution and no authority.
 
 The `claude-code` instance of worker binding `claude-main` claims the objective "Add password reset".

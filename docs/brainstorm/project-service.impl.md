@@ -130,6 +130,8 @@ The outcomes of the comparison by binding name are below.
 - A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set inserts no row and keeps the version.
 - A worker group whose latest row after the edit is a tombstone or holds `instance_count: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
+- After the commit of a binding-set write, the Project Service calls the Worker contract method `bindingsChanged(projectId)`.
+- The Worker Service then reconciles the [pool](worker-service.impl.md#the-pool) of each binding at the `server` placement.
 
 The binding set has one read route and one write route, and both serve the whole set.
 
@@ -160,6 +162,8 @@ A schema validates the shape, and a `superRefine` validates the relations of the
 The validation of the whole set runs at the write, and the validation of one binding with its dependencies runs again at each resolution.
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
 The write refuses a submission that changes the worker of an existing worker binding under the same binding name with 409 `project.bindings.worker.resource_changed`.
+The write refuses a submission that changes the `placement` of an existing worker binding under the same binding name with 409 `project.bindings.worker.placement_changed`.
+The refusal compares the effective placements, where an absent field reads as `worker`.
 
 - Worker binding validation calls [Agent configuration validation](agent.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
@@ -176,7 +180,8 @@ The write refuses a submission that changes the worker of an existing worker bin
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
 - An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
 - For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `agent.configuration.invalid`.
-- A worker binding of a known worker with no declared agent, an external harness, that carries `entries` or `resource_budget` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
+- A worker binding of a known worker with no declared agent, an external harness, that carries `entries`, `resource_budget` or `placement` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
+- The `placement` field of a worker binding of a worker that kanthord hosts is `server` or `worker`. The write stores `placement` as written. An absent field reads as `worker` at each read, so a stored revision with no field keeps the `worker` placement. No migration rewrites a stored revision.
 - A strategy with more than one action refuses the write.
 - A `landing` on an action other than `pull_request` refuses the write at the `landing` path.
 
@@ -209,7 +214,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 ## Worker binding configuration
 
-- A worker binding holds `instance_count`, optional `resource_budget` and optional per-agent entries.
+- A worker binding holds `instance_count`, optional `placement`, optional `resource_budget` and optional per-agent entries.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
@@ -368,6 +373,8 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
+- A test covers each `placement` value, the default `worker` of an absent field and the storage of the field as written.
+- A test covers the refusal of a change with `project.bindings.worker.placement_changed`, the acceptance of a change between an absent field and `worker`, and the refusal of the field on an external harness.
 - A test covers a removal, a removal by omission and a revision to `instance_count: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.

@@ -131,8 +131,11 @@ No model inference call of the execution drops a layer of its prompt.
 
 ## Instances and hosting
 
-The Worker Service reads the worker bindings and their instance counts from the [Project Service](project-service.md#execution-configuration-and-instance-count).
-For a worker that kanthord hosts at the `server` placement, it holds one instance for each unit of the instance count of a worker binding.
+The Worker Service reads the worker bindings, their placements and their instance counts from the [Project Service](project-service.md#execution-configuration-and-instance-count).
+A worker binding of a worker that kanthord hosts states one [placement](worker-service.vocabulary.md#placement) for all its instances.
+For a worker binding at the `server` placement, the Worker Service holds one [pool slot](worker-service.vocabulary.md#pool-slot) for each unit of the instance count.
+The `server` application runs one instance for each slot.
+For a worker binding at the `worker` placement, a human starts one `worker` application for each instance.
 The instances of one binding form its pool.
 An instance holds a runtime identity.
 The Worker Service mints the runtime identity when it creates the instance.
@@ -144,8 +147,10 @@ A client identity holds at most one live registration.
 A registration of a client identity that holds a live registration returns that registration, so a restarted program resumes its live execution.
 A human resumes an ended registration while it is the claimant of a live execution.
 Two live processes of one machine JWT are an accepted risk until a B9 item fences them.
-An instance of a worker that an external harness hosts registers, and an instance at the `worker` placement registers.
+Every instance registers.
+This covers an instance of an external harness, an instance at the `worker` placement and an instance at the `server` placement.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
+A worker binding at the `server` placement accepts a registration only from the client identity of one of its current pool slots.
 The instance presents its credential at the registration and on every later request, the registration returns no credential, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
 A work pull and every execution operation of a registered instance require its live registration.
 A registered instance sends a [heartbeat](worker-service.vocabulary.md#heartbeat), and a registration ends when no heartbeat arrives inside its window.
@@ -162,8 +167,19 @@ An instance record is runtime-only. The `worker_instance` row holds the durable 
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
 At server start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
 A configuration revision of the binding replaces no instance.
-A server restart creates new instances with new runtime identities for a worker at the `server` placement.
-For a worker that kanthord hosts at the `server` placement, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
+The placement of a worker binding never changes. A project removes the binding and adds it again instead.
+For a worker binding at the `server` placement, a raise of the instance count adds pool slots.
+The `server` application starts one instance for each new slot, up to a server-wide cap of started slots.
+For a worker binding at the `server` placement, a lowered count drains the excess instances under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service.
+The Worker Service retires idle instances first, and a busy instance ends its execution before it retires.
+A retired instance deregisters through the API and stops.
+A removal or an unavailability of the binding ends its registrations, and the `server` application stops every instance of the binding.
+A pool slot keeps its client identity across a server restart, as a `worker` application keeps its machine JWT across its restart.
+A binding that a project adds again after its removal gets new client identities.
+A server stop cancels the live execution of each instance.
+An instance with a live execution keeps its registration, and an idle instance deregisters, as at a stop of a `worker` application.
+A server restart starts each instance again under the same client identity.
+An instance whose registration is still live resumes it, and its work pull returns its `running` execution.
 
 An instance hosts at most one execution at a time.
 An instance holds at most one outstanding work pull or one execution.
@@ -173,23 +189,44 @@ Any idle instance of the binding takes the next compatible node.
 An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service.
 
 The Worker Service produces the instance healthcheck before each work pull and once more when the Scheduler Service asks before a claim commits.
-The healthcheck of an instance at the `server` placement passes when the effective configuration of the agent resolves under the current binding set.
-The healthcheck of an instance at the `worker` placement passes when that configuration resolves and its registration is live.
+The healthcheck of an instance of a worker that kanthord hosts passes when two conditions hold.
+The effective configuration of the agent resolves under the current binding set, and the registration of the instance is live.
+The placement of the instance changes no part of the healthcheck.
+The healthcheck of a pool slot that drains fails.
+The claim returns a `running` execution of the instance before it takes the healthcheck.
+A draining instance therefore resumes its execution and claims no new work.
 
 The healthcheck of an instance that an external harness hosts passes when its registration is live.
 The Worker Service computes the healthcheck of every placement from the state of the server alone.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
-- An execution at worker placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
-- It performs its network git read, network git write and model inference calls on its own host.
+- An execution at every placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
+- It performs its network git read, network git write and model inference calls in its own worker unit.
 - Its platform actions run through the server like every execution.
+
+Both placements run the same [worker unit](worker-service.vocabulary.md#worker-unit) inside one worker boundary.
+The [placement wrapper](worker-service.vocabulary.md#placement-wrapper) and the [worker transport](worker-service.vocabulary.md#worker-transport) are the only parts that differ.
+The worker unit reaches kanthord only through its worker transport.
+The transport reaches only the operations that the published API routes, and the invocation chain refuses each one that the machine identity may not call.
+An instance at the `server` placement holds a machine identity with the same project and binding scope as an instance at the `worker` placement.
+It meets the same refusals.
+The code of the worker unit reaches no store, no service internal and no configuration of the server.
+The agent tools and the verification commands run as the OS user of their host process.
+At the `server` placement, that user is the user of the server.
+Those commands can therefore read the files of that user and can signal the server process.
+Its log, its workspace, its state, its pi tools, its telemetry and its lifecycle stay with the worker unit at both placements.
+A failure of the code of one worker unit at the `server` placement stops no other instance and no service of the server.
+An uncaught error and a thread exit are such failures.
+This containment covers no command that the agent runs.
 
 The tool of an agent and the verifications of a node run code that the repository supplies.
 The Worker Service runs them inside a trust boundary that the operator provides.
 The host of a `worker` application is inside that trust boundary.
+The host of a `server` application that runs an instance at the `server` placement is inside that trust boundary too.
 A rule on the content of a command is a policy and no trust boundary.
 
-The sequence diagram below shows the creation of a steps instance and its first work pull, on a node with no attempt.
+The sequence diagram below shows the start of a steps instance at the `server` placement and its first work pull.
+The node holds no attempt.
 In every sequence diagram of this page, a colored block names the service that owns its steps: yellow the Project Service, blue the Scheduler Service, green the Mission Service, red the Worker Service, grey an external system.
 A diagram shows the operations of the Worker Service and the responses that it receives, and no mechanism of another service.
 
@@ -203,13 +240,15 @@ sequenceDiagram
     participant M as Mission Service
 
     rect rgb(255, 243, 205)
-        W->>P: read the worker bindings and their instance counts
-        P-->>W: worker binding, worker, instance count
+        W->>P: read the worker bindings, their placements and their instance counts
+        P-->>W: worker binding, worker, placement server, instance count
     end
     rect rgb(248, 215, 218)
-        W->>I: create the instance, mint the runtime identity
-        Note over W,I: one instance for each unit of the instance count, no record persists
-        W->>I: instance healthcheck (effective configuration resolves)
+        W->>I: start the instance of one pool slot
+        Note over W,I: one instance for each pool slot, under the client identity of the slot
+        I->>W: registration through the worker transport
+        W-->>I: runtime identity
+        W->>I: instance healthcheck (effective configuration resolves, registration live)
     end
     rect rgb(214, 234, 248)
         I->>S: work pull (worker binding, runtime identity, compatibility declarations)
@@ -411,12 +450,8 @@ sequenceDiagram
         Note over M,S: the transition revokes the claim of the execution
     end
     rect rgb(214, 234, 248)
-        alt hosted execution
-            S-->>E: in-process abort from the transaction that ends the execution
-        else other execution
-            E->>S: next execution call
-            S-->>E: call refused
-        end
+        E->>S: next execution call or claim read
+        S-->>E: call refused, or claim not running
     end
     rect rgb(248, 215, 218)
         E->>A: stop the agent
@@ -439,7 +474,7 @@ It checks that the claim is an evaluation claim.
 It checks that a current passing assessment of the attempt stands.
 The action performer obtains every operand from the records and the evidence snapshot.
 The action performer calls `intake.action.perform` of the [Intake Service](intake-service.md#outbound-operations-and-checks), which calls the [configured-action write](repository.md#write-operations) of the Repository component.
-It depends on no workspace of a hosted execution.
+It depends on no workspace of an execution.
 The action performer serializes the invocations of one execution identity.
 It never dispatches an action whose earlier dispatch is unresolved, across callers and invocations.
 
@@ -824,6 +859,8 @@ The [Project Service](project-service.md) owns bindings, their entries and confi
 The [Scheduler Service](scheduler-service.md) owns the work queue, claim, execution record, fixed deadline and live-execution accounting.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the request evidence and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
+It owns the worker unit, both placement wrappers and the pool slots.
+The [Gateway Service](gateway-service.md#the-restful-api) owns the invocation chain that both worker transports reach.
 It owns the healthcheck, the compatibility declarations, the workspace, the model connector and the prompt composer.
 It owns the action performer, the MCP server and the exposure of its tools.
 It owns the lifecycle of an execution between the claim and the release.

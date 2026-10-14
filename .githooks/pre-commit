@@ -21,15 +21,15 @@ for path in $paths; do
 	staged=$(git -C "$root" ls-files --stage -- "$path" | awk '$1 == "160000" {print $2}')
 	[ -n "$staged" ] || continue
 
+	recorded=$(git -C "$root" rev-parse --quiet --verify "HEAD:$path" || true)
+	[ "$staged" = "$recorded" ] && continue
+
 	branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD || true)
 	if [ "$branch" != "main" ]; then
 		echo "pre-commit: $path is not on main (${branch:-detached HEAD})." >&2
 		failed=1
 		continue
 	fi
-
-	recorded=$(git -C "$root" rev-parse --quiet --verify "HEAD:$path" || true)
-	[ "$staged" = "$recorded" ] && continue
 
 	git -C "$dir" fetch --quiet origin main || {
 		echo "pre-commit: $path fetch failed. Cannot verify the staged pointer." >&2

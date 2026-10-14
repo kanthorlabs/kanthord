@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools \
-	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume pi-tools-update
+	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale pi-tools-update
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -75,22 +75,31 @@ help:
 	@echo ""
 	@echo "e2e"
 	@echo "  e2e              Start everything for an e2e run in one step. RUN=name"
-	@echo "                   (todoapp-<yymmdd-HHMM>). It installs the engine dependencies,"
-	@echo "                   starts make dev in the background when the daemon is down,"
-	@echo "                   then runs e2e-start. GitHub calls use E2E_GH_TOKEN only"
-	@echo "                   Dev log in .dev/e2e/dev.log"
+	@echo "                   (todoapp-<yymmdd-HHMM>). PLACEMENT=server|worker (default server)."
+	@echo "                   It installs the engine dependencies, starts make dev in the background"
+	@echo "                   when the daemon is down, then runs e2e-start."
+	@echo "                   GitHub calls use E2E_GH_TOKEN only. Dev log in .dev/e2e/dev.log"
 	@echo "  e2e-start        Start an e2e run against the daemon of make dev. RUN=name"
+	@echo "                   PLACEMENT=server|worker (default server)."
+	@echo "                   At server placement: writes placement into each worker binding,"
+	@echo "                   starts no worker processes; the daemon pool manages the instances."
+	@echo "                   At worker placement: spawns a process for each instance."
 	@echo "                   It creates the LLM and repository credentials, enablements,"
-	@echo "                   a project, the base branch e2e/<RUN> from the fixture,"
-	@echo "                   the plan and the workers"
-	@echo "                   It pauses the project right after the creation, so that no worker"
-	@echo "                   claims a node. PAUSED=0 keeps the project active"
+	@echo "                   a project, the base branch e2e/<RUN> from the fixture, the plan"
+	@echo "                   and the workers. It pauses the project right after the creation,"
+	@echo "                   so that no worker claims a node. PAUSED=0 keeps the project active."
 	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
 	@echo "  e2e-watch        Print project state changes, node changes, execution stops,"
-	@echo "                   worker exits and PRs. RUN=name"
-	@echo "  e2e-stop         Stop the workers of a run. RUN=name"
-	@echo "  e2e-restart      Restart the workers of a run on the current engine code. RUN=name"
+	@echo "                   instance changes (server) or worker exits (worker), and PRs. RUN=name"
+	@echo "  e2e-stop         At server placement: pause the project."
+	@echo "                   STOP=daemon stops the daemon of make dev instead."
+	@echo "                   At worker placement: stop the worker processes. RUN=name"
+	@echo "  e2e-restart      At server placement: restart the daemon of make dev."
+	@echo "                   At worker placement: restart the worker processes on the current"
+	@echo "                   engine code. RUN=name"
 	@echo "  e2e-resume       Resume the paused project of a run, so that workers claim nodes. RUN=name"
+	@echo "  e2e-scale        Change instance_count of a worker binding. RUN=name BINDING=name COUNT=n"
+	@echo "                   Refuses a run at the worker placement"
 	@echo ""
 	@echo "pi tools"
 	@echo "  pi-tools-update  Pin one pi tool (fd, rg) to a release in engine/static/pi-tools.json"
@@ -142,5 +151,7 @@ e2e-restart:
 	@$(S)/e2e/restart.sh
 e2e-resume:
 	@$(S)/e2e/resume.sh
+e2e-scale:
+	@$(S)/e2e/scale.sh
 pi-tools-update:
 	@$(S)/engine/pi-tools-update.sh

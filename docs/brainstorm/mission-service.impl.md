@@ -28,7 +28,7 @@ Every record that names an actor stores one of three forms, and the server deriv
 An execution assessment is the exception: it stores the execution identity, and the read derives the execution form. A human assessment stores the human form.
 
 - `{ kind: "human", account, name }` from the human identity: `account` is the `sub` of the JWT and `name` its display name, under the bounds of [gateway-service.impl.md](gateway-service.impl.md#the-jwt). A human carries no ULID.
-- `{ kind: "execution", execution_id, client_id, name }` from the execution record of the claim: `execution_id` follows the identity that the Scheduler Service declares; `client_id` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
+- `{ kind: "execution", execution_id, client_id, name }` from the execution record of the claim: `execution_id` follows the identity that the Scheduler Service declares; `client_id` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts). An external harness assessment identifies its client identity through this form.
 - `{ kind: "service", service }` for a service, with `service: "scheduler"` for the loss declaration of the Scheduler Service and `service: "mission"` for the landed-commit evidence of a request.
 - No input carries an actor, and an actor field in an input answers HTTP 400 with an issue list.
 

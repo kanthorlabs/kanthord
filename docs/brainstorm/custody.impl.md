@@ -123,8 +123,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The view reads the revision that the execution pins.
 - `modify()` serializes on the pinned revision and writes the pi-ai result in place.
 - The view refuses `delete()`.
-- At `server` placement, the view reads custody directly; plaintext stays inside the process.
-- At `worker` placement, the view reads the decrypted handover.
+- At every placement, the view reads the decrypted handover. The worker unit at the `server` placement reads no custody record directly.
 - Custody drops the view at execution end.
 - A workbench view reads the newest live revision and pins no revision.
 
@@ -141,7 +140,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The client secret protects the handover and the refresh report alone. Registration, the work pull and the MCP calls stay bearer-only.
 - The envelope has no forward secrecy. A client secret that leaks later opens every recorded envelope of its client identity.
 - The handover carries the revisions that the execution pins.
-- Custody refreshes no pinned revision on the server while a live execution at `worker` placement holds it.
+- Custody refreshes no pinned revision on the server while a live execution holds it.
 - Two executions can hold one revision at once.
 - The refresh-token rotation behaviour of concurrent holders remains a provider constraint.
 - Custody logs the execution identity and record identity of each handover and report, never material.

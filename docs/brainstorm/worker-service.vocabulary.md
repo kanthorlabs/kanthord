@@ -31,14 +31,48 @@ The set is closed and it holds two values.
 ## placement
 
 The placement of an instance is the application of kanthord that runs it.
+A worker binding of a worker that kanthord hosts states the placement of all its instances.
 The set is closed and it holds two values.
 
-- **`server`**, which runs the instance inside the `server` application
+- **`server`**, which runs the instance in a worker thread of the `server` application
 - **`worker`**, which runs the instance inside a `worker` application
 
-An instance of `coder@1` inside the `server` application holds the `server` placement.
-An instance of `coder@1` inside a `worker` application holds the `worker` placement.
+Both placements run the same [worker unit](#worker-unit) inside the same worker boundary.
+The placement changes the [placement wrapper](#placement-wrapper) and the [worker transport](#worker-transport) only.
+Worker binding `coder-main` holds `placement: server` and instance count 2, so the `server` application runs two instances of `coder@1`.
+Worker binding `coder-remote` holds `placement: worker`, so each instance of `coder@1` runs in its own `kanthord serve worker` process.
 An instance that an external harness hosts holds no placement, because kanthord runs it never.
+
+## worker unit
+
+The worker unit is the application code that hosts one instance.
+It owns the registration, the heartbeat, the work pulls and the executions of the instance.
+It also owns the workspace, the pi tools, the transcripts and the log of the instance.
+It is the same code at both placements, and it holds no branch on its placement.
+The instance of `coder-main` and the instance of `coder-remote` run the same worker unit.
+
+## placement wrapper
+
+The placement wrapper is the code that starts a worker unit at one placement.
+It gives the worker unit its transport, its directories, its environment and its client secret.
+The set is closed and it holds two values.
+
+- **`worker` wrapper**, the `kanthord serve worker` process, which reads `cli.yaml` and builds the HTTP transport
+- **`server` wrapper**, the pool host of the `server` application, which starts one worker thread for each started pool slot
+
+## worker transport
+
+The worker transport is the one object through which a worker unit reaches kanthord.
+It reaches only the operations that the published API routes.
+The invocation chain refuses each operation that the machine identity of the instance may not call.
+The set is closed and it holds two values.
+
+- **HTTP transport**, which sends each call to the RESTful API with the machine JWT of the instance
+- **port transport**, which sends each call over the message port of a worker thread to the Gateway invocation chain
+
+Both transports reach the same invocation chain, so a call answers the same result and the same refusal on both.
+The instance of `coder-main` calls `scheduler.work.pull` over the port transport.
+The instance of `coder-remote` calls the same operation over the HTTP transport.
 
 ## steps method
 
@@ -183,7 +217,7 @@ The MCP server is the server component that exposes tools as one form of the API
 The server runs one MCP server.
 Its client kinds form a closed set of two values.
 
-- **native agent**, under the execution identity of its hosted execution
+- **native agent**, under the machine identity of its instance and the execution identity of its live claim
 - **external harness**, under the credential of its client identity and the execution identity of its live claim
 
 Each tool maps to one method of a [platform implementation](repository.vocabulary.md#platform-implementation) of the Repository component or to the action performer.
@@ -198,8 +232,10 @@ It exposes no direct platform write.
 ## runtime identity
 
 The runtime identity is the identity that the Worker Service mints for a worker instance and that names its worker binding.
-The Worker Service creates two instances for worker binding `coder-main`, whose instance count is 2, and mints a runtime identity for each one.
-A server restart creates two new instances with two new runtime identities.
+Worker binding `coder-main` holds the `server` placement and instance count 2.
+The `server` application starts two instances, and each one registers and receives its runtime identity.
+A server restart starts the two instances again under the same two client identities.
+A registration that is still live resumes with its runtime identity.
 A revision of `coder-main` that changes the model identifier of its entry replaces no instance.
 
 ## heartbeat
@@ -223,6 +259,14 @@ The pool is the instances of one worker binding.
 The pool of worker binding `coder-main` holds two instances.
 Both are idle, both pull, and the Scheduler serves "Add password reset" to the first pull.
 The second instance keeps its pull outstanding and starts no other pull.
+
+## pool slot
+
+A pool slot is one unit of the instance count of a worker binding at the `server` placement.
+A slot holds a slot number from 0 to 63 and one client identity.
+The client identity stays the same across server restarts, and a new binding generation gets new ones.
+Worker binding `coder-main` with instance count 2 holds slots 0 and 1.
+A raise of the count to 3 adds slot 2.
 
 ## compatibility declarations
 

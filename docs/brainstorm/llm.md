@@ -53,7 +53,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 ## Placement
 
 - The component runs in the process of its caller.
-- The model connector runs in the worker application for an execution at `worker` placement, with the material of a [credential handover](custody.vocabulary.md#credential-handover).
+- The model connector runs in the worker unit for an execution at every placement, with the material of a [credential handover](custody.vocabulary.md#credential-handover).
 - The caller keeps its runtime duties.
 
 ## Resource healthcheck

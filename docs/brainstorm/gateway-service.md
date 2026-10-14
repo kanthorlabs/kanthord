@@ -61,7 +61,11 @@ It describes no mechanism of another service.
 ## Machine identities
 
 - The Gateway Service authenticates a machine.
-- A human obtains the expiring credential of a machine only through an explicit local generation command, and that credential is the only credential of the machine.
+- A machine at the `worker` placement and an external harness receive their expiring credential only from a human, through an explicit local generation command.
+- That credential is the only credential of the machine.
+- For an instance at the `server` [placement](worker-service.vocabulary.md#placement), the `server` application mints a machine credential in memory for each call.
+- That credential names the client identity of the [pool slot](worker-service.vocabulary.md#pool-slot). It reaches no file and no worker unit.
+- The Gateway Service authenticates that credential like every other machine credential. The `server` placement grants no other path into the Gateway Service.
 - The credential names one [client identity](project-service.vocabulary.md#client-identity) and the worker binding that groups its instances. A client identity is never reused, and it never moves to another worker binding.
 - No database of the server holds a credential of a machine, a secret of a client identity or a list of the client identities of a worker binding.
 - The machine presents that credential on every request, including the registration of its instance.

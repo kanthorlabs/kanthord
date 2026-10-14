@@ -23,7 +23,7 @@ Organize `src/config`, `src/http`, `src/modules/auth`, `src/modules/todos`, `src
 - A clean Node 24 checkout installs with `npm ci`; other Node major versions fail the documented runtime check.
 - Tests prove constructing and importing the app factory does not listen on a port and does not open or create a database. The entrypoint alone owns process startup.
 - The runtime check accepts major 24 and rejects another major using a testable version input.
-- The source tree contains `src/config`, `src/http`, `src/modules/auth`, `src/modules/todos`, `src/modules/admin` and `src/db`. Routes call services and services call repositories.
+- The source tree contains `src/config`, `src/http`, `src/modules/auth`, `src/modules/todos`, `src/modules/admin` and `src/db`.
 - The app factory receives database, clock and logger as injected dependencies, not mutable global state.
 - The package lock matches the manifest. Tests, lint and formatting are real checks that return nonzero status on failure. A clean install and static checks succeed without disabling lint rules to hide defects.
 - Later objectives add their own suites; no placeholder suite passes without real assertions.

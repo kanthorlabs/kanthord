@@ -24,7 +24,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Records without a table
 
-- The pool of a worker binding and the runtime fields of an instance record are runtime-only. A `server` placement instance holds no `worker_instance` row.
+- The pool of a worker binding and the runtime fields of an instance record are runtime-only. A pool slot of a `server` placement binding registers like any instance and holds a `worker_instance` row.
 - The time of the last heartbeat is a monotonic-clock value in memory.
 - The MCP session `mcp_session_<ulid>` lives in memory and ends at the server stop.
 - The mutex of the action performer lives in memory.
@@ -217,7 +217,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A registration ends at a deregistration, at a heartbeat expiry, and at a removal or unavailability of its worker binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
 - A registration of a client identity that holds a live row answers that row and inserts nothing.
 - `worker.instance.resume` first settles an expired unsettled execution in the same transaction. It clears `ended_at` of an ended registration only while that row is the claimant of a `running` execution, and it takes the slot again. No other act clears `ended_at`.
-- An instance at the `server` placement registers never, so it holds no row.
+- A registration at a binding at the `server` placement is admitted only from the client identity of a pool slot of that binding. Another client identity answers 409 `worker.instance.placement_mismatch`.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
 
 ### Scheduler Service

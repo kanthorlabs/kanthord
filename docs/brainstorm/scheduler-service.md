@@ -158,7 +158,7 @@ The execution record holds these fields.
 - The execution identity that the claim mints.
 - The project.
 - The claimant: the worker binding and its instance.
-- For a registered instance, the client identity and the display name of its credential. The execution record reads both from the registration of its runtime identity through the Worker Service, also after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
+- For a registered instance, the client identity and the display name of its credential. The execution record reads both from the registration of its runtime identity through the Worker Service, also after deregistration. Every instance registers, so the record holds both at every placement. Both are attribution and no authority.
 - The node and its attempt.
 - The pinned node revision.
 - The node branch of the attempt, which the claim admission of the Mission Service answers.
@@ -254,8 +254,8 @@ Every Mission transition does the same.
 Each operation settles the loss in its own transaction, before it checks its precondition against the settled state.
 The pull lookup and the registration resume read a `running` execution, never merely a null `ended_at`.
 
-A hosted execution gets the abort in-process from the transaction that ends it.
-Every other execution learns of the end from its first refused call and aborts then.
+Every execution learns of the end from its first refused call and aborts then.
+The placement of its instance changes no part of this rule.
 An already running remote operation stays with B9 SC5.
 
 Four signals stay separate.

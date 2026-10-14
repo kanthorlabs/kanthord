@@ -1,10 +1,18 @@
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-const [engineDir, dashboardDir, bundle, blob, output] = process.argv.slice(2);
-if (!engineDir || !dashboardDir || !bundle || !blob || !output) {
+const [engineDir, dashboardDir, bundle, workerThreadBundle, blob, output] =
+  process.argv.slice(2);
+if (
+  !engineDir ||
+  !dashboardDir ||
+  !bundle ||
+  !workerThreadBundle ||
+  !blob ||
+  !output
+) {
   process.stderr.write(
-    "usage: sea-config.mjs <engine dir> <dashboard dir> <bundle> <blob> <output>\n",
+    "usage: sea-config.mjs <engine dir> <dashboard dir> <bundle> <worker-thread-bundle> <blob> <output>\n",
   );
   process.exit(1);
 }
@@ -35,7 +43,10 @@ if (
   process.exit(1);
 }
 
-const assets = { "package.json": join(engineDir, "package.json") };
+const assets = {
+  "package.json": join(engineDir, "package.json"),
+  "worker-thread.cjs": workerThreadBundle,
+};
 addFiles(assets, join(engineDir, "static"), "");
 addFiles(assets, dashboardDir, "dashboard/");
 addFiles(assets, join(piToolsDir, "bin"), "pi-tools/bin/");

@@ -693,16 +693,17 @@ The public interfaces have three kinds.
 - A service imports no private module of a peer.
 - A service names no table of a peer.
 - The registry gives one typed client interface for each service.
-- Two entry adapters implement that interface.
+- Three entry adapters implement that interface.
 - The direct adapter runs inside the `server` application.
 - The HTTP adapter runs inside another application and calls the published route.
-- Both adapters enter one invocation chain with validation, the idempotency component, the access policy and the handler.
+- The port adapter runs inside a worker thread of the `server` application, for a worker unit at the `server` placement. Its other end enters the invocation chain with the bearer token of the HTTP route and with no forwarded identity. [The worker transport](worker-service.impl.md#the-worker-transport) rules it.
+- All adapters enter one invocation chain with validation, the idempotency component, the access policy and the handler.
 - The direct adapter invokes no handler of its own.
 - The composition root of an application builds every client once.
 - The `server` uses `directClient(invocation, peerOperations)`.
 - Another application uses `httpClient(peerOperations, endpoint, token)`.
 - `kanthord serve worker` builds the HTTP adapter with one endpoint.
-- No service and no worker instance selects a transport.
+- No service and no worker unit selects a transport. The placement wrapper of a worker unit selects its worker transport.
 
 An operation declares its execution contract.
 
@@ -710,7 +711,7 @@ An operation declares its execution contract.
 - Each operation declares the store that `caller.commit` opens.
 - Its `interaction` declares the lifetime as `unary`, `wait` or `stream`.
 - Each operation declares what a cancellation stops.
-- Both adapters carry that cancellation.
+- Every adapter carries that cancellation.
 - A `unary` operation is one request and one answer.
 - A `wait` ends on cancellation.
 - Cancellation of a `wait` ends no accepted obligation under it.
@@ -738,7 +739,7 @@ An operation declares its execution contract.
 - A failed proof answers 403 with the error code `gateway.invocation.execution_proof_failed` before the handler runs.
 - Every execution mutation repeats the full proof inside its write transaction under [Scheduler liveness](scheduler-service.md#liveness).
   A failed check answers 409 `scheduler.execution.not_running`.
-- The MCP server of the Worker Service runs the same proof component before each tool call, because its execution identity sits inside the JSON-RPC message and not in the operation input. [The MCP server contract](worker-service.impl.md#mcp-server) rules its JSON-RPC error and the in-process proof for a native agent at the `server` placement.
+- The MCP server of the Worker Service runs the same proof component before each tool call, because its execution identity sits inside the JSON-RPC message and not in the operation input. [The MCP server contract](worker-service.impl.md#mcp-server) rules its JSON-RPC error.
 - The proof establishes ownership and liveness, and it grants no operation authority.
 
 An operation serves one caller kind.
@@ -773,7 +774,7 @@ Caller propagation carries identity per call.
 - A service identity names its service and nothing else.
 - A background producer of a service calls a peer through the direct adapter with its service identity in `ClientOptions.identity`.
 - A value that no authority mints authorizes nothing on either adapter.
-- Both adapters carry the trace identity and the parent span of the caller.
+- Every adapter carries the trace identity and the parent span of the caller.
 
 A handler separates asynchronous work from its commit.
 
@@ -798,7 +799,7 @@ A handler separates asynchronous work from its commit.
 The invocation chain holds idempotency in memory.
 
 - The `caller` field of a record holds the service name for a service identity.
-- A mutation carries an idempotency key on both adapters.
+- A mutation carries an idempotency key on every adapter.
 - One logical invocation keeps its key across retries.
 - The idempotency component holds each record in memory with a TTL.
 - No store holds a replay record.
@@ -810,7 +811,7 @@ The invocation chain holds idempotency in memory.
 - The Tracking Service keeps `tracking.db` separate because telemetry and operational records grow fast.
 - One file couples their locking, retention and maintenance.
 
-Both adapters implement one transport-neutral value and error contract.
+Every adapter implements one transport-neutral value and error contract.
 
 - Inputs and outputs conform to their wire representation.
 - The direct adapter parses input with the operation schema.
@@ -1016,7 +1017,7 @@ Each service module exposes its contract and composition entry.
 - Gateway authentication holds `resolveMachine` with two injected read-only lookups.
 - Gateway authentication performs no worker registration.
 - The Worker Service binds its own operations through `declare(registry)`.
-- The Gateway owns the HTTP listener, JWT verification, human and machine identity minting, invocation chain, in-memory idempotency component, OpenAPI projection and both adapters.
+- The Gateway owns the HTTP listener, JWT verification, human and machine identity minting, invocation chain, in-memory idempotency component, OpenAPI projection, the direct and HTTP adapters and the port side of the port adapter.
 
 The kernel holds shared contracts and runtime components.
 
