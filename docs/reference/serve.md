@@ -8,7 +8,7 @@ Start an application and keep it running until cancellation, a shutdown signal, 
 
 ### Server
 
-Startup opens the operational log and SQLite store, applies every migration to a new database, and binds the listener. A configuration version or a database history that differs from the binary stops the start; run [upgrade](upgrade.md). A `master_key` that does not match an existing database stops the start with `system.config.master_key_mismatch`; restore the configuration file that created the database, or the matching database backup. The first start records the `master_key` of a new database. Startup issues no JWT and requires no terminal. Obtain human or machine tokens explicitly with [JWT generation](auth/jwt.md). The default listener is `127.0.0.1:31415`.
+Startup opens the operational log and SQLite store, applies every migration to a new database, and binds the listener. A configuration version or a database history that differs from the binary stops the start; run [upgrade](upgrade.md). A `master_key` that does not match an existing database stops the start with `system.config.master_key_mismatch`; restore the configuration file that created the database, or the matching database backup. The first start records the `master_key` of a new database. Startup issues no JWT and requires no terminal. Obtain human or machine tokens explicitly with [JWT generation](auth/jwt.md). The default listener is `127.0.0.1:31415`. Startup also installs the pinned `rg` and `fd` into `pi/bin/` of the state directory for the pi tools of a workbench session; a tool that cannot be installed or run stops the start with `worker.start.tool_missing`.
 
 `SIGINT` and `SIGTERM` initiate graceful shutdown with a 10-second bound. Shutdown stops admission, cancels waiting work and streams, drains in-flight work, and releases server resources. `SIGHUP` reopens the log; reopen failure initiates shutdown. Use [healthchecks](gateway/healthcheck.md) to inspect the running server.
 
@@ -29,7 +29,7 @@ This is a long-running process, not a JSON-returning command. A clean run exits 
 | Exit code `0`          | Application completed a clean run and shutdown.                                                                        |
 | Exit code `1`          | Startup or runtime failed; a [diagnostic](errors.md#cli-diagnostics) identifies the failure.                           |
 
-A pi tool that cannot be installed or run reports `worker.start.tool_missing`. A worker version-read failure reports `worker.version.unavailable`; a mismatch reports `worker.version.mismatch`.
+A pi tool that cannot be installed or run reports `worker.start.tool_missing` on the server and on the worker. A worker version-read failure reports `worker.version.unavailable`; a mismatch reports `worker.version.mismatch`.
 
 ## API shape
 

@@ -54,6 +54,11 @@ for _ in $(seq 1 60); do
 done
 [ "$ready" = 1 ] || die "the server did not answer. See $home/serve.log"
 log "server ready on $endpoint"
+for tool in fd rg; do
+	"$XDG_STATE_HOME/kanthord/pi/bin/$tool" --version >/dev/null ||
+		die "serve did not install a working $tool in $XDG_STATE_HOME/kanthord/pi/bin. See $home/serve.log"
+done
+log "pi tools installed by serve"
 
 version=$(curl -fsS "$endpoint/api/openapi.yaml" | sed -n 's/^  version: //p')
 [ "$version" = "$expected_version" ] ||
@@ -97,10 +102,12 @@ log "OAuth flow loaded inside the binary"
 if env -u KANTHORD_ENDPOINT "$binary" serve worker >"$home/worker.log" 2>&1; then
 	die "serve worker succeeded without a configuration. See $home/worker.log"
 fi
+grep -q '^worker\.start\.client_secret_absent:' "$home/worker.log" ||
+	die "serve worker did not refuse the absent client_secret. See $home/worker.log"
 for tool in fd rg; do
 	"$XDG_STATE_HOME/kanthord/pi/bin/$tool" --version >/dev/null ||
 		die "serve worker did not install a working $tool in $XDG_STATE_HOME/kanthord/pi/bin. See $home/worker.log"
 done
-log "pi tools installed by serve worker"
+log "pi tools kept by serve worker"
 
 log "smoke passed for $binary"
