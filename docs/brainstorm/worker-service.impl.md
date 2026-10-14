@@ -38,7 +38,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - The fetch writes `.pi-tools/<target>/bin/<tool>` and `.pi-tools/<target>/licenses/<tool>/` in the engine. Git ignores `.pi-tools/`. A digest mismatch stops the fetch. A present binary with the right digest is not downloaded again.
 - `make bootstrap`, `make release-build` and `make e2e` run the fetch.
 - The single binary embeds each binary of its target as the asset `pi-tools/bin/<tool>`, and each license file as `pi-tools/licenses/<tool>/<file>`.
-- The worker and the server both install the tools at startup, because a workbench session of the server also runs the pi tools `grep` and `find`. The server installs them after it creates the state directory and before it opens a service.
+- The worker unit and the server both install the tools at startup, because a workbench session of the server also runs the pi tools `grep` and `find`. The server installs them after it creates the state directory and before it opens a service.
 - Each reads the binary from the embedded asset inside the single binary, and from `.pi-tools/<host target>/` in a development checkout.
 - It checks `binary_sha256`. Then it writes the binary to `pi/bin/<tool>` of the state directory with mode `0755`, through a temporary file and a rename. It skips a binary whose file already has that digest. It writes the license files to `pi/bin/licenses/<tool>/`.
 - Then it runs `<tool> --version` from `pi/bin/`. A missing source, a host target outside the manifest, a digest mismatch or a failed run stops the start of the worker or of the server with `worker.start.tool_missing`.
@@ -142,7 +142,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup installs and checks the [pi tool binaries](#pi-tool-binaries) first. Then it resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order.
+- The startup order is: the wrapper resolves the client configuration and checks `client_secret`. Then the worker unit installs and checks the [pi tool binaries](#pi-tool-binaries), checks the server package version and registers the instance.
+- The wrapper does not install the pi tools.
 - The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
 - The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of the state directory with mode `0600`, and it keeps the newest 50 transcripts.
 - After the registration, the application logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
@@ -168,7 +169,9 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 [worker-service.md](worker-service.md#instances-and-hosting) requires one worker unit inside one worker boundary at both placements.
 
 - `src/apps/worker/unit.ts` holds `WorkerUnit`, the worker unit.
-- It takes `{ transport, client_secret, env, log, model_runtime_factory?, repository_transport? }`. It takes no endpoint, no token and no configuration path.
+- It takes `{ transport, client_secret, env, log, model_runtime_factory?, repository_transport?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
+- `log` is a log destination, or a line sink for a test.
+- The `env` of the worker unit equals the `process.env` of its thread.
 - `WorkerUnit` reads no `process.env`, installs no signal handler and calls no `process.exit`.
 - It resolves its directories with `directories(env)` of the `env` that its wrapper gives.
 - `WorkerUnit` offers `start()`, `run()`, `drain()` and `stop()`.
@@ -182,9 +185,12 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `src/worker/index.ts` keeps the server entry: `WorkerService`, its migrations and its configuration.
 - `local-git`, `verification` and `tool-table` take the `env` of the worker unit. They pass `childEnvironment(env)` to each child process and read no `process.env`.
 - The `worker` wrapper is `src/apps/worker/index.ts`. It resolves `cli.yaml`, checks `client_secret`, builds the HTTP transport and passes `process.env`.
-- It logs to stderr, installs the signal handlers and owns the 10-second watchdog and the exit code.
+- It logs to stderr, installs the signal handlers and owns the exit code. It arms its 10-second exit through `watchdog`.
 - The `server` wrapper is the pool host `src/apps/server/worker-pool.ts`. It starts one `node:worker_threads` thread for each started pool slot.
+- The `server` wrapper passes no `watchdog`.
 - The thread entry `src/apps/worker/thread.ts` builds the port transport and runs `WorkerUnit`.
+- The pool host sends a `parentPort` message `{ kind: "drain" }` or `{ kind: "stop" }`. `thread.ts` maps it to `drain()` or `stop()`.
+- After `run()` returns, `thread.ts` closes its port, and the thread ends by itself.
 - The release build embeds a bundle of `src/apps/worker/thread.ts` as the SEA asset `worker-thread.cjs`. The pool host starts it with `eval: true`.
 - A development checkout starts the TypeScript file.
 - No module of the worker unit names a placement. The placement exists only in the wrappers, in the transports and in the binding.
@@ -195,18 +201,23 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - It holds `gateway`, `worker`, `scheduler`, `mission` and `tracking`. Each is a `ServiceClient` of `src/kernel/operation.ts` over the operation map of its `contract.ts`.
 - `httpTransport(endpoint, token)` builds each client with `httpClient` of `src/gateway/client.ts`.
 - `portTransport(port)` builds each client over a `MessagePort`. It validates the input with the schema of the operation, as `httpClient` does. It holds no credential.
+- After a port close, `portTransport` refuses each new call at once as indeterminate.
 - The port carries the HTTP wire form. A call posts `{ call_id, operation_id, params, query, body, idempotency_key, traceparent, tracestate }`.
 - `params` and `query` hold the string values that `httpClient` writes into the path and the query string. `body` holds the JSON text, or null for an operation with no body.
 - A cancellation posts `{ call_id, cancel: true }`.
 - The answer is `{ call_id, status, body }`. The client maps it to an `OperationResult` as `httpClient` maps an HTTP answer.
-- `servePort(port, invocation, credential)` of `src/gateway/port.ts` serves the other end of the port. `src/gateway/index.ts` exports it.
+- `servePort(port, invocation, credential, logger)` of `src/gateway/port.ts` serves the other end of the port. `src/gateway/index.ts` exports it.
 - For each call, `servePort` answers the 404 of an absent route for an operation that has no HTTP route.
 - These are a `service` operation, a `direct: true` operation, a `stream` operation and an identity outside the five maps.
+- The route label of an unmatched call equals the HTTP label `/*`.
+- A malformed message with a readable `call_id` answers 400 `gateway.request.validation_failed`. `servePort` drops any other malformed message.
+- The check order equals the HTTP order: 413, then authentication, then `gateway.request.unexpected_body` or `gateway.request.invalid_json`.
 - It measures the body limit on the JSON text with `bodyLimitOf(operation)`, the same function that `src/gateway/service.ts` uses. A body above the limit answers 413 `gateway.request.body_too_large`.
 - It parses the JSON text with `parseJSON`, as the HTTP route does. A body on an operation with no body answers 400 `gateway.request.unexpected_body`.
 - It then calls `Invocation.invoke(operation_id, { params, query, body }, options)` with the options of the HTTP route.
 - The options hold `authorization` set to `Bearer <JWT>` from `credential()`, the idempotency key, the trace context, a request identity and a cancellation context. They hold no `identity` option.
 - `servePort` writes the same Gateway request records as the HTTP route.
+- A failure inside the serve handler answers 500 and never stops the server.
 - It cancels the context of a call at its cancellation message, at the close of the port and at the end of the thread.
 - The worker unit calls no `stream` operation. The MCP path through the port transport is a [HANDOFF](HANDOFF.md#worker-service) item.
 
@@ -268,6 +279,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The root of a slot is `workers/<client_id>/` of the state directory of the server, with mode `0700`.
 - The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it.
 - The thread starts with its own `env` and never with `SHARE_ENV`.
+- The thread refuses a start with `worker.thread.directory_invalid` when any of `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` is absent or not absolute.
 - The pool host sets `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` to `config/`, `state/`, `data/` and `cache/` of the slot root.
 - The `env` also holds these server variables when they are set: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR`.
 - It also holds `SSH_AUTH_SOCK`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` when they are set.
@@ -278,7 +290,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The worker unit installs and checks the [pi tool binaries](#pi-tool-binaries) into its own `pi/bin/` at its start, at both placements.
 - The `server` wrapper gives the worker unit `LogDestination.File`, so the worker unit writes `kanthord.log` of its own state directory.
 - The thread starts with `stdout: true` and `stderr: true`. The pool host appends both streams to `stderr.log` of the slot root.
-- The server log holds the pool records only.
+- The server log holds the pool records and the Gateway request records of each port, and no record of the worker unit.
 - The worker unit sends its telemetry through the `tracking` client of its transport at both placements.
 - An uncaught exception or a `process.exit` of a thread ends that thread only.
 
@@ -293,19 +305,32 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
   - `src/llm/` files `model-connector.ts`, `platforms.ts` and `provider-failure.ts`;
   - `src/repository/index.ts`, `src/custody/client.ts`, `src/gateway/client.ts`, `src/gateway/client-result.ts` and `src/worker/catalog.ts`;
   - `src/worker/unit/` from `src/apps/worker`.
+- The worker elements import only `RepositoryComponent` from `src/repository/index.ts`.
+- In production, `src/apps/worker/` imports only `index.ts` of `src/worker/unit/`.
+- Non-test files of `src/worker/unit/` and `src/apps/worker/` import no `**/test-support.ts`, including `src/kernel/test-support.ts`.
 - Every other target is a boundary error.
 - Examples are a `service.ts`, `src/gateway/invocation.ts`, `src/gateway/port.ts`, `src/gateway/auth/`, `src/config/` and `src/apps/server/`.
 - `@typescript-eslint/no-restricted-imports` in both elements refuses `node:sqlite` and a value import of `src/kernel/store.ts`.
-- It refuses `node:worker_threads` outside `src/apps/worker/thread.ts`.
-- `no-restricted-properties` refuses `process.env`, `process.exit`, `process.on`, `process.kill`, `process.abort` and `process.dlopen`.
-- It applies to `src/worker/unit/` and to every file of `src/apps/worker/` except `index.ts` and `thread.ts`.
+- It refuses `node:process`, `process`, `node:module` and `module`.
+- It refuses `node:worker_threads` and `worker_threads` outside `src/apps/worker/thread.ts`. A type import is excepted.
+- `no-restricted-properties` refuses `process.env`, `process.exit`, `process.exitCode`, `process.on`, `process.once`, `process.addListener`, `process.kill`, `process.abort` and `process.dlopen`.
+- `no-restricted-globals` refuses the globals `process`, `globalThis` and `global`.
+- `no-restricted-syntax` refuses a dynamic `import()`.
+- Both rules apply to `src/worker/unit/` and to every file of `src/apps/worker/` except `index.ts` and `thread.ts`. Only those two files use the global `process`.
+- `killProcessGroup` of `src/kernel/process-group.ts` is the one signal path of the worker unit.
+- It signals only the group of a detached child that the unit started. It refuses the pid and the parent pid of its own process.
+- Test files may use `src/agent/test-support.ts`, `src/repository/connector.ts`, `src/repository/node-branch.ts`, `src/worker/test-support.ts` and `src/kernel/test-support.ts`.
+- Test files and `*test-support.ts` files of both elements are exempt from the global, property and dynamic import rules.
+- Tests of `src/apps/server/` may import `src/worker/unit/index.ts`, `src/worker/unit/test-support.ts`, `src/apps/worker/transport.ts` and `src/apps/worker/thread-data.ts`.
 - `src/apps/server/import-boundaries.test.ts` lints probes in both elements.
 - An import of `src/worker/service.ts`, `src/project/service.ts`, `src/gateway/invocation.ts`, `src/config/index.ts` or `node:sqlite` is an error. A value import of `src/kernel/store.ts` is an error.
 - Each refused property of `process` is an error. An import of `src/scheduler/contract.ts` is admitted.
 - The test counts each new lint rule, so a rule that a later edit removes fails the test.
 - A closure test builds `src/apps/worker/thread.ts` with esbuild and reads its metafile.
-- The metafile holds no `src/*/service.ts`, no `src/kernel/store.ts`, no file of `src/config/`, no file of `src/gateway/invocation.ts` or `src/gateway/auth/`, and no `node:sqlite`.
-- The thread receives `workerData` with `port`, `client_secret` and `log` only, and the port in the transfer list.
+- Each direct import of a worker-element file in the metafile passes the lint rules of the worker elements.
+- Each transitive file sits under the directory of an allowed direct target, or is a `src/*/contract.ts`.
+- It holds no `service.ts` or `store.ts` outside `src/kernel/`, no `invocation.ts`, no `port.ts`, no file of `src/config/` or `src/gateway/auth/`, no `node:sqlite` and no `node:module`.
+- The thread receives `workerData` with `port`, `client_secret` and `log` only, and the port in the transfer list. `workerData.log` is always `file`.
 - A structured clone carries no function, no store and no service object. `WorkerUnit` takes one transport and no other client.
 - Tests assert the keys of `workerData`, the keys of the thread `env` and the mode of the slot root.
 - Tests assert the place of `kanthord.log` and `stderr.log`, and no record of the worker unit in the server log.
@@ -314,7 +339,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - It runs `httpTransport` against a started Gateway and `portTransport` against `servePort` of the same server.
 - It asserts the same status, the same error code and the same body for each case:
   - a registration, a second registration of the same client identity, and a registration above the count with 409 `worker.instance.slot_unavailable`;
-  - a heartbeat, and a work pull of a paused project that answers no work;
+  - a heartbeat;
+  - a pull of a paused project gets no work from the claim and waits for a wakeup. The case cancels the pull after 500 ms on both transports. It asserts an indeterminate outcome and a Gateway 503 request record on both;
   - an execution operation that names an execution of another project, with 403 `gateway.invocation.execution_proof_failed`;
   - an execution operation that names a claim of another binding, with the same 403;
   - a `human` operation with 401;
@@ -456,6 +482,7 @@ An external harness reaches the same MCP server, and pi reaches it as a tool sou
 The third source is the other tools that a project adds, including other MCP servers.
 The fourth source is the host-supplied tools that the `worker` application serves in its own process.
 An agent declaration names its host tools: `swe@1` holds `evidence-upload`, and `re@1` holds none.
+The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
