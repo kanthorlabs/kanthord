@@ -14,7 +14,7 @@ Startup opens the operational log and SQLite store, applies every migration to a
 
 ### Worker
 
-The worker requires `rg` and `fd` (or `fdfind`) on the host. It reads the server's package version from the [OpenAPI root](gateway/openapi.md) and refuses an unavailable or different version. On a match, it calls [worker registration](worker/register.md), sends heartbeats, pulls work from the Scheduler, and executes each claim. It opens no database and reads no server configuration.
+The worker first installs its pinned `rg` and `fd` into `pi/bin/` of the state directory. It takes neither from `PATH`. It reads the server's package version from the [OpenAPI root](gateway/openapi.md) and refuses an unavailable or different version. On a match, it calls [worker registration](worker/register.md), sends heartbeats, pulls work from the Scheduler, and executes each claim. It opens no database and reads no server configuration.
 
 `SIGINT`, `SIGTERM`, or cancellation stops the pull loop and deregisters the worker instance. A stop during a live execution cancels that execution and fails with `worker.stop.execution_live`.
 
@@ -29,7 +29,7 @@ This is a long-running process, not a JSON-returning command. A clean run exits 
 | Exit code `0`          | Application completed a clean run and shutdown.                                                                        |
 | Exit code `1`          | Startup or runtime failed; a [diagnostic](errors.md#cli-diagnostics) identifies the failure.                           |
 
-A missing `rg` or `fd` reports `worker.start.tool_missing`. A worker version-read failure reports `worker.version.unavailable`; a mismatch reports `worker.version.mismatch`.
+A pi tool that cannot be installed or run reports `worker.start.tool_missing`. A worker version-read failure reports `worker.version.unavailable`; a mismatch reports `worker.version.mismatch`.
 
 ## API shape
 
