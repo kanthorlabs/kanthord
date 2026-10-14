@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools \
-	e2e e2e-start e2e-watch e2e-stop e2e-restart
+	e2e e2e-start e2e-watch e2e-stop e2e-restart pi-tools-update
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -40,6 +40,7 @@ help:
 	@echo "                   DRY_RUN=1 prints the next tag. VERSION=26.10.1 forces one"
 	@echo "                   YES=1 skips the confirmation. A rerun resumes a partial release"
 	@echo "  release-build    Build dist/kanthord-<os>-<arch>: engine, assets, dashboard"
+	@echo "                   The binary embeds the pi tools (fd, rg) of its target"
 	@echo "                   Needs an official Node 24. OUTPUT=path writes another path"
 	@echo "  release-smoke    Start the binary in a disposable home and call the API"
 	@echo "                   BINARY=path tests another binary"
@@ -86,6 +87,11 @@ help:
 	@echo "  e2e-watch        Print node changes, execution stops, worker exits and PRs. RUN=name"
 	@echo "  e2e-stop         Stop the workers of a run. RUN=name"
 	@echo "  e2e-restart      Restart the workers of a run on the current engine code. RUN=name"
+	@echo ""
+	@echo "pi tools"
+	@echo "  pi-tools-update  Pin one pi tool (fd, rg) to a release in engine/static/pi-tools.json"
+	@echo "                   TOOL=rg VERSION=15.1.0. It refuses a release younger than"
+	@echo "                   minimumReleaseAge"
 
 dev:
 	@$(S)/dev/run.sh
@@ -130,3 +136,5 @@ e2e-stop:
 	@$(S)/e2e/stop.sh
 e2e-restart:
 	@$(S)/e2e/restart.sh
+pi-tools-update:
+	@$(S)/engine/pi-tools-update.sh

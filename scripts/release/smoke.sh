@@ -94,4 +94,13 @@ login=$(curl -fsS -X POST "$endpoint/api/llm/credential/login" \
 case "$login" in *'"address":"https://'*) ;; *) die "the OpenAI Codex login answered no address" ;; esac
 log "OAuth flow loaded inside the binary"
 
+if env -u KANTHORD_ENDPOINT "$binary" serve worker >"$home/worker.log" 2>&1; then
+	die "serve worker succeeded without a configuration. See $home/worker.log"
+fi
+for tool in fd rg; do
+	"$XDG_STATE_HOME/kanthord/pi/bin/$tool" --version >/dev/null ||
+		die "serve worker did not install a working $tool in $XDG_STATE_HOME/kanthord/pi/bin. See $home/worker.log"
+done
+log "pi tools installed by serve worker"
+
 log "smoke passed for $binary"

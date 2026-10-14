@@ -19,7 +19,7 @@ RUN OUTPUT=/out/kanthord scripts/release/build.sh
 FROM docker.io/library/debian:trixie-slim
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
-		bash ca-certificates fd-find git openssh-client ripgrep tini \
+		bash ca-certificates git openssh-client tini \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& useradd --system --uid 10001 --home-dir /var/lib/kanthord --create-home kanthord
 COPY --from=build /out/kanthord /usr/local/bin/kanthord
