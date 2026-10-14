@@ -127,7 +127,6 @@ Ulrich stopped the run on 2026-10-12. The items below come from `.dev/notes.md`.
 - [ ] Added 2026-10-12. The run needs a provider with enough quota (S47). On 2026-10-12 every free provider was exhausted: the OpenRouter daily cap of 1,000 requests (reset 00:00 UTC), the NVIDIA rate limit, both Codex accounts and every Qwen free model. The fallback chain then spent more time in cooldown than in work. Decide between a wait for the OpenRouter reset, the paid `E2E_ANTHROPIC_KEY` and the unused `E2E_LLM_OPENCODE_KEY`.
 - [ ] Added 2026-10-12. Merge without a human step (S12 layer 2). Add a GitHub poll inbound so that a merge of a PR on the base branch completes the node with no manual `node check`. Add an auto-merge option and a model rotation command. Each merge still needs a full todo app check by hand: every suite, lint, the format check, the scratch-file check and the secret check.
 - [ ] Added 2026-10-12. Run the fresh attempt of S23 live: a human block, then an unblock with `start_point: "base_branch"`, then a native steps execution and a review on the branch `kanthord/<node id>-a<k>`. The engine e2e layer covers only the server path.
-- [ ] Added 2026-10-12. `tool-table.test.ts` "host tools require working rg and prefer fd over fdfind" fails under host load with `fd: not found` after about 19 s. It passes alone.
 
 ### Findings of the harness-1 run
 

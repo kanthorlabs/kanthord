@@ -240,7 +240,7 @@ To run 3 instances of `coder@1` for one project:
 1. Enable the agent `swe@1` with a provider and a model. See [agent enablement](../reference/agent/enablement.md).
 2. Add a worker binding with `"worker": "coder@1"` and `"instance_count": 3` to the project. See [project bindings](../reference/project/binding.md).
 3. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
-4. Start one `kanthord serve worker` process with each token. The host needs `git`, `rg` and `fd`, because the agent tools `grep` and `find` call them.
+4. Start one `kanthord serve worker` process with each token. The host needs `git`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
 
 The process keeps its files in the state directory of its host, `~/.local/state/kanthord/`:
 

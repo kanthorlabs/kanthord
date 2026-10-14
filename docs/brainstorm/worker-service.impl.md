@@ -38,9 +38,10 @@ Every runtime setup call carries an abort signal with a deadline.
 - The fetch writes `.pi-tools/<target>/bin/<tool>` and `.pi-tools/<target>/licenses/<tool>/` in the engine. Git ignores `.pi-tools/`. A digest mismatch stops the fetch. A present binary with the right digest is not downloaded again.
 - `make bootstrap`, `make release-build` and `make e2e` run the fetch.
 - The single binary embeds each binary of its target as the asset `pi-tools/bin/<tool>`, and each license file as `pi-tools/licenses/<tool>/<file>`.
-- At startup the worker reads each binary from the embedded asset inside the single binary, and from `.pi-tools/<host target>/` in a development checkout.
+- The worker and the server both install the tools at startup, because a workbench session of the server also runs the pi tools `grep` and `find`. The server installs them after it creates the state directory and before it opens a service.
+- Each reads the binary from the embedded asset inside the single binary, and from `.pi-tools/<host target>/` in a development checkout.
 - It checks `binary_sha256`. Then it writes the binary to `pi/bin/<tool>` of the state directory with mode `0755`, through a temporary file and a rename. It skips a binary whose file already has that digest. It writes the license files to `pi/bin/licenses/<tool>/`.
-- Then it runs `<tool> --version` from `pi/bin/`. A missing source, a host target outside the manifest, a digest mismatch or a failed run stops the start with `worker.start.tool_missing`.
+- Then it runs `<tool> --version` from `pi/bin/`. A missing source, a host target outside the manifest, a digest mismatch or a failed run stops the start of the worker or of the server with `worker.start.tool_missing`.
 - `pnpm run pi-tools:update <tool> <version>` of the engine rewrites the entry of one tool for the three targets with fresh digests. The root target `make pi-tools-update TOOL=<tool> VERSION=<version>` runs it. It refuses a release younger than the `minimumReleaseAge` of `pnpm-workspace.yaml`, 4320 minutes.
 - A test compares the tool set of the pi tool manager with the tools of the manifest. A pi version bump that adds or removes a tool fails it.
 - `bash`, `git` and `ssh` are host requirements of the [Repository component](repository.impl.md). A program that the agent runs through `bash`, for example `node` or `npm`, belongs to the environment of the project on the worker host.
