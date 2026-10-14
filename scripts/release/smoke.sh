@@ -99,6 +99,44 @@ login=$(curl -fsS -X POST "$endpoint/api/llm/credential/login" \
 case "$login" in *'"address":"https://'*) ;; *) die "the OpenAI Codex login answered no address" ;; esac
 log "OAuth flow loaded inside the binary"
 
+umask 077
+cli() {
+	KANTHORD_TOKEN="$token" "$binary" "$@"
+}
+cat >"$home/credential.json" <<'JSON'
+{"name":"smoke-anthropic","platform":"anthropic","metadata":null,"secret":{"key":"smoke_anthropic_key"}}
+JSON
+cli llm credential create --file "$home/credential.json" >/dev/null ||
+	die "llm credential create failed"
+cat >"$home/enablement.json" <<'JSON'
+{"agent_providers":[{"name":"default","provider":"anthropic","credential":"smoke-anthropic"}],"default_configuration":{"agent_provider":"default","model_identifier":"claude-sonnet-4-5","reasoning_effort":"off"},"fallback_configurations":[]}
+JSON
+cli agent enablement put swe@1 --file "$home/enablement.json" >/dev/null ||
+	die "agent enablement put failed"
+project_id=$(cli project create --name smoke-slot | node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).id') ||
+	die "project create failed"
+cat >"$home/bindings.json" <<'JSON'
+{"version":1,"bindings":{"general":{"kind":"worker","config":{"worker":"coder@1","instance_count":1,"placement":"server","entries":[{"agent":"swe@1","agent_provider":"default","model_identifier":"claude-sonnet-4-5","reasoning_effort":"off"}]}}}}
+JSON
+cli project binding apply "$project_id" --file "$home/bindings.json" >/dev/null ||
+	die "project binding apply failed"
+slot_ready=0
+for _ in $(seq 1 60); do
+	if cli worker instance list --project "$project_id" |
+		node -e '
+const { items } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+process.exit(items.some((item) => item.placement === "server" && item.draining === false) ? 0 : 1);
+'; then
+		slot_ready=1
+		break
+	fi
+	sleep 0.5
+done
+[ "$slot_ready" = 1 ] || die "no slot thread registered. See $home/serve.log"
+set -- "$XDG_STATE_HOME"/kanthord/workers/*/state/kanthord/kanthord.log
+[ -f "$1" ] || die "the slot thread wrote no log under $XDG_STATE_HOME/kanthord/workers"
+log "slot thread started inside the binary"
+
 if env -u KANTHORD_ENDPOINT "$binary" serve worker >"$home/worker.log" 2>&1; then
 	die "serve worker succeeded without a configuration. See $home/worker.log"
 fi
