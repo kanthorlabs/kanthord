@@ -57,12 +57,12 @@ The API returns HTTP `200` with one instance record. The CLI writes the same obj
 | `resource_identity` | string  | Worker binding, `worker:kanthord:<binding-name>`.                                |
 | `worker_name`       | string  | Supplied worker of the binding, for example `coder@1`.                           |
 | `host`              | string  | `kanthord` or `external-harness`.                                                |
-| `placement`         | string  | `worker`; present only when `host` is `kanthord`.                                |
+| `placement`         | string  | `worker` or `server`; present only when `host` is `kanthord`.                    |
 | `client_id`         | string  | Machine client identity that owns the registration, `client_identity_<ulid>`.    |
 | `name`              | string  | Display name of the machine client, 1 to 64 characters.                          |
 | `activity`          | string  | `idle`, `pulling` or `executing`.                                                |
 | `execution_id`      | string  | Execution that the instance claims; present only when `activity` is `executing`. |
-| `draining`          | boolean | Always `false` in the current implementation.                                    |
+| `draining`          | boolean | `true` when the pool of the server drains the slot; otherwise `false`.           |
 | `registered`        | boolean | Always `true`, because the operation returns live registrations only.            |
 
 ### `worker instance resume` and `worker instance deregister`

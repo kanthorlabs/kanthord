@@ -96,7 +96,8 @@ Their design, and the packaging of the `/work` orchestration skill that they car
   An unknown name answers 404 `worker.catalog.not_found`.
 - `worker.instance.list` is `GET /api/worker/instance` with optional `project_id`, `resource_identity`, `limit` and `cursor`. `project_id` is a `project_<ulid>` and `resource_identity` is `worker:kanthord:<binding name>`. `resource_identity` requires `project_id`, and a binding that the project does not hold answers 400 `worker.instance.binding_unknown`. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
 - `worker.instance.get` is `GET /api/worker/instance/:runtime_identity`. An unknown or ended instance answers 404 `worker.instance.not_found`.
-- An instance record holds `runtime_identity`, `project_id`, `resource_identity`, `worker_name`, `host`, `placement` for a kanthord host from the placement of the binding, `client_id` and `name` for a registered instance, `activity` (`idle`, `pulling` or `executing`), `draining` (true for a [pool slot](#the-pool) that drains), `execution_id` while executing, and `registered`. It holds no JWT.
+- An instance record holds `runtime_identity`, `project_id`, `resource_identity`, `worker_name`, `host`, `placement` for a kanthord host from the placement of the binding, `client_id` and `name` for a registered instance, `activity` (`idle`, `pulling` or `executing`), `draining` (from the [pool](#the-pool): true for a slot that drains), `execution_id` while executing, and `registered`. It holds no JWT.
+- The dashboard shows the placement of a server-placement instance as the text `· server` in the row description, and `draining` as an outline badge. An instance of an external harness shows neither.
 - The reads change no registration, no pool, no configuration and no scheduling state, and they infer no dead process from silence.
 - The instance healthcheck runs before a work pull and before a claim commits, not through a human inspection command. A disabled enablement shows in `agent get`; a missing enablement refuses the binding write under [configuration validation](agent.impl.md#agent-configuration-validation). The health report covers registration liveness.
 - Tests cover each human read and machine-JWT refusal, each unknown name or identity, the binding-to-project check, and records after registration, during execution and after a drain. They assert no JWT and no pool side effect.
@@ -169,7 +170,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 [worker-service.md](worker-service.md#instances-and-hosting) requires one worker unit inside one worker boundary at both placements.
 
 - `src/apps/worker/unit.ts` holds `WorkerUnit`, the worker unit.
-- It takes `{ transport, client_secret, env, log, model_runtime_factory?, repository_transport?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
+- It takes `{ transport, client_secret, env, log, model_runtime_factory?, repository_transport?, resume_pull_wait_ms?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
 - `log` is a log destination, or a line sink for a test.
 - The `env` of the worker unit equals the `process.env` of its thread.
 - `WorkerUnit` reads no `process.env`, installs no signal handler and calls no `process.exit`.
@@ -177,6 +178,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `WorkerUnit` offers `start()`, `run()`, `drain()` and `stop()`.
 - `stop()` follows the stop rules of [The worker application](#the-worker-application).
 - `drain()` stops further work pulls and lets the live execution end with its release or its closure. Then it deregisters and ends `run()`. An idle unit deregisters and ends at once.
+- A unit that drains before its first pull makes one resume pull. `resume_pull_wait_ms` (default 5000) bounds that pull, so that a running execution resumes.
+- `instanceHealthcheck` refuses a draining slot, so that pull claims no new work. The claim returns a `running` execution before the healthcheck.
 - The modules of `src/worker/` that only the worker unit runs move to `src/worker/unit/`. `src/worker/unit/index.ts` is their one entry.
 - Today these modules are `execution-run`, `native-agent`, `native-method`, `steps-objective`, `steps-initiative`, `judgement`, `judged-tasks`, `evaluation` and `evaluation-input`.
 - They also include `base-refresh`, `verification`, `local-git`, `workspace`, `budget`, `model-runtime`, `tool-table`, `host-tools`, `transcript` and `method-clients`.
@@ -190,8 +193,9 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The `server` wrapper passes no `watchdog`.
 - The thread entry `src/apps/worker/thread.ts` builds the port transport and runs `WorkerUnit`.
 - The pool host sends a `parentPort` message `{ kind: "drain" }` or `{ kind: "stop" }`. `thread.ts` maps it to `drain()` or `stop()`.
+- A start in drain mode sends the thread `{ kind: "drain" }`.
 - After `run()` returns, `thread.ts` closes its port, and the thread ends by itself.
-- The release build embeds a bundle of `src/apps/worker/thread.ts` as the SEA asset `worker-thread.cjs`. The pool host starts it with `eval: true`.
+- The release build embeds a bundle of `src/apps/worker/thread.ts` as the SEA asset `worker-thread.cjs`. It uses the same esbuild flags as `kanthord.cjs`. The pool host starts it with `eval: true`.
 - A development checkout starts the TypeScript file.
 - No module of the worker unit names a placement. The placement exists only in the wrappers, in the transports and in the binding.
 
@@ -207,6 +211,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - A cancellation posts `{ call_id, cancel: true }`.
 - The answer is `{ call_id, status, body }`. The client maps it to an `OperationResult` as `httpClient` maps an HTTP answer.
 - `servePort(port, invocation, credential, logger)` of `src/gateway/port.ts` serves the other end of the port. `src/gateway/index.ts` exports it.
+- `credential` is a `string` or a `Promise<string>`.
 - For each call, `servePort` answers the 404 of an absent route for an operation that has no HTTP route.
 - These are a `service` operation, a `direct: true` operation, a `stream` operation and an identity outside the five maps.
 - The route label of an unmatched call equals the HTTP label `/*`.
@@ -215,7 +220,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - It measures the body limit on the JSON text with `bodyLimitOf(operation)`, the same function that `src/gateway/service.ts` uses. A body above the limit answers 413 `gateway.request.body_too_large`.
 - It parses the JSON text with `parseJSON`, as the HTTP route does. A body on an operation with no body answers 400 `gateway.request.unexpected_body`.
 - It then calls `Invocation.invoke(operation_id, { params, query, body }, options)` with the options of the HTTP route.
-- The options hold `authorization` set to `Bearer <JWT>` from `credential()`, the idempotency key, the trace context, a request identity and a cancellation context. They hold no `identity` option.
+- The options hold `authorization` set to `Bearer <JWT>` from `credential`, the idempotency key, the trace context, a request identity and a cancellation context. They hold no `identity` option.
 - `servePort` writes the same Gateway request records as the HTTP route.
 - A failure inside the serve handler answers 500 and never stops the server.
 - It cancels the context of a call at its cancellation message, at the close of the port and at the end of the thread.
@@ -225,21 +230,22 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 
 - The pool host computes the client identity of a pool slot. It is `client_identity_<26 characters>`.
 - The label of the derivation is `worker/server-client/<project_id>/<resource_identity>/<generation>/<slot>`.
-- `<generation>` is the `created_at` of the first revision of the binding group after its latest tombstone.
-- A group with no tombstone takes the `created_at` of its revision 1.
+- `<generation>` is the `revision` of the first binding revision after the latest tombstone. The value only increases.
+- A group with no tombstone takes revision 1.
 - The characters are the Crockford base32 form of the first 128 bits of `deriveKey(master_key, label)`. The first character is in `0` to `7`, so the value passes the identity schema.
 - A binding that a project adds again after its removal therefore gets new client identities and new slot roots.
 - The derivation stores nothing. No database holds the client identity of a slot, as [machine identities](gateway-service.md#machine-identities) require.
 - The client identity of a slot is stable across server restarts. An increment of `gateway.auth.version` keeps it.
 - The `client_secret` of a slot is `deriveClientSecret(master_key, auth_version, client_id)`, the derivation of `kanthord auth jwt generate`.
-- `src/gateway/auth/jwt.ts` offers `generateSlotJWT`, which takes the `sub` of the slot. Only `src/apps/server/` imports it.
-- For each call, `credential()` mints a machine JWT in memory with `generateSlotJWT`.
+- `src/gateway/auth/jwt.ts` offers `generateSlotJWT`, which takes the `sub` of the slot. Only `src/apps/server/**` imports it.
+- The `server` wrapper passes `servePort` a credential that mints a machine JWT in memory with `generateSlotJWT` for each call.
 - The JWT holds the client identity of the slot, the project and the binding name.
-- It holds the name `server slot <slot>` and a lifetime of 60 s. It reaches no file and no thread.
+- It holds the name `server slot <n>` and a lifetime of 60 s (`SLOT_TOKEN_LIFETIME`). It reaches no file and no thread.
 - The Gateway authenticates that JWT through `Authentication.authenticate` and `resolveMachine`, as an HTTP bearer token.
 - The binding resolution, the tombstone check of `iat`, the registration match, the access policy, the registration requirement and the execution proof apply unchanged.
 - `worker.register` of a binding at the `server` placement checks that the client identity of the caller is a current pool slot of that binding.
 - A current pool slot is every slot in the pool state of the binding, a slot that drains included.
+- The pool check `isSlot` compares the project, the binding and the generation.
 - Another client identity answers 409 `worker.instance.placement_mismatch`.
 
 ## The pool
@@ -249,41 +255,49 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - For each slot, it holds the client identity, the runtime identity and the drain flag.
 - `src/worker/pool.ts` computes the plan of a reconciliation.
 - The pool host executes the plan through the `PoolHost` interface of `src/worker/contract.ts`.
-- `PoolHost` offers `clientIdentity(project_id, resource_identity, generation, slot)`, `start(slot)` and `drain(slot)`. The Worker Service holds no `master_key`.
+- `PoolHost` offers `clientIdentity(project_id, resource_identity, generation, slot)`, `start(slot)`, `drain(slot)`, `stop()` and `onEnded(listener)`. The Worker Service holds no `master_key`.
+- `stop` serves the server stop. `onEnded` tells the Worker Service that a slot ended. The Worker Service then removes the slot from the pool state.
 - The composition root of the `server` application passes the pool host in `Dependencies`.
-- The pool starts after every service starts and after the Gateway is ready.
 - The Worker Service reconciles every pool at server start and after each committed binding-set write.
-- The Project Service calls the Worker contract method `bindingsChanged(projectId)` after the commit of a binding-set write. The method writes nothing and returns at once.
+- `startPool` runs after every service and the Gateway are ready.
+- The Project Service calls the Worker contract method `bindingsChanged(projectId)` after the commit of a binding-set write. The method writes nothing.
+- `bindingsChanged` returns at once and runs the reconciliation on the next tick. The reconciliation logs a failure as `worker.pool.reconcile_failed`. `bindingsChanged` before `startPool` is a no-op.
 - The target of a binding is the instance count of its latest revision, or 0 for a removed binding.
-- At server start, the reconciliation also checks each slot number from the target to 63. A slot whose client identity holds a live registration starts in drain mode.
-- Below the target, the reconciliation first clears the drain flag of a slot that drains. Then it starts the lowest free slot numbers.
-- Above the target, it sets the drain flag on the excess slots. It takes idle slots first, then busy slots, highest slot number first in each group.
+- After a server restart, the reconciliation also checks each slot number from the target to 63. A slot at or above the target with a live registration starts in drain mode.
+- A raise resumes the lowest draining slots first. Then it starts the lowest free slot numbers.
+- A lower drains idle slots first, then busy slots, highest slot number first in each group.
 - An idle slot holds the activity `idle` or `pulling`.
-- The pool host retires every excess slot through `drain()`. An idle unit deregisters and ends at once. A busy unit ends its execution, deregisters and ends. The thread then ends.
+- A raise clears the drain flag, but the thread still finishes its drain. The pool host then starts the slot again.
+- The pool host retires every excess slot through `drain()`. An idle unit deregisters and ends at once. A busy unit ends its execution, deregisters and ends.
+- A drained slot ends through its own deregistration.
 - A target of 0 ends every registration of the binding in the transaction of the binding-set write, under [Registration heartbeat](#registration-heartbeat).
 - The pool host then drains every slot of the binding. A live execution learns of the end at its next call.
 - `worker.server_slot_limit` caps the started slots of the server, as a positive safe integer with the default `16`.
-- A slot above the cap stays unstarted.
-- The pool host then writes `worker.pool.slot_limit` with the project, the binding and the slot to the server log.
-- A thread that ends with an error or a nonzero exit code without a drain request fails.
-- The pool host then writes `worker.pool.instance_failed` with the project, the binding, the slot and the runtime identity to the server log.
-- It starts the slot again after a backoff of 1 s that doubles up to 30 s. It starts a slot that drains again in drain mode.
+- A slot over the cap stays pending. The pool host starts the lowest pending slot when an entry leaves.
+- A drain of a pending slot with no live registration removes the slot at once.
+- The pool host writes `worker.pool.slot_limit` with `project_id`, `binding` and `slot` to the server log.
+- A thread exit without a drain or stop request restarts the slot with a backoff of 1 s that doubles up to 30 s. The backoff resets after the thread lives 30 s.
+- The pool host writes `worker.pool.instance_failed` with `project_id`, `binding`, `slot`, `runtime_identity`, `exit_code` and `err` to the server log.
+- The pool host starts a slot that drains and still holds a live registration again in drain mode.
+- A slot that drains and has no live registration ends. The pool host deletes the entry and calls `ended()`.
 - The registration stays live during the backoff, so the new thread resumes the registration and its `running` execution.
-- At server stop, the server stops the pool before the Gateway stops the invocation chain. The pool host stops every slot.
+- At server stop, `stopPool` runs first, before quiesce. The pool host sends `{ kind: "stop" }` to each thread.
+- The pool host terminates a thread that does not end within the pool stop deadline of 5 s. The server watchdog is 10 s.
 - A stopped slot cancels its live execution. Only a worker unit with a live execution keeps its registration. An idle worker unit deregisters.
-- The pool host terminates a thread that does not end within 10 s.
 - The project pause reaches a server-placement instance through its work pull, as it reaches every instance. The pool reads no pause.
 
 ## Isolation of a server-placement instance
 
 - The root of a slot is `workers/<client_id>/` of the state directory of the server, with mode `0700`.
 - The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it.
+- The slot root holds `state/kanthord/kanthord.log` and `stderr.log`.
 - The thread starts with its own `env` and never with `SHARE_ENV`.
 - The thread refuses a start with `worker.thread.directory_invalid` when any of `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` is absent or not absolute.
 - The pool host sets `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` to `config/`, `state/`, `data/` and `cache/` of the slot root.
-- The `env` also holds these server variables when they are set: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR`.
-- It also holds `SSH_AUTH_SOCK`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` when they are set.
-- It holds no other variable, so it holds no `KANTHORD_*` variable and no `NODE_OPTIONS`.
+- The `env` is an allowlist of these server variables, when they are set: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR`.
+- The allowlist also holds `SSH_AUTH_SOCK`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
+- The `env` holds no other variable, so it holds no `KANTHORD_*` variable and no `NODE_OPTIONS`.
+- `HOME` and `SSH_AUTH_SOCK` are the values of the server user. The [HANDOFF](HANDOFF.md#worker-service) item of OS containment owns their containment.
 - The worker unit keeps its workspaces, its transcripts, its `pi/` directory and its log under `state/kanthord/` of the slot root. Two slots share no workspace.
 - Each thread holds its own `process.env` and its own module instance of pi.
 - `loadPi` therefore sets `PI_OFFLINE` and `PI_CODING_AGENT_DIR` for its thread only. pi of that thread finds `rg` and `fd` in `pi/bin/` of the slot.

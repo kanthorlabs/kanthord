@@ -192,6 +192,9 @@ The Worker Service produces the instance healthcheck before each work pull and o
 The healthcheck of an instance of a worker that kanthord hosts passes when two conditions hold.
 The effective configuration of the agent resolves under the current binding set, and the registration of the instance is live.
 The placement of the instance changes no part of the healthcheck.
+The healthcheck of a pool slot that drains fails.
+The claim returns a `running` execution of the instance before it takes the healthcheck.
+A draining instance therefore resumes its execution and claims no new work.
 
 The healthcheck of an instance that an external harness hosts passes when its registration is live.
 The Worker Service computes the healthcheck of every placement from the state of the server alone.

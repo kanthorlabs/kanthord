@@ -107,7 +107,7 @@ Two more states can interrupt any step. A human can pause a node, which sets `Pa
 
 ## One execution, from pull to release
 
-A native worker instance runs as one `kanthord serve worker` process. The process talks to the server only through the API. It repeats the same cycle for every execution:
+A native worker instance runs as one `kanthord serve worker` process or as one worker thread of the server. It talks to the server only through the API. It repeats the same cycle for every execution:
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "& { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
@@ -233,27 +233,38 @@ The start check of `coder@1` runs every task verification again on the head of t
 
 ## Where a worker runs
 
-Today every native instance runs as a separate `kanthord serve worker --endpoint <url> --token <token>` process. The process can run on the server host or on another host.
+The field `placement` of a worker binding chooses where its native instances run. The value is `server` or `worker`. An absent field means `worker`. A binding never changes its placement.
 
-To run 3 instances of `coder@1` for one project:
+- At the `server` placement, the server runs each instance as a worker thread. The server starts one thread for each unit of `instance_count`, up to `worker.server_slot_limit` (default 16). A human generates no token and starts no process.
+- At the `worker` placement, each instance is a separate `kanthord serve worker --endpoint <url> --token <token>` process. The process can run on the server host or on another host.
+
+Both placements run the same worker unit. The thread of a server slot reaches the server through the same API operations, under a machine identity of the same project and binding scope.
+
+To run 3 instances of `coder@1` for one project at the `server` placement:
 
 1. Enable the agent `swe@1` with a provider and a model. See [agent enablement](../reference/agent/enablement.md).
-2. Add a worker binding with `"worker": "coder@1"` and `"instance_count": 3` to the project. See [project bindings](../reference/project/binding.md).
-3. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
-4. Start one `kanthord serve worker` process with each token. The host needs `git`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+2. Add a worker binding with `"worker": "coder@1"`, `"instance_count": 3` and `"placement": "server"` to the project. See [project bindings](../reference/project/binding.md).
 
-The process keeps its files in the state directory of its host, `~/.local/state/kanthord/`:
+The server starts the 3 threads. A raise of `instance_count` starts more threads. A lowered count drains the excess threads: an idle thread ends at once, and a busy thread ends after its execution. A server restart starts each thread again under the same client identity, and a live registration resumes its running execution.
+
+To run 3 instances of `coder@1` at the `worker` placement:
+
+1. Enable the agent `swe@1`, and add the worker binding as above, with `"placement": "worker"` or with no `placement`.
+2. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
+3. Start one `kanthord serve worker` process with each token. The host needs `git`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+
+An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
 
 | Path                                 | Content                                                                                                                                                                          |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaces/<node_id>/<binding_id>/` | The checkout of one objective. The next execution of the objective on this host reuses it. The process removes it 7 days after its last use.                                     |
-| `workspaces/<execution_id>/`         | The fresh directory of one evaluation or initiative execution. The process removes it at the end.                                                                                |
-| `transcripts/<execution_id>.jsonl`   | The agent conversation of one execution, mode `0600`. The process keeps the newest 50.                                                                                           |
+| `workspaces/<node_id>/<binding_id>/` | The checkout of one objective. The next execution of the objective on this host reuses it. The instance removes it 7 days after its last use.                                    |
+| `workspaces/<execution_id>/`         | The fresh directory of one evaluation or initiative execution. The instance removes it at the end.                                                                               |
+| `transcripts/<execution_id>.jsonl`   | The agent conversation of one execution, mode `0600`. The instance keeps the newest 50.                                                                                          |
 | `pi/`                                | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here. |
 
-The workspace and the transcript are local conveniences, not records. Another host can take the next execution of the same objective. It then clones the repository and checks out the pushed node branch.
+The workspace and the transcript are local conveniences, not records. Another host or another slot can take the next execution of the same objective. It then clones the repository and checks out the pushed node branch.
 
-The agent tools and the verification commands run on the host with the rights of the worker process. KanthorD has no sandbox. Run the worker process on a host that you trust with the repository and its credentials.
+The agent tools and the verification commands run with the rights of the worker process. At the `server` placement, those rights are the rights of the server user. A command can read the files of that user and can signal the server process. KanthorD has no sandbox. Run a worker on a host that you trust with the repository and its credentials.
 
 ## Read next
 
