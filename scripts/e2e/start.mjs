@@ -117,6 +117,7 @@ for (const [agent, enablement] of Object.entries(config.enablements)) {
     ...(current ? { expected_revision: current.revision } : {}),
     agent_providers: providers,
     default_configuration: enablement.default,
+    fallback_configurations: enablement.fallback_configurations,
   });
   log("enablement set", { agent, ...enablement.default });
 }

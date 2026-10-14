@@ -34,7 +34,8 @@
         "agent_provider": "e2e-nvidia",
         "model_identifier": "z-ai/glm-5.3-flash",
         "reasoning_effort": "medium"
-      }
+      },
+      "fallback_configurations": []
     },
     "re@1": {
       "providers": [
@@ -48,7 +49,8 @@
         "agent_provider": "e2e-nvidia",
         "model_identifier": "z-ai/glm-5.3-flash",
         "reasoning_effort": "medium"
-      }
+      },
+      "fallback_configurations": []
     }
   },
   "repository": {

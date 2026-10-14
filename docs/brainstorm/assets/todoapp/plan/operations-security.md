@@ -6,6 +6,8 @@ verifications:
   - node --test test/operations-security.test.js
   - npm ci && npm run test:operations
   - npm run test:foundation
+  - npm run --if-present test:foundation && npm run --if-present test:persistence && npm run --if-present test:operations && npm run --if-present test:authentication && npm run --if-present test:todos
+  - npm run lint && npm run format:check
 ---
 
 # Apply secure middleware and secret-safe request logging

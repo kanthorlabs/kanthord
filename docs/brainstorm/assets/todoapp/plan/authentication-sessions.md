@@ -6,6 +6,8 @@ verifications:
   - node --test test/authentication-sessions.test.js
   - npm ci && npm run test:authentication
   - npm run test:persistence
+  - npm run --if-present test:foundation && npm run --if-present test:persistence && npm run --if-present test:operations && npm run --if-present test:authentication && npm run --if-present test:todos
+  - npm run lint && npm run format:check
 ---
 
 # Enforce expiring and revocable bearer sessions

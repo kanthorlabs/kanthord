@@ -6,6 +6,8 @@ verifications:
   - node --test test/persistence-repositories.test.js
   - npm ci && npm run test:persistence
   - npm run test:foundation
+  - npm run --if-present test:foundation && npm run --if-present test:persistence && npm run --if-present test:operations && npm run --if-present test:authentication && npm run --if-present test:todos
+  - npm run lint && npm run format:check
 ---
 
 # Isolate validated, owner-scoped repository operations
