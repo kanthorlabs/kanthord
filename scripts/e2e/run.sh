@@ -12,6 +12,7 @@ DEV_LOG="$RUN_DIR/e2e/dev.log"
 require_command pnpm
 (cd "$ENGINE_DIR" && pnpm install --frozen-lockfile --reporter=silent) ||
 	die "the engine dependencies do not match engine/pnpm-lock.yaml"
+(cd "$ENGINE_DIR" && pnpm run pi-tools:fetch) || die "the pi tools fetch failed"
 
 live() {
 	curl -fsS -o /dev/null --max-time 2 "$LIVENESS" 2>/dev/null

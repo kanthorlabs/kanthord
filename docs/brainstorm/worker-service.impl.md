@@ -19,6 +19,7 @@ The adapter obtains the runtime from the [model connector](llm.impl.md#the-model
 The first version supports a native agent of a worker at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
 Before the first import of `@earendil-works/pi-coding-agent`, it sets `PI_OFFLINE=1` and sets `PI_CODING_AGENT_DIR` to `pi/` of the state directory, so pi downloads no tool binary.
+The worker installs the [pi tool binaries](#pi-tool-binaries) into `pi/bin/`, the directory that pi searches before `PATH`.
 The adapter persists no settings file in that directory or in `~/.pi`.
 The [Agent implementation](agent.impl.md#session-file) rules the session file.
 It disables the discovery of user extensions, skills, prompt templates and themes.
@@ -27,6 +28,23 @@ It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendi
 An execution of an externally hosted worker has no native agent, and a read of its [execution setup](#the-execution-setup) answers 409 `worker.execution.no_native_agent`.
 A pi version bump affects the workers that run on it and the credential shape of the handover.
 Every runtime setup call carries an abort signal with a deadline.
+
+## Pi tool binaries
+
+- The pi built-in tools `grep` and `find` run `rg` and `fd`. kanthord ships both programs at pinned versions. The worker never takes them from `PATH`.
+- The manifest `static/pi-tools.json` of the engine lists each tool of the pi tool manager. A tool holds `version`, `repository` and one entry for each release target: `darwin-arm64`, `linux-x64` and `linux-arm64`.
+- A target entry holds `url`, `archive_sha256`, `binary_path`, `binary_sha256` and `license_paths`.
+- `pnpm run pi-tools:fetch` of the engine downloads the archives of the host target. It checks `archive_sha256`, extracts the binary and the license files, and checks `binary_sha256`.
+- The fetch writes `.pi-tools/<target>/bin/<tool>` and `.pi-tools/<target>/licenses/<tool>/` in the engine. Git ignores `.pi-tools/`. A digest mismatch stops the fetch. A present binary with the right digest is not downloaded again.
+- `make bootstrap`, `make release-build` and `make e2e` run the fetch.
+- The single binary embeds each binary of its target as the asset `pi-tools/bin/<tool>`, and each license file as `pi-tools/licenses/<tool>/<file>`.
+- The worker and the server both install the tools at startup, because a workbench session of the server also runs the pi tools `grep` and `find`. The server installs them after it creates the state directory and before it opens a service.
+- Each reads the binary from the embedded asset inside the single binary, and from `.pi-tools/<host target>/` in a development checkout.
+- It checks `binary_sha256`. Then it writes the binary to `pi/bin/<tool>` of the state directory with mode `0755`, through a temporary file and a rename. It skips a binary whose file already has that digest. It writes the license files to `pi/bin/licenses/<tool>/`.
+- Then it runs `<tool> --version` from `pi/bin/`. A missing source, a host target outside the manifest, a digest mismatch or a failed run stops the start of the worker or of the server with `worker.start.tool_missing`.
+- `pnpm run pi-tools:update <tool> <version>` of the engine rewrites the entry of one tool for the three targets with fresh digests. The root target `make pi-tools-update TOOL=<tool> VERSION=<version>` runs it. It refuses a release younger than the `minimumReleaseAge` of `pnpm-workspace.yaml`, 4320 minutes.
+- A test compares the tool set of the pi tool manager with the tools of the manifest. A pi version bump that adds or removes a tool fails it.
+- `bash`, `git` and `ssh` are host requirements of the [Repository component](repository.impl.md). A program that the agent runs through `bash`, for example `node` or `npm`, belongs to the environment of the project on the worker host.
 
 ## The worker template registry
 
@@ -123,7 +141,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 1.1.0 selects `fd` first.
+- Startup installs and checks the [pi tool binaries](#pi-tool-binaries) first. Then it resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order.
 - The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
 - The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of the state directory with mode `0600`, and it keeps the newest 50 transcripts.
 - After the registration, the application logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.

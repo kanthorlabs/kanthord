@@ -1,4 +1,4 @@
-import { readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const [engineDir, dashboardDir, bundle, blob, output] = process.argv.slice(2);
@@ -20,9 +20,26 @@ function addFiles(assets, directory, prefix) {
   }
 }
 
+const piToolsDir = join(
+  engineDir,
+  ".pi-tools",
+  `${process.platform}-${process.arch}`,
+);
+if (
+  !existsSync(join(piToolsDir, "bin")) ||
+  !existsSync(join(piToolsDir, "licenses"))
+) {
+  process.stderr.write(
+    `the pi tools of ${process.platform}-${process.arch} are missing in ${piToolsDir}. Run pnpm run pi-tools:fetch in ${engineDir}\n`,
+  );
+  process.exit(1);
+}
+
 const assets = { "package.json": join(engineDir, "package.json") };
 addFiles(assets, join(engineDir, "static"), "");
 addFiles(assets, dashboardDir, "dashboard/");
+addFiles(assets, join(piToolsDir, "bin"), "pi-tools/bin/");
+addFiles(assets, join(piToolsDir, "licenses"), "pi-tools/licenses/");
 
 writeFileSync(
   output,

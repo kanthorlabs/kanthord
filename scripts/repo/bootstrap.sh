@@ -44,6 +44,7 @@ step "4/6 dependencies"
 "$ROOT/scripts/repo/install.sh" || exit 1
 "$ROOT/scripts/engine/install.sh" || exit 1
 "$ROOT/scripts/app/install.sh" || exit 1
+(cd "$ENGINE_DIR" && pnpm run pi-tools:fetch) || die "the pi tools fetch failed"
 
 step "5/6 daemon configuration"
 if [ -f "$ENGINE_DIR/.envrc" ] && command -v direnv >/dev/null; then

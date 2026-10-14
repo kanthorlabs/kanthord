@@ -229,7 +229,7 @@ KanthorD rejects a source that is larger than 32 KiB, that is not UTF-8, that ho
 
 The agent receives only the tools of its declaration. A tool outside the allowlist does not exist for the agent.
 
-- **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` need `rg` and `fd` on the host; the worker refuses to start without them.
+- **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` run `rg` and `fd`. The worker and the server install pinned copies into `pi/bin/` of the state directory at startup and never take them from `PATH`.
 - **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key from the environment of each command, so a command cannot read the credentials of the agent. In a Worker execution, the timeout of each command is capped at the remaining budget and at 10 minutes.
 - **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidence_id`, `asset_id` and `uri`.
 - **Operation tools** (Workbench only) expose KanthorD operations. Each call runs with the identity of the human who sent the last message. The [operation tool reference](../reference/workbench/tools.md) lists every tool.

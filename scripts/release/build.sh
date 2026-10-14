@@ -36,6 +36,9 @@ pnpm install --frozen-lockfile >/dev/null || die "pnpm install failed in $ROOT"
 rm -rf "$work"
 mkdir -p "$work" "$(dirname "$output")" || die "cannot create $work"
 
+log "fetching the pi tools"
+(cd "$ENGINE_DIR" && pnpm run pi-tools:fetch) || die "the pi tools fetch failed"
+
 log "building the dashboard"
 (cd "$APP_DIR" && pnpm run build >"$work/dashboard.log" 2>&1) ||
 	die "the dashboard build failed. See $work/dashboard.log"
