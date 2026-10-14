@@ -30,7 +30,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 ## Shipped assets
 
-- The single binary embeds every shipped asset as a `node:sea` asset: the shipped prompts, the OpenAPI files and the package manifest `package.json`.
+- The single binary embeds every shipped asset as a `node:sea` asset: the shipped prompts, the OpenAPI files, the package manifest `package.json`, and the [pi tool binaries](worker-service.impl.md#pi-tool-binaries) of its target with their license files.
 - One loader `shippedAsset(name)` answers `sea.getAsset(name, "utf8")` inside the binary, and it reads the file under `static/` in a development checkout.
 - The single binary embeds the production build of the dashboard under the asset prefix `dashboard/`. The loader `dashboardAsset(path)` answers the bytes of that asset inside the binary, and it answers no asset in a development checkout.
 - The loader `packageManifest()` answers the embedded `package.json` inside the binary, and it reads the `package.json` of the engine in a development checkout.
@@ -44,14 +44,14 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - `kanthord --version` prints the version of the embedded package manifest.
 - A tag `v<version>` on the root repository publishes the three binaries and `SHA256SUMS` as a public GitHub Release of that repository. The tag must equal `v` plus the version of `engine/package.json`.
 - The workflow reads `engine` and `apps` with the secret `SUBMODULE_TOKEN` when the secret exists, and anonymously otherwise. It never checks out `platforms/webhook`.
-- No command downloads or writes a shipped asset. The release version and the digest identify it.
+- No command downloads or writes a shipped asset at run time. The release version and the digest identify it. The release build downloads each pi tool binary and checks it against the digest of `static/pi-tools.json`.
 - Tests cover both branches of the loader and every name of the asset list.
 
 ## Container image
 
 - The root `Containerfile` builds the image `kanthord:<version>`. Its build stage runs `scripts/release/build.sh` on the official Node.js image of the version in `engine/.nvmrc`.
 - The root target `make release-image` builds the image with Podman or Docker. `CONTAINER_ENGINE` selects the engine, and Podman comes first when both exist.
-- The runtime stage is Debian trixie slim, because the Repository component needs git 2.40 or later. It holds `bash`, `git`, `openssh-client`, `ripgrep`, `fd-find`, `ca-certificates` and `tini`.
+- The runtime stage is Debian trixie slim, because the Repository component needs git 2.40 or later. It holds `bash`, `git`, `openssh-client`, `ca-certificates` and `tini`. The single binary supplies `rg` and `fd`.
 - The image runs as the user `kanthord` with uid 10001. `tini` is PID 1 and it starts `kanthord serve`.
 - The volume `/var/lib/kanthord` holds `HOME` and the four XDG directories.
 - The container binds `::`, which accepts IPv4 and IPv6. It publishes port 31415 and port 1455, the OpenAI Codex login callback. The operator creates the configuration once with `kanthord config init --gateway-bind ::`.
