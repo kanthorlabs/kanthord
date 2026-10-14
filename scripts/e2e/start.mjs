@@ -10,11 +10,14 @@ import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
 
-const [configPath, run, pausedFlag = "1"] = process.argv.slice(2);
+const [configPath, run, pausedFlag = "1", placement = "server"] =
+  process.argv.slice(2);
 if (!configPath || !run) throw new Error("usage: start.mjs <config> <run>");
 const paused = pausedFlag !== "0";
 if (!/^[a-z0-9][a-z0-9-]*$/.test(run))
   throw new Error("RUN holds lower-case letters, digits and hyphens");
+if (placement !== "server" && placement !== "worker")
+  throw new Error(`PLACEMENT must be server or worker, got ${placement}`);
 
 const PRIVATE_DIRECTORY = 0o700;
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "../..");
@@ -171,7 +174,11 @@ const bindings = {
 for (const worker of config.workers)
   bindings[worker.binding] = {
     kind: "worker",
-    config: { worker: worker.worker, instance_count: worker.instances },
+    config: {
+      worker: worker.worker,
+      instance_count: worker.instances,
+      ...(placement === "server" ? { placement: "server" } : {}),
+    },
   };
 const bindingSet = await api.get(`/api/project/${project.id}/binding-set`);
 await api.put(`/api/project/${project.id}/binding-set`, {
@@ -213,54 +220,64 @@ await api.post(`/api/mission/${mission.id}/import`, {
 });
 log("plan imported", { mission: mission.id, files: snapshot.files.length });
 
-const instances = [];
-for (const worker of config.workers)
-  for (let index = 1; index <= worker.instances; index++) {
-    const name = `${worker.binding}-${index}`;
-    const home = join(runDir, name);
-    const cliFile = join(home, "config/kanthord/cli.yaml");
-    mkdirSync(dirname(cliFile), { recursive: true, mode: PRIVATE_DIRECTORY });
-    kanthord([
-      "auth",
-      "jwt",
-      "generate",
-      "--project",
-      project.id,
-      "--binding",
-      worker.binding,
-      "--name",
-      `e2e ${run} ${name}`,
-      "--output",
-      cliFile,
-      "--endpoint",
-      config.endpoint,
-    ]);
-    const logFile = join(runDir, `${name}.log`);
-    const pid = spawnWorker(ENGINE, home, logFile);
-    instances.push({ name, pid, log: logFile });
-    log("worker started", { name, pid });
-  }
+const runState = {
+  run,
+  endpoint: config.endpoint,
+  env_file: config.env_file,
+  github_token_env: githubTokenEnv,
+  github: config.repository.github,
+  base_branch: baseBranch,
+  project_id: project.id,
+  mission_id: mission.id,
+  placement,
+};
+
+if (placement === "server") {
+  const binding_counts = {};
+  for (const worker of config.workers)
+    binding_counts[worker.binding] = worker.instances;
+  runState.binding_counts = binding_counts;
+  log("workers managed by the daemon pool", {
+    bindings: Object.keys(binding_counts),
+  });
+} else {
+  const instances = [];
+  for (const worker of config.workers)
+    for (let index = 1; index <= worker.instances; index++) {
+      const name = `${worker.binding}-${index}`;
+      const home = join(runDir, name);
+      const cliFile = join(home, "config/kanthord/cli.yaml");
+      mkdirSync(dirname(cliFile), { recursive: true, mode: PRIVATE_DIRECTORY });
+      kanthord([
+        "auth",
+        "jwt",
+        "generate",
+        "--project",
+        project.id,
+        "--binding",
+        worker.binding,
+        "--name",
+        `e2e ${run} ${name}`,
+        "--output",
+        cliFile,
+        "--endpoint",
+        config.endpoint,
+      ]);
+      const logFile = join(runDir, `${name}.log`);
+      const pid = spawnWorker(ENGINE, home, logFile);
+      instances.push({ name, pid, log: logFile });
+      log("worker started", { name, pid });
+    }
+  runState.instances = instances;
+}
 
 writeFileSync(
   join(runDir, "run.json"),
-  `${JSON.stringify(
-    {
-      run,
-      endpoint: config.endpoint,
-      env_file: config.env_file,
-      github_token_env: githubTokenEnv,
-      github: config.repository.github,
-      base_branch: baseBranch,
-      project_id: project.id,
-      mission_id: mission.id,
-      instances,
-    },
-    null,
-    2,
-  )}\n`,
+  `${JSON.stringify(runState, null, 2)}\n`,
 );
 log("ready", {
   run_dir: runDir,
+  placement,
   watch: `make e2e-watch RUN=${run}`,
   ...(paused ? { resume: `make e2e-resume RUN=${run}` } : {}),
 });

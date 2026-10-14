@@ -27,6 +27,7 @@ const nodes = new Map();
 const ended = new Set();
 const prs = new Map();
 const down = new Set();
+const runtimeStates = new Map();
 let projectState;
 
 function alive(pid) {
@@ -95,6 +96,20 @@ function watchWorkers() {
   }
 }
 
+async function watchInstances(quiet) {
+  const page = await api.get(
+    `/api/worker/instance?project_id=${state.project_id}`,
+  );
+  for (const inst of page?.items ?? []) {
+    const id = inst.runtime_identity;
+    const label = `placement=${inst.placement} activity=${inst.activity} draining=${inst.draining} resource=${inst.resource_identity} worker=${inst.worker_name}`;
+    const before = runtimeStates.get(id);
+    if (!quiet && before !== label)
+      console.log(`${now()} instance ${id}: ${before ?? "-"} -> ${label}`);
+    runtimeStates.set(id, label);
+  }
+}
+
 function watchPullRequests(quiet) {
   const list = JSON.parse(
     execFileSync(
@@ -127,7 +142,11 @@ for (let tick = 0; ; tick++) {
     await watchProject();
     await watchNodes(tick === 0);
     await watchExecutions(tick === 0);
-    watchWorkers();
+    if (state.placement === "server") {
+      await watchInstances(tick === 0);
+    } else {
+      watchWorkers();
+    }
     if (tick % PR_EVERY_TICKS === 0) watchPullRequests(tick === 0);
   } catch (error) {
     console.log(`${now()} watch error: ${error.message}`);
