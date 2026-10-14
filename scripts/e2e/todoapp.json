@@ -9,6 +9,18 @@
       "metadata": null
     }
   ],
+  "repository_credentials": [
+    {
+      "name": "github-com",
+      "platform": "ssh",
+      "host": "github.com"
+    },
+    {
+      "name": "kanthor-verify",
+      "platform": "github",
+      "secret_env": "E2E_GH_TOKEN"
+    }
+  ],
   "enablements": {
     "swe@1": {
       "providers": [

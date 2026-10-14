@@ -49,6 +49,8 @@ The implementation exposes `npm run test:foundation`, `test:persistence`, `test:
 
 ## Import preparation
 
+`make e2e` runs every step below from `scripts/e2e/todoapp.json`. It reads the secrets from `engine/.env.e2e` and the SSH identity from `~/.ssh/config` of the host.
+
 1. Create a dedicated KanthorD project. Its mission is created with it; do not invent a mission-create command.
 2. Configure an available repository binding named `todoapp-repo`, pointing to a disposable, initialized repository. Every objective names exactly this binding. Rename it consistently in the six objectives and the initiative verification if your environment uses another name.
 3. Configure execution and reviewer workers separately through project worker bindings. Enable the desired agent/provider/model explicitly. No worker binding belongs in a plan node's `bindings`.

@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools \
-	e2e-start e2e-watch e2e-stop e2e-restart
+	e2e e2e-start e2e-watch e2e-stop e2e-restart
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -73,9 +73,15 @@ help:
 	@echo "                   CHECK=1 reports only, and fails when the page is stale"
 	@echo ""
 	@echo "e2e"
+	@echo "  e2e              Start everything for an e2e run in one step. RUN=name"
+	@echo "                   (todoapp-<yymmdd-HHMM>). It installs the engine dependencies,"
+	@echo "                   starts make dev in the background when the daemon is down,"
+	@echo "                   then runs e2e-start. GitHub calls use E2E_GH_TOKEN only"
+	@echo "                   Dev log in .dev/e2e/dev.log"
 	@echo "  e2e-start        Start an e2e run against the daemon of make dev. RUN=name"
-	@echo "                   It creates credentials, enablements, a project, the base"
-	@echo "                   branch e2e/<RUN> from the fixture, the plan and the workers"
+	@echo "                   It creates the LLM and repository credentials, enablements,"
+	@echo "                   a project, the base branch e2e/<RUN> from the fixture,"
+	@echo "                   the plan and the workers"
 	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
 	@echo "  e2e-watch        Print node changes, execution stops, worker exits and PRs. RUN=name"
 	@echo "  e2e-stop         Stop the workers of a run. RUN=name"
@@ -114,6 +120,8 @@ cleanup:
 	@$(S)/engine/cleanup.sh
 docs-tools:
 	@$(S)/docs/tools.sh
+e2e:
+	@$(S)/e2e/run.sh
 e2e-start:
 	@$(S)/e2e/start.sh
 e2e-watch:
