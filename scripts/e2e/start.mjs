@@ -10,8 +10,9 @@ import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
 
-const [configPath, run] = process.argv.slice(2);
+const [configPath, run, pausedFlag = "1"] = process.argv.slice(2);
 if (!configPath || !run) throw new Error("usage: start.mjs <config> <run>");
+const paused = pausedFlag !== "0";
 if (!/^[a-z0-9][a-z0-9-]*$/.test(run))
   throw new Error("RUN holds lower-case letters, digits and hyphens");
 
@@ -151,6 +152,10 @@ execFileSync(
 log("base branch pushed", { branch: baseBranch, commit: fixture.slice(0, 7) });
 
 const project = await api.post("/api/project", { name: `e2e-${run}` });
+if (paused) {
+  await api.post(`/api/project/${project.id}/pause`);
+  log("project paused", { project: project.id });
+}
 const bindings = {
   [config.repository.binding]: {
     kind: "repository",
@@ -254,4 +259,8 @@ writeFileSync(
     2,
   )}\n`,
 );
-log("ready", { run_dir: runDir, watch: `make e2e-watch RUN=${run}` });
+log("ready", {
+  run_dir: runDir,
+  watch: `make e2e-watch RUN=${run}`,
+  ...(paused ? { resume: `make e2e-resume RUN=${run}` } : {}),
+});

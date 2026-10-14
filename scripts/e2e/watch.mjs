@@ -27,6 +27,7 @@ const nodes = new Map();
 const ended = new Set();
 const prs = new Map();
 const down = new Set();
+let projectState;
 
 function alive(pid) {
   try {
@@ -36,6 +37,15 @@ function alive(pid) {
     if (error.code === PROCESS_ABSENT) return false;
     throw error;
   }
+}
+
+async function watchProject() {
+  const project = await api.get(`/api/project/${state.project_id}`);
+  const label =
+    project.paused_at === null ? "project active" : "project paused";
+  if (label === projectState) return;
+  projectState = label;
+  console.log(`${now()} ${label}`);
 }
 
 async function watchNodes(quiet) {
@@ -114,6 +124,7 @@ function watchPullRequests(quiet) {
 
 for (let tick = 0; ; tick++) {
   try {
+    await watchProject();
     await watchNodes(tick === 0);
     await watchExecutions(tick === 0);
     watchWorkers();
