@@ -49,10 +49,13 @@ The component owns a dedicated platform validator for every platform of the Repo
 The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
 
 - The GitHub SSH host set is `github.com` and `ssh.github.com`.
-- The events read answers the wait of `X-Poll-Interval` in milliseconds with a 200 or a 304 answer.
-- A refused read answers the wait that GitHub names: `Retry-After` in seconds, or `x-ratelimit-reset` minus the current time when `x-ratelimit-remaining` is `0`. A refusal with neither header names no wait.
-- A 403 whose message names a secondary rate limit is a `retryable_refusal`, as a 429 is.
-- The pull request check reads the pull request again while `mergeable` is null, at most 3 reads 2 seconds apart inside the deadline of the call. A null `mergeable` after the last read folds to `none`.
+- The events read answers the wait of `X-Poll-Interval` in milliseconds. It reads the header only on a 200 or a 304 answer, and it ignores a malformed value.
+- A 429 is a rate limit refusal. A 403 is a rate limit refusal when `x-ratelimit-remaining` is `0` or when its message matches "secondary rate limit". A rate limit refusal is a `retryable_refusal`.
+- A rate limit refusal answers the wait that GitHub names. `Retry-After` wins over `x-ratelimit-reset`. Both headers take integer seconds only, and an HTTP date names no wait.
+- `x-ratelimit-reset` counts only when `x-ratelimit-remaining` is `0`. Its wait is the reset minus the current time, and a reset in the past gives a wait of 0. A refusal with no usable header names no wait.
+- Only the pull request check of the Intake Service reads the pull request again. `getChangeRequests` and the action read read once.
+- The check reads again only an open, unmerged pull request whose `mergeable` is null, at most 3 reads 2 seconds apart. It stops when the remaining deadline of the call is at most the delay, and it returns the last read. A failed read again fails the check.
+- A null `mergeable` in the last read folds to `none`.
 - A test covers a pull request whose first read holds a null `mergeable` and whose second read holds `mergeable_state: dirty`, and it asserts the fold `conflict`.
 - Every platform implementation declares its SSH host set.
 

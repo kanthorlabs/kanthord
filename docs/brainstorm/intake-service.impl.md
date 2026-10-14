@@ -65,10 +65,13 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - The poll loops run inside the Intake Service of the `server` application, at the `server` and at the `worker` placement. No worker process and no slot thread runs a poll.
 - The poll runs on an interval of 60 seconds per inbound with a release per request. Each request carries a deadline.
 - One poll request per inbound runs at a time. The next interval starts after the previous request ends, so no older answer commits its checkpoint after a newer one.
-- Before the release, the cycle calls `mission.delivery.unresolved_request.count` with the project and the resource identity of the inbound. A count of zero skips the request and keeps `checkpoint`. A failed call skips the request and writes a span with its reason.
+- After the capacity bound check and before the release, the cycle calls `mission.delivery.unresolved_request.count` with the project and the resource identity of the inbound. A count of zero skips the request and keeps `checkpoint`. A failed call skips the request and writes a span with its reason.
+- The release transaction ends the loop when the inbound no longer exists.
 - The wait before the next request is the longest of the interval and the wait that the [GitHub implementation](repository.impl.md#platform-connector-and-platform-implementations) answers from `X-Poll-Interval`, `Retry-After` or `x-ratelimit-reset`.
-- A rate limit refusal that names no wait is a secondary rate limit. Each consecutive such refusal doubles the wait, from the interval up to `POLL_BACKOFF_MAX_MS`, 900 seconds. Any other answer ends the count.
-- `POLL_WAIT_MAX_MS`, 3600 seconds, bounds every wait.
+- A rate limit refusal that names no wait is a secondary rate limit. The n-th consecutive secondary refusal waits the interval times 2^n, up to `POLL_BACKOFF_MAX_MS`, 900 seconds.
+- A refusal that names a wait ends the count, and its wait is never less than the interval. Any other answer ends the count.
+- A cycle that makes no request keeps the count and waits the interval. These cycles are a capacity pause, a count of zero and a failed count.
+- `POLL_WAIT_MAX_MS`, 3600 seconds, caps every wait.
 - The loop holds its wait and its count in memory. A start opens every loop at its spread offset with the interval.
 - The `intake` section of the configuration file holds no poll key.
 - The GitHub poll reads the events of the resource with `If-None-Match` set to the ETag of `checkpoint`. A 304 answer stores nothing.
