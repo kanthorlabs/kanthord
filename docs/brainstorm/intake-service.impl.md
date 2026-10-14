@@ -62,14 +62,31 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ## The poll acquisition
 
+- The poll loops run inside the Intake Service of the `server` application, at the `server` and at the `worker` placement. No worker process and no slot thread runs a poll.
 - The poll runs on an interval of 60 seconds per inbound with a release per request. Each request carries a deadline.
 - One poll request per inbound runs at a time. The next interval starts after the previous request ends, so no older answer commits its checkpoint after a newer one.
+- Before the release, the cycle calls `mission.delivery.unresolved_request.count` with the project and the resource identity of the inbound. A count of zero skips the request and keeps `checkpoint`. A failed call skips the request and writes a span with its reason.
+- The wait before the next request is the longest of the interval and the wait that the [GitHub implementation](repository.impl.md#platform-connector-and-platform-implementations) answers from `X-Poll-Interval`, `Retry-After` or `x-ratelimit-reset`.
+- A rate limit refusal that names no wait is a secondary rate limit. Each consecutive such refusal doubles the wait, from the interval up to `POLL_BACKOFF_MAX_MS`, 900 seconds. Any other answer ends the count.
+- `POLL_WAIT_MAX_MS`, 3600 seconds, bounds every wait.
+- The loop holds its wait and its count in memory. A start opens every loop at its spread offset with the interval.
+- The `intake` section of the configuration file holds no poll key.
 - The GitHub poll reads the events of the resource with `If-None-Match` set to the ETag of `checkpoint`. A 304 answer stores nothing.
 - Each event inserts `event_id` from the event `id`, the event JSON in `event` and `{ "event": <type> }` in `metadata`.
 - The transaction that stores the batch also writes `checkpoint`. It discards the batch when the inbound row no longer exists.
 - The poll pauses beyond the capacity bound that [intake-service.md](intake-service.md#capacity-and-retention) states. It resumes when the count of pending events falls below that bound.
 - A failed request writes a span with its reason and leaves `checkpoint` unchanged.
 - The automatic detection of a merged, closed or conflicting pull request needs a poll or webhook inbound for the repository. A push event of a base branch reaches the open pull request requests on that branch through [delivery admission](mission-service.impl.md#the-request-record).
+
+### The merge detection of a GitHub poll
+
+- A human creates one poll inbound for each GitHub repository whose pull requests a project awaits. It names a credential of platform `github` that reads the events of the repository.
+- The poll stores a `PullRequestEvent` and a `PushEvent` as they arrive. Delivery admission decodes each one and calls the Intake check of the matched request, the same check that `mission.node.check` calls. The check uses the credential of the pinned binding revision. Admission and `mission.node.check` commit through one end-state write.
+- A merged pull request folds to `expected`. The node goes from `External.Requested` to `External.Success`, then to `Completed`.
+- A closed pull request that is not merged folds to `other`. The node goes to `External.Failed`, then to `Blocked`.
+- A pull request that cannot merge folds to `conflict` at the recheck of a `PushEvent` of its base branch. The node goes to `Available`, and the request stays unresolved.
+- A merge reaches admission twice, as a `PullRequestEvent` and as a `PushEvent`. The second admission answers `duplicate` or skips the resolved request.
+- A failed admission leaves its event `failed`. A human retries the event or checks the node.
 
 ## The handoff
 
@@ -226,6 +243,11 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A test covers a discard after the dispatcher selects an event and before it starts the handoff, and it asserts that no handoff starts.
 - A test covers an append to a full `error` array, and it asserts that the oldest item goes and the state becomes `failed`.
 - A test covers a slow poll request, and it asserts that no second request of that inbound starts before it ends.
+- A test covers an unresolved request count of zero, and it asserts no platform request and an unchanged checkpoint.
+- A test covers a 403 with `x-ratelimit-remaining: 0`, and it asserts no request before `x-ratelimit-reset`.
+- A test covers a 429 with `Retry-After`, and it asserts no request before that wait.
+- A test covers three secondary rate limit refusals with no wait and a 304, and it asserts the doubled waits up to the bound and the interval after the 304.
+- A test covers an `X-Poll-Interval` above the interval, and it asserts the longer wait.
 - A test covers a delete of an inbound with a pending event, and it asserts the 409 and the kept row.
 - Tests cover a missing, a duplicate, a malformed and a wrong-length signature, and a valid signature over the exact bytes.
 - A test asserts that a post with a failed verification stores nothing and answers 401.

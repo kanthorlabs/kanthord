@@ -49,6 +49,11 @@ The component owns a dedicated platform validator for every platform of the Repo
 The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
 
 - The GitHub SSH host set is `github.com` and `ssh.github.com`.
+- The events read answers the wait of `X-Poll-Interval` in milliseconds with a 200 or a 304 answer.
+- A refused read answers the wait that GitHub names: `Retry-After` in seconds, or `x-ratelimit-reset` minus the current time when `x-ratelimit-remaining` is `0`. A refusal with neither header names no wait.
+- A 403 whose message names a secondary rate limit is a `retryable_refusal`, as a 429 is.
+- The pull request check reads the pull request again while `mergeable` is null, at most 3 reads 2 seconds apart inside the deadline of the call. A null `mergeable` after the last read folds to `none`.
+- A test covers a pull request whose first read holds a null `mergeable` and whose second read holds `mergeable_state: dirty`, and it asserts the fold `conflict`.
 - Every platform implementation declares its SSH host set.
 
 ## Git-only platforms
