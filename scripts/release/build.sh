@@ -55,9 +55,20 @@ pnpm exec esbuild "$ENGINE_DIR/src/main.ts" \
 	--define:import.meta.url=__kanthord_import_meta_url \
 	--outfile="$work/kanthord.cjs" || die "esbuild failed"
 
+log "bundling the worker thread"
+pnpm exec esbuild "$ENGINE_DIR/src/apps/worker/thread.ts" \
+	--bundle \
+	--platform=node \
+	--target=node24 \
+	--format=cjs \
+	--log-level=warning \
+	"--banner:js=const __kanthord_import_meta_url=require('node:url').pathToFileURL(__filename).href;" \
+	--define:import.meta.url=__kanthord_import_meta_url \
+	--outfile="$work/worker-thread.cjs" || die "worker thread bundle failed"
+
 log "preparing the single executable blob"
 node "$ROOT/scripts/release/sea-config.mjs" "$ENGINE_DIR" "$APP_DIR/dist" "$work/kanthord.cjs" \
-	"$work/kanthord.blob" "$work/sea-config.json" || die "cannot write the SEA configuration"
+	"$work/worker-thread.cjs" "$work/kanthord.blob" "$work/sea-config.json" || die "cannot write the SEA configuration"
 node --experimental-sea-config "$work/sea-config.json" >/dev/null || die "cannot prepare the SEA blob"
 
 log "injecting the blob into $(node -v)"
