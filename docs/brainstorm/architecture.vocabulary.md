@@ -88,7 +88,7 @@ The Slack workspace `kanthorlabs` is a source on a messaging platform.
 An application of kanthord that a user runs. The set is closed and it holds three values.
 
 - **`cli`**, which operates the system on a terminal
-- **`server`**, which holds every service in one running process and serves the RESTful API
+- **`server`**, which holds every service in one running process, serves the RESTful API and runs the worker instances of the `server` placement
 - **`worker`**, which runs worker instances and holds no service
 
 `app` is the short form of `application`, and the two words name one term.
@@ -167,7 +167,7 @@ The platform validator of `github` in the Repository component accepts `api_key`
 
 What the container view shows. A service is not a container.
 
-- The `server` application is a container, and it holds the eight services.
+- The `server` application is a container, and it holds the eight services and the worker instances of the `server` placement.
 - The `cli` application is a container.
 - The `worker` application is a container, and it holds worker instances.
 - A service boundary separates authority inside the server, so it describes no container.
