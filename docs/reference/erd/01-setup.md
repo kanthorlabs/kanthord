@@ -48,6 +48,7 @@ erDiagram
         text id PK "project_ + ULID"
         text name UK "binding-name form"
         integer created_at "Unix ms"
+        integer paused_at "Unix ms, null while active"
     }
 
     project_binding {

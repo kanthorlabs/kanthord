@@ -13,6 +13,18 @@ The directory of one project on the host of the server.
 The term names no closed set.
 The workspace directory of "Account recovery" is `~/.local/state/kanthord/projects/project_01JA2Z9V6Q8T0B4N3M5K7H1C2D/`.
 
+## paused project
+
+A project that admits no claim until a human resumes it.
+The state of a project is a closed set, and it holds two values.
+
+- **active**: The project admits claims. A new project is active.
+- **paused**: The project admits no claim. Its live executions run to their end.
+
+A human pauses project `atlas` while `coder-main` executes "Add password reset".
+That execution continues to its release, and the node returns to `Available` with a job.
+No instance of `coder-main` or `reviewer-main` claims a node of `atlas` until the human resumes `atlas`.
+
 ## capability
 
 One class of authenticated operation on a resource.

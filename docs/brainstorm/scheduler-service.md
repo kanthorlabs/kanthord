@@ -127,6 +127,7 @@ An instance retries with backoff, never with tight polling.
 A Mission write, an accepted inbound event or an ended execution of the binding triggers a recheck for a waiting pull.
 The Scheduler rechecks every admission condition before it satisfies that pull.
 A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
+A [project pause](project-service.md#project-pause) takes effect while a request waits, and a resume triggers a recheck for a waiting pull.
 
 An instance healthcheck establishes no liveness, no idleness, no operation authorization and no proof of success.
 An unreachable provider creates no block condition.
@@ -137,10 +138,11 @@ Only the [fallback chain](agent.md#fallback-chain) of the Agent component substi
 The claim operation is one atomic operation.
 Only a work pull invokes it.
 Selection and claim form one acquisition operation without an unprotected gap.
-The operation rechecks the Mission state, the readiness condition, the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
+The operation rechecks the Mission state, the readiness condition, the [project pause](project-service.md#project-pause), the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
+A paused project returns the pull empty, and the claim selects no job.
 The claim reads the [fallback chain](agent.md#fallback-chain) of each native agent of the worker.
 It selects the first chain entry with no live cooldown and pins that selection in the execution record.
-When every chain entry of an agent has a live cooldown, the claim returns no work and creates no block, no pause and no execution.
+When every chain entry of an agent has a live cooldown, the claim returns no work and creates no block, no node pause and no execution.
 The claim validates no effective configuration of an agent.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
@@ -148,7 +150,7 @@ The Scheduler takes the instance healthcheck once more immediately before the cl
 A failed healthcheck at that point returns the pull empty.
 The operation counts the execution against the claimant's count and records the execution.
 The [Mission Service](mission-service.md#state-transitions) performs the node transition and owns the [attempt opening](mission-service.md#attempt) and [revision pin](mission-service.md#criterion-and-authority).
-The claim operation serializes with a block, a pause, a graph or import change and a binding change.
+The claim operation serializes with a block, a node pause, a graph or import change, a binding change and a project pause.
 The [Mission Service](mission-service.md#the-enforcement) requires refusal of a blocked node on both harnesses.
 
 The execution record holds these fields.
