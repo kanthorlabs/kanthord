@@ -49,7 +49,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 ## Container image
 
-- The root `Containerfile` builds the image `kanthord:<version>`. Its build stage runs `scripts/release/build.sh` on the official Node.js image of the version in `engine/.nvmrc`.
+- The root `Containerfile` builds the image `kanthord:<version>`. Its build stage runs `scripts/release/build.sh` on the official Node.js image of the version in `engine/.nvmrc`. The build context excludes `.pi-tools`, so the build stage fetches the pi tools of its own target.
 - The root target `make release-image` builds the image with Podman or Docker. `CONTAINER_ENGINE` selects the engine, and Podman comes first when both exist.
 - The runtime stage is Debian trixie slim, because the Repository component needs git 2.40 or later. It holds `bash`, `git`, `openssh-client`, `ca-certificates` and `tini`. The single binary supplies `rg` and `fd`.
 - The image runs as the user `kanthord` with uid 10001. `tini` is PID 1 and it starts `kanthord serve`.
