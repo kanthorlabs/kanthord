@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools \
-	e2e e2e-start e2e-watch e2e-stop e2e-restart pi-tools-update
+	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume pi-tools-update
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -83,10 +83,14 @@ help:
 	@echo "                   It creates the LLM and repository credentials, enablements,"
 	@echo "                   a project, the base branch e2e/<RUN> from the fixture,"
 	@echo "                   the plan and the workers"
+	@echo "                   It pauses the project right after the creation, so that no worker"
+	@echo "                   claims a node. PAUSED=0 keeps the project active"
 	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
-	@echo "  e2e-watch        Print node changes, execution stops, worker exits and PRs. RUN=name"
+	@echo "  e2e-watch        Print project state changes, node changes, execution stops,"
+	@echo "                   worker exits and PRs. RUN=name"
 	@echo "  e2e-stop         Stop the workers of a run. RUN=name"
 	@echo "  e2e-restart      Restart the workers of a run on the current engine code. RUN=name"
+	@echo "  e2e-resume       Resume the paused project of a run, so that workers claim nodes. RUN=name"
 	@echo ""
 	@echo "pi tools"
 	@echo "  pi-tools-update  Pin one pi tool (fd, rg) to a release in engine/static/pi-tools.json"
@@ -136,5 +140,7 @@ e2e-stop:
 	@$(S)/e2e/stop.sh
 e2e-restart:
 	@$(S)/e2e/restart.sh
+e2e-resume:
+	@$(S)/e2e/resume.sh
 pi-tools-update:
 	@$(S)/engine/pi-tools-update.sh

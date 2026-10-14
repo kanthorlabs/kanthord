@@ -30,7 +30,7 @@ The Project Service owns its tables in the operational database, and [architectu
 It reads no table of another service.
 The tables are below.
 
-- `project_project(id, name, created_at)` holds the identity of a project.
+- `project_project(id, name, created_at, paused_at)` holds the identity of a project and its [pause](#the-project-pause).
 - The binding-set version is 1 plus the number of `project_binding` rows of the project. A new project has binding-set version 1. No row of `project_binding` is ever deleted, so every write that inserts a row raises the version.
 - Its first write names version 1 and commits version 2.
 - `project_binding(id, project_id, name, resource_identity, revision, config, created_at, removed_at)` holds one immutable row for each revision of a binding, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
@@ -75,6 +75,23 @@ A binding identity and a project identity follow the identity convention of [arc
 - `project.get` and each item of `project.list` answer `workspace_directory`, the path of the workspace directory with the home directory written as `~`.
 - No table holds the path. A read derives it from the project identity and the state directory.
 - The project details view of the dashboard shows `workspace_directory` as the answer holds it.
+
+## The project pause
+
+- `project_project.paused_at` holds the time of the pause in Unix milliseconds. A null value states an active project.
+- A migration adds the nullable column. Every earlier project stays active.
+- `project.get`, each item of `project.list` and every project answer hold `paused_at`.
+- `project.create` keeps the body `{ name }`, and the insert sets `paused_at` to null.
+- `project.pause` at `POST /api/project/:project_id/pause` and `project.resume` at `POST /api/project/:project_id/resume` are `human` mutations of `unary` lifetime. They take no body.
+- A pause sets `paused_at` to the transaction time. A resume sets `paused_at` to null. Each answers the project record.
+- A pause of a paused project keeps its `paused_at` and writes nothing. A resume of an active project writes nothing. Both answer the project record.
+- An absent project answers 404 `project.project.not_found`.
+- A pause and a resume take no expected version. The last write wins, as for a rename.
+- The resume calls the Scheduler wakeup `wake(projectId)` after its commit. The pause calls no wakeup.
+- The Project Service implements the Scheduler collaboration [`projectPaused(tx, projectId)`](scheduler-service.impl.md#the-claim-selection). It answers `true` when `paused_at` holds a value. An absent project throws.
+- The claim reads `projectPaused` inside its transaction, under [the claim](scheduler-service.md#claims-and-counts). A paused project answers the work pull `{ kind: "no-work" }`.
+- The pause and the resume write no record of the Tracking Service.
+- `project.pause` and `project.resume` are Workbench tools, and each call waits for the approval of a human.
 
 ## The resource identity
 
@@ -297,6 +314,9 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 ## The binding screen of the dashboard
 
 - The header of the Project page shows the project identity and the creation time. It shows no binding-set version.
+- The header of a paused project shows the badge `Paused` and the time of `paused_at`.
+- The header holds `Pause` for an active project and `Resume` for a paused project. Each calls its route with no confirmation dialog and reloads the project.
+- A list row of a paused project shows the badge `Paused`.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Repository instructions` holds the instruction files and the project prompt.
 - `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`.
@@ -330,6 +350,8 @@ The `kanthord` bin of `package.json` releases it.
 
 - A test covers a creation and a rename to a taken project name, and it asserts 409 with the identity of the holder.
 - A test covers a project creation whose mission insert fails, and it asserts that no project row remains.
+- A test creates a project and asserts a null `paused_at`.
+- A test pauses and resumes a project. It asserts `paused_at`, a no-op of a repeated pause and of a repeated resume, 404 for an absent project, and one wakeup after the resume only.
 - Tests cover repository coverage and custody suitability; an absent platform key and an HTTPS repository address fail.
 - Tests assert `validateEntry` inside the write transaction and refusal when an agent lacks enabled enablement.
 - Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.

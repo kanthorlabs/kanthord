@@ -79,11 +79,12 @@ It predicts no claim, because a work pull rechecks every admission condition at 
 
 - `EligibilityReport` holds `project_id`, `node_id`, `state`, `claimable` and `checks`.
   - `state` is the Mission state of the node at the read.
-  - `checks` holds four `EligibilityCheck` objects in this order: `node-state`, `mission-condition`, `queue-job` and `no-live-claim`.
+  - `checks` holds five `EligibilityCheck` objects in this order: `project-pause`, `node-state`, `mission-condition`, `queue-job` and `no-live-claim`.
   - `claimable` is true exactly when no check holds `failed`.
 - `EligibilityCheck` holds `name`, `result` and `condition`.
   - `result` is `passed`, `failed` or `not-applicable`.
   - `condition` is `initiative-steps`, `readiness`, `continuation` or `null`. Only the `mission-condition` check holds a value other than `null`.
+- `project-pause` passes when the project is not [paused](project-service.md#project-pause). The handler first resolves the project and the node, and it reads `projectPaused` only for a found node. An absent project therefore keeps 404 `scheduler.eligibility.node_not_found`.
 - `node-state` passes when the node is not retired and holds `Available`, `Waiting` or `External.Requested`.
 - `mission-condition` reads the Mission condition of that state.
   - `Available` on an initiative reads the [initiative steps condition](mission-service.md#initiative-steps-condition) as `initiative-steps`.
@@ -93,7 +94,7 @@ It predicts no claim, because a work pull rechecks every admission condition at 
   - When `node-state` fails, the check holds `not-applicable` with `condition: null`.
 - `queue-job` passes when the work queue of the project holds a job of the node.
 - `no-live-claim` passes when no execution of the node holds the claim state `running`.
-- The handler reads the node state and the Mission condition through the Mission collaboration, and the job and the executions of the node from its own tables, in one read transaction.
+- The handler reads the project pause through the `projectPaused` collaboration, the node state and the Mission condition through the Mission collaboration, and the job and the executions of the node from its own tables, in one read transaction.
   It writes nothing, and it moves no job.
 
 The report never answers a check that needs a selected claimant:
@@ -140,6 +141,8 @@ The instance healthcheck stays out of every human inspection command under [work
 - The column `scheduler_execution.agent_selections` is `TEXT`. It holds the JSON list of the selections, which the claim writes once.
 - The execution row inserts the selections with the row. Nothing updates them later.
 - A pull that finds a `running` execution of its runtime identity returns that row and selects nothing.
+- The Scheduler Service declares the collaboration `projectPaused(tx, projectId)` in its `contract.ts` as the dependency `projects`. The Project Service implements it, and `apps/server/index.ts` wires it.
+- After that read, the claim reads `projectPaused`. A paused project answers `{ kind: "no-work" }` before the instance healthcheck, and the claim inserts no execution and changes no node.
 - When one agent has no chain entry without a live cooldown, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`.
 - The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
@@ -218,7 +221,9 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test asserts that no sweep deletes an execution record, and that an ended execution stays readable through `execution get` after a restart.
 - A test asserts that `queue list` returns no job of a node that left the claimable state.
 - A test pages `queue list` with a limit of 1 over jobs of several priorities and asserts the order of the work queue across the pages.
-- Tests read the eligibility report of a node in each of the twelve states, under each Mission condition that holds and that fails, with and without a job, and with a `running`, a `lost` and a `finished` execution. They assert each check result, `claimable` and no write.
+- A test pauses a project with a claimable node and a waiting pull. It asserts `{ kind: "no-work" }` at the end of the wait window, no execution, and an unchanged node and job. After the resume, it asserts the claim of the waiting pull before the end of its window.
+- A test pauses a project during a live execution. It asserts that the execution stays `running`, that its release routes the node, and that no pull claims the node before the resume.
+- Tests read the eligibility report of a node in each of the twelve states, under each Mission condition that holds and that fails, with and without a job, with an active and a paused project, and with a `running`, a `lost` and a `finished` execution. They assert each check result, `claimable` and no write.
 - Tests assert 404 `scheduler.eligibility.node_not_found` for an absent project, an absent node and a node of another project, and 400 `scheduler.eligibility.node_task` for a task.
 - A test asserts that the eligibility report takes no instance healthcheck and holds no binding, instance or claimant field.
 

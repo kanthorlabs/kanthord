@@ -11,15 +11,16 @@ The caller is a machine identity with a live [worker registration](../worker/reg
 The Scheduler processes a pull in this order:
 
 1. When the runtime identity holds a live execution, the pull returns that execution as `claimed`. It creates no second execution.
-2. When the instance healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, or an invalid agent configuration of a server-hosted worker.
-3. When the binding group already runs as many executions as its instance count, the pull admits no claim.
-4. Otherwise, the Scheduler reads the project queue in queue order. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
+2. When the project is [paused](../project/project.md#project-pause), the pull admits no claim. The claim creates no execution and moves no job.
+3. When the instance healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, or an invalid agent configuration of a server-hosted worker.
+4. When the binding group already runs as many executions as its instance count, the pull admits no claim.
+5. Otherwise, the Scheduler reads the project queue in queue order. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
 
 For each native agent, the claim selects the first fallback chain entry with no live cooldown. It pins the selection in `agent_selections` of the execution. When every entry of one agent has a live cooldown, the pull admits no claim and answers `no-work`. That answer creates no block, no pause and no failed execution. A later cooldown changes no pinned selection; see [agent cooldowns](../agent/cooldown.md).
 
 A claim creates one execution with a fixed deadline. `expired_at` is `created_at`, plus the wall time of the binding or the worker declaration, plus `scheduler.release_reserve` seconds (default `600`). After `expired_at`, the claim is lost.
 
-When step 3 or step 4 admits no claim, the request waits. A wakeup for the project, for example after a release or a Mission or Project change, makes it try again. The 30-second loss sweep also wakes every pull that waits. It answers `no-work` when the 90-second window ends. It answers at once in these cases:
+When step 2, step 4 or step 5 admits no claim, the request waits. A wakeup for the project, for example after a release, a Mission change, a Project change or a [project resume](../project/project.md#project-resume), makes it try again. A pull that waits under a project pause claims after the resume when its window is still open. The 30-second loss sweep also wakes every pull that waits. It answers `no-work` when the 90-second window ends. It answers at once in these cases:
 
 - Another pull of the same runtime identity already waits.
 - The pull settles an expired execution of this instance or of a node in the queue.

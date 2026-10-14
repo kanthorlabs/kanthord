@@ -104,6 +104,18 @@ A worker binding of an externally hosted worker holds no agent configuration.
 The external harness selects and authenticates its own inference.
 The credential of a client identity authenticates the instance and authorizes no operation, so it is no credential of a resource.
 
+## Project pause
+
+A project is [active or paused](project-service.vocabulary.md#paused-project). A human pauses a project and resumes it.
+A new project is active.
+A paused project admits no [claim](scheduler-service.md#claims-and-counts) on any of its nodes.
+A project pause ends no live execution. Each live execution of the project runs to its release, its revocation or its loss.
+A project pause changes no node state, no job, no binding and no registration.
+A worker instance of a paused project stays registered, and each of its work pulls answers no work.
+A project pause stops no other operation of the project: a Mission write, a human node control including a node pause, a release and an Intake event proceed.
+A resume makes the project admit claims again, and it wakes the waiting work pulls of the project.
+A pause of a paused project and a resume of an active project change nothing.
+
 ## Authorization and credential custody
 
 The entity that performs an operation holds the credential reference that permits it.

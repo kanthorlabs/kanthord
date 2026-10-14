@@ -162,7 +162,8 @@ Several people and agents work in parallel. Each change has its own worktree, it
 - `make sync` publishes the submodules.
 - `make e2e` prepares and starts a live e2e run in one step. It installs the engine dependencies from the lockfile and starts `make dev` in the background when the daemon is down, then runs `make e2e-start`. `RUN` defaults to `todoapp-<yymmdd-HHMM>`.
 - `make pi-tools-update TOOL=<tool> VERSION=<version>` pins one pi tool in `engine/static/pi-tools.json`. `make bootstrap`, `make release-build` and `make e2e` fetch the pinned tools.
-- `make e2e-start RUN=<name>` starts a live e2e run against the daemon of `make dev`. `make e2e-watch`, `make e2e-stop` and `make e2e-restart` take the same `RUN`. The run files live in `.dev/e2e/<name>/`.
+- `make e2e-start RUN=<name>` starts a live e2e run against the daemon of `make dev`. `make e2e-watch`, `make e2e-stop`, `make e2e-restart` and `make e2e-resume` take the same `RUN`. The run files live in `.dev/e2e/<name>/`.
+- `make e2e-start` pauses the project directly after its creation, so that no worker claims a node. `PAUSED=0` keeps it active. `make e2e-resume RUN=<name>` resumes the project. `make e2e-watch` prints the state of the project and each change of it.
 - An e2e script reaches a third-party platform only with a token of `engine/.env.e2e`. Every `gh` call uses `E2E_GH_TOKEN` as `GH_TOKEN`, never the `gh` login of the host. The token holds limited scopes.
 - Move the engine under a live e2e run only when no claim is in progress. Then run `make e2e-restart RUN=<name>` in the same step.
 - The daemon listens on port 31415. The web app listens on port 27182 at `http://localhost:27182`.
