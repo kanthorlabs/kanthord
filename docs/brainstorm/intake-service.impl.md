@@ -109,7 +109,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - A merged `pull_request_closed` item decodes as a push of its base branch. Its admission checks every unresolved `pull_request` request on that base branch, so it also rechecks the other pull requests on that base.
 - A closed pull request that is not merged folds to `other`. The node goes to `External.Failed`, then to `Blocked`.
 - A pull request that cannot merge folds to `conflict` at the recheck of a push of its base branch. The node goes to `Available`, and the request stays unresolved.
-- A merge reaches admission up to three times: as a `pull_request_closed` item, as a `PullRequestEvent` and as a `PushEvent`. The Mission Service writes the end state once. Every later admission answers `duplicate` or skips the resolved request. The same rule covers a webhook event and a human check.
+- A merge reaches admission up to three times: as a `pull_request_closed` item, as a `PullRequestEvent` and as a `PushEvent`. The Mission Service writes the end state once. Every later admission answers `duplicate` or skips the resolved request. The same rule covers a webhook event, a human check and the deferred check.
+- After a reviewer release to `External.Requested`, the Mission Service schedules one deferred check. The deferred check calls `intake.action.check` for each unresolved `pull_request` and `branch_push` evidence of the attempt. A pull request merged during execution resolves through the deferred check after release. A branch push landed during execution resolves through the deferred check after release. A later admission or check finds the end state set and writes nothing.
 - A failed admission leaves its event `failed`. A human retries the event or checks the node.
 - A GitHub webhook inbound of the same repository is a complement where a public ingress exists. It needs no code of the poll.
 

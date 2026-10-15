@@ -899,6 +899,18 @@ A duplicate creates no second effect.
 The Mission Service answers the Intake Service the count of unresolved request evidences of the open attempts of a project on one resource.
 A poll of the Intake Service requests its platform only while that count is above zero.
 
+A reviewer release to `External.Requested` applies the fold to the node in the same transaction.
+If all required external actions of the attempt hold a recorded end state, the fold closes the attempt.
+It then moves the node to `External.Success` or `External.Failed`.
+After a reviewer release to `External.Requested`, the Mission Service schedules one deferred check.
+The deferred check calls the Intake check for each unresolved `pull_request` and `branch_push` evidence of the attempt.
+It applies the result when no live claim exists on the node.
+An `expected` result moves the node to `Completed`.
+An `other` result moves it to `Blocked`.
+A `conflict` result moves the node to `Available` and leaves the request unresolved.
+A `none` result makes no change.
+A failed deferred check makes no change.
+
 A human requests the check of a node.
 The check calls the Intake check for each request evidence of the open attempt that holds no end state.
 Each result commits in its own transaction.
