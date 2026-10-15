@@ -570,7 +570,9 @@ kanthord leaves the earlier pull request open, and a human closes it.
 
 After the action performer submits the request evidence of a `kanthord` landing pull request, it calls `intake.action.perform` once more with the evidence identity of that submission.
 The Intake Service records this call as `github.pull_request_merge` and merges the pull request.
-A failed merge changes no return item of the action performer.
+After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence.
+This request uses the current tested commit, so a rework or a restart gets its merge.
+A failed merge changes no return item of the action performer and logs a warning with the evidence identity.
 
 For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.

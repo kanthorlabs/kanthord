@@ -132,10 +132,9 @@ Ulrich stopped the run on 2026-10-12. The items below come from `.dev/notes.md`.
 - [ ] Added 2026-10-12. Merge without a human step (S12 layer 2). Add an auto-merge option and a model rotation command. Each merge still needs a full todo app check by hand: every suite, lint, the format check, the scratch-file check and the secret check.
   - Ruled 2026-10-15 by Ulrich: auto-merge plan approved. The pages record the release fold, the deferred check, the merge write and the merge request. The model rotation command stays open in this item.
     - Green: the passing kanthord assessment of the tested commit, plus every rule that GitHub enforces at the merge call. kanthord reads no CI state.
-    - The action performer requests the merge again after each rework. kanthord does not retry a refused merge.
-    - Readiness: delete the clause "No external action of the open attempt is unresolved" from the readiness condition, so that a `conflict` rework reaches the reviewer.
     - Harness: `scripts/e2e/todoapp.json` sets `landing: kanthord`. `make e2e-check` runs every suite, lint, the format check, the scratch-file check and the secret check on the head of the base branch. `make e2e-watch` runs it at each `Completed` and pauses the project on a failure. The scratch-file and secret rules are the rules of the manual check script of the merge-poll-1 run.
-    - Open layers: merge after a rework, readiness fix, live run `make e2e RUN=automerge-1 PAUSED=0`, `make e2e-check`.
+    - kanthord does not retry a refused merge.
+    - Open layers: live run `make e2e RUN=automerge-1 PAUSED=0`, `make e2e-check`.
 - [ ] Added 2026-10-12. Run the fresh attempt of S23 live: a human block, then an unblock with `start_point: "base_branch"`, then a native steps execution and a review on the branch `kanthord/<node id>-a<k>`. The engine e2e layer covers only the server path.
 
 ### Findings of the harness-1 run

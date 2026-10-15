@@ -474,7 +474,6 @@ kanthord runs no automatic evidence delete and no cleanup process.
   A mismatch answers 409 `mission.node.state_conflict`.
 - When the attempt reads 0, the readiness condition reads no attempt-scoped record.
   An initiative is ready only when every current objective holds a terminal state.
-  No action is unresolved, because no attempt requested one.
 - A node that is not ready answers 409 `mission.node.not_ready`.
   Its `details` hold `objectives_not_terminal: NodeId[]`, `unresolved_actions: Key[]` and `unsatisfied_ids: NodeId[]`.
   `unsatisfied_ids` names the dependencies of the closure that are not `Completed`.

@@ -239,14 +239,13 @@ The asserted result of a discard is that nothing is established.
 
 ## readiness condition
 
-The condition over current objective terminal states and unresolved external actions that admits an evaluation claim.
+The condition over current objective terminal states that admits an evaluation claim.
 The term names no closed set.
 [Readiness condition](mission-service.md#readiness-condition) states the rule.
 
 Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
 The steps execution releases with no further work, and the objective reaches `Waiting`.
 Neither task holds an outcome, because a task holds no record.
-No external action of the open attempt is unresolved.
 The readiness condition admits an evaluation claim.
 
 Take the initiative "Account recovery" with the objectives "Add password reset" and "Add recovery codes".

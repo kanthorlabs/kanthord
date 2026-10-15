@@ -492,11 +492,10 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 ### Readiness condition
 
 `Waiting` means released, and it does not mean claimable.
-The readiness condition admits an evaluation claim when the child rule and the external action rule hold.
+The readiness condition admits an evaluation claim when the child rule holds.
 It also admits the human assertion of `Available -> Waiting`.
 For an objective, the child rule always holds, because a task holds no outcome.
 For an initiative, every current objective holds a terminal state.
-No external action of the open attempt is unresolved.
 The condition reads the current children of the node, and a retirement removes a node from that set.
 
 ### Continuation condition
