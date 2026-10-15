@@ -59,7 +59,7 @@ A project holds any number of inbounds, and two inbounds can name the same resou
 
 The store is the single source of truth, and a row exists only for a validated inbound.
 The create validates the inbound before its insert.
-The create of a poll performs one request with the credential before the insert.
+The create of a poll performs each request of one poll cycle with the credential before the insert.
 kanthord registers no webhook at a platform.
 A human sets the address and the secret of a webhook inbound at the platform.
 A webhook inbound is the one exception to the validation before the insert, and its create validates the project, the platform and the configuration only.
@@ -73,16 +73,18 @@ A poll inbound holds its [checkpoint](intake-service.vocabulary.md#checkpoint).
 A poll runs while its inbound exists, and every poll is permanent.
 The create and the delete of the inbound are the only switch of its poll.
 A poll requests its platform only while its project holds an unresolved request evidence on the resource of the inbound.
-The validation request of the inbound create is the one exception.
+The validation requests of the inbound create are the one exception.
 The [Mission Service](mission-service.md#delivery-admission-and-check) answers that demand.
-A poll waits at least its interval between two requests, and it waits longer when the platform asks for a longer wait.
-A poll checkpoint advances only with the commit that stores every event of the batch.
+A poll cycle performs the requests that the platform implementation names, one after the other.
+A poll waits at least its interval between two cycles, and it waits longer when the platform asks for a longer wait.
+Each request of a poll owns one field of the checkpoint.
+A checkpoint field advances only with the commit that stores every event of the batch of its request.
 A poll discards its batch when its inbound no longer exists at the commit.
 
 The Intake Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of an inbound.
 
 - The check runs only when a human calls the healthcheck.
-- The check of a poll performs one fetch at the platform. A success reports healthy, and a failure reports unhealthy.
+- The check of a poll performs each request of one poll cycle at the platform. A success of every request reports healthy, and a failure reports unhealthy.
 - A webhook inbound reports [unknown](architecture.vocabulary.md#resource-status).
 - The check changes no inbound and stores no result.
 - The [implementation](intake-service.impl.md#the-resource-healthcheck) defines the values of the check.

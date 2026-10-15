@@ -54,11 +54,39 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 - A 429 is a rate limit refusal. A 403 is a rate limit refusal when `x-ratelimit-remaining` is `0` or when its message matches "secondary rate limit". A rate limit refusal is a `retryable_refusal`.
 - A rate limit refusal answers the wait that GitHub names. `Retry-After` wins over `x-ratelimit-reset`. Both headers take integer seconds only, and an HTTP date names no wait.
 - `x-ratelimit-reset` counts only when `x-ratelimit-remaining` is `0`. Its wait is the reset minus the current time, and a reset in the past gives a wait of 0. A refusal with no usable header names no wait.
+- The Events API lists an event 30 seconds to 6 hours after it occurs, as GitHub documents. The merge-poll-1 run measured a merge event 15.6 to 32 minutes late, and no `PushEvent` of a base merge within one hour. The events read bounds no detection delay.
 - Only the pull request check of the Intake Service reads the pull request again. `getChangeRequests` and the action read read once.
 - The check reads again only an open, unmerged pull request whose `mergeable` is null, at most 3 reads 2 seconds apart. It stops when the remaining deadline of the call is at most the delay, and it returns the last read. A failed read again fails the check.
 - A null `mergeable` in the last read folds to `none`.
 - A test covers a pull request whose first read holds a null `mergeable` and whose second read holds `mergeable_state: dirty`, and it asserts the fold `conflict`.
 - Every platform implementation declares its SSH host set.
+
+### The closed pull request read
+
+- The closed pull request read calls `GET /repos/{owner}/{repo}/pulls` with `state=closed`, `sort=updated`, `direction=desc` and `per_page=100`. It sends `If-None-Match` with the ETag that its caller supplies.
+- It reads one page and follows no `next` link. The page holds the 100 most recently updated closed pull requests.
+- A 200 answer answers the ETag and the items. A 304 answer answers no item. The read answers the wait of `X-Poll-Interval` and the rate limit refusals under the rules of the events read.
+- A 200 answer costs one request of the primary rate limit of the credential. A 304 answer costs none. The merge-poll-1 run measured both costs.
+- The merge-poll-1 run listed a merge 37 seconds after `closed_at`, at the first read after the merge.
+- Each item maps to the event id `pull_request:<number>:<closed_at>` and to the metadata `{ "event": "pull_request_closed" }`. `closed_at` is the exact text of the item. A reopen and a second close give a new event id.
+- An item without a positive integer `number` or a `closed_at` text fails the read with the unreadable-body result class.
+
+### The event decoder
+
+`decodeGitHubEvent` is the pure decoder of a GitHub inbound event. `metadata.event` selects its entry, and an unknown value decodes to no address.
+
+| `metadata.event`      | Source                   | Address                                                                                                          |
+| --------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `pull_request`        | Webhook                  | `pull_request` `{ number }`                                                                                      |
+| `push`                | Webhook                  | `branch_push` `{ branch, commit }` from `ref` and `after`                                                        |
+| `PullRequestEvent`    | Events read              | `pull_request` `{ number }` from `payload.number`                                                                |
+| `PushEvent`           | Events read              | `branch_push` `{ branch, commit }` from `payload.ref` and `payload.head`                                         |
+| `pull_request_closed` | Closed pull request read | Merged: `branch_push` `{ branch: base.ref, commit: merge_commit_sha }`. Not merged: `pull_request` `{ number }`. |
+
+- An item of `pull_request_closed` is merged when `merged_at` is a text. A null or absent `merged_at` marks an unmerged item.
+- The repository of the event must equal the resource of the inbound: `repository.full_name` of a webhook, `repo.name` of the events read and `base.repo.full_name` of the closed pull request read. Another repository decodes to no address.
+- A merged item without a 40-character lower-case hexadecimal `merge_commit_sha` decodes to no address. A `merge_commit_sha` of 40 zeros decodes to no address. An item with an empty or absent `base.ref` decodes to no address.
+- A merged item decodes as a push of its base branch. [Delivery admission](mission-service.impl.md#the-request-record) then checks every unresolved `pull_request` request on that base branch: the merged request folds to `expected`, and another request that cannot merge folds to `conflict`.
 
 ## Git-only platforms
 
@@ -90,7 +118,7 @@ A git-only platform has an SSH host set and no platform implementation.
 A platform implementation is a TypeScript module with its own method signatures and no shared interface.
 The platform connector is a registry keyed by the platform value of the binding.
 The registry uses static registration and loads no runtime plugin.
-The GitHub implementation decodes a GitHub webhook payload into GitHub event types.
+The GitHub implementation decodes a GitHub inbound event under [the event decoder](#the-event-decoder).
 Every method returns a discriminated union: the success with the result of the operation, or the result class.
 The check method folds the state of an external object into `expected`, `other`, `conflict` or `none` against the expected end state that its caller names, and it answers the landed commits of an `expected` repository result. The GitHub fold answers `other` for an open pull request with a current change request. A change request is current when it is the latest `APPROVED`, `CHANGES_REQUESTED` or `DISMISSED` review of its reviewer and names the head commit. The GitHub fold answers `conflict` for another open pull request whose `mergeable_state` is `dirty`.
 The GitHub merge of a pull request reads the allowed merge methods of the repository, then calls `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` with the head guard `sha`.
