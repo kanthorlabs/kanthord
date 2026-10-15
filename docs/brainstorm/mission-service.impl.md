@@ -610,6 +610,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence, an evidence asset and the presigned PUT of a new asset. The Mission Service authorizes the presigned PUT inside `mission.evidence.submit`, before the asset row exists: it checks the live claim and the storage binding of the pinned revision, refuses an asset identity that an asset row holds, and derives the object key from the claim and the asset identity that the submission allocates.
 - For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
+- For `github.pull_request_merge`, the authorization checks the request evidence of `merge_evidence_id`: it belongs to the same attempt, names the same action key as the `FrozenAction`, holds a `pull_request` address kind and has no end state. The `merge_address` field of the action facts carries that address.
 - For a human identity, it follows the evidence asset to its storage binding revision.
 - It takes no association from the caller.
 - A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled`, `binding_removed` or `service_mismatch`.

@@ -607,6 +607,7 @@ B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, acros
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
 The operands take the node branch from `node_branch` of the claim.
 It passes the request key `<node id>/<attempt>/<FrozenAction.key>`, and it appends the snapshot commit for `merge_push`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6`. For the reuse of a pull request, it appends the number of the reused pull request and the snapshot commit, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9`.
+After a `kanthord` landing pull request action submits its request evidence, the action performer calls `intake.action.perform` once more with `mergeEvidenceId` set to the evidence identity. The merge request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request/merge/b4c5d6`. A failed merge changes no return item.
 
 The operation and the tool answer `{ tool_name: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.

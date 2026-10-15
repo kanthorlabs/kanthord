@@ -126,6 +126,7 @@ The [retry rules](repository.md#result-classes) use the deadline that the caller
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
 An epic decides that form for each platform.
 The read-back of the create of `github.pull_request` calls `GET /repos/{owner}/{repo}/pulls` with `state=open`, `head=<owner>:<node branch>` and `base=<base branch>`, where the node branch is `node_branch` of the claim. The read-back of its reuse fetches the node branch of the claim through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <node branch>`.
+The read-back of `github.pull_request_merge` calls `GET /repos/{owner}/{repo}/pulls/{pull_number}` (`pullRequestMergedAt`). A response where `merged` is true and `head.sha` equals the tested commit is a match.
 The read-back of `git.merge_push` fetches the base branch through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <base branch>`.
 
 ## Repository connector
