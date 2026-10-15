@@ -21,7 +21,7 @@ A TODO representation contains `id`, `user_id`, `title`, `description`, `complet
 
 List accepts `limit` from 1 to 100, default 20; an optional opaque `cursor`; and optional `completed=true|false`. Reject unknown/duplicate query keys and invalid values. Return `{ items, next_cursor }`, ordered by `created_at DESC, id DESC`, with keyset pagination and null at the end. Decode and strictly validate cursor structure, bind cursor operands as SQL parameters and scope every page to the authenticated owner. Cursors bind the completion filter; a filter mismatch returns 400. Cursors confer no access rights.
 
-Single-resource create/get/patch responses return a strong ETag containing the quoted integer version, for example `"1"`. Patch/delete require exactly that form in `If-Match`; missing is 428, malformed or wildcard is 400, and a stale version is 412. Patch accepts a nonempty subset of `title`, `description`, `completed` only. Even a value-equal successful patch increments version once. Check ownership before revealing version conflicts; absent and foreign-owned UUIDs both return 404. Malformed UUIDs return 400. Add `test:todos`.
+Single-resource create/get/patch responses return a strong ETag containing the quoted integer version, for example `"1"`. Patch/delete require exactly that form in `If-Match`; missing is 428, malformed or wildcard is 400, and a stale version is 412. Patch accepts a nonempty subset of `title`, `description`, `completed` only. Even a value-equal successful patch increments version once. Check ownership before revealing version conflicts; absent and foreign-owned UUIDs both return 404. Malformed UUIDs return 400. Create `src/modules/todos` with this code. Add `test:todos`.
 
 ## Criterion
 

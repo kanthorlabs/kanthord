@@ -141,6 +141,9 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - Its timeout plugin bounds each operation by the remaining resource budget that the caller supplies.
 - Its abort plugin binds to the `Context` of the caller.
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
+- Every `git` child that the engine runs reads no global and no system git configuration of the host. The one builder `isolatedGitEnvironment` in `src/kernel/git-environment.ts` sets `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and `core.excludesFile=/dev/null` through `GIT_CONFIG_COUNT`.
+- The builder `isolatedGitEnvironment` also removes `PAGER`, `GIT_PAGER`, `EDITOR`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_ASKPASS` and `SSH_ASKPASS`. It sets the commit identity `kanthord <kanthord@localhost>` for each name that the environment leaves empty.
+- The connector and `local-git` of the worker unit build the environment of every `simple-git` and `git` child with this builder. A global ignore file of the host therefore never drops a file from a checkpoint.
 - `simple-git` kills the `git` process and not the `ssh` child of that process.
 - A git operation of the connector that fails, is aborted or reaches its deadline answers `repository.connector.git_failed`, and the message names the operation.
 - `fetchAndCheckout(directory, branch, base_branch, pushed, ...)` answers `repository.node_branch.missing` when the remote node branch is missing and either `pushed` is true or the workspace held `refs/remotes/origin/<branch>` before the fetch. [worker-service.impl.md](worker-service.impl.md#workspace) names the records behind `pushed`.

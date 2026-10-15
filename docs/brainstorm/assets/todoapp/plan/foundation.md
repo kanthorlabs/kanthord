@@ -13,7 +13,7 @@ verifications:
 
 ## Requirement
 
-Create a JavaScript ESM application on Node.js 24.x using Express 5.x. Separate the side-effect-free app factory from the process entrypoint. Organize `src/config`, `src/http`, `src/modules/auth`, `src/modules/todos`, `src/modules/admin` and `src/db`; routes delegate to services and services to repositories. Inject database, clock and logger dependencies rather than relying on mutable global state.
+Create a JavaScript ESM application on Node.js 24.x using Express 5.x. Separate the side-effect-free app factory from the process entrypoint. Organize `src/config`, `src/http` and `src/db`. Create a directory only when it holds code, and add no `.gitkeep` place-holder. Later objectives create `src/modules/auth`, `src/modules/todos` and `src/modules/admin` with their code. Routes delegate to services and services to repositories. Inject database, clock and logger dependencies rather than relying on mutable global state.
 
 Use npm with a committed lockfile, ESLint, Prettier, Node's test runner and Supertest. Provide `test:foundation`, `lint` and `format:check` scripts, with substantive tests in the three task-named files. Later objectives add their suites. Do not pre-create passing placeholder suites.
 

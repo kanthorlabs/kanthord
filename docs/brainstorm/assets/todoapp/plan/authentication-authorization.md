@@ -10,7 +10,7 @@ verifications:
 
 ## Requirement
 
-Mount explicit public and authenticated routers, with role checks after authentication for administrator routes. Read the current user role on every private request. Implement `GET /api/v1/admin/stats` as an admin-only aggregate read that returns only `user_count` and `todo_count`, not a user-data browsing endpoint.
+Mount explicit public and authenticated routers, with role checks after authentication for administrator routes. Read the current user role on every private request. Implement `GET /api/v1/admin/stats` as an admin-only aggregate read that returns only `user_count` and `todo_count`, not a user-data browsing endpoint. Create `src/modules/admin` with this code.
 
 ## Criterion
 
