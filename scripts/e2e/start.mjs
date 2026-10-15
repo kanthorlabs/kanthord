@@ -240,6 +240,7 @@ const runState = {
   github_token_env: githubTokenEnv,
   github: config.repository.github,
   base_branch: baseBranch,
+  fixture_commit: fixture,
   project_id: project.id,
   mission_id: mission.id,
   placement,

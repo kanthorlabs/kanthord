@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
+import { runCheck, shouldPause } from "./check.mjs";
 
 const [run] = process.argv.slice(2);
 if (!run) throw new Error("usage: watch.mjs <run>");
@@ -29,6 +30,8 @@ const prs = new Map();
 const down = new Set();
 const runtimeStates = new Map();
 let projectState;
+let checkRunning = false;
+const COMPLETED_STATE = "Completed";
 
 function alive(pid) {
   try {
@@ -51,6 +54,7 @@ async function watchProject() {
 
 async function watchNodes(quiet) {
   const page = await api.get(`/api/mission/${state.mission_id}/node?limit=200`);
+  const completedNodes = [];
   for (const node of page.items) {
     if (node.kind === TASK_KIND) continue;
     const label = `${node.state}/a${node.attempt}`;
@@ -59,7 +63,30 @@ async function watchNodes(quiet) {
       console.log(
         `${now()} node ${node.filename}: ${before ?? "-"} -> ${label}`,
       );
+    if (!quiet && before !== label && node.state === COMPLETED_STATE)
+      completedNodes.push(node.filename);
     nodes.set(node.id, label);
+  }
+  if (completedNodes.length > 0 && !checkRunning) {
+    checkRunning = true;
+    runCheck(run, MAIN)
+      .then(async (result) => {
+        console.log(
+          `${now()} check ${result} (after ${completedNodes.join(", ")} completed)`,
+        );
+        if (shouldPause(result)) {
+          try {
+            await api.post(`/api/project/${state.project_id}/pause`);
+            console.log(`${now()} project paused`);
+          } catch (err) {
+            console.log(`${now()} pause error: ${err.message}`);
+          }
+        }
+      })
+      .catch((err) => console.log(`${now()} check error: ${err.message}`))
+      .finally(() => {
+        checkRunning = false;
+      });
   }
 }
 

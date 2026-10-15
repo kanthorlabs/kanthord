@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules cleanup docs-tools \
-	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale pi-tools-update
+	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale e2e-check pi-tools-update
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -101,6 +101,10 @@ help:
 	@echo "  e2e-resume       Resume the paused project of a run, so that workers claim nodes. RUN=name"
 	@echo "  e2e-scale        Change instance_count of a worker binding. RUN=name BINDING=name COUNT=n"
 	@echo "                   Refuses a run at the worker placement"
+	@echo "  e2e-check        Run every suite, lint, format check, scratch-file check and secret check"
+	@echo "                   on the head of the base branch of a run, in a scratch clone. RUN=name"
+	@echo "                   Prints one line per check and RESULT pass or RESULT fail."
+	@echo "                   Clone lives in .dev/e2e/<RUN>/check/ of the main checkout."
 	@echo ""
 	@echo "pi tools"
 	@echo "  pi-tools-update  Pin one pi tool (fd, rg) to a release in engine/static/pi-tools.json"
@@ -154,5 +158,7 @@ e2e-resume:
 	@$(S)/e2e/resume.sh
 e2e-scale:
 	@$(S)/e2e/scale.sh
+e2e-check:
+	@$(S)/e2e/check.sh
 pi-tools-update:
 	@$(S)/engine/pi-tools-update.sh

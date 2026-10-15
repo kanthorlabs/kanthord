@@ -71,3 +71,7 @@ An import is authoritative for the whole mission. Never submit only one objectiv
 - [Execution ERD](../../../reference/erd/02-execution.md): attempts, claims, evidence, assessments and outcomes.
 
 The ERDs describe KanthorD's design, not proof of implemented capability. The app's users, sessions and TODO tables are separate from KanthorD's database. Run [the operator checks](kanthord-checks.md) to distinguish app correctness from KanthorD correctness.
+
+## Check after each merge
+
+After kanthord merges a pull request, `make e2e-watch` runs `make e2e-check RUN=<name>` once for that node. The check runs every suite, lint, the format check, the scratch-file check and the secret check on the head of the base branch. It prints one line per check. It exits with `RESULT pass` or `RESULT fail`. On `RESULT fail`, `make e2e-watch` pauses the project. The scratch-file check rejects any path that matches `(^|\/)\.kanthord|scratch|\.tmp$|\.log$|\.bak$|~$|\.orig$|(^|\/)\.env$|\.db$|node_modules/` (case-insensitive) in the diff from the fixture commit to the base branch head. The secret check rejects any added line that matches `gh[pousr]_[A-Za-z0-9]{20,}`, `github_pat_`, `sk-[A-Za-z0-9-]{20,}`, `AKIA[0-9A-Z]{16}`, `-----BEGIN [A-Z ]*PRIVATE KEY`, `xox[baprs]-` or `nvapi-`.
