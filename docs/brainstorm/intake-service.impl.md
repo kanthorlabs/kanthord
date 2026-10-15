@@ -29,7 +29,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `configuration` is JSON text. The Intake Service validates it per `(kind, platform)` with a `zod` schema in code before the write. It holds `resource` and the options of the kind and the platform. Every property name is snake_case.
 - `checkpoint` is JSON text whose shape the platform implementation validates.
 - The table holds no unique index other than its key.
-- The create validates the input, then performs the remote validation of its kind: each request of one poll cycle for a poll, nothing for a webhook. Each request takes its own release, and a refusal of any request refuses the create.
+- The create validates the input, then performs the remote validation of its kind: each request of one poll cycle for a poll, nothing for a webhook. Each request takes its own release, and a refusal of any request refuses the create. The create stops at the first refusal.
 - The insert transaction checks that the credential name has a live revision and that its platform suits the inbound. A credential archive calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and an archive never interleave.
 - A delete refuses with 409 `intake.inbound.events_pending` when a pending event exists. Otherwise one transaction deletes the events of the inbound and deletes the row. A delete calls no platform.
 - A create or a delete answers its platform refusal and changes no row. Each failure writes a span of the Tracking Service with its reason.
@@ -67,11 +67,12 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - One poll cycle per inbound runs at a time, and its requests run one after the other. The next interval starts after the previous cycle ends, so no older answer commits its checkpoint field after a newer one.
 - A cycle of a GitHub poll makes the events read, then the [closed pull request read](repository.impl.md#the-closed-pull-request-read). Each request takes its own release for `poll`.
 - After the capacity bound check and before the first release, the cycle calls `mission.delivery.unresolved_request.count` with the project and the resource identity of the inbound. A count of zero skips both requests and keeps `checkpoint`. A failed call skips both requests and writes a span with its reason.
-- The release transaction ends the loop when the inbound no longer exists.
+- The release transaction ends the loop when the inbound no longer exists. Each request takes its own release transaction, so an inbound deleted between the two requests ends the loop with no second request.
 - A rate limit refusal of the events read ends the cycle, and the cycle makes no closed pull request read. Another failure of the events read writes its span, and the closed pull request read still runs.
 - The wait before the next cycle is the longest of the interval and the waits that the [GitHub implementation](repository.impl.md#platform-connector-and-platform-implementations) answers for the requests of the cycle from `X-Poll-Interval`, `Retry-After` or `x-ratelimit-reset`.
 - A rate limit refusal that names no wait is a secondary rate limit. One count holds the consecutive cycles with a secondary refusal of either request. The n-th such cycle waits the interval times 2^n, up to `POLL_BACKOFF_MAX_MS`, 900 seconds.
 - A refusal that names a wait ends the count, and its wait is never less than the interval. A cycle with no rate limit refusal ends the count.
+- A cycle with a secondary refusal waits the longer of its backoff and the wait that the other request names.
 - A cycle that makes no request keeps the count and waits the interval. These cycles are a capacity pause, a count of zero and a failed count.
 - `POLL_WAIT_MAX_MS`, 3600 seconds, caps every wait.
 - The loop holds its wait and its count in memory. A start opens every loop at its spread offset with the interval.
@@ -249,7 +250,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The inbound check follows them like every other check.
 - The check runs only inside a health report that a human calls.
 - The inventory answers one entry per inbound with its `project_id` in place of a project name. The composition root resolves the name under the [health report](gateway-service.impl.md#the-resource-healthcheck-report). The Intake Service reads no Project table and calls no Project collaboration.
-- A GitHub poll performs the events read and the closed pull request read. Each request takes its own release for `poll` and sends its ETag field of `checkpoint`. A 200 or a 304 answer of both requests reports `healthy`, and any other result reports `unhealthy`. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
+- A GitHub poll performs the events read and the closed pull request read. Each request takes its own release for `poll` and sends its ETag field of `checkpoint`. A 200 or a 304 answer of both requests reports `healthy`, and any other result reports `unhealthy`. The check stops at the first request that fails and reports the code of that failure. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
 - A webhook inbound reports `unknown` with the capability `webhook`.
 - No store holds a check result.
 
@@ -268,6 +269,10 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A test covers an `X-Poll-Interval` above the interval, and it asserts the longer wait.
 - A test covers a rate limit refusal of the events read, and it asserts no closed pull request read in that cycle.
 - A test covers a secondary refusal of the closed pull request read after a 200 events read, and it asserts the doubled wait.
+- A test covers an events read that fails with no rate limit, and it asserts that the closed pull request read still runs.
+- A test covers the waits of both reads, and it asserts the longest wait.
+- A test covers a stored checkpoint without `pulls_etag`, and it asserts a closed pull request read with no `If-None-Match`.
+- A test covers a failed events read in a health report, and it asserts `unhealthy` and no closed pull request read.
 - A test covers a closed pull request read with a merged item and an unmerged item. It asserts two events with the ids `pull_request:<number>:<closed_at>`, the metadata `pull_request_closed`, the new `pulls_etag` and the kept `etag`.
 - A test covers a closed pull request item that is already stored, and it asserts no second row.
 - A test covers a closed pull request page that exceeds the room, and it asserts a null `pulls_etag` and the kept `etag`.

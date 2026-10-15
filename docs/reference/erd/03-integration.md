@@ -127,7 +127,7 @@ A remote effect never commits with a SQLite transaction. An outbound request com
 - `credential` holds a credential name. A poll names a credential, and a webhook holds a null `credential`. The insert transaction checks that the name exists and that its platform suits the inbound. A credential archive calls `inboundsNaming` in its own transaction and is refused while an inbound names the credential.
 - kanthord registers no webhook at a platform. A human sets the address and the secret of a webhook inbound at the platform.
 - The create of a poll performs one request with the credential before the insert.
-- A poll advances `checkpoint` in the transaction that stores every event of the batch. A batch whose inbound no longer exists is discarded.
+- A poll advances one field of `checkpoint` in the transaction that stores the batch of one read. A batch whose inbound no longer exists is discarded.
 - No row holds credential material or a webhook secret.
 - A delete of an inbound is refused while the inbound holds a pending event. A delete calls no platform. One transaction deletes the events of the inbound and the row.
 - `intake_inbound_event` has a unique index on `(inbound_id, event_id)`, so a redelivery inside one inbound creates no second row.

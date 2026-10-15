@@ -83,9 +83,9 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 | `PushEvent`           | Events read              | `branch_push` `{ branch, commit }` from `payload.ref` and `payload.head`                                         |
 | `pull_request_closed` | Closed pull request read | Merged: `branch_push` `{ branch: base.ref, commit: merge_commit_sha }`. Not merged: `pull_request` `{ number }`. |
 
-- An item of `pull_request_closed` is merged when `merged_at` is not null.
+- An item of `pull_request_closed` is merged when `merged_at` is a text. A null or absent `merged_at` marks an unmerged item.
 - The repository of the event must equal the resource of the inbound: `repository.full_name` of a webhook, `repo.name` of the events read and `base.repo.full_name` of the closed pull request read. Another repository decodes to no address.
-- A merged item without a 40-character lower-case hexadecimal `merge_commit_sha` decodes to no address.
+- A merged item without a 40-character lower-case hexadecimal `merge_commit_sha` decodes to no address. A `merge_commit_sha` of 40 zeros decodes to no address. An item with an empty or absent `base.ref` decodes to no address.
 - A merged item decodes as a push of its base branch. [Delivery admission](mission-service.impl.md#the-request-record) then checks every unresolved `pull_request` request on that base branch: the merged request folds to `expected`, and another request that cannot merge folds to `conflict`.
 
 ## Git-only platforms
