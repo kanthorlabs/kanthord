@@ -190,6 +190,19 @@ log("project created", {
   bindings: Object.keys(bindings),
 });
 
+const inbound = await api.post("/api/intake/inbound", {
+  project_id: project.id,
+  kind: "poll",
+  platform: "github",
+  consumer: "mission.delivery.admit",
+  credential: config.repository.config.credential,
+  configuration: { resource: config.repository.github },
+});
+log("poll inbound created", {
+  inbound: inbound.id,
+  resource: config.repository.github,
+});
+
 const mission = await api.get(`/api/mission/project/${project.id}`);
 const planDir = resolve(ROOT, config.plan);
 const snapshot = {

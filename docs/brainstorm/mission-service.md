@@ -896,6 +896,9 @@ Acceptance as a human act invokes the Mission operation under the [linked human 
 Refusal admits no effect.
 A duplicate creates no second effect.
 
+The Mission Service answers the Intake Service the count of unresolved request evidences of the open attempts of a project on one resource.
+A poll of the Intake Service requests its platform only while that count is above zero.
+
 A human requests the check of a node.
 The check calls the Intake check for each request evidence of the open attempt that holds no end state.
 Each result commits in its own transaction.

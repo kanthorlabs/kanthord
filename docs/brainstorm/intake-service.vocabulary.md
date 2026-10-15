@@ -43,7 +43,7 @@ GitHub assigns `a438bd70-72ed-4d5e-96b2-9c9bf5c3807f` to the webhook delivery ab
 ## checkpoint
 
 A checkpoint is the cursor from which the next request of a poll continues acquisition.
-The poll inbound `inbound_01J9R2MX` of `kanthord-docs` keeps the newest event identity and the ETag of the last answer for `kanthorlabs/kanthord` as its checkpoint.
+The poll inbound `inbound_01J9R2MX` of `kanthord-docs` keeps the ETag of the last answer for `kanthorlabs/kanthord` as its checkpoint.
 
 ## inbound event state
 

@@ -749,7 +749,7 @@ An operation serves one caller kind.
 - A `human` or `client` operation that only a server component of a peer calls, with the identity that it forwards, declares `direct: true`. It is reachable through the direct adapter alone, and its access policy and its execution proof apply to the forwarded identity.
 - The Gateway registers no HTTP route for a `service` operation or a `direct: true` operation, and the OpenAPI emitter excludes both.
 - The conformance test of both adapters exempts a `service` operation. It runs a `direct: true` operation through the direct adapter alone.
-- `mission.delivery.admit`, the delivery admission of the Mission Service, is a `service` operation. The Intake Service calls it under its service identity.
+- `mission.delivery.admit`, the delivery admission of the Mission Service, and `mission.delivery.unresolved_request.count` are `service` operations. The Intake Service calls them under its service identity.
 - The `service` policy alone grants no operation, and the owning service authorizes the calling service by name.
 - No operation accepts both a human and a machine.
 - No handler shapes its result by the kind of the caller identity.

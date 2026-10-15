@@ -70,7 +70,12 @@ An error after the insert produces a span of the [Tracking Service](tracking-ser
 An inbound row holds no state of its acquisition health.
 
 A poll inbound holds its [checkpoint](intake-service.vocabulary.md#checkpoint).
-A poll runs on a fixed interval while its inbound exists, and every poll is permanent.
+A poll runs while its inbound exists, and every poll is permanent.
+The create and the delete of the inbound are the only switch of its poll.
+A poll requests its platform only while its project holds an unresolved request evidence on the resource of the inbound.
+The validation request of the inbound create is the one exception.
+The [Mission Service](mission-service.md#delivery-admission-and-check) answers that demand.
+A poll waits at least its interval between two requests, and it waits longer when the platform asks for a longer wait.
 A poll checkpoint advances only with the commit that stores every event of the batch.
 A poll discards its batch when its inbound no longer exists at the commit.
 
