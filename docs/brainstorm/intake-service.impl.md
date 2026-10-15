@@ -99,6 +99,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - The poll stores a `PullRequestEvent`, a `PushEvent` and a `pull_request_closed` item as they arrive. Delivery admission decodes each one under [the event decoder](repository.impl.md#the-event-decoder) and calls the Intake check of each matched or selected request, the same check that `mission.node.check` calls. The check uses the credential of the pinned binding revision. Admission and `mission.node.check` commit through one end-state write.
 - The closed pull request read lists a merge at the next cycle. The events read lists it 30 seconds to 6 hours later.
 - The detection delay is the cycle wait plus the admission. The cycle wait is the longest wait of both reads, so the `X-Poll-Interval` of either read and an active secondary backoff raise it.
+- A cycle makes the events read first. An event of the events read that names the pull request resolves the request when its check finds the merge or the close. The closed pull request item of the same cycle then finds the request resolved and writes nothing.
 - The live run records the observed `X-Poll-Interval`. The 3 minute bound applies while `X-Poll-Interval` stays at about 60 seconds.
 - The first closed pull request read with demand, and any read after a null `pulls_etag`, stores every closed item of the page that has no row. The page holds at most 100 items.
 - A stale merged item rechecks every unresolved pull request request on its base branch. Each recheck is one Intake check, and the checks run one after the other.
