@@ -75,7 +75,12 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - The loop holds its wait and its count in memory. A start opens every loop at its spread offset with the interval.
 - The `intake` section of the configuration file holds no poll key.
 - The GitHub poll reads the events of the resource with `If-None-Match` set to the ETag of `checkpoint`. A 304 answer stores nothing.
+- `checkpoint` of a GitHub poll holds `{ "etag": <ETag or null> }`. A stored `checkpoint` that holds `newest_event_id` loads, and the next write drops that field.
+- GitHub event ids carry no order across event types. A newer event can hold a lower id than an older event.
+- The `(inbound_id, event_id)` dedupe is the only filter of a 200 page. Every event of the page that has no stored row inserts.
+- The poll inserts the events of a page from the last to the first, so the oldest event of the page is stored first.
 - Each event inserts `event_id` from the event `id`, the event JSON in `event` and `{ "event": <type> }` in `metadata`.
+- A page that exceeds the room below the capacity bound stores the events that fit and writes a null ETag. The next request reads the page again.
 - The transaction that stores the batch also writes `checkpoint`. It discards the batch when the inbound row no longer exists.
 - The poll pauses beyond the capacity bound that [intake-service.md](intake-service.md#capacity-and-retention) states. It resumes when the count of pending events falls below that bound.
 - A failed request writes a span with its reason and leaves `checkpoint` unchanged.

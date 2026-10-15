@@ -49,6 +49,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
 
 - The GitHub SSH host set is `github.com` and `ssh.github.com`.
+- GitHub event ids carry no order across event types. The events read and the checkpoint rank no event by its id.
 - The events read answers the wait of `X-Poll-Interval` in milliseconds. It reads the header only on a 200 or a 304 answer, and it ignores a malformed value.
 - A 429 is a rate limit refusal. A 403 is a rate limit refusal when `x-ratelimit-remaining` is `0` or when its message matches "secondary rate limit". A rate limit refusal is a `retryable_refusal`.
 - A rate limit refusal answers the wait that GitHub names. `Retry-After` wins over `x-ratelimit-reset`. Both headers take integer seconds only, and an HTTP date names no wait.
