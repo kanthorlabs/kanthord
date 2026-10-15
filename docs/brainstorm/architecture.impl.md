@@ -1132,7 +1132,7 @@ The import boundaries follow the public files.
 - The dashboard sidebar lists only a route that has a screen.
 - A planned screen joins the sidebar in the change that adds its route.
 - The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
-- A project-scoped screen waits for a project: Overview, Scheduler, Executions and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
+- A project-scoped screen waits for a project: Overview, Scheduler and Workers. Scheduler reads every project and offers a project filter. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
 
 ## Unwired collaborations
 
