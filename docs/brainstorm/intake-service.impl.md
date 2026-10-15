@@ -90,7 +90,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - A lost ETag reads the page again, and the `(inbound_id, event_id)` dedupe drops every stored item.
 - After a downtime, the closed pull request read detects a close only while the pull request stays among the 100 most recently updated closed pull requests.
 - The poll pauses beyond the capacity bound that [intake-service.md](intake-service.md#capacity-and-retention) states. It resumes when the count of pending events falls below that bound.
-- A failed request writes a span with its reason and leaves `checkpoint` unchanged.
+- A failed request writes a span with its reason and leaves its checkpoint field unchanged. The other read of the cycle still commits its own field.
 - The automatic detection of a merged, closed or conflicting pull request needs a poll or webhook inbound for the repository. A push event of a base branch reaches the open pull request requests on that branch through [delivery admission](mission-service.impl.md#the-request-record).
 
 ### The merge detection of a GitHub poll
@@ -98,6 +98,12 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - A human creates one poll inbound for each GitHub repository whose pull requests a project awaits. It names a credential of platform `github` that reads the events and the pull requests of the repository.
 - The poll stores a `PullRequestEvent`, a `PushEvent` and a `pull_request_closed` item as they arrive. Delivery admission decodes each one under [the event decoder](repository.impl.md#the-event-decoder) and calls the Intake check of each matched or selected request, the same check that `mission.node.check` calls. The check uses the credential of the pinned binding revision. Admission and `mission.node.check` commit through one end-state write.
 - The closed pull request read lists a merge at the next cycle. The events read lists it 30 seconds to 6 hours later.
+- The detection delay is the cycle wait plus the admission. The cycle wait is the longest wait of both reads, so the `X-Poll-Interval` of either read and an active secondary backoff raise it.
+- The live run records the observed `X-Poll-Interval`. The 3 minute bound applies while `X-Poll-Interval` stays at about 60 seconds.
+- The first closed pull request read with demand, and any read after a null `pulls_etag`, stores every closed item of the page that has no row. The page holds at most 100 items.
+- A stale merged item rechecks every unresolved pull request request on its base branch. Each recheck is one Intake check, and the checks run one after the other.
+- Every fold reads the current state, so no request ends wrong. No other project is touched.
+- A failed check leaves that stale event `failed`. A human retries or discards it.
 - A merged pull request folds to `expected`. The node goes from `External.Requested` to `External.Success`, then to `Completed`. The landed-commit evidence names the `inbound_event_id` of the event whose admission commits the end state.
 - A merged `pull_request_closed` item decodes as a push of its base branch. Its admission checks every unresolved `pull_request` request on that base branch, so it also rechecks the other pull requests on that base.
 - A closed pull request that is not merged folds to `other`. The node goes to `External.Failed`, then to `Blocked`.
