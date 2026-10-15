@@ -16,7 +16,7 @@ Keep an ESM package on Node.js 24.x with Express 5.x, a Node 24 version declarat
 
 Use ESLint, Prettier, Node's test runner and Supertest. Provide the `lint`, `format:check` and `test:foundation` scripts. Put substantive tests in the three foundation task-named test files. Do not pre-create passing placeholder suites for later objectives.
 
-Organize `src/config`, `src/http` and `src/db`. Create a directory only when it holds code, and add no `.gitkeep` place-holder. Later objectives create `src/modules/auth`, `src/modules/todos` and `src/modules/admin` with their code. Routes delegate to services and services to repositories. Inject database, clock and logger dependencies rather than relying on mutable global state. Keep source modules small.
+Organize `src/config`, `src/http` and `src/db`. Create a directory only when it holds code, and add no `.gitkeep` placeholder. Later objectives create `src/modules/auth`, `src/modules/todos` and `src/modules/admin` with their code. Routes delegate to services and services to repositories. Inject database, clock and logger dependencies rather than relying on mutable global state. Keep source modules small.
 
 ## Criterion
 

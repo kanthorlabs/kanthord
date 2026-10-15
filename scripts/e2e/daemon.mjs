@@ -100,12 +100,13 @@ export async function stopDevDaemon(endpoint, label) {
     console.log(`${label}: no daemon on port ${port}`);
     return [];
   }
-  const foreign = listeners.filter((pid) => !devDaemonPids(pid));
+  const groups = listeners.map(devDaemonPids);
+  const foreign = listeners.filter((pid, index) => !groups[index]);
   if (foreign.length)
     throw new Error(
       `port ${port} holds pid ${foreign.join(", ")} that is neither a child of the node --watch of scripts/dev/run.sh nor an orphaned node src/main.ts serve of a kanthord engine directory`,
     );
-  const pids = listeners.flatMap(devDaemonPids);
+  const pids = groups.flat();
   for (const pid of pids) {
     try {
       process.kill(pid, "SIGTERM");

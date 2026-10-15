@@ -187,7 +187,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `toolDeclarations` moves out of `tool-table` and stays in `src/worker/`, because the server reads it.
 - `src/worker/index.ts` keeps the server entry: `WorkerService`, its migrations and its configuration.
 - `local-git`, `verification` and `tool-table` take the `env` of the worker unit. They pass `childEnvironment(env)` to each child process and read no `process.env`.
-- `local-git` passes the environment through `isolatedGitEnvironment` of the [Repository connector](repository.impl.md#repository-connector), so no `git` command of a worker workspace reads the global or system git configuration of the host.
+- `local-git` builds each git environment with `isolatedGitEnvironment` of `src/kernel/git-environment.ts`. [repository.impl.md](repository.impl.md#repository-connector) states the rules.
 - The `worker` wrapper is `src/apps/worker/index.ts`. It resolves `cli.yaml`, checks `client_secret`, builds the HTTP transport and passes `process.env`.
 - It logs to stderr, installs the signal handlers and owns the exit code. It arms its 10-second exit through `watchdog`.
 - The `server` wrapper is the pool host `src/apps/server/worker-pool.ts`. It starts one `node:worker_threads` thread for each started pool slot.
