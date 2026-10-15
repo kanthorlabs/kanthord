@@ -64,6 +64,7 @@
       "strategy": {
         "action": {
           "name": "pull_request",
+          "landing": "kanthord",
           "follows": {
             "type": "assessment_passed"
           }
