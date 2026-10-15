@@ -14,6 +14,7 @@ A mechanism here never overrides a rule there.
 - The workbench directory of an agent is `workbench/<agent name>/` of the state directory.
 - The list calls `SessionManager.list` of pi with that directory.
 - Each item of the list answers `id`, `name`, `created`, `modified`, `message_count` and `first_message`.
+- Each item of the list also answers `run_active` and `pending_approval` from the in-memory run, the source of the snapshot. `pending_approval` holds `tool_call_id` and `operation_id`, or `null`, and never `input`.
 - A resume opens the session whose `id` the human picks.
 - The `model_change` and `thinking_level_change` entries of pi carry `modelId` and `thinkingLevel`. pi writes them at each change of the model or of the thinking level.
 - A `custom` entry of pi with `customType` `kanthord.workbench.configuration` carries `{ agent_provider }`. The service appends it at the session create and at each change of `agent_provider`.
