@@ -177,7 +177,7 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 | `workbench--session--create` | `POST /api/workbench/session` | Yes | Create a workbench session with one agent of the catalog. |
 | `workbench--session--events` | `GET /api/workbench/session/:session_id/events` | No | Answer the session entries after `after` and the snapshot of the active run at once when `version` differs, else wait up to 25 seconds for a change. |
 | `workbench--session--get` | `GET /api/workbench/session/:session_id` | No | Get the configuration, the entries of the completed runs and the run state of a workbench session. |
-| `workbench--session--list` | `GET /api/workbench/session` | No | List the workbench sessions of every agent, or of one agent. |
+| `workbench--session--list` | `GET /api/workbench/session` | No | List the workbench sessions of every agent, or of one agent. Each item holds run_active and pending_approval of the in-memory run. |
 | `workbench--session--message` | `POST /api/workbench/session/:session_id/message` | Yes | Start a run of the agent on one human message. A session holds one run at a time. |
 
 ## Worker
