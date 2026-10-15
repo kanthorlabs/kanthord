@@ -14,7 +14,7 @@ Provide public `POST /api/v1/auth/register` and `POST /api/v1/auth/login`. Use Z
 
 Registration accepts only `email` and `password`. It trims and lowercases the email, creates role `user`, and returns 201 with safe user fields and no session. Email is valid and at most 254 characters. Password has 12 through 128 characters and at most 512 UTF-8 bytes. Never trim or normalize the password. A duplicate email returns 409. Login returns 200. An unknown email and an incorrect password return the same safe 401 error, with a dummy hash comparison for unknown accounts.
 
-Supply a documented operator-only CLI that provisions the initial administrator. It reads the password from hidden input or stdin, never from a command argument or log. No HTTP route can choose or change role.
+Supply a documented operator-only CLI that provisions the initial administrator. It reads the password from hidden input or stdin, never from a command argument or log. No HTTP route can choose or change role. Create `src/modules/auth` with this code.
 
 ## Criterion
 

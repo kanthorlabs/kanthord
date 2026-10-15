@@ -14,7 +14,7 @@ Implement authenticated `POST /api/v1/todos`, `GET /api/v1/todos/:id`, `PATCH /a
 
 A TODO representation contains `id`, `user_id`, `title`, `description`, `completed`, `version`, `created_at`, `updated_at`. Trim titles; a title is nonblank and has at most 200 characters. A description has at most 5000 characters and defaults to an empty string. Creation accepts only `title`, optional `description` and optional boolean `completed` that defaults to false. Creation returns 201 with a `Location` header and the representation. Get and patch return 200. Delete returns 204 without a body and physically removes the row.
 
-Create, get and patch responses return a strong `ETag` that contains the quoted integer version, for example `"1"`. Patch accepts a nonempty subset of `title`, `description` and `completed` only. Even a value-equal successful patch increments the version once. A malformed UUID returns 400.
+Create, get and patch responses return a strong `ETag` that contains the quoted integer version, for example `"1"`. Patch accepts a nonempty subset of `title`, `description` and `completed` only. Even a value-equal successful patch increments the version once. A malformed UUID returns 400. Create `src/modules/todos` with this code.
 
 ## Criterion
 

@@ -141,6 +141,11 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - Its timeout plugin bounds each operation by the remaining resource budget that the caller supplies.
 - Its abort plugin binds to the `Context` of the caller.
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
+- Every `git` child that the engine runs reads no global and no system git configuration of the host. The one builder `isolatedGitEnvironment` in `src/kernel/git-environment.ts` sets `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`.
+- The builder sets `core.excludesFile=/dev/null` and `core.attributesFile=/dev/null` through `GIT_CONFIG_COUNT=2`. It sets `GIT_ATTR_NOSYSTEM=1`. No attributes file of the host changes a committed file.
+- The builder `isolatedGitEnvironment` also removes `PAGER`, `GIT_PAGER`, `EDITOR`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_ASKPASS` and `SSH_ASKPASS`. It removes `GIT_TEMPLATE_DIR`, `GIT_EXTERNAL_DIFF` and `GIT_PROXY_COMMAND`, which the `simple-git` unsafe check rejects. It sets the commit identity `kanthord <kanthord@localhost>` for each name that the environment leaves empty.
+- The builder exports the `simple-git` unsafe options `allowUnsafeConfigPaths`, `allowUnsafeConfigEnvCount` and `allowUnsafeSshCommand`. The connector and `local-git` pass them to `simple-git`.
+- The connector and `local-git` of the worker unit build the environment of every `simple-git` and `git` child with this builder. A global ignore file of the host therefore never drops a file from a checkpoint.
 - `simple-git` kills the `git` process and not the `ssh` child of that process.
 - A git operation of the connector that fails, is aborted or reaches its deadline answers `repository.connector.git_failed`, and the message names the operation.
 - `fetchAndCheckout(directory, branch, base_branch, pushed, ...)` answers `repository.node_branch.missing` when the remote node branch is missing and either `pushed` is true or the workspace held `refs/remotes/origin/<branch>` before the fetch. [worker-service.impl.md](worker-service.impl.md#workspace) names the records behind `pushed`.
@@ -153,7 +158,7 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - The `ssh` record of the binding pins the SSH host, the resolved hostname, the port and the one identity file that git uses.
 - The inherited environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
 - The SSH host resolution reads the same `~/.ssh/config`, so it resolves an alias host as the `ssh` child of git resolves it.
-- The connector sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
+- The connector sets no `GIT_SSH_COMMAND` and no `GIT_SSH`. The unsafe options of the builder let a `GIT_SSH` or `GIT_SSH_COMMAND` of the host reach the connector and `local-git`.
 - The connector passes no credential inside a URL and no secret on the command line of a child.
 - The command line of a process is readable by every user of the host.
 - A network git operation names the `ssh` record of its binding in its attribution.

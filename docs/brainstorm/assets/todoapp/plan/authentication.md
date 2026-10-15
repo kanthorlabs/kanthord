@@ -21,7 +21,7 @@ Issue an opaque 32-byte cryptographically random bearer `access_token` at login,
 
 Registration accepts only `email` and `password`, normalizes email by trimming/lowercasing, creates role `user`, returns 201 with safe user fields and no session. Email is valid and at most 254 characters; password is 12 through 128 characters and at most 512 UTF-8 bytes, never trimmed or normalized. Duplicate email returns 409. Login returns 200; unknown email and incorrect password return the same safe 401 error, with a dummy hash comparison for unknown accounts.
 
-Provision the initial administrator through a documented operator-only CLI reading a password from hidden input or stdin, never a command argument or log. No HTTP route can choose or change role. Admin stats return only aggregate `user_count` and `todo_count`. Use `user` and `admin` as the closed code enum. Add `test:authentication`.
+Provision the initial administrator through a documented operator-only CLI reading a password from hidden input or stdin, never a command argument or log. No HTTP route can choose or change role. Admin stats return only aggregate `user_count` and `todo_count`. Use `user` and `admin` as the closed code enum. Create `src/modules/auth` and `src/modules/admin` with their code. Add `test:authentication`.
 
 ## Criterion
 

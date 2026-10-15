@@ -21,21 +21,31 @@ watch_parent() {
 	esac
 }
 
+EXIT_WAIT_TICKS=30
+
+wait_for_exit() {
+	local tick pid running
+	for tick in $(seq 1 "$EXIT_WAIT_TICKS"); do
+		running=""
+		for pid in "$@"; do
+			kill -0 "$pid" 2>/dev/null && running="$running $pid"
+		done
+		[ -n "$running" ] || return 0
+		sleep 0.5
+	done
+	die "pid$running did not exit in $((EXIT_WAIT_TICKS / 2)) s"
+}
+
 stop_port() {
-	local port=$1 holders pid attempt
+	local port=$1 holders pid targets=""
 	holders=$(port_holders "$port")
 	[ -n "$holders" ] || return 0
 	for pid in $holders; do
 		log "port $port: stop pid $pid: $(ps -p "$pid" -o command= | cut -c1-80)"
-		kill $(watch_parent "$pid") "$pid" 2>/dev/null
+		targets="$targets $(watch_parent "$pid") $pid"
 	done
-	for attempt in 1 2 3 4 5 6 7 8 9 10; do
-		[ -n "$(port_holders "$port")" ] || return 0
-		sleep 0.5
-	done
-	holders=$(port_holders "$port")
-	[ -z "$holders" ] || kill -KILL $holders 2>/dev/null
-	sleep 0.5
+	kill $targets 2>/dev/null
+	wait_for_exit $targets
 	holders=$(port_holders "$port")
 	[ -z "$holders" ] || die "port $port still has a listener, pid $holders"
 }
