@@ -92,7 +92,7 @@ It predicts no claim, because a work pull rechecks every admission condition at 
   - `External.Requested` reads the [continuation condition](mission-service.md#continuation-condition) as `continuation`.
   - `Available` on an objective reads no condition, and the check holds `not-applicable` with `condition: null`.
   - When `node-state` fails, the check holds `not-applicable` with `condition: null`.
-- `queue-job` passes when the work queue of the project holds a job of the node.
+- `queue-job` passes when the work queue of the project holds a job of the node, and that job holds no `not_before` after the clock reading.
 - `no-live-claim` passes when no execution of the node holds the claim state `running`.
 - The handler reads the project pause through the `projectPaused` collaboration, the node state and the Mission condition through the Mission collaboration, and the job and the executions of the node from its own tables, in one read transaction.
   It writes nothing, and it moves no job.
@@ -158,6 +158,8 @@ The Scheduler Service owns the section `scheduler` of the configuration file tha
   It reads the effective `wall_time_ms` of the worker binding row that `worker_binding_id` pins.
   Nothing moves that deadline, including a resume of a worker registration.
   A later configuration change affects only later claims.
+- `scheduler.stop_backoff` holds the hold of a job after the first consecutive failure of its node, in seconds.
+  It is a positive safe integer and defaults to `30`. Each further consecutive failure doubles the hold.
 
 ## Loss settlement
 
@@ -172,6 +174,10 @@ The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
 At the limit, it moves the node to `Paused`, and no job exists.
+After the Mission Service consumes the failure, the transaction sets `not_before` of the job of the node to `now + 1000 × scheduler.stop_backoff × 2^(n − 1)`, where `n` is the count. A count of 0 sets no `not_before`.
+A job that the Mission Service inserts later holds `not_before = null`.
+The claim selects only jobs with `not_before` null or at most the clock reading. It skips a node whose loss it settles in its own walk.
+A parked work pull waits at most until the earliest `not_before` of its project that lies after the clock reading.
 The attempt stays open.
 The operations that [Liveness](scheduler-service.md#liveness) names apply this same settlement before their own precondition checks in the same transaction.
 
@@ -185,6 +191,8 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that a claim exposes no identity of its own.
+- Tests assert that a release with a stop and a loss declaration hold the job for `scheduler.stop_backoff` seconds, that the hold doubles with the count, and that a count of 0 holds nothing.
+- Tests assert that the claim skips a held job until `not_before`, that a claim does not claim a node whose loss it settles, and that a parked work pull claims a held job when its hold ends.
 - A test parses every input and output of the Scheduler operations through the direct adapter and the HTTP adapter and rejects an unknown field, a `null` outside its permitted fields and a bare ULID.
 - A test loses an accepted pull answer and repeats the pull from the same runtime identity, once with the same key and once with a new key, and asserts the same execution and no second execution or count.
 - A test pulls from another runtime identity of the same binding while an execution is live and asserts that it never receives that execution.

@@ -142,6 +142,7 @@ erDiagram
         text project_id
         text node_id UK "initiative or objective"
         integer priority "copy of the Mission priority"
+        integer not_before "end of the stop backoff, or null"
     }
 
     project_project ||..o{ project_binding : "FK project_id"
