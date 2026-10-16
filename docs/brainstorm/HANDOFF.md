@@ -133,7 +133,7 @@ Ulrich stopped the run on 2026-10-12. The items below come from `.dev/notes.md`.
   - Ruled 2026-10-15 by Ulrich: auto-merge plan approved. The pages record the release fold, the deferred check, the merge write and the merge request. The model rotation command stays open in this item.
     - Green: the passing kanthord assessment of the tested commit, plus every rule that GitHub enforces at the merge call. kanthord reads no CI state.
     - kanthord does not retry a refused merge.
-    - Open layers: live run `make e2e RUN=automerge-1 PAUSED=0`.
+    - Live run `automerge-1` done on 2026-10-16: kanthord merged pull requests #47 to #52 with no human merge. The conflict rework path ran only in engine e2e E08.14.
 - [ ] Added 2026-10-12. Run the fresh attempt of S23 live: a human block, then an unblock with `start_point: "base_branch"`, then a native steps execution and a review on the branch `kanthord/<node id>-a<k>`. The engine e2e layer covers only the server path.
 
 ### Findings of the harness-1 run
@@ -150,6 +150,8 @@ Each item names its owner. Read the owning design document before taking an item
 ### Findings of the automerge-1 run
 
 Run data is in `.dev/e2e/automerge-1`. Each item names its owner.
+
+Ruled 2026-10-16 by Ulrich: the run ends with the project paused. `todo-api.md` stays Blocked with two app defects of the initiative review: `src/http/errors.js` leaks log data through `console.error`, and `RepositoryError database_busy` answers 500 instead of 503.
 
 - [ ] Added 2026-10-16. Repository component. `runGitTask` of `src/repository/connector.ts` catches every git error and throws `repository.connector.git_failed` without the git message. No log line and no span holds the cause. On 2026-10-15 at 23:47 UTC, `persistence.md` failed at its finish and `operations.md` failed at its prepare, and the git error text is lost. Keep the git operation and its stderr in the error cause and in a span event, with no secret.
 - [ ] Added 2026-10-16. Worker Service. `settleObjective` of `src/worker/unit/steps-objective.ts` runs the base fetch, the base refresh and the node branch push with no child span. A failed finish shows only the finish span. Add one span for each git operation.
