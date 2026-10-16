@@ -158,7 +158,7 @@ Several people and agents work in parallel. Each change has its own worktree, it
 - `kanthord` is a superrepo. [Submodules](#submodules) maps each submodule and its responsibility.
 - Every `make` target wraps `scripts/<category>/<command>.sh`.
 - Run `make bootstrap` first in a clone. It is idempotent.
-- `make dev` runs the engine with `node --watch` and the dashboard with Vite in the foreground. `Ctrl-C` stops both. An agent runs it as a background task. Before `kanthord upgrade`, it stops the old listener of each port. It waits up to 15 s for the old pid and its `node --watch` parent to exit. It fails with the pid that stays.
+- `make dev` runs the engine with `node --watch` and the dashboard with Vite in the foreground. `Ctrl-C` stops both. An agent runs it as a background task. Before `kanthord upgrade`, it stops the old listener of each port. It waits up to 15 s for the old pid and its `node --watch` parent to exit. It fails with the pid that stays. The engine preloads `scripts/dev/upgrade.mjs`, so each start and each `node --watch` restart runs `kanthord upgrade` before `serve`. An engine update with a migration therefore restarts the daemon.
 - `make sync` publishes the submodules.
 - `make e2e` prepares and starts a live e2e run in one step. It installs the engine dependencies from the lockfile and starts `make dev` in the background when the daemon is down, then runs `make e2e-start`. `RUN` defaults to `todoapp-<yymmdd-HHMM>`. `PLACEMENT=server|worker` (default `server`).
 - `make pi-tools-update TOOL=<tool> VERSION=<version>` pins one pi tool in `engine/static/pi-tools.json`. `make bootstrap`, `make release-build` and `make e2e` fetch the pinned tools.

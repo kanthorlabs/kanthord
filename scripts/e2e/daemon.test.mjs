@@ -24,6 +24,13 @@ test("accepts an orphaned engine serve in a checkout engine directory", () => {
       isOrphanDevDaemon({ command: "node src/main.ts serve", cwd }),
       true,
     );
+    assert.equal(
+      isOrphanDevDaemon({
+        command: `/usr/local/bin/node --import ${join(root, "scripts/dev/upgrade.mjs")} src/main.ts serve`,
+        cwd,
+      }),
+      true,
+    );
   } finally {
     rmSync(root, { recursive: true });
   }
