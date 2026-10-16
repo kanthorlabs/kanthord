@@ -746,6 +746,7 @@ Its child processes run with the rights of the server process.
 The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
+The finish of the `steps` objective method writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `ssh_proof`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 
