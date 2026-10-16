@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
-import { runCheck, shouldPause } from "./check.mjs";
+import { runCheck, shouldPause, pendingCheckAction } from "./check.mjs";
 
 const [run] = process.argv.slice(2);
 if (!run) throw new Error("usage: watch.mjs <run>");
@@ -31,6 +31,7 @@ const down = new Set();
 const runtimeStates = new Map();
 let projectState;
 let checkRunning = false;
+let checkPending = false;
 const COMPLETED_STATE = "Completed";
 
 function alive(pid) {
@@ -41,6 +42,37 @@ function alive(pid) {
     if (error.code === PROCESS_ABSENT) return false;
     throw error;
   }
+}
+
+async function pauseProject() {
+  try {
+    await api.post(`/api/project/${state.project_id}/pause`);
+    console.log(`${now()} project paused`);
+  } catch (err) {
+    console.log(`${now()} pause error: ${err.message}`);
+  }
+}
+
+function startCheck(label) {
+  checkRunning = true;
+  runCheck(run, MAIN)
+    .then(async (result) => {
+      console.log(`${now()} check ${result} (after ${label} completed)`);
+      if (shouldPause(result)) {
+        await pauseProject();
+      }
+    })
+    .catch(async (err) => {
+      console.log(`${now()} check error: ${err.message}`);
+      await pauseProject();
+    })
+    .finally(() => {
+      checkRunning = false;
+      if (checkPending) {
+        checkPending = false;
+        startCheck("queued");
+      }
+    });
 }
 
 async function watchProject() {
@@ -67,26 +99,11 @@ async function watchNodes(quiet) {
       completedNodes.push(node.filename);
     nodes.set(node.id, label);
   }
-  if (completedNodes.length > 0 && !checkRunning) {
-    checkRunning = true;
-    runCheck(run, MAIN)
-      .then(async (result) => {
-        console.log(
-          `${now()} check ${result} (after ${completedNodes.join(", ")} completed)`,
-        );
-        if (shouldPause(result)) {
-          try {
-            await api.post(`/api/project/${state.project_id}/pause`);
-            console.log(`${now()} project paused`);
-          } catch (err) {
-            console.log(`${now()} pause error: ${err.message}`);
-          }
-        }
-      })
-      .catch((err) => console.log(`${now()} check error: ${err.message}`))
-      .finally(() => {
-        checkRunning = false;
-      });
+  const action = pendingCheckAction(completedNodes.length, checkRunning);
+  if (action === "queue") {
+    checkPending = true;
+  } else if (action === "start") {
+    startCheck(completedNodes.join(", "));
   }
 }
 

@@ -9,6 +9,8 @@ export const SCRATCH_PATTERN =
 export const SECRET_PATTERN =
   /gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|xox[baprs]-|nvapi-/;
 
+const CHILD_TIMEOUT_MS = 10 * 60 * 1000;
+
 export function matchesScratch(path) {
   return SCRATCH_PATTERN.test(path);
 }
@@ -21,24 +23,51 @@ export function shouldPause(result) {
   return result === "fail";
 }
 
-function exec(command, args, cwd) {
+export function githubAuthHeader(token) {
+  return (
+    "Authorization: Basic " +
+    Buffer.from("x-access-token:" + token).toString("base64")
+  );
+}
+
+export function pendingCheckAction(completedCount, checkRunning) {
+  if (completedCount === 0) return "none";
+  return checkRunning ? "queue" : "start";
+}
+
+function exec(command, args, cwd, timeoutMs, env) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(env && { env }),
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
     child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
     child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
     child.on("error", reject);
-    child.on("close", (status) => resolve({ status, stdout, stderr }));
+    child.on("close", (status) => {
+      if (timer) clearTimeout(timer);
+      resolve({ status, stdout, stderr, timedOut });
+    });
+    let timer = null;
+    if (timeoutMs) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        child.kill();
+      }, timeoutMs);
+    }
   });
 }
 
-async function git(args, cwd) {
-  const result = await exec("git", args, cwd);
-  if (result.status !== 0) throw new Error(`git ${args[2]} failed`);
+async function git(args, cwd, env) {
+  const result = await exec("git", args, cwd, null, env);
+  if (result.status !== 0) {
+    const sub = args.find((a) => !a.startsWith("-") && !a.includes("/"));
+    throw new Error(`git ${sub ?? args[0]} failed`);
+  }
   return result.stdout;
 }
 
@@ -66,31 +95,41 @@ export async function runCheck(run, MAIN) {
   if (existsSync(checkDir)) rmSync(checkDir, { recursive: true });
   mkdirSync(dirname(checkDir), { recursive: true });
 
-  const cloneUrl = `https://x-access-token:${token}@github.com/${github}.git`;
-  await git([
-    "-c",
-    "credential.helper=",
-    "clone",
-    "-q",
-    "--branch",
-    base_branch,
-    "--single-branch",
-    cloneUrl,
-    checkDir,
-  ]);
-  await git([
-    "-C",
-    checkDir,
-    "remote",
-    "set-url",
-    "origin",
-    `https://github.com/${github}.git`,
-  ]);
+  const cloneEnv = {
+    ...process.env,
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "http.extraHeader",
+    GIT_CONFIG_VALUE_0: githubAuthHeader(token),
+    GIT_TERMINAL_PROMPT: "0",
+  };
+  await git(
+    [
+      "-c",
+      "credential.helper=",
+      "clone",
+      "-q",
+      "--branch",
+      base_branch,
+      "--single-branch",
+      `https://github.com/${github}.git`,
+      checkDir,
+    ],
+    undefined,
+    cloneEnv,
+  );
 
   let failed = false;
 
-  const ci = await exec("npm", ["ci", "--ignore-scripts"], checkDir);
-  if (ci.status === 0) {
+  const ci = await exec(
+    "npm",
+    ["ci", "--ignore-scripts"],
+    checkDir,
+    CHILD_TIMEOUT_MS,
+  );
+  if (ci.timedOut) {
+    fail("npm-ci", "timeout");
+    failed = true;
+  } else if (ci.status === 0) {
     ok("npm-ci");
   } else {
     fail("npm-ci");
@@ -102,26 +141,52 @@ export async function runCheck(run, MAIN) {
     (k) => k === "test" || k.startsWith("test:"),
   );
   for (const script of testScripts) {
-    const r = await exec("npm", ["run", "-s", script], checkDir);
-    const combined = r.stdout + r.stderr;
-    const summary = combined
-      .split("\n")
-      .filter((l) => /^ℹ (tests|pass|fail) /.test(l))
-      .join(" ");
-    console.log(`${script} rc=${r.status}${summary ? " " + summary : ""}`);
-    if (r.status !== 0) failed = true;
+    const r = await exec(
+      "npm",
+      ["run", "-s", script],
+      checkDir,
+      CHILD_TIMEOUT_MS,
+    );
+    if (r.timedOut) {
+      fail(script, "timeout");
+      failed = true;
+    } else {
+      const combined = r.stdout + r.stderr;
+      const summary = combined
+        .split("\n")
+        .filter((l) => /^ℹ (tests|pass|fail) /.test(l))
+        .join(" ");
+      console.log(`${script} rc=${r.status}${summary ? " " + summary : ""}`);
+      if (r.status !== 0) failed = true;
+    }
   }
 
-  const lint = await exec("npm", ["run", "-s", "lint"], checkDir);
-  if (lint.status === 0) {
+  const lint = await exec(
+    "npm",
+    ["run", "-s", "lint"],
+    checkDir,
+    CHILD_TIMEOUT_MS,
+  );
+  if (lint.timedOut) {
+    fail("lint", "timeout");
+    failed = true;
+  } else if (lint.status === 0) {
     ok("lint");
   } else {
     fail("lint");
     failed = true;
   }
 
-  const fmt = await exec("npm", ["run", "-s", "format:check"], checkDir);
-  if (fmt.status === 0) {
+  const fmt = await exec(
+    "npm",
+    ["run", "-s", "format:check"],
+    checkDir,
+    CHILD_TIMEOUT_MS,
+  );
+  if (fmt.timedOut) {
+    fail("format", "timeout");
+    failed = true;
+  } else if (fmt.status === 0) {
     ok("format");
   } else {
     fail("format");

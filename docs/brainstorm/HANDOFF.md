@@ -157,6 +157,8 @@ Run data is in `.dev/e2e/automerge-1`. Each item names its owner.
 - [ ] Added 2026-10-16. Worker Service (S25 gap). A finish that fails before the push leaves the agent commits only in the workspace. The next prepare finds no remote node branch and no evidence, and it resets the branch to the base branch. `persistence.md` held three unpushed commits at `c768be36`. Keep unpushed workspace commits of the same attempt, or push them before the finish fails.
 - [ ] Added 2026-10-16. Scheduler Service (S16 gap). After a `git_failed` stop, the claims of two nodes repeated five times in 700 ms, and the failure limit paused both nodes. Add a backoff before the next claim of a node after an `operation_failed` stop.
 
+- [ ] Added 2026-10-16. Worker Service, test. `src/apps/server/worker-thread.test.ts:137` asserts that `kanthord.log` exists right after the registration. It failed once in four full verify runs on 2026-10-16. Wait for the log file, or assert it after the thread stops.
+
 ### B9, failure and recovery
 
 Deferred cross-service work across Mission, Scheduler, Worker and Project.

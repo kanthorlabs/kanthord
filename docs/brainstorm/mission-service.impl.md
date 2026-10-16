@@ -296,10 +296,10 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - A reviewer release requires a current passing assessment of the attempt and no required external action of the attempt that is eligible and unrequested. An action is eligible under [worker-service.md](worker-service.md#evaluation-and-required-external-actions): it is unrequested in the attempt, and it follows no action or its predecessor reached its expected end state.
 - A release that fails the predicate answers 409 `mission.release.obligation_unmet` with `details: { obligation }`, where `obligation` is `evidence`, `assessment` or `request`. The refusal writes no execution row, no node state and no job, and the execution stays `running`.
 - The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
-- A reviewer release that moves the node to `External.Requested` calls `foldExternalState` on the node in the same transaction. If all required external actions of the attempt hold a recorded end state, the fold calls `closeExternalAttempt` and moves the node to `External.Success` or `External.Failed`.
+- A reviewer release that moves the node to `External.Requested` calls `foldExternalState` on the node in the same transaction. If one required external action holds end state `other`, `foldExternalState` sets `External.Failed`. `closeExternalAttempt` then moves the node to `Blocked`, even when sibling actions are unresolved. If every required external action holds end state `expected`, `foldExternalState` sets `External.Success` and `closeExternalAttempt` moves the node to `Completed`. Otherwise the node stays in `External.Requested`.
 - After a reviewer release to `External.Requested`, the service calls `scheduleDeferredCheck`. That function schedules `runDeferredCheck` through `setImmediate`. The deferred check reads the node and its unresolved `pull_request` and `branch_push` evidence in one transaction, then calls `intakeCheck.check` for each. It applies the result with `applyEndState` when no live claim exists. A failed check logs a warning and changes no state.
 - Tests release a steps claim on an objective with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record. A test releases a reviewer claim with a `stop` and no assessment and asserts `Evaluating -> Waiting`.
-- Tests in `transitions.test.ts` assert that a reviewer release folds all expected end states to `Completed` and folds an other end state to `Blocked`. They also assert that the deferred check applies `expected`, `other`, `conflict` and `none` correctly for `pull_request` evidence, that it resolves a `branch_push` request, and that a failed deferred check leaves the node unchanged.
+- Tests in `transitions.test.ts` assert that a reviewer release folds all expected end states to `Completed` and folds an other end state to `Blocked`. They also assert that the deferred check applies `expected`, `other`, `conflict` and `none` correctly for `pull_request` evidence. They assert that it resolves a `branch_push` request, and that a failed deferred check leaves the node unchanged.
 - `e2e-delivery-admission.test.ts` E08.11 asserts that a merge admitted after release completes the node through the fold. E08.12 asserts that a pull request merged before release completes the node through the deferred check.
 
 ## Evidence content
@@ -475,7 +475,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - When the attempt reads 0, the readiness condition reads no attempt-scoped record.
   An initiative is ready only when every current objective holds a terminal state.
 - A node that is not ready answers 409 `mission.node.not_ready`.
-  Its `details` hold `objectives_not_terminal: NodeId[]`, `unresolved_actions: Key[]` and `unsatisfied_ids: NodeId[]`.
+  Its `details` hold `objectives_not_terminal: NodeId[]` and `unsatisfied_ids: NodeId[]`.
   `unsatisfied_ids` names the dependencies of the closure that are not `Completed`.
   Each array is empty when it does not apply.
   The refusal opens no attempt, changes no state and writes no job.
@@ -609,7 +609,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence, an evidence asset and the presigned PUT of a new asset. The Mission Service authorizes the presigned PUT inside `mission.evidence.submit`, before the asset row exists: it checks the live claim and the storage binding of the pinned revision, refuses an asset identity that an asset row holds, and derives the object key from the claim and the asset identity that the submission allocates.
 - For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
-- For `github.pull_request_merge`, the authorization checks the request evidence of `merge_evidence_id`: it belongs to the same attempt, names the same action key as the `FrozenAction`, holds a `pull_request` address kind and has no end state. The `merge_address` field of the action facts carries that address.
+- For `github.pull_request_merge`, the authorization checks the request evidence of `merge_evidence_id`. That evidence belongs to the same attempt, names the same action key as the `FrozenAction`, holds a `pull_request` address kind, and has no end state. The action is a `pull_request` with `landing: kanthord`. The `merge_address` field of the action facts carries that address.
 - For a human identity, it follows the evidence asset to its storage binding revision.
 - It takes no association from the caller.
 - A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled`, `binding_removed` or `service_mismatch`.
@@ -808,7 +808,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A test asserts 404 `mission.mission.not_found` for an absent mission, 404 `mission.node.not_found` for an absent node and 404 `mission.record.not_found` for an absent record.
 - A test checks `graph get` at 10 MiB and above that bound.
 - It asserts 413 `mission.graph.too_large` above the bound, with the node count and both paged reads in `details`.
-- A test covers a node with a `merge_push` request that the deferred check resolves, alongside two `pull_request` sibling requests. A merged pull request from a later admission resolves one sibling. The conflicting sibling returns its node to `Available`.
+- A test covers a node with a `merge_push` request that the deferred check resolves, alongside two `pull_request` sibling requests. A merged pull request from a later admission resolves one sibling. The sibling in conflict returns its node to `Available`.
 
 ## Execution CLI validation
 
