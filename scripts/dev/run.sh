@@ -78,7 +78,7 @@ stop() {
 trap 'stop; exit 0' INT TERM
 trap stop EXIT
 
-(cd "$ENGINE_DIR" && exec node --watch-path=src --watch-path=static src/main.ts serve) \
+(cd "$ENGINE_DIR" && exec node --watch-path=src --watch-path=static --import "$ROOT/scripts/dev/upgrade.mjs" src/main.ts serve) \
 	> >(prefix engine) 2>&1 &
 engine_pid=$!
 (cd "$APP_DIR" && exec ./node_modules/.bin/vite --host 0.0.0.0 --port "$WEB_PORT" --strictPort) \
