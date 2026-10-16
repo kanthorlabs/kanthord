@@ -211,6 +211,12 @@ Those transactions serialize with the release, the claim and every other transac
 The continuation reaches a later work pull, never a pushed assignment.
 A waiting node holds no instance while it waits.
 
+A loss declaration or a release with a `stop` that counts a failure holds the job of the node.
+The claim selects no held job.
+The hold ends `scheduler.stop_backoff` seconds after the first consecutive failure, and the wait doubles with each further consecutive failure.
+A claim that settles the loss of a node therefore does not claim that node in the same transaction.
+A waiting work pull wakes when the earliest hold of its project ends.
+
 The [Mission Service](mission-service.md#state-transitions) owns the human pause, discard and success override transitions that end a live claim.
 Those transitions also determine whether the attempt closes or stays open.
 Its success override from `Executing` ends a live steps claim.

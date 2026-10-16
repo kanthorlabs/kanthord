@@ -395,6 +395,7 @@ This sibling declares the fields below.
 - `agent.cooldown.max_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
 - `worker.heartbeat_window`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
+- `scheduler.stop_backoff`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `mission.consecutive_failure_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - `mission.text_max_bytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.

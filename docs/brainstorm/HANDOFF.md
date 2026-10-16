@@ -164,9 +164,11 @@ Ruled 2026-10-16 by Ulrich: one engine pull request fixes the findings below, br
   - Ruled 2026-10-16 by Ulrich: the proof stays a local pin check. The push is the connection proof, and the git error text item makes its failure readable.
 - [x] Added 2026-10-16. Worker Service (S25 gap). A finish that fails before the push leaves the agent commits only in the workspace. The next prepare finds no remote node branch and no evidence, and it resets the branch to the base branch. `persistence.md` held three unpushed commits at `c768be36`. Keep unpushed workspace commits of the same attempt, or push them before the finish fails.
   - Ruled 2026-10-16 by Ulrich: when the remote node branch is missing and no record shows a push, the prepare keeps the local node branch. Every other prepare resets the local node branch to the remote. [worker-service.impl.md](worker-service.impl.md#workspace) records the rule.
-- [ ] Added 2026-10-16. Scheduler Service (S16 gap). After a `git_failed` stop, the claims of two nodes repeated five times in 700 ms, and the failure limit paused both nodes. Add a backoff before the next claim of a node after an `operation_failed` stop.
+- [x] Added 2026-10-16. Scheduler Service (S16 gap). After a `git_failed` stop, the claims of two nodes repeated five times in 700 ms, and the failure limit paused both nodes. Add a backoff before the next claim of a node after an `operation_failed` stop.
+  - Ruled 2026-10-16 by Ulrich: after each counted failure, the job of the node waits `scheduler.stop_backoff` seconds (default `30`), doubled for each further consecutive failure. [scheduler-service.md](scheduler-service.md#claims-and-counts) records the rule.
 
-- [ ] Added 2026-10-16. Worker Service, test. `src/apps/server/worker-thread.test.ts:137` asserts that `kanthord.log` exists right after the registration. It failed once in four full verify runs on 2026-10-16. Wait for the log file, or assert it after the thread stops.
+- [x] Added 2026-10-16. Worker Service, test. `src/apps/server/worker-thread.test.ts:137` asserts that `kanthord.log` exists right after the registration. It failed once in four full verify runs on 2026-10-16. Wait for the log file, or assert it after the thread stops.
+  - Done 2026-10-16: the test waits for the log file through `until`.
 
 ### B9, failure and recovery
 
