@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mainCheckout, readEnvFile } from "./api.mjs";
 
 export const SCRATCH_PATTERN =
@@ -20,6 +19,27 @@ export function matchesSecret(line) {
 
 export function shouldPause(result) {
   return result === "fail";
+}
+
+function exec(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+async function git(args, cwd) {
+  const result = await exec("git", args, cwd);
+  if (result.status !== 0) throw new Error(`git ${args[2]} failed`);
+  return result.stdout;
 }
 
 function ok(label) {
@@ -47,22 +67,18 @@ export async function runCheck(run, MAIN) {
   mkdirSync(dirname(checkDir), { recursive: true });
 
   const cloneUrl = `https://x-access-token:${token}@github.com/${github}.git`;
-  execFileSync(
-    "git",
-    [
-      "-c",
-      "credential.helper=",
-      "clone",
-      "-q",
-      "--branch",
-      base_branch,
-      "--single-branch",
-      cloneUrl,
-      checkDir,
-    ],
-    { stdio: ["ignore", "ignore", "ignore"] },
-  );
-  execFileSync("git", [
+  await git([
+    "-c",
+    "credential.helper=",
+    "clone",
+    "-q",
+    "--branch",
+    base_branch,
+    "--single-branch",
+    cloneUrl,
+    checkDir,
+  ]);
+  await git([
     "-C",
     checkDir,
     "remote",
@@ -73,10 +89,7 @@ export async function runCheck(run, MAIN) {
 
   let failed = false;
 
-  const ci = spawnSync("npm", ["ci", "--ignore-scripts"], {
-    cwd: checkDir,
-    encoding: "utf8",
-  });
+  const ci = await exec("npm", ["ci", "--ignore-scripts"], checkDir);
   if (ci.status === 0) {
     ok("npm-ci");
   } else {
@@ -89,11 +102,8 @@ export async function runCheck(run, MAIN) {
     (k) => k === "test" || k.startsWith("test:"),
   );
   for (const script of testScripts) {
-    const r = spawnSync("npm", ["run", "-s", script], {
-      cwd: checkDir,
-      encoding: "utf8",
-    });
-    const combined = (r.stdout ?? "") + (r.stderr ?? "");
+    const r = await exec("npm", ["run", "-s", script], checkDir);
+    const combined = r.stdout + r.stderr;
     const summary = combined
       .split("\n")
       .filter((l) => /^ℹ (tests|pass|fail) /.test(l))
@@ -102,10 +112,7 @@ export async function runCheck(run, MAIN) {
     if (r.status !== 0) failed = true;
   }
 
-  const lint = spawnSync("npm", ["run", "-s", "lint"], {
-    cwd: checkDir,
-    encoding: "utf8",
-  });
+  const lint = await exec("npm", ["run", "-s", "lint"], checkDir);
   if (lint.status === 0) {
     ok("lint");
   } else {
@@ -113,10 +120,7 @@ export async function runCheck(run, MAIN) {
     failed = true;
   }
 
-  const fmt = spawnSync("npm", ["run", "-s", "format:check"], {
-    cwd: checkDir,
-    encoding: "utf8",
-  });
+  const fmt = await exec("npm", ["run", "-s", "format:check"], checkDir);
   if (fmt.status === 0) {
     ok("format");
   } else {
@@ -124,11 +128,14 @@ export async function runCheck(run, MAIN) {
     failed = true;
   }
 
-  const diffNames = execFileSync(
-    "git",
-    ["-C", checkDir, "diff", "--name-only", fixture_commit, "HEAD"],
-    { encoding: "utf8" },
-  );
+  const diffNames = await git([
+    "-C",
+    checkDir,
+    "diff",
+    "--name-only",
+    fixture_commit,
+    "HEAD",
+  ]);
   const scratchFiles = diffNames
     .split("\n")
     .filter((f) => f && matchesScratch(f));
@@ -139,11 +146,7 @@ export async function runCheck(run, MAIN) {
     failed = true;
   }
 
-  const diffLines = execFileSync(
-    "git",
-    ["-C", checkDir, "diff", fixture_commit, "HEAD"],
-    { encoding: "utf8" },
-  );
+  const diffLines = await git(["-C", checkDir, "diff", fixture_commit, "HEAD"]);
   const secretLines = diffLines
     .split("\n")
     .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
