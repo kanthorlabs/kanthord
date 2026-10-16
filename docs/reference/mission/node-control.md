@@ -179,21 +179,21 @@ The state controls check in this order, and the first failure answers:
 
 Command-specific failures:
 
-| HTTP status / code                       | Operation             | Meaning                                                                                                                                                             |
-| ---------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `409 mission.node.not_ready`             | `ready`, `resume`     | Readiness fails, or for `resume` with `Waiting` a dependency is unsatisfied. `details` holds `objectives_not_terminal`, `unresolved_actions` and `unsatisfied_ids`. |
-| `409 mission.node.action_unresolved`     | `override`, `discard` | The open attempt has unresolved requests; `details.requirement_keys` lists them.                                                                                    |
-| `400 mission.evidence.binding_mismatch`  | `override`            | `landed_commit` does not name a repository binding that the objective pins.                                                                                         |
-| `409 mission.revision.conflict`          | `unblock`             | `expected_revision` is stale; `details.current` holds the current revision.                                                                                         |
-| `400 mission.node.content_invalid`       | `unblock`             | The change content is invalid, or `tasks` does not match the current task set.                                                                                      |
-| `400 mission.node.bindings_invalid`      | `unblock`             | A change binding does not resolve or breaks the binding rule.                                                                                                       |
-| `409 mission.node.filename_conflict`     | `unblock`             | A task file name is in use by another current node.                                                                                                                 |
-| `400 mission.node.control_task`          | `check`               | The node is a task.                                                                                                                                                 |
-| `409 mission.node.no_unresolved_request` | `check`               | The open attempt has no unresolved request.                                                                                                                         |
-| `409 mission.node.retired`               | `priority set`        | The node is retired.                                                                                                                                                |
-| `400 mission.node.priority_task`         | `priority set`        | The node is a task.                                                                                                                                                 |
-| `409 mission.node.terminal`              | `priority set`        | The node is `Completed` or `Discarded`.                                                                                                                             |
-| `409 mission.node.claim_live`            | `priority set`        | The node has a live claim; `details` holds `node_id` and `execution_id`.                                                                                            |
+| HTTP status / code                       | Operation             | Meaning                                                                                                                                       |
+| ---------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `409 mission.node.not_ready`             | `ready`, `resume`     | Readiness fails, or for `resume` with `Waiting` a dependency is unsatisfied. `details` holds `objectives_not_terminal` and `unsatisfied_ids`. |
+| `409 mission.node.action_unresolved`     | `override`, `discard` | The open attempt has unresolved requests; `details.requirement_keys` lists them.                                                              |
+| `400 mission.evidence.binding_mismatch`  | `override`            | `landed_commit` does not name a repository binding that the objective pins.                                                                   |
+| `409 mission.revision.conflict`          | `unblock`             | `expected_revision` is stale; `details.current` holds the current revision.                                                                   |
+| `400 mission.node.content_invalid`       | `unblock`             | The change content is invalid, or `tasks` does not match the current task set.                                                                |
+| `400 mission.node.bindings_invalid`      | `unblock`             | A change binding does not resolve or breaks the binding rule.                                                                                 |
+| `409 mission.node.filename_conflict`     | `unblock`             | A task file name is in use by another current node.                                                                                           |
+| `400 mission.node.control_task`          | `check`               | The node is a task.                                                                                                                           |
+| `409 mission.node.no_unresolved_request` | `check`               | The open attempt has no unresolved request.                                                                                                   |
+| `409 mission.node.retired`               | `priority set`        | The node is retired.                                                                                                                          |
+| `400 mission.node.priority_task`         | `priority set`        | The node is a task.                                                                                                                           |
+| `409 mission.node.terminal`              | `priority set`        | The node is `Completed` or `Discarded`.                                                                                                       |
+| `409 mission.node.claim_live`            | `priority set`        | The node has a live claim; `details` holds `node_id` and `execution_id`.                                                                      |
 
 `node check` checks the mission version again before it records each result. A stale version then fails the call with `409 mission.version.conflict`, and the results that committed before stay committed. The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 

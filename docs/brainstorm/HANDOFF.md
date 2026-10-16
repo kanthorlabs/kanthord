@@ -129,16 +129,12 @@ Ulrich stopped the run on 2026-10-12. The items below come from `.dev/notes.md`.
 
 - [ ] Added 2026-10-12. Resume or replace the run. State: `foundation`, `operations`, `persistence` and `authentication` are Completed. `todos` is Paused on attempt 1 with one commit `0fccccf`. `todo-api` is Available. `acceptance` is Pending. The workers `coder-1` and `reviewer-1` are stopped. To resume, run `make e2e-restart RUN=harness-1`, then resume `todos` with target `Available`. Run data is in `.dev/e2e/harness-1`.
 - [ ] Added 2026-10-12. The run needs a provider with enough quota (S47). On 2026-10-12 every free provider was exhausted: the OpenRouter daily cap of 1,000 requests (reset 00:00 UTC), the NVIDIA rate limit, both Codex accounts and every Qwen free model. The fallback chain then spent more time in cooldown than in work. Decide between a wait for the OpenRouter reset, the paid `E2E_ANTHROPIC_KEY` and the unused `E2E_LLM_OPENCODE_KEY`.
-- [ ] Added 2026-10-12. Merge without a human step (S12 layer 2). Add an auto-merge option and a model rotation command. The GitHub poll inbound part moved to [the merge detection of a GitHub poll](intake-service.impl.md#the-merge-detection-of-a-github-poll). Each merge still needs a full todo app check by hand: every suite, lint, the format check, the scratch-file check and the secret check.
-  - Ruled 2026-10-15 by Ulrich: auto-merge plan approved. Build it in its own pull request after the `fix/run-findings` pull request merges. The model rotation command stays open in this item.
-    - Switch: `landing: kanthord` on the `pull_request` action. Add no new key.
-    - The create of `intake.action.perform` does not merge. A separate outbound write `github.pull_request_merge` merges. Its request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`. It sends `sha` = tested commit and reads back `merged` and `head.sha`.
-    - The action performer requests the merge under the reviewer claim, after `mission.evidence.request`, and again after each rework. kanthord does not retry a refused merge.
+  - Ruled 2026-10-16 by Ulrich: `todoapp.json` runs `claude-haiku-5-5` for `swe@1` and `re@1` through the LLM credential `anthropic-subscription`. The repository names no machine-specific credential. The [todo app README](assets/todoapp/README.md) states the login step.
+- [ ] Added 2026-10-12. Merge without a human step (S12 layer 2). Add an auto-merge option and a model rotation command.
+  - Ruled 2026-10-15 by Ulrich: auto-merge plan approved. The pages record the release fold, the deferred check, the merge write and the merge request. The model rotation command stays open in this item.
     - Green: the passing kanthord assessment of the tested commit, plus every rule that GitHub enforces at the merge call. kanthord reads no CI state.
-    - Merge method: the repository settings choose it, as today.
-    - Readiness: delete the clause "No external action of the open attempt is unresolved" from the readiness condition, so that a `conflict` rework reaches the reviewer.
-    - Harness: `scripts/e2e/todoapp.json` sets `landing: kanthord`. `make e2e-check` runs every suite, lint, the format check, the scratch-file check and the secret check on the head of the base branch. `make e2e-watch` runs it at each `Completed` and pauses the project on a failure. The scratch-file and secret rules are the rules of the manual check script of the merge-poll-1 run.
-    - Layers: release fold, deferred check, merge write, performer request, readiness fix, live run `make e2e RUN=automerge-1 PAUSED=0`, `make e2e-check`.
+    - kanthord does not retry a refused merge.
+    - Live run `automerge-1` done on 2026-10-16: kanthord merged pull requests #47 to #52 with no human merge. The conflict rework path ran only in engine e2e E08.14.
 - [ ] Added 2026-10-12. Run the fresh attempt of S23 live: a human block, then an unblock with `start_point: "base_branch"`, then a native steps execution and a review on the branch `kanthord/<node id>-a<k>`. The engine e2e layer covers only the server path.
 
 ### Findings of the harness-1 run
@@ -147,13 +143,27 @@ Each item names its owner. Read the owning design document before taking an item
 
 - [ ] Added 2026-10-12. Worker Service (S16). The pull loop claims again at once after a `provider_failed` stop. Check whether the cooldown of the fallback chain now bounds this. If not, keep a backoff after a stop.
 - [ ] Added 2026-10-12. Worker and Project Services (S25 gap). A fresh workspace that continues an attempt with no repository evidence starts from the base branch with no signal, although the remote node branch is gone.
-- [ ] Added 2026-10-12. Intake Service (S17). The merge of a `kanthord` landing runs inside the outbound call. A crash after the merge and before the finalize makes the create read-back find no open PR, so the repeat answers `unknown_outcome` although the PR merged. Decide whether to finalize before the merge.
-  - Added 2026-10-15 by Ulrich, no fix now. The merge of a `kanthord` landing runs inside the action perform under a live claim. The closed pull request read can list the merge before the claim ends. Its `branch_push` admission skips a request with a live claim and writes nothing, and the dedupe keeps the item from a second admission. The node then waits for the `PullRequestEvent` of the events read or a human check.
-  - Ruled 2026-10-15 by Ulrich, as part of the auto-merge plan. The separate merge write fixes the crash case. The release folds the end states that the attempt records. After a release that moves a node to `External.Requested`, one deferred check runs `intake.action.check` for each unresolved request. The release also folds a recorded end state that a human merge writes while the node is `Waiting`.
 - [ ] Added 2026-10-12. Project Service (S21). `POST .../binding/<worker binding>/verify` answers `project.binding.not_found`. Return a code that names the worker binding.
 - [ ] Added 2026-10-12. Agent component (S28). The chain view shows an expired cooldown row (`until_at` in the past), and `active_position` skips it. Decide whether the view keeps the row for the dashboard to badge only a live `until_at`, or answers null for an expired row. `agent.impl.md` section The chain view records the first reading.
 - [ ] Added 2026-10-12. `apps` (S19). After an unblock, the proposal of the earlier attempt keeps the badge "proposed". Show a "superseded" badge when `proposal.attempt` is below the attempt of the initiative.
 - [ ] Added 2026-10-12. Council. Engine PR #37 and root PR #53 wait for the review of the team. Open: the eslint `apps-cli` allowance for the mission `plan-file.ts` and `parser.ts`, the six council agents are not in `agent.impl.md`, and council has no live run.
+
+### Findings of the automerge-1 run
+
+Run data is in `.dev/e2e/automerge-1`. Each item names its owner.
+
+Ruled 2026-10-16 by Ulrich: the run ends with the project paused. `todo-api.md` stays Blocked with two app defects of the initiative review: `src/http/errors.js` leaks log data through `console.error`, and `RepositoryError database_busy` answers 500 instead of 503.
+
+Ruled 2026-10-16 by Ulrich: one engine pull request fixes the findings below, branched from engine main after engine PR #59 merges. The layer order is the unpushed work loss (S25 gap), the git error text, the git spans of the finish, the claim backoff, then the flaky test. Each layer carries a test that fails without its change.
+
+- [ ] Added 2026-10-16. Repository component. `runGitTask` of `src/repository/connector.ts` catches every git error and throws `repository.connector.git_failed` without the git message. No log line and no span holds the cause. On 2026-10-15 at 23:47 UTC, `persistence.md` failed at its finish and `operations.md` failed at its prepare, and the git error text is lost. Keep the git operation and its stderr in the error cause and in a span event, with no secret.
+- [ ] Added 2026-10-16. Worker Service. `settleObjective` of `src/worker/unit/steps-objective.ts` runs the base fetch, the base refresh and the node branch push with no child span. A failed finish shows only the finish span. Add one span for each git operation.
+- [x] Added 2026-10-16. Worker Service. The SSH proof of the finish runs `ssh -G`, which reads only the configuration. It passes when the SSH agent holds no key.
+  - Ruled 2026-10-16 by Ulrich: the proof stays a local pin check. The push is the connection proof, and the git error text item makes its failure readable.
+- [ ] Added 2026-10-16. Worker Service (S25 gap). A finish that fails before the push leaves the agent commits only in the workspace. The next prepare finds no remote node branch and no evidence, and it resets the branch to the base branch. `persistence.md` held three unpushed commits at `c768be36`. Keep unpushed workspace commits of the same attempt, or push them before the finish fails.
+- [ ] Added 2026-10-16. Scheduler Service (S16 gap). After a `git_failed` stop, the claims of two nodes repeated five times in 700 ms, and the failure limit paused both nodes. Add a backoff before the next claim of a node after an `operation_failed` stop.
+
+- [ ] Added 2026-10-16. Worker Service, test. `src/apps/server/worker-thread.test.ts:137` asserts that `kanthord.log` exists right after the registration. It failed once in four full verify runs on 2026-10-16. Wait for the log file, or assert it after the thread stops.
 
 ### B9, failure and recovery
 
