@@ -12,6 +12,11 @@ export ROOT="$sandbox/parent"
 
 fail() { printf 'test-submodules: %s\n' "$*" >&2; exit 1; }
 
+mkdir -p "$sandbox/bin"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/gh.log"\nprintf "https://example.invalid/pull/1\\n"\n' "$sandbox" >"$sandbox/bin/gh"
+chmod 700 "$sandbox/bin/gh"
+export PATH="$sandbox/bin:$PATH"
+
 git init --quiet --bare --initial-branch=main "$sandbox/parent.git"
 git init --quiet --initial-branch=main "$ROOT"
 git -C "$ROOT" config user.name 'Fixture Operator'
@@ -89,7 +94,14 @@ actual=$(git -C "$webhook" rev-parse HEAD)
 [ "$actual" != "$old" ] || fail 'fixture did not advance'
 [ "$(git -C "$ROOT" rev-parse HEAD:platforms/webhook)" = "$actual" ] || fail 'nested pointer was not reconciled'
 [ "$(git -C "$sandbox/webhook.git" rev-parse main)" = "$actual" ] || fail 'webhook was not published'
-[ "$(git -C "$ROOT" rev-parse HEAD)" = "$(git -C "$sandbox/parent.git" rev-parse main)" ] || fail 'parent was not published'
+branch=$(git -C "$sandbox/parent.git" for-each-ref --format='%(refname:short)' refs/heads/sync/)
+[ -n "$branch" ] || fail 'parent sync branch was not pushed'
+[ "$(git -C "$ROOT" rev-parse HEAD)" = "$(git -C "$sandbox/parent.git" rev-parse "$branch")" ] || fail 'parent sync branch is not the parent head'
+[ "$(git -C "$ROOT" rev-parse HEAD)" != "$(git -C "$sandbox/parent.git" rev-parse main)" ] || fail 'parent main was pushed directly'
+grep -q -- "pr create --base main --head $branch" "$sandbox/gh.log" || fail 'parent pull request was not opened'
+grep -q 'The parent waits in https://example.invalid/pull/1' "$sandbox/sync.log" || fail 'sync did not report the pull request'
+git -C "$sandbox/parent.git" update-ref refs/heads/main "refs/heads/$branch"
+git -C "$ROOT" fetch --quiet origin
 [ -f "$ROOT/.dev/sync/webhook.pin" ] || fail 'alias-based state file missing'
 webhook_line=$(grep -n 'sync-all: webhook pushed' "$sandbox/sync.log" | cut -d: -f1)
 parent_line=$(grep -n 'sync-all: parent pushed' "$sandbox/sync.log" | cut -d: -f1)
