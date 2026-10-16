@@ -49,7 +49,7 @@ The implementation exposes `npm run test:foundation`, `test:persistence`, `test:
 
 ## Import preparation
 
-`make e2e` runs every step below from `scripts/e2e/todoapp.json`. It reads the secrets from `engine/.env.e2e` and the SSH identity from `~/.ssh/config` of the host.
+`make e2e` runs every step below from `scripts/e2e/todoapp.json`. It reads the secrets from `engine/.env.e2e` and the SSH identity from `~/.ssh/config` of the host. Both agents run `claude-haiku-5-5` through the LLM credential `anthropic-subscription`, which `make e2e` does not create. Before the first run, create it with `kanthord llm credential login anthropic-subscription --name anthropic-subscription`.
 
 1. Create a dedicated KanthorD project. Its mission is created with it; do not invent a mission-create command.
 2. Configure an available repository binding named `todoapp-repo`, pointing to a disposable, initialized repository. Every objective names exactly this binding. Rename it consistently in the six objectives and the initiative verification if your environment uses another name.

@@ -1,14 +1,7 @@
 {
   "endpoint": "http://127.0.0.1:31415",
   "env_file": "engine/.env.e2e",
-  "credentials": [
-    {
-      "name": "e2e-nvidia",
-      "platform": "nvidia",
-      "secret_env": "E2E_NVIDIA_KEY",
-      "metadata": null
-    }
-  ],
+  "credentials": [],
   "repository_credentials": [
     {
       "name": "github-com",
@@ -25,14 +18,14 @@
     "swe@1": {
       "providers": [
         {
-          "name": "e2e-nvidia",
-          "provider": "nvidia",
-          "credential": "e2e-nvidia"
+          "name": "anthropic-subscription",
+          "provider": "anthropic-subscription",
+          "credential": "anthropic-subscription"
         }
       ],
       "default": {
-        "agent_provider": "e2e-nvidia",
-        "model_identifier": "z-ai/glm-5.3-flash",
+        "agent_provider": "anthropic-subscription",
+        "model_identifier": "claude-haiku-5-5",
         "reasoning_effort": "medium"
       },
       "fallback_configurations": []
@@ -40,14 +33,14 @@
     "re@1": {
       "providers": [
         {
-          "name": "e2e-nvidia",
-          "provider": "nvidia",
-          "credential": "e2e-nvidia"
+          "name": "anthropic-subscription",
+          "provider": "anthropic-subscription",
+          "credential": "anthropic-subscription"
         }
       ],
       "default": {
-        "agent_provider": "e2e-nvidia",
-        "model_identifier": "z-ai/glm-5.3-flash",
+        "agent_provider": "anthropic-subscription",
+        "model_identifier": "claude-haiku-5-5",
         "reasoning_effort": "medium"
       },
       "fallback_configurations": []
