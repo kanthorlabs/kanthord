@@ -154,11 +154,12 @@ Run data is in `.dev/e2e/automerge-1`. Each item names its owner.
 
 Ruled 2026-10-16 by Ulrich: the run ends with the project paused. `todo-api.md` stays Blocked with two app defects of the initiative review: `src/http/errors.js` leaks log data through `console.error`, and `RepositoryError database_busy` answers 500 instead of 503.
 
-Ruled 2026-10-16 by Ulrich: one engine pull request fixes the findings below, branched from engine main after engine PR #59 merges. The layer order is the unpushed work loss (S25 gap), the git error text, the git spans of the finish, the claim backoff, then the flaky test. Each layer carries a test that fails without its change. The SSH proof item waits for its own ruling.
+Ruled 2026-10-16 by Ulrich: one engine pull request fixes the findings below, branched from engine main after engine PR #59 merges. The layer order is the unpushed work loss (S25 gap), the git error text, the git spans of the finish, the claim backoff, then the flaky test. Each layer carries a test that fails without its change.
 
 - [ ] Added 2026-10-16. Repository component. `runGitTask` of `src/repository/connector.ts` catches every git error and throws `repository.connector.git_failed` without the git message. No log line and no span holds the cause. On 2026-10-15 at 23:47 UTC, `persistence.md` failed at its finish and `operations.md` failed at its prepare, and the git error text is lost. Keep the git operation and its stderr in the error cause and in a span event, with no secret.
 - [ ] Added 2026-10-16. Worker Service. `settleObjective` of `src/worker/unit/steps-objective.ts` runs the base fetch, the base refresh and the node branch push with no child span. A failed finish shows only the finish span. Add one span for each git operation.
-- [ ] Added 2026-10-16. Worker Service. The SSH proof of the finish runs `ssh -G`, which reads only the configuration. It passes when the SSH agent holds no key. Decide whether the proof connects to the host.
+- [x] Added 2026-10-16. Worker Service. The SSH proof of the finish runs `ssh -G`, which reads only the configuration. It passes when the SSH agent holds no key.
+  - Ruled 2026-10-16 by Ulrich: the proof stays a local pin check. The push is the connection proof, and the git error text item makes its failure readable.
 - [ ] Added 2026-10-16. Worker Service (S25 gap). A finish that fails before the push leaves the agent commits only in the workspace. The next prepare finds no remote node branch and no evidence, and it resets the branch to the base branch. `persistence.md` held three unpushed commits at `c768be36`. Keep unpushed workspace commits of the same attempt, or push them before the finish fails.
 - [ ] Added 2026-10-16. Scheduler Service (S16 gap). After a `git_failed` stop, the claims of two nodes repeated five times in 700 ms, and the failure limit paused both nodes. Add a backoff before the next claim of a node after an `operation_failed` stop.
 
