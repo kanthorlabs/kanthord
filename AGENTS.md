@@ -159,7 +159,7 @@ Several people and agents work in parallel. Each change has its own worktree, it
 - Every `make` target wraps `scripts/<category>/<command>.sh`.
 - Run `make bootstrap` first in a clone. It is idempotent.
 - `make dev` runs the engine with `node --watch` and the dashboard with Vite in the foreground. `Ctrl-C` stops both. An agent runs it as a background task. Before `kanthord upgrade`, it stops the old listener of each port. It waits up to 15 s for the old pid and its `node --watch` parent to exit. It fails with the pid that stays. The engine preloads `scripts/dev/upgrade.mjs`, so each start and each `node --watch` restart runs `kanthord upgrade` before `serve`. An engine update with a migration therefore restarts the daemon.
-- `make sync` publishes the submodules.
+- `make sync` publishes the submodules. It then pushes the parent to a branch `sync/<yymmdd-HHMM>` and opens a pull request with `gh pr create`, because the `main` ruleset refuses a direct push. It prints the pull request URL.
 - `make e2e` prepares and starts a live e2e run in one step. It installs the engine dependencies from the lockfile and starts `make dev` in the background when the daemon is down, then runs `make e2e-start`. `RUN` defaults to `todoapp-<yymmdd-HHMM>`. `PLACEMENT=server|worker` (default `server`).
 - `make pi-tools-update TOOL=<tool> VERSION=<version>` pins one pi tool in `engine/static/pi-tools.json`. `make bootstrap`, `make release-build` and `make e2e` fetch the pinned tools.
 - `make e2e-start RUN=<name>` starts a live e2e run against the daemon of `make dev`. `make e2e-watch`, `make e2e-stop`, `make e2e-restart`, `make e2e-resume` and `make e2e-scale` take the same `RUN`. The run files live in `.dev/e2e/<name>/`.

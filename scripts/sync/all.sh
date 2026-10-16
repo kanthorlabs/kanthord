@@ -81,12 +81,13 @@ for name in $SUBMODULES; do
 done
 
 # P8. Publish the parent.
-log "phase 8: push the parent"
-push_repo parent
+log "phase 8: open the parent pull request"
+rm -f "$SYNC_STATE/parent.pr"
+publish_parent
 
 # P9. Prove the postcondition.
 log "phase 9: verify"
-for name in parent $SUBMODULES; do
+for name in $SUBMODULES; do
 	preflight_repo "$name"
 	state=$(drift_state "$name")
 	[ "$state" = "synced" ] || die "$name is $state after the sync"
@@ -102,4 +103,8 @@ for name in parent $SUBMODULES; do restore_repo "$name"; done
 
 trap - EXIT
 rm -f "$SYNC_STATE/published"
-log "the parent and all submodules are level with origin/main"
+if [ -f "$SYNC_STATE/parent.pr" ]; then
+	log "the submodules are level with origin/main. The parent waits in $(cat "$SYNC_STATE/parent.pr")"
+else
+	log "the parent and all submodules are level with origin/main"
+fi

@@ -163,7 +163,7 @@ integrate_repo() {
 	esac
 }
 
-# P6 and P8. Never forced. A rejection means the remote moved after P0.
+# P6. Never forced. A rejection means the remote moved after P0.
 push_repo() {
 	name=$1
 	dir=$(repo_dir "$name")
@@ -176,6 +176,25 @@ push_repo() {
 		die "$name push was rejected. origin/main moved after the sync started. Run sync again"
 	log "$name pushed $1 commits"
 	printf '%s\n' "$name" >>"$SYNC_STATE/published"
+}
+
+publish_parent() {
+	set -- $(drift_counts parent)
+	if [ "$1" = "0" ]; then
+		log "parent has nothing to push"
+		return 0
+	fi
+	require_command gh
+	branch="sync/$(date +%y%m%d-%H%M)"
+	git -C "$ROOT" push origin "HEAD:refs/heads/$branch" >/dev/null 2>&1 ||
+		die "parent push of $branch was rejected"
+	printf '%s\n' parent >>"$SYNC_STATE/published"
+	url=$(cd "$ROOT" && gh pr create --base main --head "$branch" \
+		--title "chore: sync the submodule pointers" \
+		--body "make sync opened this pull request for $1 parent commits.") ||
+		die "parent pushed $branch, but the pull request failed. Open it by hand"
+	printf '%s\n' "$url" >"$SYNC_STATE/parent.pr"
+	log "parent pushed $1 commits to $branch: $url"
 }
 
 # P10. Apply the exact recorded stash. Drop it only after it applies.

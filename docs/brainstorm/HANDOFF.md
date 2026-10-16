@@ -121,30 +121,36 @@ After the first native-agent worker runs the acceptance path.
 
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
-- [ ] Added 2026-10-12 from the harness-1 run. `make sync` pushes the root `main` directly in phase 8, and the `main` ruleset accepts a change only through a pull request. Decide whether `make sync` keeps a parent push.
+- [x] Added 2026-10-12 from the harness-1 run. `make sync` pushes the root `main` directly in phase 8, and the `main` ruleset accepts a change only through a pull request. Decide whether `make sync` keeps a parent push.
+  - Ruled 2026-10-16 by Ulrich: phase 8 pushes the parent to a branch `sync/<yymmdd-HHMM>` and opens a pull request with `gh pr create`. Phase 9 checks only the submodules. `AGENTS.md` records the rule.
 
 ### End-to-end run harness-1
 
 Ulrich stopped the run on 2026-10-12. The items below come from `.dev/notes.md`. Read `scripts/e2e/` and `docs/brainstorm/assets/todoapp/plan` first.
 
-- [ ] Added 2026-10-12. Resume or replace the run. State: `foundation`, `operations`, `persistence` and `authentication` are Completed. `todos` is Paused on attempt 1 with one commit `0fccccf`. `todo-api` is Available. `acceptance` is Pending. The workers `coder-1` and `reviewer-1` are stopped. To resume, run `make e2e-restart RUN=harness-1`, then resume `todos` with target `Available`. Run data is in `.dev/e2e/harness-1`.
-- [ ] Added 2026-10-12. The run needs a provider with enough quota (S47). On 2026-10-12 every free provider was exhausted: the OpenRouter daily cap of 1,000 requests (reset 00:00 UTC), the NVIDIA rate limit, both Codex accounts and every Qwen free model. The fallback chain then spent more time in cooldown than in work. Decide between a wait for the OpenRouter reset, the paid `E2E_ANTHROPIC_KEY` and the unused `E2E_LLM_OPENCODE_KEY`.
+- [x] Added 2026-10-12. Resume or replace the run. State: `foundation`, `operations`, `persistence` and `authentication` are Completed. `todos` is Paused on attempt 1 with one commit `0fccccf`. `todo-api` is Available. `acceptance` is Pending. The workers `coder-1` and `reviewer-1` are stopped. To resume, run `make e2e-restart RUN=harness-1`, then resume `todos` with target `Available`. Run data is in `.dev/e2e/harness-1`.
+  - Ruled 2026-10-16 by Ulrich: the run ends. The dev database holds no `harness-1` project, and the run directory is gone.
+- [x] Added 2026-10-12. The run needs a provider with enough quota (S47). On 2026-10-12 every free provider was exhausted: the OpenRouter daily cap of 1,000 requests (reset 00:00 UTC), the NVIDIA rate limit, both Codex accounts and every Qwen free model. The fallback chain then spent more time in cooldown than in work. Decide between a wait for the OpenRouter reset, the paid `E2E_ANTHROPIC_KEY` and the unused `E2E_LLM_OPENCODE_KEY`.
   - Ruled 2026-10-16 by Ulrich: `todoapp.json` runs `claude-haiku-5-5` for `swe@1` and `re@1` through the LLM credential `anthropic-subscription`. The repository names no machine-specific credential. The [todo app README](assets/todoapp/README.md) states the login step.
-- [ ] Added 2026-10-12. Merge without a human step (S12 layer 2). Add an auto-merge option and a model rotation command.
+  - Closed 2026-10-16: the ruling above settles the provider.
+- [x] Added 2026-10-12. Merge without a human step (S12 layer 2). Add an auto-merge option and a model rotation command.
   - Ruled 2026-10-15 by Ulrich: auto-merge plan approved. The pages record the release fold, the deferred check, the merge write and the merge request. The model rotation command stays open in this item.
     - Green: the passing kanthord assessment of the tested commit, plus every rule that GitHub enforces at the merge call. kanthord reads no CI state.
     - kanthord does not retry a refused merge.
     - Live run `automerge-1` done on 2026-10-16: kanthord merged pull requests #47 to #52 with no human merge. The conflict rework path ran only in engine e2e E08.14.
+  - Ruled 2026-10-16 by Ulrich: the model rotation command is dropped. No page defines it, and the fallback chain and an enablement edit cover a model change.
 - [ ] Added 2026-10-12. Run the fresh attempt of S23 live: a human block, then an unblock with `start_point: "base_branch"`, then a native steps execution and a review on the branch `kanthord/<node id>-a<k>`. The engine e2e layer covers only the server path.
 
 ### Findings of the harness-1 run
 
 Each item names its owner. Read the owning design document before taking an item.
 
-- [ ] Added 2026-10-12. Worker Service (S16). The pull loop claims again at once after a `provider_failed` stop. Check whether the cooldown of the fallback chain now bounds this. If not, keep a backoff after a stop.
+- [x] Added 2026-10-12. Worker Service (S16). The pull loop claims again at once after a `provider_failed` stop. Check whether the cooldown of the fallback chain now bounds this. If not, keep a backoff after a stop.
+  - Closed 2026-10-16: an advancing `provider_failed` stop sets a chain cooldown, and the next claim takes the next chain entry or answers no work. Every other `provider_failed` code counts as a failure, and the [stop backoff](scheduler-service.md#claims-and-counts) holds the node.
 - [ ] Added 2026-10-12. Worker and Project Services (S25 gap). A fresh workspace that continues an attempt with no repository evidence starts from the base branch with no signal, although the remote node branch is gone.
 - [ ] Added 2026-10-12. Project Service (S21). `POST .../binding/<worker binding>/verify` answers `project.binding.not_found`. Return a code that names the worker binding.
-- [ ] Added 2026-10-12. Agent component (S28). The chain view shows an expired cooldown row (`until_at` in the past), and `active_position` skips it. Decide whether the view keeps the row for the dashboard to badge only a live `until_at`, or answers null for an expired row. `agent.impl.md` section The chain view records the first reading.
+- [x] Added 2026-10-12. Agent component (S28). The chain view shows an expired cooldown row (`until_at` in the past), and `active_position` skips it. Decide whether the view keeps the row for the dashboard to badge only a live `until_at`, or answers null for an expired row. `agent.impl.md` section The chain view records the first reading.
+  - Ruled 2026-10-16 by Ulrich: the view keeps the expired row, because its strikes decide the next cooldown. The dashboard reads only `cooling`, which is null unless every chain entry has a live cooldown.
 - [ ] Added 2026-10-12. `apps` (S19). After an unblock, the proposal of the earlier attempt keeps the badge "proposed". Show a "superseded" badge when `proposal.attempt` is below the attempt of the initiative.
 - [ ] Added 2026-10-12. Council. Engine PR #37 and root PR #53 wait for the review of the team. Open: the eslint `apps-cli` allowance for the mission `plan-file.ts` and `parser.ts`, the six council agents are not in `agent.impl.md`, and council has no live run.
 
