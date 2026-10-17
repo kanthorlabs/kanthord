@@ -108,9 +108,12 @@ The schema accepts `follows` type `action_end_state` with a `binding` name, but 
 | `instance_count`  | integer | Required. From `0` to `64`. The value `0` disables the group.                                                                                                                                                                         |
 | `placement`       | string  | Optional. `server` or `worker`; an absent field means `worker`. Refused for a worker that declares no agent. A later write cannot change the effective placement. At `server`, the server runs one thread for each unit of the count. |
 | `resource_budget` | object  | Optional. Positive integers `turns` and `wall_time_ms`. Refused for a worker that declares no agent.                                                                                                                                  |
+| `traits`          | array   | Optional. A list of unique trait keys. Each key matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. An absent field reads as `[]`. A change of `traits` stores the next revision.                             |
 | `entries`         | array   | Optional. Items `{ "agent", "agent_provider"?, "model_identifier"?, "reasoning_effort"?, "fallback_configurations"? }`. Each `agent` is unique and declared by the worker. Refused for a worker that declares no agent.               |
 
 The Agent Service validates the effective configuration of each agent of the worker.
+
+A trait states a fact of the host of the instances, for example `platform.macos`. The [Scheduler match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match) admits a node for a worker binding only when the traits of the binding hold every key of the `requires` list of the node. Before and after its change, the apply reads the pairs of a node and a claimable state that no current worker binding covers. An apply that adds such a pair fails with `project.bindings.worker.node_unmatched`. A pair that exists before the apply refuses no apply. Configure the worker bindings of a project before the first import.
 
 An entry can name `fallback_configurations`: an array of at most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items. An entry can hold only this field; the default configuration is then the head of the chain. A named field, also `[]`, replaces the `fallback_configurations` of the enablement whole. An omitted field inherits them. `[]` means no fallback. Each item passes the validation of the default configuration. A repeated `agent_provider` and `model_identifier`, or an item with the `agent_provider` and `model_identifier` of the head of the entry, fails with `agent.configuration.fallback_duplicate`.
 
@@ -124,6 +127,8 @@ An entry can name `fallback_configurations`: an array of at most 7 complete `{ a
 | `region`     | string  | Required, nonblank.                                   |
 | `prefix`     | string  | Required. Can be empty.                               |
 | `credential` | string  | Required. Name of a live credential of platform `s3`. |
+
+A node names zero or more storage bindings as an ordered list, and its uploads use the first working binding of that list. A node names every binding that it uses and takes no binding from the project. A node with no storage binding accepts only inline evidence content.
 
 ## Expected response
 
@@ -309,6 +314,8 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 project.bindings.worker.instance_count_range`         | `apply`                                                                 | `instance_count` is outside `0` to `64`.                                                                                                                                                 |
 | `400 project.bindings.worker.field_forbidden`              | `apply`                                                                 | `entries`, `resource_budget` or `placement` is set for a worker that declares no agent. `details` holds `binding` and `field`.                                                           |
 | `400 project.bindings.worker.agent_unknown`                | `apply`                                                                 | An entry names an agent that the worker does not declare.                                                                                                                                |
+| `400 project.bindings.worker.traits_invalid`               | `apply`                                                                 | A worker `traits` value is no list, repeats a key or holds a malformed key. `details` holds `binding` and `trait`; `trait` is `null` for a nonlist value or a nontext item.              |
+| `409 project.bindings.worker.node_unmatched`               | `apply`                                                                 | The apply adds a pair of a node and a claimable state that no current worker binding covers. `details.node_ids` names the nodes.                                                         |
 | `400 agent.configuration.invalid`                          | `apply`                                                                 | The `worker` value names no declared worker.                                                                                                                                             |
 | `400 agent.configuration.fallback_duplicate`               | `apply`                                                                 | A `fallback_configurations` list of an entry repeats an agent provider and model, or repeats those of the head of the entry.                                                             |
 | `agent.configuration.*`, `agent.enablement.*`              | `apply`                                                                 | The Agent Service refuses the effective configuration of an agent, for example a disabled agent.                                                                                         |

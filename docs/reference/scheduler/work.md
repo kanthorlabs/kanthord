@@ -14,7 +14,9 @@ The Scheduler processes a pull in this order:
 2. When the project is [paused](../project/project.md#project-pause), the pull admits no claim. The claim creates no execution and moves no job.
 3. When the instance healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, or an invalid agent configuration of a server-hosted worker.
 4. When the binding group already runs as many executions as its instance count, the pull admits no claim.
-5. Otherwise, the Scheduler reads the project queue in queue order. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
+5. Otherwise, the Scheduler reads the project queue in queue order. It skips each job whose node the claimant does not admit through the match. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
+
+The claimant admits a node when two facts hold. The worker declares the `work` of the node, and the traits of the worker binding hold every key of the `requires` list of the node. The match compares exact strings. The work and the requires list come from the node revision that the claim pins: the revision of the open attempt, else the current revision. A worker name with no worker declaration gives no claimant, and its pull answers `no-work`.
 
 For each native agent, the claim selects the first fallback chain entry with no live cooldown. It pins the selection in `agent_selections` of the execution. When every entry of one agent has a live cooldown, the pull admits no claim and answers `no-work`. That answer creates no block, no pause and no failed execution. A later cooldown changes no pinned selection; see [agent cooldowns](../agent/cooldown.md).
 
