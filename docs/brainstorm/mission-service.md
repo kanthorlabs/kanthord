@@ -27,8 +27,9 @@ A node revision covers that whole content.
 Dependency is the only edge kind.
 
 The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`, and it selects the method of the execution.
-An `implement` node changes one repository, and its tasks state the final-state requirements of that change.
-An `examine` node reports on the outcomes of its direct dependencies, and it holds no task.
+An `implement` node changes one or more repositories, and its tasks state the final-state requirements of that change.
+An `examine` node reads zero or more repositories and the outcomes of its direct dependencies, and it changes no repository.
+An `examine` node holds no task, and its execution submits its findings as produced evidence.
 A human changes the work of a node only while the attempt of the node reads 0.
 A later change of the work answers `mission.node.work_locked`.
 The [requires](mission-service.vocabulary.md#requires) list of a node names the traits that a worker binding needs to claim the node.
@@ -41,8 +42,8 @@ Each task holds its own identity, its own plan file, its name, its requirement, 
 A task carries no dependency edge, no state, no attempt and no priority.
 A task is a unit of execution inside a worker.
 A task is never a unit of scheduling.
-The Mission Service permits an `implement` node with no task on the node API.
-An import refuses an `implement` node with no task, as [Criterion and authority](#criterion-and-authority) states.
+An `implement` node holds zero or more tasks on every write path.
+An `implement` node with no task is its own single work unit.
 
 A dependency relates two nodes of the same mission, whatever their work.
 A dependency makes its dependent unavailable until the node that it names is `Completed`.
@@ -69,23 +70,21 @@ An addition on a node whose execution ended changes no routing of that node, bec
 
 The check of a landing is a platform operation of the Intake Service, and it uses the credential of a repository binding.
 
-A node names the bindings that its work permits, and each binding kind states how many a node of each work names.
-The Mission Service resolves each binding kind on its own, at write time.
-It takes the bindings that the node names, else the one binding of that kind that the project holds.
-The fallback to the project binding applies only to a binding kind whose count permits one or more bindings for the work of the node.
-The first level that names a kind wins, and bindings of one kind never merge across the two levels.
-The fallback tail of an agent follows the same replace rule, under the [fallback chain](agent.md#fallback-chain) of the Agent component.
-Two or more project bindings of a kind that the node does not name refuse the write with `mission.node.bindings_invalid`.
-An omitted `bindings` field and `bindings: []` both take the project binding.
-An existing node keeps its stored bindings of each kind that a write omits.
+A node names every binding that it uses, and each binding kind states how many bindings a node of each work names.
+No node takes a binding from the project.
+The Mission Service resolves each binding name at write time.
 The node revision stores the resolved bindings, so a later change of the project moves no existing node.
-An `implement` node names exactly one repository binding, and it names any repository binding that its project holds.
-An `examine` node names no repository binding.
-A task names no binding, and a task acts on the repository that its node names.
-A node names at most one storage binding, and its uploads use that binding.
+An `implement` node names one or more repository bindings, and it names any repository binding that its project holds.
+An `implement` node with no repository binding answers `mission.node.bindings_invalid`.
+An `examine` node names zero or more repository bindings, and it changes none of them.
+By convention, a node names one repository binding.
+A human names more when one change needs one verification across repositories, for example a backend and a frontend.
+A task names no binding, and a task acts on every repository that its node names.
+A node names zero or more storage bindings as an ordered list.
+An upload of a node uses the first working storage binding of that list, under [Evidence](#evidence).
+A node that names no storage binding accepts only inline evidence content.
 Two `implement` nodes name the same binding or different bindings.
-An execution of an `examine` node derives its repositories from the repository bindings of its direct `implement` dependencies, for its verifications too.
-One `examine` node reports on work in many repositories.
+An `examine` node requires no external action, whatever repository binding it names.
 
 The mission holds no branch, no merge and no repository action.
 An `implement` node supplies the grouping that a repository strategy uses.
@@ -250,12 +249,11 @@ That record establishes attribution, and it establishes no authorship and no app
 
 Every node holds a criterion and at least one verification.
 A task is a final-state requirement of its node, not a transient step.
-Its criterion and its verifications hold at the head of the node branch.
+Its criterion and its verifications hold at the heads of the node branches of its node.
 The verifications are an ordered list in the node content, and an import carries them.
 A human writes their value.
 No execution identity infers a verification from prose.
-An import requires that each verification of an `implement` node equals a verification of at least one task of that node in the import set.
-An import therefore refuses an `implement` node with no task.
+When an `implement` node holds one or more tasks, an import requires that each verification of the node equals a verification of at least one task of that node in the import set.
 The node API and the change of an unblock do not check this coverage.
 An `examine` node holds no task on every write path.
 The [tested input](mission-service.vocabulary.md#tested-input) names the content that the verification reads, and that content stays mutable.
@@ -301,6 +299,18 @@ The Mission Service stores produced evidence as inline content or [object eviden
 It stores the address of repository evidence.
 Stored content stays retrievable until a human deletes it.
 An address resolves while its repository holds the content.
+
+The server selects the storage binding of an upload, and the execution never selects one.
+The grant takes the first storage binding of the pinned revision that is enabled, that the signing call accepts, and that holds no failed upload check for that asset.
+A failed upload check records the binding as failed for that asset.
+A node with no remaining storage binding refuses the upload with `mission.evidence.storage_unavailable`.
+A read and a delete of an asset use the storage binding that the asset pins, and no read moves to another binding.
+
+The evidence snapshot of an `implement` node is one evidence that holds one repository asset for each repository binding of the pinned revision.
+An execution evidence of an `implement` node that holds a repository asset holds exactly one for each repository binding of the pinned revision, and no other.
+Another set of repository assets answers `mission.evidence.binding_mismatch`.
+With one repository binding, the tested input of an `implement` node is one address.
+With two or more, the tested input is a list with one address for each repository binding, in binding order.
 
 Evidence durability differs by work.
 A task commit is an internal step of the execution of its node, and no record names it.
@@ -485,9 +495,10 @@ The attempt names the actor of the act that opens it.
 The attempt records its start point, `base_branch` or `node_branch`.
 Attempt 1 records `base_branch`.
 A later attempt records the start point that its unblock names.
+The start point applies to every repository binding of the node.
 The start point of an `examine` attempt has no effect, because an `examine` node has no node branch.
 An execution pins the attempt that it starts under.
-The required external actions of an attempt follow from the binding row that its pinned node revision names.
+The required external actions of an attempt are the configured actions of the repository bindings that its pinned `implement` revision names.
 Every record names its attempt, and it stays the record of that attempt forever.
 An attempt closure ends every execution in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
@@ -554,6 +565,9 @@ The evaluation of a node precedes its external request.
 The reviewer execution requests each required external action, and an action that follows another action is requested after that action reaches its expected end state.
 The assessment names the [tested input](mission-service.vocabulary.md#tested-input) of the verification that it names.
 Evidence owns the record of the landed commit identities.
+kanthord gives no atomic landing across repositories.
+Each required external action resolves on its own.
+One action with the end state other blocks the node, also when a sibling action landed, and that landed commit stays a record of its attempt.
 
 ### Outcome record
 

@@ -13,15 +13,16 @@ This file is not a design document, and `mission-service.md` stays the single so
 The bindings of a node are the project binding identities in its content.
 A plan file names each binding by its name.
 The write resolves each identity or name to the latest revision of its binding and checks these counts.
-A node that names no binding of a kind takes the one project binding of that kind when its column permits one or more.
+A node names every binding that it uses, and no node takes a binding from the project.
+The storage bindings of a node form an ordered list, and an upload uses the first working binding of that list.
 A task names no binding.
 A new binding kind adds a row.
 
-| Binding kind | `implement`  | `examine`  |
-| ------------ | --------- | --------- |
-| Repository   | Exactly 1 | 0         |
-| Worker       | 0         | 0         |
-| Storage      | At most 1 | At most 1 |
+| Binding kind | `implement` | `examine`  |
+| ------------ | ----------- | ---------- |
+| Repository   | 1 or more   | 0 or more  |
+| Worker       | 0           | 0          |
+| Storage      | 0 or more   | 0 or more  |
 
 ## node content
 
@@ -37,8 +38,10 @@ name: Account recovery
 requirement: Let account holders recover access.
 criterion: A password reset restores access and rejects expired tokens.
 verifications:
-  - cd api-repo && npm run e2e
-bindings: []
+  - cd web-repo && npm run e2e -- --api ../api-repo
+bindings:
+  - api-repo
+  - web-repo
 work: examine
 requires: []
 ---
@@ -76,11 +79,13 @@ A node with no verification need holds `true`, not an empty list.
 The kind of work that a node asks for, which selects the method of its execution.
 The set is closed and it holds two values.
 
-- **implement**: The node changes one repository, and its tasks state the final-state requirements of that change.
-- **examine**: The node reports on the outcomes of its direct dependencies, and it holds no task.
+- **implement**: The node changes one or more repositories, and its tasks state the final-state requirements of that change.
+- **examine**: The node reads zero or more repositories and the outcomes of its direct dependencies, changes no repository and holds no task.
 
 The `implement` node "Add password reset" holds two tasks and names `api-repo`.
-The `examine` node "Account recovery" depends on "Add password reset" and "Add recovery codes", and it holds no task.
+The `implement` node "Add the audit log" holds no task, so it is its own single work unit: the agent works from its requirement, and the execution runs its verifications.
+The `examine` node "Account recovery" names `api-repo` and `web-repo`, depends on "Add password reset" and "Add recovery codes", and holds no task.
+Its execution checks out each base-branch head, runs its verifications and submits its findings as produced evidence.
 A human changes the `work` of "Add password reset" while its attempt reads 0.
 After the first claim opens attempt 1, a change of its `work` answers `mission.node.work_locked`.
 
@@ -356,8 +361,8 @@ Only the first case permits an empty judgement, and no case permits an absent ra
 What the verifications read, named by the assessment that weighs their results.
 The term names a closed set of four forms.
 
-- **a repository snapshot**, for an `implement` node whose evidence names one
-- **a list of repository snapshots**, one commit per distinct binding of the direct `implement` dependencies of an `examine` node
+- **a repository snapshot**, for a node with one repository binding
+- **a list of repository snapshots**, one commit for each repository binding in binding order, for a node with two or more repository bindings
 - **the content address of produced evidence**, when no repository supplies the tested input
 - **the address of object evidence**, when the verifications read an object that the storage binding holds
 
@@ -367,8 +372,7 @@ A later addition to the evidence set changes no earlier tested input.
 Take the `implement` node "Add password reset" above.
 Its evidence names the head commit of the node branch, so the tested input is that repository snapshot.
 
-Take the `examine` node "Account recovery" with direct `implement` dependencies on `api-repo` and `web-repo`.
-The reviewer removes duplicate bindings, even when several dependencies name `api-repo`.
+Take the `examine` node "Account recovery" that names `api-repo` and `web-repo`.
 The reviewer checks out each base-branch head under the binding name in the workspace.
 The tested input names `api-repo` at `a41b9c0` and `web-repo` at `9f1c2e7`, one commit per binding.
 The end-to-end suite lives in `web-repo`.
@@ -378,7 +382,9 @@ The verification runs from the workspace root:
 cd web-repo && npm run e2e -- --api ../api-repo
 ```
 
-Take an `examine` node whose direct dependencies are `examine` nodes alone, so no dependency names a repository.
+An `implement` node that names `api-repo` and `web-repo` holds the same list form, with the head commit of each node branch.
+
+Take an `examine` node that names no repository binding.
 Its steps execution submits a report as produced evidence.
 The reviewer places that evidence in the workspace, and the tested input is the content address of that report.
 

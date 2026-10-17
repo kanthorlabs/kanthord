@@ -111,7 +111,7 @@ A third `tdd@1` binding with the values of `tdd-main` is accepted.
 ## storage binding
 
 The binding of one S3-compatible bucket that holds the object evidence of a project.
-A project holds any number of storage bindings, and a node names at most one of them for its uploads.
+A project holds any number of storage bindings, and a node names zero or more of them as an ordered list for its uploads.
 Project `atlas` names its binding `evidence-store` and its bucket `atlas-evidence`.
 Its configuration holds `endpoint`, `bucket`, `region`, `prefix` and `credential` beside `available`.
 The credential reference names an `s3` [credential store record](custody.vocabulary.md#credential-store-record).

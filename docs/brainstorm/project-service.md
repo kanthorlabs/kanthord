@@ -39,9 +39,8 @@ The kind determines the configuration that the binding holds, the cardinality th
 A project holds one binding for each repository that it uses.
 It holds any number of bindings of one worker and any number of [storage bindings](project-service.vocabulary.md#storage-binding).
 A storage binding names one S3-compatible bucket for object evidence.
-A node names at most one storage binding for its uploads, and a node without one accepts only inline evidence content.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) resolves each binding kind of a node: the bindings that the node names, else the one project binding of that kind.
-That fallback applies only where the [rule table](mission-service.vocabulary.md#bindings-of-a-node) permits one or more bindings of the kind.
+A node names zero or more storage bindings as an ordered list for its uploads, and a node without one accepts only inline evidence content.
+A node names every binding that it uses under the [rule table](mission-service.vocabulary.md#bindings-of-a-node), and the [Mission Service](mission-service.md#mission-structure-and-nodes) takes no binding from the project.
 A binding references no other binding.
 A project shares a resource with another project.
 A binding belongs to one project, and no project shares a binding.
@@ -59,7 +58,7 @@ A [policy](project-service.vocabulary.md#policy) on a binding configures an exte
 A policy states what its action follows: the passing assessment of the node, or the expected end state of another configured action of the same node.
 The repository strategy is the policy of the repository binding.
 A repository binding holds its connection, which is the address, the platform, the SSH credential reference and the credential reference, and its repository policy, which is the repository strategy and the project prompt.
-A node requires the action of a policy when the node names the binding that holds the policy.
+A node requires the action of a policy when the node is an `implement` node and names the binding that holds the policy.
 An external action states its expected end state on its platform.
 The repository [capabilities](project-service.vocabulary.md#capability) distinguish authenticated operations from local work.
 A repository address is an SSH address.

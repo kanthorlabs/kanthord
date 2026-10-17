@@ -328,6 +328,8 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The header holds `Pause` for an active project and `Resume` for a paused project. Each calls its route with no confirmation dialog and reloads the project.
 - A list row of a paused project shows the badge `Paused`.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
+- The form of a worker binding holds a `Traits` field with one trait key per line. The row of a worker binding shows one badge for each trait.
+- The "no taker" view of the dashboard applies the match of [The match](scheduler-service.impl.md#the-match): the work, the traits and the declared node states.
 - The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Repository instructions` holds the instruction files and the project prompt.
 - `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`.
 - While the read runs, the section shows a spinner with `Reading the instruction files from <base branch>.` and a line that names the four files and the binding.

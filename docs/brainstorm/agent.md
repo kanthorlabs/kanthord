@@ -85,7 +85,6 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - `fallback_configurations` is an overridable field of `swe@1` and `re@1`.
 - The tail is the `fallback_configurations` of the entry when the entry names that field, else the `fallback_configurations` of the enablement.
 - An omitted field inherits. A named field, also `[]`, replaces the tail of the enablement whole. A tail never merges across levels.
-- This is the rule of the [binding resolution](mission-service.md#mission-structure-and-nodes) of a node: the first level that names a field wins.
 - The head and the tail resolve independently.
 - The chain is the head, then the tail. A later chain entry with the same agent provider and model identifier as an earlier chain entry is dropped.
 - A duplicate agent provider and model identifier inside one level answers 400 `agent.configuration.fallback_duplicate`.
