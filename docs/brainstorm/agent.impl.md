@@ -276,8 +276,8 @@ The Agent component owns these keys of the section `agent`.
 | `task-revision`      | `rationale`, `results`, `output`                                                        |
 | `criterion-revision` | `rationale`                                                                             |
 | `conflict`           | `base_branch`, `files`                                                                  |
-| `evaluation`         | `tasks`, `tested_input`, `evidence`, `objectives`, `marker`                             |
-| `report`             | `objectives`, `outcomes`, `evidence`                                                    |
+| `evaluation`         | `tasks`, `tested_input`, `evidence`, `dependencies`, `marker`                           |
+| `report`             | `dependencies`, `outcomes`, `evidence`                                                  |
 | `repair`             | `marker`                                                                                |
 
 - `marker` is the marker that the worker parses. A replacement of `task-judgement`, `task-choice`, `evaluation` or `repair` keeps the marker line, or the worker treats the reply as invalid.

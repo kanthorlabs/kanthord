@@ -34,10 +34,10 @@ The set is closed and it holds three values.
 - **platform connector**: the Repository component owns it; it performs every operation on the API of an external platform through the platform implementation of that platform.
 
 Execution 1 of "Add password reset" asks the repository connector to push the node branch.
-The connector resolves the repository binding of the objective through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
+The connector resolves the repository binding of the node through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
 
 The action performer asks the platform connector to open pull request 42 for the node branch of "Add password reset".
-The platform connector selects the GitHub implementation because the repository binding of the objective names GitHub.
+The platform connector selects the GitHub implementation because the repository binding of the node names GitHub.
 The GitHub implementation resolves the binding through the Project Service under the execution identity before the call.
 
 ## resource healthcheck
@@ -118,7 +118,7 @@ An execution under an evaluation claim.
 Under the workers that kanthord hosts, the worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.
-- A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.
+- A `reviewer@1` instance claims a `Waiting` node through the Scheduler Service.
 - The instance produces an execution, and that execution is the reviewer execution.
 - The reviewer execution reads the criterion and the evidence from the Mission Service.
 - The reviewer execution writes the assessment to the Mission Service.

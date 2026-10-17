@@ -16,7 +16,7 @@ Telemetry for project `Billing` contains the trace of an execution.
 ## trace
 
 A trace is the set of spans that share one trace identity.
-Project `Billing` has a trace for the objective `Add password reset`.
+Project `Billing` has a trace for the node `Add password reset`.
 
 ## trace identity
 

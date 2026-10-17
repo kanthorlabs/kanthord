@@ -18,4 +18,4 @@ In that session, `swe@1` pulls "Add password reset" of "Account recovery" and re
 
 The work of the agent on one human message of a workbench session.
 The term names no closed set.
-Ulrich writes "List the open objectives of Account recovery". The run of `swe@1` on that message holds 3 turns of pi and ends with the list.
+Ulrich writes "List the open dependencies of Account recovery". The run of `swe@1` on that message holds 3 turns of pi and ends with the list.
