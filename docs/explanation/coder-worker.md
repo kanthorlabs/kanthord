@@ -6,15 +6,15 @@
 
 Read [How a worker works](worker.md) first. That page defines the terms of this page: node, attempt, claim, execution, release, evidence and assessment.
 
-| Property        | Value                                                                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Method          | `steps`                                                                                                                                   |
-| Agent           | `swe@1`                                                                                                                                   |
-| Claims          | An `implement` node or an `examine` node in state `Available`                                                                             |
-| Default budget  | 200 agent turns and 2 hours of wall time for each execution                                                                               |
-| Repository      | The one repository binding that the `implement` node names, under [bindings of a node](../reference/mission/import.md#bindings-of-a-node) |
-| Git branch      | The node branch `kanthord/<node_id>`                                                                                                      |
-| After a success | The node moves to `Waiting`, and `reviewer@1` evaluates the whole node                                                                    |
+| Property        | Value                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method          | `steps`                                                                                                                                                   |
+| Agent           | `swe@1`                                                                                                                                                   |
+| Claims          | An `implement` node or an `examine` node in state `Available`                                                                                             |
+| Default budget  | 200 agent turns and 2 hours of wall time for each execution                                                                                               |
+| Repository      | The repository bindings that the `implement` node names, by convention one, under [bindings of a node](../reference/mission/import.md#bindings-of-a-node) |
+| Git branch      | The node branch `kanthord/<node_id>`                                                                                                                      |
+| After a success | The node moves to `Waiting`, and `reviewer@1` evaluates the whole node                                                                                    |
 
 ## In short
 
@@ -170,13 +170,15 @@ On attempt 1 with no rework, no prior rationale exists.
 
 **Step 3** prepares the **workspace**, the git checkout of the `implement` node:
 
-- The workspace is `workspaces/<node_id>/<binding_id>/` in the state directory of the worker host. The worker reuses it when the host holds it, and clones the repository otherwise.
+- The workspace is `workspaces/<node_id>/` in the state directory of the worker host. It holds one checkout for each repository binding, in `checkouts/<binding name>/`. The worker reuses a checkout when the host holds it, and clones the repository otherwise.
+- With one repository binding, its checkout is the agent root. With two or more, `checkouts/` is the agent root, and it holds one directory for each binding.
+- The agent works from the agent root, and the worker runs every verification from it. With two or more repository bindings, each step below acts on every checkout and every node branch, and the evidence holds one head commit for each binding.
 - The worker then fetches and checks out the node branch of the attempt from the remote. It resets the checkout to the remote branch and removes untracked files, so every execution starts from the pushed state. When the remote holds no node branch yet, the worker creates it from the base branch.
 - The node branch is `kanthord/<node_id>`. An unblock with the start point `base_branch` opens attempt k on a new branch, `kanthord/<node_id>-a<k>`. The default start point, `node_branch`, keeps the earlier branch.
 - The remote can lose a node branch that existed, for example after a manual delete. The worker detects this when the attempt holds repository evidence, or when the workspace saw the remote branch before. It then stops with `operation_failed` and the code `repository.node_branch.missing`. It never starts the branch again from the base branch, because a record names a commit of the lost branch. The stop releases with `further_work: true`, so the node returns to `Available`, and each next execution stops the same way. After `mission.consecutive_failure_limit` stops, the node moves to `Paused`. A human restores the branch on the git host and resumes the node. Or the human pauses and blocks the node, then unblocks it with the start point `base_branch`, which opens the next attempt on a new branch.
 - The worker adds `.kanthord-scratch/` to the git exclude file. The agent writes its probe and debug files there, and no commit takes them.
 
-**Step 4** opens the agent `swe@1` in the workspace. [How the native agent works](native-agent.md) explains what the agent receives: the model, the prompt and the tools.
+**Step 4** opens the agent `swe@1` at the agent root. [How the native agent works](native-agent.md) explains what the agent receives: the model, the prompt and the tools.
 
 ## Start: steps 5 and 6
 
@@ -255,7 +257,7 @@ Each pass through the loop does these things:
 1. **Claim check.** The worker reads its claim. A claim that is not running, for example after a human pause, ends the execution as revoked.
 2. **Work.** The worker sends the work prompt of the task, or a revision instruction. `swe@1` reads files, edits files and runs commands until it ends its turns. One turn is one reply of the model with the tool calls of that reply. Each turn counts toward the budget of 200.
 3. **Commit.** The worker commits every change with the message `kanthord: task <task_id> attempt <n>`. A revision that changes no file makes no commit. The same is true when the agent committed its own change with `git commit`: the worker finds nothing to commit.
-4. **Verify.** The worker runs each verification command of the task on the head, in order, with `bash -c` in the workspace. The first failure stops the run. Each command has a limit of 10 minutes, and the remaining budget can cut it shorter. The worker then discards every change that the commands made, so a test run never leaks into the next commit.
+4. **Verify.** The worker runs each verification command of the task on the head, in order, with `bash -c` at the agent root. The first failure stops the run. Each command has a limit of 10 minutes, and the remaining budget can cut it shorter. The worker then discards every change that the commands made, so a test run never leaks into the next commit.
 5. **Judge.** Only after every command passes, the worker asks `swe@1` to judge the criterion. The reply must end with one `kanthord-judgement:` line that holds JSON. A reply with no valid line gets one repair turn. A second invalid reply stops the execution with `judgement_invalid`.
 6. **Decide.** A met criterion completes the task. The worker writes the judged commit to `judged-tasks.json` and takes the next pending task.
 
@@ -498,7 +500,7 @@ The worker process also writes one JSON log line to stderr for each task start, 
 ## Limits
 
 - **One review, at the node.** `coder@1` judges each task itself. Only `reviewer@1` reviews the work, and only after the release.
-- **One repository.** An `implement` node names exactly one repository binding. Work in two repositories needs two `implement` nodes.
+- **No atomic landing across repositories.** The task commit of a node with two or more repository bindings is the set of the heads of its node branches. Each required external action resolves on its own. An action with the end state other blocks the node, and the landed commit of a sibling action stays a record of its attempt.
 - **No memory in the agent.** Each execution starts a new agent conversation. Only the node branch, the records of the Mission Service and the local `judged-tasks.json` carry over.
 - **A stalled node pauses.** An execution that completes no task before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`. An `examine` budget end releases with no stop and does not count.
 - **The agent can use git.** `swe@1` has `bash`, and its commands run with the git and SSH configuration of the host. Nothing blocks a `git commit` or a `git push` by the agent. The worker does not depend on it: an agent commit leaves the worker nothing to commit, and after a failed verification that counts as an unchanged revision.
