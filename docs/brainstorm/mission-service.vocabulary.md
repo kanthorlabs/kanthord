@@ -18,11 +18,11 @@ The storage bindings of a node form an ordered list, and an upload uses the firs
 A task names no binding.
 A new binding kind adds a row.
 
-| Binding kind | `implement` | `examine`  |
-| ------------ | ----------- | ---------- |
-| Repository   | 1 or more   | 0 or more  |
-| Worker       | 0           | 0          |
-| Storage      | 0 or more   | 0 or more  |
+| Binding kind | `implement` | `examine` |
+| ------------ | ----------- | --------- |
+| Repository   | 1 or more   | 0 or more |
+| Worker       | 0           | 0         |
+| Storage      | 0 or more   | 0 or more |
 
 ## node content
 

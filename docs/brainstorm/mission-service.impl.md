@@ -54,11 +54,11 @@ A node names every binding that it uses, and the write takes no binding from the
 A task names no binding, and a task with a nonempty `bindings` list answers `mission.node.bindings_invalid`.
 A new binding kind adds a row.
 
-| Binding kind | `implement` | `examine`  |
-| ------------ | ----------- | ---------- |
-| Repository   | 1 or more   | 0 or more  |
-| Worker       | 0           | 0          |
-| Storage      | 0 or more   | 0 or more  |
+| Binding kind | `implement` | `examine` |
+| ------------ | ----------- | --------- |
+| Repository   | 1 or more   | 0 or more |
+| Worker       | 0           | 0         |
+| Storage      | 0 or more   | 0 or more |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or unknown `work`, a nonlist `requires`, a repeated or malformed trait key, and a task on an `examine` node answer `mission.node.content_invalid`.
