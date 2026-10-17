@@ -184,7 +184,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - A unit that drains before its first pull makes one resume pull. `resume_pull_wait_ms` (default 5000) bounds that pull, so that a running execution resumes.
 - `instanceHealthcheck` refuses a draining slot, so that pull claims no new work. The claim returns a `running` execution before the healthcheck.
 - The modules of `src/worker/` that only the worker unit runs move to `src/worker/unit/`. `src/worker/unit/index.ts` is their one entry.
-- Today these modules are `execution-run`, `native-agent`, `native-method`, `steps-objective`, `steps-initiative`, `judgement`, `judged-tasks`, `evaluation` and `evaluation-input`.
+- Today these modules are `execution-run`, `native-agent`, `native-method`, `steps-implement`, `steps-examine`, `judgement`, `judged-tasks`, `evaluation` and `evaluation-input`.
 - They also include `base-refresh`, `verification`, `local-git`, `workspace`, `budget`, `model-runtime`, `tool-table`, `host-tools`, `transcript` and `method-clients`.
 - They also include `method-telemetry`, `telemetry`, `agent-telemetry`, `report-facts` and `node-reads`.
 - `toolDeclarations` moves out of `tool-table` and stays in `src/worker/`, because the server reads it.

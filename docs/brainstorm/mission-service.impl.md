@@ -202,7 +202,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - `dependency add` on a `Paused` dependent whose open attempt holds a request evidence answers the same code. The rule applies to the node API and to the import.
 - A self addition answers 409 `mission.import.cycle` after the endpoint checks. `dependency remove` checks no endpoint pair, and an absent edge is a no-op.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
-- An import entry with the identity of a task that an earlier write removed fails with 400 `mission.import.retired_id`.
+- An import entry with the identity of a task of a retired node, or of a task that an earlier write removed, fails with 400 `mission.import.retired_id`.
 - `node create` admits a node at any time.
 - The import keeps the import condition.
 - A human control whose `expected_state` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
@@ -612,7 +612,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
 - `change.write` is the write path: `import`, `node.create`, `node.update`, `node.rebind`, `criterion.set` or `unblock`.
-- An import that moves a task changes the content of both nodes, so each one takes a node revision with `write: import`.
+- An import that moves a task between two nodes that it keeps changes the content of both nodes. Each node takes a node revision with `write: import`.
+- An import writes no node revision on a node that it retires. The last revision of that node keeps its tasks.
 - `change.previous_revision` is the previous revision, or null on revision 1.
 - `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `work`, `requires` and `tasks`.
 - `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node. An import omission and a node update that drops the task both write it.
