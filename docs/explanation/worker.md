@@ -28,7 +28,7 @@ The terms below appear on every worker page. Each term has exactly one meaning.
 | Mission              | All the work of one project, as a graph of nodes.                                                                                                                                                                         |
 | Node                 | One vertex of the mission. It holds a work, a requires list, its bindings and, for an `implement` node, its tasks.                                                                                                        |
 | Work                 | The kind of work of a node: `implement` or `examine`. The work of the pinned revision selects the form of the method.                                                                                                     |
-| `implement` node     | A node that changes its repository through its tasks. It names exactly one repository binding. Most worker activity is on an `implement` node.                                                                            |
+| `implement` node     | A node that changes its repositories through its tasks. It names one or more repository bindings, and the convention is one binding. Most worker activity is on an `implement` node.                                      |
 | `examine` node       | A node that changes no repository. It checks out the base-branch head of each repository binding that it names, reads its direct dependencies and reports its findings.                                                   |
 | Task                 | One step of an `implement` node, with a `task_<ulid>` identity. A task has a criterion and verifications, but no state. A worker never claims a task alone. An `implement` node with no task is its own single work unit. |
 | Requires             | The list of trait keys that a worker binding needs to claim the node, for example `platform.macos`.                                                                                                                       |
@@ -169,8 +169,8 @@ A **native** worker runs its agent inside KanthorD on the [pi runtime](native-ag
 
 `reviewer@1` has its own execution. It trusts nothing that `coder@1` judged.
 
-1. It reads the pinned revision and the evidence of the attempt. For an `implement` node, the evidence names the head commit of the node branch. For an `examine` node, it also reads the outcome and the evidence of each direct dependency.
-2. It makes a fresh directory. For an `implement` node, it makes a clean checkout of that commit under `checkouts/<binding name>/`. For an `examine` node, it checks out the base-branch head of each repository binding of the node in the same way. It places the produced evidence in `evidence/`, beside `checkouts/` and outside the agent root.
+1. It reads the pinned revision and the evidence of the attempt. For an `implement` node, the evidence names the head commit of each node branch. For an `examine` node, it also reads the outcome and the evidence of each direct dependency.
+2. It makes a fresh directory. For an `implement` node, it makes a clean checkout of each commit under `checkouts/<binding name>/`. For an `examine` node, it checks out the base-branch head of each repository binding of the node in the same way. It places the produced evidence in `evidence/`, beside `checkouts/` and outside the agent root.
 3. Its code runs the verifications of the node, then the verifications of each task, in order. The first failure stops the run. A failed command runs up to two more times, only to detect a flaky test. A pass on a rerun still counts as a failure, and the rationale names the test as flaky.
 4. It records the results as evidence.
 5. When a command failed, it writes a `criterion-not-met` assessment at once, with no agent. The rationale names the command and holds the last 4 KiB of its output.
@@ -262,12 +262,16 @@ To run 3 instances of `coder@1` at the `worker` placement:
 
 An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
 
-| Path                                 | Content                                                                                                                                                                                                         |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaces/<node_id>/<binding_id>/` | The checkout of one `implement` node. The next execution of the node on this host reuses it. The instance removes it 7 days after its last use.                                                                 |
-| `workspaces/<execution_id>/`         | The fresh directory of one evaluation execution or one `examine` execution. It holds `checkouts/<binding name>/` for each checkout and `evidence/` for the placed evidence. The instance removes it at the end. |
-| `transcripts/<execution_id>.jsonl`   | The agent conversation of one execution, mode `0600`. The instance keeps the newest 50.                                                                                                                         |
-| `pi/`                                | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here.                                |
+| Path                               | Content                                                                                                                                                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaces/<node_id>/`            | The workspace of one `implement` node: `checkouts/<binding name>/` for each repository binding and `judged-tasks.json`. The next execution of the node on this host reuses it. The instance removes it 7 days after its last use. |
+| `workspaces/<execution_id>/`       | The fresh directory of one evaluation execution or one `examine` execution. It holds `checkouts/<binding name>/` for each checkout and `evidence/` for the placed evidence. The instance removes it at the end.                   |
+| `transcripts/<execution_id>.jsonl` | The agent conversation of one execution, mode `0600`. The instance keeps the newest 50.                                                                                                                                           |
+| `pi/`                              | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here.                                                  |
+
+The agent root is the directory that the agent works from. A node with no repository binding uses the workspace as the agent root. A node with one repository binding uses its checkout as the agent root. A node with two or more repository bindings uses `checkouts/` as the agent root.
+
+The task commit of an `implement` node with two or more repository bindings is the set of the heads of its node branches. Each required external action resolves on its own.
 
 The workspace and the transcript are local conveniences, not records. Another host or another slot can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
 

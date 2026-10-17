@@ -33,8 +33,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Mission Service
 
-- [ ] RULED 2026-10-17 by Ulrich. Implement the multi-repository implement node (plans 09a, 09b and 10 of `engine/.agents/plan/flat-nodes/`). [Mission structure and nodes](mission-service.md#mission-structure-and-nodes) permits one or more repository bindings on an `implement` node, and the engine accepts exactly one until plan 09b. [Executions](worker-service.md#executions) holds the checkout of each repository binding. [The read-backs](intake-service.impl.md#the-read-backs) hold the contained snapshot. Plan 10 removes the limit from `docs/reference/` and `docs/explanation/`.
-
 - [ ] Added 2026-10-02 from the debate of the Intake redesign. A human-act admission invokes the Mission operation under the linked human identity, and since 2026-10-03 no admission row exists. A crash after the act lets a repeat of the same inbound event repeat the human act. Decide how the human act becomes idempotent by the event identity.
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.

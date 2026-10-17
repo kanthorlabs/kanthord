@@ -41,13 +41,13 @@ The work of a node sets the count of each binding kind. A count outside the rule
 
 | Work        | Repository | Storage             | Worker |
 | ----------- | ---------- | ------------------- | ------ |
-| `implement` | Exactly 1  | 0 or more, in order | 0      |
+| `implement` | 1 or more  | 0 or more, in order | 0      |
 | `examine`   | 0 or more  | 0 or more, in order | 0      |
 
-- An `implement` node names exactly one repository binding. A second repository binding fails with `mission.node.bindings_invalid`.
+- An `implement` node names one or more repository bindings, and the convention is one binding. An `implement` node with no repository binding fails with `mission.node.bindings_invalid`.
 - An `examine` node changes none of its repository bindings. Its execution checks out the base-branch head of each one read-only.
 - The storage bindings of a node form an ordered upload list. An upload uses the first storage binding of that list that accepts the grant, under [evidence](evidence.md#object-upload).
-- A task names no binding. A task acts on the repository of its node.
+- A task names no binding. A task acts on every repository that its node names.
 - A [mission export](mission.md#mission-export) writes the binding names of each node, so an exported plan names every binding explicitly.
 
 ### Import condition

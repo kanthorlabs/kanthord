@@ -279,11 +279,11 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
 - `name`, `requirement` and `criterion` are nonblank text. `verifications` is a nonempty ordered list of nonblank bash commands.
 - `requires` holds unique trait keys under the [trait](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.vocabulary.md#trait) form. An absent list reads `[]`.
-- `bindings` obeys the rule table of [the node content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-node-content). A node names every binding that it uses, and no node takes a binding from the project. The storage bindings of `bindings` form an ordered upload list in the order of the write. An `implement` node names exactly one repository binding, and a second repository binding answers `mission.node.bindings_invalid`. A task names no binding.
+- `bindings` obeys the rule table of [the node content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-node-content). A node names every binding that it uses, and no node takes a binding from the project. The storage bindings of `bindings` form an ordered upload list in the order of the write. An `implement` node names one or more repository bindings, and the convention is one binding. An `implement` node with no repository binding answers `mission.node.bindings_invalid`. A task names no binding.
 
   | Binding kind | `implement` | `examine` |
   | ------------ | ----------- | --------- |
-  | Repository   | 1           | 0 or more |
+  | Repository   | 1 or more   | 0 or more |
   | Worker       | 0           | 0         |
   | Storage      | 0 or more   | 0 or more |
 
