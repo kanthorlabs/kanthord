@@ -40,6 +40,41 @@ These are the capabilities that `project-service.md` names, and the page closes 
 
 - A commit, a branch and a merge are local, so none of them is a capability.
 
+## trait
+
+One fact of the host of a worker binding, which a human writes in the configuration of that binding.
+The word "capability" names a class of authenticated operation, so a fact of a host takes the word "trait".
+The current worker bindings of a project state its trait vocabulary, so the term names no closed set.
+
+These prefixes are examples, and the list closes no set.
+
+- `platform.`, for an operating system, for example `platform.macos`
+- `toolchain.`, for a build toolchain, for example `toolchain.xcode`
+
+Project `atlas` holds four worker bindings.
+
+| Binding        | Worker       | traits                              |
+| -------------- | ------------ | ----------------------------------- |
+| linux-coder    | `coder@1`    | `[]`                                |
+| macos-coder    | `coder@1`    | `[platform.macos, toolchain.xcode]` |
+| linux-reviewer | `reviewer@1` | `[]`                                |
+| macos-reviewer | `reviewer@1` | `[platform.macos]`                  |
+
+```yaml
+name: macos-coder
+worker: coder@1
+placement: worker
+instance_count: 2
+traits:
+  - platform.macos
+  - toolchain.xcode
+```
+
+The node "Add password reset to the iOS app" holds `requires: [platform.macos]`.
+`macos-coder` and `macos-reviewer` hold that trait, so only their instances claim the node.
+A Linux binding with `traits: []` claims only a node with `requires: []`.
+The key `platform.macOS` holds an upper-case letter, so the write answers `project.bindings.worker.traits_invalid`.
+
 ## binding name
 
 The name that a human chooses for a binding, unique inside its project.
@@ -58,7 +93,7 @@ The set holds three kinds.
 - **storage**
 
 The mission of a project is intrinsic to that project, so no binding allocates it.
-A repository binding of the objective "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
+A repository binding of the node "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
 
 ## cardinality
 
@@ -77,7 +112,7 @@ A third `tdd@1` binding with the values of `tdd-main` is accepted.
 ## storage binding
 
 The binding of one S3-compatible bucket that holds the object evidence of a project.
-A project holds any number of storage bindings, and an initiative or an objective names at most one of them for its uploads.
+A project holds any number of storage bindings, and a node names at most one of them for its uploads.
 Project `atlas` names its binding `evidence-store` and its bucket `atlas-evidence`.
 Its configuration holds `endpoint`, `bucket`, `region`, `prefix` and `credential` beside `available`.
 The credential reference names an `s3` [credential store record](custody.vocabulary.md#credential-store-record).
@@ -143,7 +178,7 @@ The Project Service authorizes that human identity for an operation on any proje
 
 The identity that an execution presents.
 
-A `tdd@1` worker instance executes an objective and produces an execution object.
+A `tdd@1` worker instance executes a node and produces an execution object.
 That execution holds its own execution identity, and the instance presents that identity for a network git write.
 The protected facility resolves that identity to the project and to the node of the request.
 The record of the operation names the execution identity.
@@ -191,7 +226,7 @@ The branch of a repository that the repository strategy names as the origin of e
 The term names no closed set.
 
 Project `atlas` names `develop` as the base branch of `kanthorlabs/kanthord` and `main` as the base branch of `kanthorlabs/apps`.
-Every node branch of an objective on `kanthorlabs/kanthord` starts from `develop`, and the pull request of the objective targets `develop`.
+Every node branch on `kanthorlabs/kanthord` starts from `develop`, and the pull request of each node targets `develop`.
 
 ## expected end state
 

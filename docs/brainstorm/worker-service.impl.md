@@ -51,6 +51,9 @@ Every runtime setup call carries an abort signal with a deadline.
 - A worker template is a static server module; the registry maps worker names to templates and loads no runtime plugin.
 - A worker references the declaration of its agent in the [agent catalog](agent.impl.md#the-agent-catalog) and carries no separate configuration version.
 - `coder@1` references `swe@1`; `reviewer@1` references `re@1`.
+- `coder@1`, `reviewer@1` and `claude-code@1` declare `declared_works: [change, report]`.
+- The Worker Service offers `declarationOf(workerName)` to the Scheduler Service through its `contract.ts`. It answers the worker name, `declared_node_states` and `declared_works` of the template, and null for a name that the registry does not hold.
+- The worker unit selects the method form from `work` of the pinned node revision.
 
 ## Externally hosted worker
 
@@ -89,7 +92,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## Inspection operations
 
 - Four `human` operations expose the published worker contract and the runtime-only instance record. Each one is `unary`, declares `mutation: false`, uses the default 30 s timeout and reads no table of another service.
-- `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in ascending alphabetical order, and the next page reads the names that are greater than the cursor. An item holds `name`, `host` (`kanthord` or `external-harness`), `declared_node_states` and `required_node_format`. The answer lists the supplied workers; a registration adds no entry.
+- `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in ascending alphabetical order, and the next page reads the names that are greater than the cursor. An item holds `name`, `host` (`kanthord` or `external-harness`), `declared_node_states` and `declared_works`. The answer lists the supplied workers; a registration adds no entry.
 - `worker.catalog.get` is `GET /api/worker/catalog/:worker_name`.
   The answer holds the item fields and `resource_budget` for every worker.
   It also holds `harness` for an externally hosted worker, or `method` and `agent_name` for a worker that kanthord hosts.
@@ -384,8 +387,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
 - Each entry of `repositories` holds `{ binding_id, name, address, ssh_identity, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
 - `ssh_identity` is the metadata `{ host, hostname, port, identity_file }` of the `ssh` record of the binding. The worker application runs the [`ssh` validation](repository.impl.md#platform-validators) with it before each clone, fetch and push.
-- For an objective, `repositories` holds the repository binding that the pinned node revision names.
-- For an initiative, `repositories` holds one row per resource identity of the repository bindings of its current objectives, discarded objectives included, at the greatest revision.
+- For a `change` node, `repositories` holds the repository binding that the pinned node revision names.
+- For a `report` node, `repositories` holds one row per resource identity of the repository bindings of its direct `change` dependencies, at the greatest revision.
 - `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
@@ -507,11 +510,11 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 ## The further-work release
 
 - A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
-- `startCheck` stores the judged commit of each task in the objective workspace. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
+- `startCheck` stores the judged commit of each task in the workspace of the `change` node. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
 
 ## The unblock reads
 
-- At the start of the steps method on an objective, the execution reads the prior rationale. The rationale of the latest rework assessment of the attempt comes first.
+- At the start of the steps method on a `change` node, the execution reads the prior rationale. The rationale of the latest rework assessment of the attempt comes first.
 - With no rework assessment, an execution of attempt 2 or later reads `mission.execution.clearedOutcome.get`.
 - When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
 - `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
@@ -542,15 +545,15 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
 The workspace root for that run is the root of the execution workspace, not the server's `workspaces/` directory.
-An initiative uses one subdirectory per distinct repository binding from its current objectives.
+A `report` node uses one subdirectory per distinct repository binding from its direct `change` dependencies.
 A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
-A test checks duplicate removal, discarded objectives, base-branch heads and one tested commit per binding for an initiative.
-A test checks the evidence-placement rule when an initiative's objectives name no repository.
+A test checks duplicate removal, base-branch heads and one tested commit per binding for a `report` node.
+A test checks the evidence-placement rule when the direct dependencies of a `report` node name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
 The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
-The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. An initiative has none.
+The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. A `report` node has none.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
@@ -568,16 +571,16 @@ Tests assert that the action performer does not reuse an open pull request of th
 ## Workspace
 
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
-- The workspace of a steps execution on an objective is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
-- The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
-- The preparation of an objective workspace adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
+- The workspace of a steps execution on a `change` node is `workspaces/<node identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
+- The workspace of an evaluation execution and of a steps execution on a `report` node is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
+- The preparation of the workspace of a `change` node adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
 - The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists. Else it checks out the local node branch without a reset when the workspace holds one, so that commits of a failed push stay. Else it checks out the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
-- Two records show an earlier push of the node branch. The first is the remote-tracking ref `refs/remotes/origin/<node branch>` of the objective workspace before the fetch. The second is an evidence of the claimed attempt with a `repository` asset of the repository binding. The preparation reads that evidence through `execution.evidence.list`.
+- Two records show an earlier push of the node branch. The first is the remote-tracking ref `refs/remotes/origin/<node branch>` of the node workspace before the fetch. The second is an evidence of the claimed attempt with a `repository` asset of the repository binding. The preparation reads that evidence through `execution.evidence.list`.
 - When either record exists and the remote node branch is missing, `fetchAndCheckout` refuses with `repository.node_branch.missing` and keeps the checkout. The execution stops with `operation_failed` and that code.
 - When the workspace holds the remote-tracking ref, `fetchAndCheckout` checks the remote node branch with `git ls-remote` before `git fetch --prune`. A refusal therefore keeps the ref, and the next execution refuses again.
 - A first execution of a node branch has neither record and starts from the base branch. An attempt with the start point `base_branch` has a new node branch name, so a missing earlier node branch does not refuse it.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
-- The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
+- The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the node.
 - A sweep at the start and every hour removes an expired workspace.
 - The state directory holds the workspace because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
 
@@ -746,7 +749,7 @@ Its child processes run with the rights of the server process.
 The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The finish of the `steps` objective method writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `ssh_proof`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The finish of the steps method on a `change` node writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `ssh_proof`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 

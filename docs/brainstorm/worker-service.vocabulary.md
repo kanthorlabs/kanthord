@@ -80,17 +80,19 @@ The steps method is the method of a worker whose executions carry out the steps 
 `coder@1` holds the steps method.
 A `coder@1` instance of worker binding `coder-main` claims "Add password reset" from `Available`.
 Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
+A `coder@1` instance claims the `report` node "Account recovery" from `Available`.
+Its execution writes the report on the outcomes of the direct dependencies, submits it as produced evidence and releases with no further work.
 
 ## evaluation method
 
 The evaluation method is the method of a worker whose executions evaluate a node and request its required external actions.
 `reviewer@1` holds the evaluation method.
 A `reviewer@1` instance claims "Add password reset" from `Waiting`.
-It checks out the commit that the objective evidence names in a fresh workspace.
+It checks out the commit that the evidence of the node names in a fresh workspace.
 It runs the verifications, records their results as produced evidence and writes the assessment.
-A later `reviewer@1` instance claims the same objective from `External.Requested` and evaluates nothing.
+A later `reviewer@1` instance claims the same node from `External.Requested` and evaluates nothing.
 The action performer requests the unrequested action whose predecessor reaches its expected end state, and the reviewer execution releases.
-A change request on pull request 42 blocks the objective.
+A change request on pull request 42 blocks the node.
 For the reviewer execution of attempt 2, the action performer reuses that pull request because it stays open and fulfils the operands.
 The action performer performs the network git write only.
 
@@ -164,7 +166,7 @@ It takes the system layer from the agent file of the host and the shipped `base.
 It takes the agent prompt from the shipped `swe@1.md`.
 It takes the project prompt from `AGENTS.md` of the workspace and the repository binding of `kanthorlabs/kanthord`.
 It pins the work prompt of task "Add reset token expiry".
-The reviewer execution of the same objective composes the project prompt from that repository binding, and it reads no agent file of the workspace.
+The reviewer execution of the same node composes the project prompt from that repository binding, and it reads no agent file of the workspace.
 
 ## entry
 
@@ -270,22 +272,20 @@ A raise of the count to 3 adds slot 2.
 
 ## compatibility declarations
 
-The compatibility declarations are the worker name, the declared node states and the required node format that an instance carries on a work pull.
-An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the required node format.
-An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the required node format.
+The compatibility declarations are the worker name, the declared node states and the declared works that an instance carries on a work pull.
+An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the declared works `change` and `report`.
+An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the declared works `change` and `report`.
 
-## required node format
+## declared works
 
-The required node format is the fields of a node that a method requires.
-Every worker of this page requires the same format, and the set is closed.
+The declared works are the values of [work](mission-service.vocabulary.md#work) that the method of a worker takes.
+Every worker of this page declares both values.
 
-- the name
-- the requirement
-- the criterion
-- the verifications
-- the bindings
+- **change**
+- **report**
 
-Every node holds verifications, and a method reads them.
+The [match rule](scheduler-service.md#matching) admits a node only when the declared works of the worker hold the work of the node.
+`coder@1` declares `change` and `report`, so a `coder@1` instance takes the steps claim of "Add password reset" and of "Account recovery".
 
 ## instance healthcheck
 
@@ -305,19 +305,19 @@ They run inside the boundary and reach no resource of another project.
 ## workspace
 
 A workspace is the host-local working directory of one execution.
-The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the server, keyed by the objective and its repository binding.
-Execution 3 of the same objective under the same repository binding reuses it.
+The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the server, keyed by the node and its repository binding.
+Execution 3 of the same node under the same repository binding reuses it.
 The Worker Service removes it after the fixed retention period.
-The reviewer execution of the objective uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
-The steps execution of "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
+The reviewer execution of the node uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
+The steps execution of the `report` node "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
 
 ## node branch
 
-The node branch is the branch that the steps method uses for one objective in one repository, from the latest attempt that starts from the base branch.
+The node branch is the branch that the steps method uses for one `change` node in one repository, from the latest attempt that starts from the base branch.
 The node branch of "Add password reset" takes its name from the node identity, for example `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
 Attempt 1 and attempt 2 both work on that branch when attempt 2 records the start point `node_branch`.
 When attempt 2 records the start point `base_branch`, attempt 2 starts the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2` from the base branch.
-A revision of the objective that names another repository binding starts a new node branch in that repository.
+A revision of the node that names another repository binding starts a new node branch in that repository.
 
 ## task commit
 

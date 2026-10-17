@@ -39,7 +39,9 @@ The kind determines the configuration that the binding holds, the cardinality th
 A project holds one binding for each repository that it uses.
 It holds any number of bindings of one worker and any number of [storage bindings](project-service.vocabulary.md#storage-binding).
 A storage binding names one S3-compatible bucket for object evidence.
-An initiative or an objective names at most one storage binding for its uploads, and a node without one accepts only inline evidence content.
+A node names at most one storage binding for its uploads, and a node without one accepts only inline evidence content.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) resolves each binding kind of a node: the bindings that the node names, else the one project binding of that kind.
+That fallback applies only where the [rule table](mission-service.vocabulary.md#bindings-of-a-node) permits one or more bindings of the kind.
 A binding references no other binding.
 A project shares a resource with another project.
 A binding belongs to one project, and no project shares a binding.
@@ -94,6 +96,18 @@ The worker that a worker binding names never changes. A project removes the bind
 - The Worker Service validates an entry during the binding write through the [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters).
 - The [agent enablement rules](agent.md#agent-configuration) govern that validation.
 - A project reaches an agent only through its worker binding and worker.
+- A worker binding holds its [traits](project-service.vocabulary.md#trait), a list of unique trait keys. The list is empty by default.
+
+A human writes the traits of a worker binding, and a trait states a fact of the host of its instances.
+A trait key matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes.
+The namespace prefix of a key is a convention, and no rule reads it.
+A trait holds no version, no range and no operator, so a version is part of the key, for example `toolchain.xcode_16`.
+A key that violates the form, or a repeated key, refuses the write with `project.bindings.worker.traits_invalid`.
+The current worker bindings of a project state the trait vocabulary of that project.
+The [Scheduler Service](scheduler-service.md#matching) matches the traits of a worker binding against the requires list of each node.
+A binding-set write that adds an unmatched claim refuses the write with `project.bindings.worker.node_unmatched`, and the error names the nodes.
+An unmatched claim that exists before the write refuses no write.
+A human configures the worker bindings of a project before the first import, because a node write also refuses an unmatched claim.
 
 Each worker binding of one worker holds its own configuration, and two bindings of one worker with equal values are valid.
 A binding identity is separate from a worker name.

@@ -8,7 +8,7 @@ title: Scheduler Service
 
 This document describes the Scheduler Service.
 It describes the work queue and its order, the work pull, the execution record and its deadline.
-It describes the declared node states of a worker and the count of a claimant.
+It describes the declared node states of a worker, the match of a node and a claimant, and the count of a claimant.
 It describes no mechanism of another service.
 
 ## Topology and work queue
@@ -24,7 +24,7 @@ A node that waits for a model call, a human review or a pull request never occup
 Scheduling concurrency and instance counts solve different bottlenecks.
 
 The work queue is a component of the Scheduler Service with a public insert and a public delete, and the Mission Service is its caller.
-The [Mission Service](mission-service.md#boundary) inserts and removes the jobs of every affected node, including dependency and parent effects.
+The [Mission Service](mission-service.md#boundary) inserts and removes the jobs of every affected node, including dependency effects.
 The work queue never holds a job that the Mission state of its node contradicts.
 The Scheduler coalesces the wakeups of the [Mission Service](mission-service.md#boundary).
 A peek reads the first job of the order and removes nothing.
@@ -36,9 +36,9 @@ The Scheduler persists the work queue in the storage of the server, so its order
 The work queue holds, per project, one job for each claimable node.
 A node is claimable when its Mission state and its Mission condition admit a claim.
 The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
-`Available` admits a steps claim, and on an initiative only under the [initiative steps condition](mission-service.md#initiative-steps-condition).
+`Available` admits a steps claim.
 `Waiting` admits an evaluation claim under the [readiness condition](mission-service.md#readiness-condition).
-`External.Requested` admits an evaluation claim under the [continuation condition](mission-service.md#continuation-condition).
+`External.Requested` admits an evaluation claim under the readiness condition and the [continuation condition](mission-service.md#continuation-condition).
 No other state admits a claim.
 Membership is not the Mission state `Available`: a claimable `Waiting` node is not `Available`.
 A job carries the node, its priority and a time-ordered identity.
@@ -101,13 +101,13 @@ That authorization starts at the first operation under the execution identity th
 The work pull requires an instance healthcheck taken for the claim and fewer live executions of the binding than its instance count.
 The Worker Service produces the instance healthcheck and the compatibility declarations.
 The Scheduler selects the first job of the project's work queue that the claimant admits.
-The match reads the node states that the worker declares, the exact worker name and the required node format of the worker.
+The match reads the node states that the worker declares and the [match](#matching) of the node and the claimant.
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
 The [Mission Service](mission-service.md#criterion-and-authority) owns that revision selection.
 The worker requests work and never authorizes its own claim.
 Under the workers that kanthord hosts, reviewer instances pull independently of instances that execute steps.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the restriction on the executing worker's choice of reviewer and reviewer instructions.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) restricts scheduling to initiatives and objectives, never tasks.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) restricts scheduling to nodes, and a task is never a unit of scheduling.
 
 The [Worker Service](worker-service.md#instances-and-hosting) accepts the registration of an instance that an external harness hosts, and that instance pulls work like every instance, with the instance healthcheck and the compatibility match.
 The external harness hosts its own executions, and it never writes the execution record or authorizes its own claim.
@@ -184,8 +184,8 @@ For an otherwise eligible node, the Scheduler admits a claim only when the worke
 A claim from `Available` is a steps claim and authorizes the steps work.
 A claim from `Waiting` or `External.Requested` is an evaluation claim and authorizes the evaluation.
 The claim records no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes its kind.
-The declared states come from the worker contract that the Worker Service publishes, never from a registering instance.
-A new worker declares its states without a change to a rule of the Scheduler.
+The declared states and the declared works come from the worker declaration that the Worker Service publishes, never from a registering instance.
+A new worker declares its states and its works without a change to a rule of the Scheduler.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the separation between the execution of the steps of a node and its assessment.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`, and one of its instances can perform both through the corresponding claims.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the policy on the verification of that separation inside an external harness.
@@ -229,6 +229,42 @@ The revoked execution leaves its claimant's count at revocation.
 
 An instance-count change stops new admissions where the new count requires it.
 The Scheduler counts live executions during the drain and treats no configuration edit as a discard of a node.
+
+## Matching
+
+The Scheduler Service owns the match of a node and a claimant.
+A claimant admits a node when two facts hold.
+
+- The [work](mission-service.vocabulary.md#work) of the node is a member of the declared works of the worker of the claimant.
+- Every trait of the [requires](mission-service.vocabulary.md#requires) list of the node is a member of the [traits](project-service.vocabulary.md#trait) of the worker binding of the claimant.
+
+The match compares exact strings, and it reads no version, no range and no operator.
+The work and the requires list come from the node revision that the claim pins: the revision of the open attempt, else the current revision.
+The traits come from the worker binding row that the claim pins.
+A worker declares its works in code, because a work selects a method of the worker.
+A human writes the traits of a worker binding, because a trait states a fact of a host.
+A new worker host therefore needs a worker binding with its traits, and no code.
+
+The claim walk reads the work and the requires list of each job from the Mission Service, and it skips each job that the claimant does not admit.
+The [Mission Service](mission-service.md#state-transitions) then rechecks the state and the conditions of the node inside the claim.
+An on-demand request applies the same match.
+A worker name with no worker declaration gives no claimant, and its work pull answers no work.
+
+A claimant covers a node in a state when its worker declares that state and the claimant admits the node.
+Each node that is not terminal and not retired needs a claimant for `Available` and for `Waiting`.
+It also needs a claimant for `External.Requested` when its bindings require an external action.
+A pair of a node and one of these states is unmatched when no current worker binding of the project covers it.
+The check reads the current revision of the node and the revision that its open attempt pins.
+The check ignores the instance count.
+
+- A Mission node write that adds an unmatched pair answers `mission.node.requires_unmatched`.
+- A binding-set write of the Project Service that adds an unmatched pair answers `project.bindings.worker.node_unmatched`.
+- Each write reads the unmatched pairs of the project from the Scheduler Service before and after its change, in its own transaction.
+- An unmatched pair that exists before a write refuses no write.
+- An import preview reports every unmatched pair, and the apply decides.
+
+No node state records an unmatched pair.
+A node that no claimant covers keeps its state and its job, and no claim selects it.
 
 ## Liveness
 

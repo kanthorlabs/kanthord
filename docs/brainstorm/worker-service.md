@@ -19,26 +19,29 @@ It describes no mechanism of another service.
 
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
-A worker declares its name, its host, the node states that its instances claim and its required node format.
+A worker declares its name, its host, the node states that its instances claim and the works that its method takes.
 A worker that kanthord hosts also declares its method and its agents, at least one.
 It references the [catalog declaration](agent.md#agent-catalog) of each agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
+The [match rule](scheduler-service.md#matching) of the Scheduler Service admits a node whose work the worker declares and whose [requires list](mission-service.vocabulary.md#requires) the [traits](project-service.vocabulary.md#trait) of the worker binding hold.
 Every agent of a kanthord-hosted worker is [in the catalog](agent.vocabulary.md#in-the-catalog) of the [Agent component](agent.md#agent-catalog).
 A worker reads no other project configuration.
-The required node format names the fields of a node that the method requires.
-Compatibility reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
-Every worker of this page requires the same node format.
+The declared works name the values of [work](mission-service.vocabulary.md#work) that the method takes.
+The match rule reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
+Every worker of this page declares the works `change` and `report`.
 
 A method is the worker's own.
 Two methods of kanthord exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
 The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
+Each method of kanthord holds one form for each work.
+The execution selects the form from the work of the pinned revision alone.
 
 Each agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
 The Worker Service publishes the contract of `claude-code@1`.
-It holds the name, host, declared node states, required node format and resource budget.
+It holds the name, host, declared node states, declared works and resource budget.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
 A worker that kanthord hosts declares the agent prompt of each of its agents.
@@ -198,7 +201,7 @@ A draining instance therefore resumes its execution and claims no new work.
 
 The healthcheck of an instance that an external harness hosts passes when its registration is live.
 The Worker Service computes the healthcheck of every placement from the state of the server alone.
-The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
+The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the declared works.
 
 - An execution at every placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
 - It performs its network git read, network git write and model inference calls in its own worker unit.
@@ -280,14 +283,14 @@ It fetches the external content that the request evidence addresses through `int
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
-The workspace of the steps method on an objective is a checkout of the repository that the pinned revision names, on the node branch of its attempt.
-The Worker Service keys that workspace by the objective and the repository binding of the pinned revision.
+The workspace of the steps method on a `change` node is a checkout of the repository that the pinned revision names, on the node branch of its attempt.
+The Worker Service keys that workspace by the node and the repository binding of the pinned revision.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
 Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch of its attempt at the repository through the Repository component.
 When the checkout holds another branch, the execution also removes the ignored files of that branch.
-The Worker Service removes it after a bounded retention since the last execution of that objective ended.
+The Worker Service removes it after a bounded retention since the last execution of that node ended.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
-The workspace of the steps method on an initiative holds no checkout.
+The workspace of the steps method on a `report` node holds no checkout.
 
 The kanthord component on the file's host serves `evidence upload <path>`.
 That component is the server, the `worker` application or the harness extension.
@@ -296,8 +299,8 @@ It returns the evidence identity and object URI, never the presigned URL, to the
 The storage credential stays in server custody.
 The MCP server exposes no upload write.
 
-The rules of the four paragraphs below hold for the steps method on an objective.
-The steps method uses one node branch for each objective and repository binding.
+The rules of the four paragraphs below hold for the steps method on a `change` node.
+The steps method uses one node branch for each `change` node and repository binding.
 The node branch of an attempt is the branch of the latest attempt k, at or before it, that records the [start point](mission-service.md#attempt) `base_branch`.
 The node branch takes its name from the node identity, in the form `kanthord/<node identity>` when k is 1, and `kanthord/<node identity>-a<k>` when k is later.
 The claim names the node branch, and the execution reads it from the claim.
@@ -321,7 +324,7 @@ The agent judges the result against the criterion only after every verification 
 A task is complete when its verifications pass and the agent judges its criterion met.
 The execution writes no evidence, no assessment and no outcome for a task.
 
-At each steps claim on an objective, the execution first merges `origin/<base_branch>` into the node branch.
+At each steps claim on a `change` node, the execution first merges `origin/<base_branch>` into the node branch.
 `swe@1` resolves a merge conflict as task work.
 A conflict that stays unresolved aborts the merge and stops the execution with `operation_failed`.
 
@@ -338,7 +341,7 @@ When a node verification fails, the agent chooses the task that is most related 
 
 Before a release with evidence, the execution merges `origin/<base_branch>` again and runs the task verifications on the merged head.
 A conflict or a failed verification resets the node branch to its head before that merge, and the release carries further work.
-Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
+Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the node, whatever the task results establish.
 When every task of the revision is complete, the execution releases with no further work.
 The boundary of the budget end is the task commit.
 A task commit whose verification run failed or left an item unrun, with no later task work when the resource budget ends, ends the task work, and the execution releases with no further work.
@@ -349,7 +352,7 @@ A checkpoint commit establishes no completion and no verification result, and th
 An execution that stops for a reason other than a revocation performs the same cleanup and releases with further work and a `stop` that names the reason.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
-The sequence diagram below shows the steps method on an objective with a native agent, on the path where every task passes its verifications.
+The sequence diagram below shows the steps method on a `change` node with a native agent, on the path where every task passes its verifications.
 
 ```mermaid
 sequenceDiagram
@@ -367,7 +370,7 @@ sequenceDiagram
     rect rgb(248, 215, 218)
         E->>M: read the pinned revision, its tasks and its repository binding
         E->>P: read the repository strategy
-        E->>RG: create or reuse the workspace keyed by the objective and its repository binding, on the node branch
+        E->>RG: create or reuse the workspace keyed by the node and its repository binding, on the node branch
     end
     rect rgb(255, 243, 205)
         RG->>P: resolve the repository binding, network git read, execution identity
@@ -395,19 +398,21 @@ sequenceDiagram
         E->>RG: push the node branch
     end
     rect rgb(212, 237, 218)
-        E->>M: evidence of the objective: the head commit of the node branch
+        E->>M: evidence of the node: the head commit of the node branch
     end
     rect rgb(214, 234, 248)
         E->>S: release, no further work
     end
 ```
 
-For an initiative the steps method reads the current objectives of the initiative.
-The [initiative steps condition](mission-service.md#initiative-steps-condition) admits the claim only when every objective holds a terminal state.
-When a graph change adds a nonterminal objective during the execution, the execution releases with further work.
-When every objective holds a terminal state, the agent writes a report on the outcome of each objective, the execution submits that report as produced evidence and releases with no further work.
+For a `report` node the steps method reads the current outcome and the produced evidence of each direct dependency.
+A `report` node holds `Available` only when every direct dependency is `Completed`, under the [dependency rules](mission-service.md#mission-structure-and-nodes).
+The read of a `report` dependency gives its outcome and its produced evidence, and no repository.
+The read follows no dependency of a direct dependency.
+The agent writes a report on the outcome of each direct dependency.
+The execution submits that report as produced evidence and releases with no further work.
 
-The sequence diagram below shows the steps method on an initiative.
+The sequence diagram below shows the steps method on a `report` node.
 
 ```mermaid
 sequenceDiagram
@@ -417,10 +422,10 @@ sequenceDiagram
     participant S as Scheduler Service
 
     rect rgb(248, 215, 218)
-        E->>M: read the current objectives of the initiative
-        Note over E,M: every objective holds a terminal state
-        E->>M: read the outcome and the evidence set of each objective
-        E->>E: the agent writes the report on the objective outcomes
+        E->>M: read the direct dependencies of the node
+        Note over E,M: every direct dependency is Completed
+        E->>M: read the current outcome and the evidence set of each direct dependency
+        E->>E: the agent writes the report on the dependency outcomes
     end
     rect rgb(212, 237, 218)
         E->>M: produced evidence: the report
@@ -446,7 +451,7 @@ sequenceDiagram
     participant A as Native agent
 
     rect rgb(212, 237, 218)
-        H->>M: pause the objective
+        H->>M: pause the node
         Note over M,S: the transition revokes the claim of the execution
     end
     rect rgb(214, 234, 248)
@@ -514,19 +519,19 @@ The [Repository component](repository.md#placement) defines its placement.
 
 ## Evaluation and required external actions
 
-The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and, for an initiative, the current child outcomes.
+The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and, for a `report` node, the dependency outcomes.
 A reviewer judges the assets that the evidence still holds.
-The child outcomes of an initiative are its objective outcomes, and an objective holds no child outcomes.
-The reviewer of an objective runs the verifications of the objective and of each current task of the pinned revision, and it judges each task criterion.
-For an objective, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
+The dependency outcomes of a `report` node are the current outcomes of its direct dependencies, and a `change` node holds no dependency outcome.
+The reviewer of a `change` node runs the verifications of the node and of each current task of the pinned revision, and it judges each task criterion.
+For a `change` node, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
 It uses the [Repository component](repository.md#repository-connector).
-For an initiative, the reviewer derives the repository bindings of the current objectives and removes duplicates.
-A discarded objective still contributes its repository.
+For a `report` node, the reviewer derives the repository bindings of its direct `change` dependencies and removes duplicates.
+A direct `report` dependency contributes no repository.
 The reviewer checks out the head of the base branch of each binding under a directory named after that binding.
-An end-to-end suite lives in a repository of one of the objectives.
+An end-to-end suite lives in a repository of one of the direct `change` dependencies.
 The tested input names every commit, one per binding.
-An initiative whose objectives name no repository keeps the evidence-placement rule.
-For an objective whose evidence names no repository snapshot, the reviewer also uses that rule.
+A `report` node whose direct dependencies name no repository keeps the evidence-placement rule.
+For a `change` node whose evidence names no repository snapshot, the reviewer also uses that rule.
 Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
 The reviewer execution code, never the agent, runs the verifications of the pinned revision from the workspace root.
 The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
@@ -534,7 +539,7 @@ The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
-For an initiative, the judgement may hold one fix-objective proposal for each defect inside a completed objective.
+For a `report` node, the judgement can hold one fix-node proposal for each defect inside a direct `change` dependency.
 A judgement with proposals writes an `undetermined` assessment that holds them.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the record and its currency.
@@ -583,7 +588,7 @@ The reviewer execution releases after its requests when the return of the action
 That rule holds for a reviewer execution of an external harness after the tool of the action performer returns.
 The [Mission Service](mission-service.md#continuation-condition) owns the continuation condition, and the transaction that makes it hold inserts the evaluation job.
 
-The sequence diagram below shows an objective with one required action after every verification passes.
+The sequence diagram below shows a `change` node with one required action after every verification passes.
 
 ```mermaid
 sequenceDiagram
@@ -603,7 +608,7 @@ sequenceDiagram
     rect rgb(248, 215, 218)
         R->>M: read the criterion of the pinned revision, its tasks and the evidence set
         R->>RG: clean isolated checkout of the repository snapshot in a fresh workspace
-        R->>R: run the verifications of the objective and of each current task of the pinned revision
+        R->>R: run the verifications of the node and of each current task of the pinned revision
     end
     rect rgb(212, 237, 218)
         R->>M: evidence with the verification bound to the tested input and the pinned revision
@@ -650,7 +655,7 @@ sequenceDiagram
     end
 ```
 
-The sequence diagram below shows the continuation claim from `External.Requested`, on an objective that requires two actions, where the following action follows the first.
+The sequence diagram below shows the continuation claim from `External.Requested`, on a `change` node that requires two actions, where the following action follows the first.
 
 ```mermaid
 sequenceDiagram
@@ -726,7 +731,7 @@ sequenceDiagram
         E->>M: read the new revision and perform the unblock reads
         E->>IN: intake.action.read: fetch the change request with the address of the request evidence
         IN-->>E: the change request
-        E->>RG: reuse the workspace of the objective and its repository binding, same node branch
+        E->>RG: reuse the workspace of the node and its repository binding, same node branch
         loop for each task
             alt the verifications of the task pass at the head of the node branch and the agent judges its criterion met
                 E->>E: skip the task
@@ -782,7 +787,7 @@ sequenceDiagram
     end
 ```
 
-The sequence diagram below shows the invocation of the action performer by an external harness, on an objective that requires one action.
+The sequence diagram below shows the invocation of the action performer by an external harness, on a `change` node that requires one action.
 
 ```mermaid
 sequenceDiagram
@@ -853,7 +858,7 @@ sequenceDiagram
 The execution owns memory.
 The [memory](overview.vocabulary.md#memory) of an execution is the context of its agent and the content of its workspace.
 It ends with the execution.
-The workspace that the Worker Service retains for a later execution of the same objective is a host-local artifact, and its content is no memory of that later execution.
+The workspace that the Worker Service retains for a later execution of the same node is a host-local artifact, and its content is no memory of that later execution.
 A worker defines how its executions use memory, and it holds no memory of its own.
 An instance holds no memory, and each execution starts with a fresh agent context.
 A later execution rebuilds its context from the records of the Mission Service and from the content that those records reference, as its method requires.
