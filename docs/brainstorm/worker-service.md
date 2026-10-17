@@ -601,6 +601,7 @@ The requested-changes text of the unblock reads names the repository binding of 
 After the action performer submits the request evidence of a `kanthord` landing pull request, it calls `intake.action.perform` once more.
 It passes the evidence identity of that submission.
 The Intake Service records this call as `github.pull_request_merge` and merges the pull request.
+When the base branch already contains the snapshot commit, the request evidence holds a `branch_push` address, and the action performer makes no merge call.
 After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence.
 This request uses the current tested commit, so a rework or a restart gets its merge.
 A failed merge changes no return item of the action performer and logs a warning with the evidence identity.
