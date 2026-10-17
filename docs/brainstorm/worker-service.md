@@ -29,7 +29,7 @@ Every agent of a kanthord-hosted worker is [in the catalog](agent.vocabulary.md#
 A worker reads no other project configuration.
 The declared works name the values of [work](mission-service.vocabulary.md#work) that the method takes.
 The match rule reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
-Every worker of this page declares the works `change` and `report`.
+Every worker of this page declares the works `implement` and `examine`.
 
 A method is the worker's own.
 Two methods of kanthord exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
@@ -283,14 +283,14 @@ It fetches the external content that the request evidence addresses through `int
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
-The workspace of the steps method on a `change` node is a checkout of the repository that the pinned revision names, on the node branch of its attempt.
+The workspace of the steps method on an `implement` node is a checkout of the repository that the pinned revision names, on the node branch of its attempt.
 The Worker Service keys that workspace by the node and the repository binding of the pinned revision.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
 Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch of its attempt at the repository through the Repository component.
 When the checkout holds another branch, the execution also removes the ignored files of that branch.
 The Worker Service removes it after a bounded retention since the last execution of that node ended.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
-The workspace of the steps method on a `report` node holds no checkout.
+The workspace of the steps method on an `examine` node holds no checkout.
 
 The kanthord component on the file's host serves `evidence upload <path>`.
 That component is the server, the `worker` application or the harness extension.
@@ -299,8 +299,8 @@ It returns the evidence identity and object URI, never the presigned URL, to the
 The storage credential stays in server custody.
 The MCP server exposes no upload write.
 
-The rules of the four paragraphs below hold for the steps method on a `change` node.
-The steps method uses one node branch for each `change` node and repository binding.
+The rules of the four paragraphs below hold for the steps method on an `implement` node.
+The steps method uses one node branch for each `implement` node and repository binding.
 The node branch of an attempt is the branch of the latest attempt k, at or before it, that records the [start point](mission-service.md#attempt) `base_branch`.
 The node branch takes its name from the node identity, in the form `kanthord/<node identity>` when k is 1, and `kanthord/<node identity>-a<k>` when k is later.
 The claim names the node branch, and the execution reads it from the claim.
@@ -324,7 +324,7 @@ The agent judges the result against the criterion only after every verification 
 A task is complete when its verifications pass and the agent judges its criterion met.
 The execution writes no evidence, no assessment and no outcome for a task.
 
-At each steps claim on a `change` node, the execution first merges `origin/<base_branch>` into the node branch.
+At each steps claim on an `implement` node, the execution first merges `origin/<base_branch>` into the node branch.
 `swe@1` resolves a merge conflict as task work.
 A conflict that stays unresolved aborts the merge and stops the execution with `operation_failed`.
 
@@ -352,7 +352,7 @@ A checkpoint commit establishes no completion and no verification result, and th
 An execution that stops for a reason other than a revocation performs the same cleanup and releases with further work and a `stop` that names the reason.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
-The sequence diagram below shows the steps method on a `change` node with a native agent, on the path where every task passes its verifications.
+The sequence diagram below shows the steps method on an `implement` node with a native agent, on the path where every task passes its verifications.
 
 ```mermaid
 sequenceDiagram
@@ -405,14 +405,14 @@ sequenceDiagram
     end
 ```
 
-For a `report` node the steps method reads the current outcome and the produced evidence of each direct dependency.
-A `report` node holds `Available` only when every direct dependency is `Completed`, under the [dependency rules](mission-service.md#mission-structure-and-nodes).
-The read of a `report` dependency gives its outcome and its produced evidence, and no repository.
+For an `examine` node the steps method reads the current outcome and the produced evidence of each direct dependency.
+An `examine` node holds `Available` only when every direct dependency is `Completed`, under the [dependency rules](mission-service.md#mission-structure-and-nodes).
+The read of an `examine` dependency gives its outcome and its produced evidence, and no repository.
 The read follows no dependency of a direct dependency.
 The agent writes a report on the outcome of each direct dependency.
 The execution submits that report as produced evidence and releases with no further work.
 
-The sequence diagram below shows the steps method on a `report` node.
+The sequence diagram below shows the steps method on an `examine` node.
 
 ```mermaid
 sequenceDiagram
@@ -519,19 +519,19 @@ The [Repository component](repository.md#placement) defines its placement.
 
 ## Evaluation and required external actions
 
-The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and, for a `report` node, the dependency outcomes.
+The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and, for an `examine` node, the dependency outcomes.
 A reviewer judges the assets that the evidence still holds.
-The dependency outcomes of a `report` node are the current outcomes of its direct dependencies, and a `change` node holds no dependency outcome.
-The reviewer of a `change` node runs the verifications of the node and of each current task of the pinned revision, and it judges each task criterion.
-For a `change` node, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
+The dependency outcomes of an `examine` node are the current outcomes of its direct dependencies, and an `implement` node holds no dependency outcome.
+The reviewer of an `implement` node runs the verifications of the node and of each current task of the pinned revision, and it judges each task criterion.
+For an `implement` node, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
 It uses the [Repository component](repository.md#repository-connector).
-For a `report` node, the reviewer derives the repository bindings of its direct `change` dependencies and removes duplicates.
-A direct `report` dependency contributes no repository.
+For an `examine` node, the reviewer derives the repository bindings of its direct `implement` dependencies and removes duplicates.
+A direct `examine` dependency contributes no repository.
 The reviewer checks out the head of the base branch of each binding under a directory named after that binding.
-An end-to-end suite lives in a repository of one of the direct `change` dependencies.
+An end-to-end suite lives in a repository of one of the direct `implement` dependencies.
 The tested input names every commit, one per binding.
-A `report` node whose direct dependencies name no repository keeps the evidence-placement rule.
-For a `change` node whose evidence names no repository snapshot, the reviewer also uses that rule.
+An `examine` node whose direct dependencies name no repository keeps the evidence-placement rule.
+For an `implement` node whose evidence names no repository snapshot, the reviewer also uses that rule.
 Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
 The reviewer execution code, never the agent, runs the verifications of the pinned revision from the workspace root.
 The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
@@ -539,7 +539,7 @@ The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
-For a `report` node, the judgement can hold one fix-node proposal for each defect inside a direct `change` dependency.
+For an `examine` node, the judgement can hold one fix-node proposal for each defect inside a direct `implement` dependency.
 A judgement with proposals writes an `undetermined` assessment that holds them.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the record and its currency.
@@ -588,7 +588,7 @@ The reviewer execution releases after its requests when the return of the action
 That rule holds for a reviewer execution of an external harness after the tool of the action performer returns.
 The [Mission Service](mission-service.md#continuation-condition) owns the continuation condition, and the transaction that makes it hold inserts the evaluation job.
 
-The sequence diagram below shows a `change` node with one required action after every verification passes.
+The sequence diagram below shows an `implement` node with one required action after every verification passes.
 
 ```mermaid
 sequenceDiagram
@@ -655,7 +655,7 @@ sequenceDiagram
     end
 ```
 
-The sequence diagram below shows the continuation claim from `External.Requested`, on a `change` node that requires two actions, where the following action follows the first.
+The sequence diagram below shows the continuation claim from `External.Requested`, on an `implement` node that requires two actions, where the following action follows the first.
 
 ```mermaid
 sequenceDiagram
@@ -787,7 +787,7 @@ sequenceDiagram
     end
 ```
 
-The sequence diagram below shows the invocation of the action performer by an external harness, on a `change` node that requires one action.
+The sequence diagram below shows the invocation of the action performer by an external harness, on an `implement` node that requires one action.
 
 ```mermaid
 sequenceDiagram

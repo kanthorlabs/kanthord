@@ -51,7 +51,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - A worker template is a static server module; the registry maps worker names to templates and loads no runtime plugin.
 - A worker references the declaration of its agent in the [agent catalog](agent.impl.md#the-agent-catalog) and carries no separate configuration version.
 - `coder@1` references `swe@1`; `reviewer@1` references `re@1`.
-- `coder@1`, `reviewer@1` and `claude-code@1` declare `declared_works: [change, report]`.
+- `coder@1`, `reviewer@1` and `claude-code@1` declare `declared_works: [implement, examine]`.
 - The Worker Service offers `declarationOf(workerName)` to the Scheduler Service through its `contract.ts`. It answers the worker name, `declared_node_states` and `declared_works` of the template, and null for a name that the registry does not hold.
 - The worker unit selects the method form from `work` of the pinned node revision.
 
@@ -387,8 +387,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
 - Each entry of `repositories` holds `{ binding_id, name, address, ssh_identity, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
 - `ssh_identity` is the metadata `{ host, hostname, port, identity_file }` of the `ssh` record of the binding. The worker application runs the [`ssh` validation](repository.impl.md#platform-validators) with it before each clone, fetch and push.
-- For a `change` node, `repositories` holds the repository binding that the pinned node revision names.
-- For a `report` node, `repositories` holds one row per resource identity of the repository bindings of its direct `change` dependencies, at the greatest revision.
+- For an `implement` node, `repositories` holds the repository binding that the pinned node revision names.
+- For an `examine` node, `repositories` holds one row per resource identity of the repository bindings of its direct `implement` dependencies, at the greatest revision.
 - `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
@@ -510,11 +510,11 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 ## The further-work release
 
 - A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
-- `startCheck` stores the judged commit of each task in the workspace of the `change` node. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
+- `startCheck` stores the judged commit of each task in the workspace of the `implement` node. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
 
 ## The unblock reads
 
-- At the start of the steps method on a `change` node, the execution reads the prior rationale. The rationale of the latest rework assessment of the attempt comes first.
+- At the start of the steps method on an `implement` node, the execution reads the prior rationale. The rationale of the latest rework assessment of the attempt comes first.
 - With no rework assessment, an execution of attempt 2 or later reads `mission.execution.clearedOutcome.get`.
 - When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
 - `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
@@ -545,15 +545,15 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
 The workspace root for that run is the root of the execution workspace, not the server's `workspaces/` directory.
-A `report` node uses one subdirectory per distinct repository binding from its direct `change` dependencies.
+An `examine` node uses one subdirectory per distinct repository binding from its direct `implement` dependencies.
 A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
-A test checks duplicate removal, base-branch heads and one tested commit per binding for a `report` node.
-A test checks the evidence-placement rule when the direct dependencies of a `report` node name no repository.
+A test checks duplicate removal, base-branch heads and one tested commit per binding for an `examine` node.
+A test checks the evidence-placement rule when the direct dependencies of an `examine` node name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
 The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
-The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. A `report` node has none.
+The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. An `examine` node has none.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
@@ -571,9 +571,9 @@ Tests assert that the action performer does not reuse an open pull request of th
 ## Workspace
 
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
-- The workspace of a steps execution on a `change` node is `workspaces/<node identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
-- The workspace of an evaluation execution and of a steps execution on a `report` node is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
-- The preparation of the workspace of a `change` node adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
+- The workspace of a steps execution on an `implement` node is `workspaces/<node identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
+- The workspace of an evaluation execution and of a steps execution on an `examine` node is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
+- The preparation of the workspace of an `implement` node adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
 - The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists. Else it checks out the local node branch without a reset when the workspace holds one, so that commits of a failed push stay. Else it checks out the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
 - Two records show an earlier push of the node branch. The first is the remote-tracking ref `refs/remotes/origin/<node branch>` of the node workspace before the fetch. The second is an evidence of the claimed attempt with a `repository` asset of the repository binding. The preparation reads that evidence through `execution.evidence.list`.
 - When either record exists and the remote node branch is missing, `fetchAndCheckout` refuses with `repository.node_branch.missing` and keeps the checkout. The execution stops with `operation_failed` and that code.
@@ -749,7 +749,7 @@ Its child processes run with the rights of the server process.
 The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The finish of the steps method on a `change` node writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `ssh_proof`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The finish of the steps method on an `implement` node writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `ssh_proof`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 

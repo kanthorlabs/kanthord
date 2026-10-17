@@ -37,9 +37,9 @@ An execution assessment is the exception: it stores the execution identity, and 
 
 - Every node and every task holds all five required plan content fields and a plan file name.
 - The same rules apply to an import, a node write and an unblock content change.
-- `work` is a closed enum in code with the values `change` and `report`, and every node holds it.
+- `work` is a closed enum in code with the values `implement` and `examine`, and every node holds it.
 - `requires` is a list of unique trait keys under the [trait](project-service.vocabulary.md#trait) form, and an absent list reads `[]`.
-- `tasks` is the list of the tasks of a `change` node. Each task holds `id`, `filename` and its content. A `report` node holds an empty list on every write path.
+- `tasks` is the list of the tasks of an `implement` node. Each task holds `id`, `filename` and its content. An `examine` node holds an empty list on every write path.
 - `name` is nonblank text, a title with no identity or uniqueness requirement.
 - `requirement` is nonblank text.
 - `criterion` is nonblank text that can hold several checkable statements.
@@ -53,14 +53,14 @@ A node that names no binding of a kind takes the one project binding of that kin
 A task names no binding, and a task with a nonempty `bindings` list answers `mission.node.bindings_invalid`.
 A new binding kind adds a row.
 
-| Binding kind | `change`  | `report`  |
+| Binding kind | `implement`  | `examine`  |
 | ------------ | --------- | --------- |
 | Repository   | Exactly 1 | 0         |
 | Worker       | 0         | 0         |
 | Storage      | At most 1 | At most 1 |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
-An absent or unknown `work`, a nonlist `requires`, a repeated or malformed trait key, and a task on a `report` node answer `mission.node.content_invalid`.
+An absent or unknown `work`, a nonlist `requires`, a repeated or malformed trait key, and a task on an `examine` node answer `mission.node.content_invalid`.
 A write that changes `work` of a node whose attempt reads 1 or more answers 409 `mission.node.work_locked` with `details: { node_id, attempt }`.
 A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.requires_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The node writes are import apply, node create, node update, an unblock with a change and a proposal approval.
 Each of these writes reads `unmatchedClaims` of the Scheduler Service before and after its change, in its own `BEGIN IMMEDIATE` transaction.
@@ -103,7 +103,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - `configuration` holds the operands that the action performer takes from the strategy: `base_branch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `binding_id` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
 - `binding_id` is the repository binding revision that the pinned node revision names.
 - A configured action of another binding kind adds its own `action` value, `expected_end_state` values and `configuration` shape with its design; the service refuses every other value.
-- A `report` node requires no external action, so its set is empty.
+- An `examine` node requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
 - `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:node_id/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
   Its input holds `execution_id`, `attempt`, `node_revision`, `requirement_key`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
@@ -127,14 +127,14 @@ The service derives it from the policy of the `project_binding` row that the pin
 - A plan file is a node file or a task file. It holds exactly one of `work` and `node`.
 - The front matter of a node file permits only these keys:
   - `id`: the node identity `node_<ulid>`; absent on a new node.
-  - `work`: `change` or `report`; required.
+  - `work`: `implement` or `examine`; required.
   - `depends_on`: a list of plan file names of node files.
   - `requires`: a list of trait keys; absent reads `[]`.
   - `bindings`: the project binding names under the node content rules.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
 - The front matter of a task file permits only these keys:
   - `id`: the task identity `task_<ulid>`; absent on a new task.
-  - `node`: the plan file name of a node file of the import set with `work: change`; required.
+  - `node`: the plan file name of a node file of the import set with `work: implement`; required.
   - `bindings`: an empty list; another list answers `mission.node.bindings_invalid`.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
 - A task file refuses `depends_on`, `requires` and `work`.
@@ -185,7 +185,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
 - The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.mission_mismatch`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.reference_kind_invalid` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, `mission.import.verification_uncovered` with `details: { name, command }`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict`, `mission.node.requires_unmatched`, `mission.node.state_conflict` and `mission.node.claim_live` for a dependency edit, and, on apply alone, `mission.import.retirement_mismatch`.
-- A body `mission_id` that differs from the route is a first-stage violation `mission.import.mission_mismatch`. A `node` name that resolves inside the set to a task file or to a node file with `work: report`, and a dependency name that resolves to a task file, are second-stage violations `mission.import.reference_kind_invalid`. A verification of a `change` node that equals no verification of a task of that node in the import set is a second-stage violation `mission.import.verification_uncovered`, with the node file as `name` and the verification as `command`.
+- A body `mission_id` that differs from the route is a first-stage violation `mission.import.mission_mismatch`. A `node` name that resolves inside the set to a task file or to a node file with `work: examine`, and a dependency name that resolves to a task file, are second-stage violations `mission.import.reference_kind_invalid`. A verification of an `implement` node that equals no verification of a task of that node in the import set is a second-stage violation `mission.import.verification_uncovered`, with the node file as `name` and the verification as `command`.
 - A preview reports every unmatched pair that the import adds, and the apply refuses it with `mission.node.requires_unmatched`.
 
 ## Node API admission
@@ -224,7 +224,7 @@ No execution identity infers a verification from prose.
 
 The Mission Service refuses an assessment that asserts success with a failed or unrun verification, and it answers `mission.assessment.verification_failed`.
 A success assessment names exactly one evidence whose `verification` covers every required command of the pinned revision, and that run must pass; otherwise the service answers the same code. A named evidence whose `verification` covers only part of the required commands does not count.
-For a `change` node, the `results` of that run hold one entry for each verification of the node and of each current task of the pinned revision; otherwise the service answers the same code.
+For an `implement` node, the `results` of that run hold one entry for each verification of the node and of each current task of the pinned revision; otherwise the service answers the same code.
 Judgement decides success only after every verification of the pinned content passes.
 
 ## The assessment
@@ -250,21 +250,21 @@ The result follows this order:
 Only the first case permits an empty judgement.
 The judgement is absent in that case; the rationale is never absent.
 The rationale names each default-standard violation. An assessment holds no separate list of findings.
-The rationale of a `change` assessment also names each current task whose criterion is unmet.
+The rationale of an `implement` assessment also names each current task whose criterion is unmet.
 The Mission Service answers `mission.assessment.verification_failed` when an assessment asserts success with a failed or unrun verification.
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
 
-- At acceptance `dependency_outcome_ids` of a `report` node names the current outcome of each direct dependency, and no other outcome. `dependency_outcome_ids` of a `change` node is empty. The service refuses every other set with HTTP 400 and an issue list. `evidence_ids` and `dependency_outcome_ids` are duplicate-free sets.
+- At acceptance `dependency_outcome_ids` of an `examine` node names the current outcome of each direct dependency, and no other outcome. `dependency_outcome_ids` of an `implement` node is empty. The service refuses every other set with HTTP 400 and an issue list. `evidence_ids` and `dependency_outcome_ids` are duplicate-free sets.
 - The read derives `dependency_node_ids` from the nodes of `dependency_outcome_ids`.
-- An `undetermined` execution assessment of a `report` node can hold `proposals`, at most 10. Each proposal holds `dependency_id`, `name`, `requirement`, `criterion` and one `task`, and it names one defect inside a completed dependency. `dependency_id` names a current direct dependency with `work: change`. Proposals on a `change` node or with another result answer HTTP 400 at `proposals`.
+- An `undetermined` execution assessment of an `examine` node can hold `proposals`, at most 10. Each proposal holds `dependency_id`, `name`, `requirement`, `criterion` and one `task`, and it names one defect inside a completed dependency. `dependency_id` names a current direct dependency with `work: implement`. Proposals on an `implement` node or with another result answer HTTP 400 at `proposals`.
 - The service writes one `mission_proposal` row for each proposal in the transaction that closes the attempt and writes the outcome. A non-current assessment records no proposal.
 - `node_revision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment.
 - The read derives `worker_version` from the worker of the binding row that the execution of the actor pins.
 - The service computes the currency of an execution assessment at each read, and it stores no currency.
-- Take an execution assessment A of node N and attempt k. `context_matches` is true exactly when all three conditions hold: `node_revision` of A equals the revision that attempt k of N pins; each identity of `evidence_ids` of A names an evidence of N; for a `report` node, the nodes of `dependency_outcome_ids` of A equal the direct dependencies of N, and each named outcome is the current outcome of its node.
+- Take an execution assessment A of node N and attempt k. `context_matches` is true exactly when all three conditions hold: `node_revision` of A equals the revision that attempt k of N pins; each identity of `evidence_ids` of A names an evidence of N; for an `examine` node, the nodes of `dependency_outcome_ids` of A equal the direct dependencies of N, and each named outcome is the current outcome of its node.
 - The current outcome of a node is its outcome with the greatest `sequence`.
 - `authority_admits` is true exactly when no human assessment of N and attempt k has a greater `sequence` than A.
 - `order_selected` is true exactly when A holds the greatest `sequence` among the execution assessments of N and attempt k that pass the context check and the authority check.
@@ -300,8 +300,8 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 
 - `mission.proposal.list` uses `GET /api/mission/node/:node_id/proposal` with `human` access, and it answers a page of proposals with an optional `attempt` filter.
 - `mission.proposal.approve` uses `POST /api/mission/proposal/:proposal_id/approve` with `human` access. Its body holds `expected_mission_version` and an optional nonblank `reason`.
-- In one transaction, the approval creates a `change` node with the one task of the proposal and copies `bindings` and `requires` from the node of `dependency_id`.
-- The same transaction adds the dependency of the proposer `report` node on the new node and reads the unmatched pairs of the Scheduler Service.
+- In one transaction, the approval creates an `implement` node with the one task of the proposal and copies `bindings` and `requires` from the node of `dependency_id`.
+- The same transaction adds the dependency of the proposer `examine` node on the new node and reads the unmatched pairs of the Scheduler Service.
 - It then unblocks the proposer into a new attempt with the default start point `node_branch` and sets `created_node_id` and `approved_at` of the proposal.
 - The proposer routes to `Pending` and stays unclaimable until the new node reaches `Completed`, under the dependency rule.
 - An approved proposal answers 409 `mission.proposal.already_approved`. A proposer that is not `Blocked` in the attempt of the proposal answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.requires_unmatched`.
@@ -310,7 +310,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 ## The release admission
 
 - The Mission Service routes a release inside the release transaction of the Scheduler Service, and it checks the release predicate before the terminal write. The node state fixes the kind of the release: `Executing` for a steps release and `Evaluating` for a reviewer release.
-- A steps release with `further_work: false` requires a published evidence of the open attempt whose provenance is the releasing execution. For a `change` node, that evidence holds one `repository` asset whose `binding_id` equals the repository binding of the pinned revision. For a `report` node, it holds one `produced` asset.
+- A steps release with `further_work: false` requires a published evidence of the open attempt whose provenance is the releasing execution. For an `implement` node, that evidence holds one `repository` asset whose `binding_id` equals the repository binding of the pinned revision. For an `examine` node, it holds one `produced` asset.
 - A steps release with `further_work: true` carries the checkpoint and push obligation of [worker-service.impl.md](worker-service.impl.md#stop-and-budget), and the service checks no record for it.
 - A further-work release whose execution reached its resource budget and passed no new task carries the stop `{ reason: "budget_end", code }`, where `code` is `turns` or `wall_time`. A `budget_end` stop is no failure and does not count toward the consecutive failure limit. A `provider_failed` stop with the code `rate_limited`, `quota_exhausted` or `unavailable` is neutral: it neither counts nor ends the count. When the count of consecutive `budget_end` releases of the attempt reaches `mission.further_work_limit`, the release moves the node to `Paused` for a human.
 - A release with a `stop`, from a steps execution or a reviewer execution, checks no record. It routes under the [consecutive failure limit](mission-service.md#consecutive-failure-limit).
@@ -319,7 +319,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
 - A reviewer release that moves the node to `External.Requested` calls `foldExternalState` on the node in the same transaction. If one required external action holds end state `other`, `foldExternalState` sets `External.Failed`. `closeExternalAttempt` then moves the node to `Blocked`, even when sibling actions are unresolved. If every required external action holds end state `expected`, `foldExternalState` sets `External.Success` and `closeExternalAttempt` moves the node to `Completed`. Otherwise the node stays in `External.Requested`.
 - After a reviewer release to `External.Requested`, the service calls `scheduleDeferredCheck`. That function schedules `runDeferredCheck` through `setImmediate`. The deferred check reads the node and its unresolved `pull_request` and `branch_push` evidence in one transaction, then calls `intakeCheck.check` for each. It applies the result with `applyEndState` when no live claim exists. A failed check logs a warning and changes no state.
-- Tests release a steps claim on a `change` node with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record. A test releases a reviewer claim with a `stop` and no assessment and asserts `Evaluating -> Waiting`.
+- Tests release a steps claim on an `implement` node with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record. A test releases a reviewer claim with a `stop` and no assessment and asserts `Evaluating -> Waiting`.
 - Tests in `transitions.test.ts` assert that a reviewer release folds all expected end states to `Completed` and folds an other end state to `Blocked`. They also assert that the deferred check applies `expected`, `other`, `conflict` and `none` correctly for `pull_request` evidence. They assert that it resolves a `branch_push` request, and that a failed deferred check leaves the node unchanged.
 - `e2e-delivery-admission.test.ts` E08.11 asserts that a merge admitted after release completes the node through the fold. E08.12 asserts that a pull request merged before release completes the node through the deferred check.
 
@@ -347,10 +347,10 @@ Repository evidence remains an address, not an upload of repository content.
 - `commit` is the full git object name in lower-case hexadecimal: 40 characters for a SHA-1 repository or 64 characters for a SHA-256 repository, the two object formats of git. An abbreviation, upper-case or a ref name answers HTTP 400 with an issue list.
 - The service checks the form alone and never the repository.
 - `binding_id` names a repository binding revision of the project in every context.
-- For the evidence of a `change` node, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
-- For the tested input of a `report` node, the list holds one address per distinct repository binding of its direct `change` dependencies.
+- For the evidence of an `implement` node, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
+- For the tested input of an `examine` node, the list holds one address per distinct repository binding of its direct `implement` dependencies.
 - The landed commit of a success override follows the same form and binding rule.
-- A repository address whose `binding_id` is not the binding that its context requires, or a landed commit on a `report` node, answers 400 `mission.evidence.binding_mismatch` with `details: { binding_id }`.
+- A repository address whose `binding_id` is not the binding that its context requires, or a landed commit on an `examine` node, answers 400 `mission.evidence.binding_mismatch` with `details: { binding_id }`.
 - `media_type` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
 - A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidence_id` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
 - A content read of a `platform` asset answers 409 `mission.evidence.content_platform` with `evidence_id` and the address in `details`, after the same checks, and it fetches no external content.
@@ -411,7 +411,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `mission.evidence.delete` uses `DELETE /api/mission/evidence/:evidence_id` with `human` access. It deletes every asset of the evidence, then the evidence row. It removes the evidence identity from every `evidence_ids` set of an assessment and of an outcome.
 - Both inputs hold `expected_mission_version`, `force: boolean` and an optional `reason: Text`; the CLI defaults `force` to `false`.
 - `Text` is nonblank text; its bounds remain open in [HANDOFF](HANDOFF.md#mission-service).
-- With `force: false`, the node of the evidence and every direct `report` dependent of that node must hold a terminal state.
+- With `force: false`, the node of the evidence and every direct `examine` dependent of that node must hold a terminal state.
 - A nonterminal node of that set refuses the delete with 409 `mission.evidence.remove_node_live`.
 - `force: true` skips that check and requires a reason, so a human can delete an exposed credential at once. `force` never changes what the command deletes.
 - Force without a reason answers HTTP 400 with a validation issue list.
@@ -440,7 +440,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A human act on a node whose attempt reads 0 writes its human assessment and the node outcome.
   It closes no attempt.
 - An outcome stores no revision and no attempt. The read derives `node_revision` and `attempt` from the assessment that the outcome names.
-- The dependency read of a `report` execution resolves a direct dependency to the `node_revision` of its current outcome.
+- The dependency read of an `examine` execution resolves a direct dependency to the `node_revision` of its current outcome.
 - An execution submission always names an attempt of 1 or more, because a claim exists only under an open attempt.
 - An omitted `attempt` filter selects every authorized record of the node.
   `--attempt <n>` selects the records of attempt n.
@@ -540,7 +540,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A named retired node answers 409 `mission.node.retired`, and a named terminal node answers 409 `mission.node.terminal`.
 - The act inserts a node revision for each rebound node, and increments `mission_mission.version` once.
 - The answer is the `NodeChange` of the act and `skipped`, a list of `{ node, condition }` where `condition` is `terminal` or `retired`, for a mission rebind.
-- A rebind revision holds `change.write: node.rebind`, `changed_fields: ["bindings"]`, the unchanged task snapshot of a `change` node and `change.tasks: []`.
+- A rebind revision holds `change.write: node.rebind`, `changed_fields: ["bindings"]`, the unchanged task snapshot of an `implement` node and `change.tasks: []`.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
 
 - The Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service through its `contract.ts`. It answers every node that is not terminal and not retired when its current revision or the node revision of its open attempt pins the binding revision. A rebind keeps the node revision of an open attempt, so the node keeps the old pin until that attempt ends.
@@ -621,7 +621,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - The Mission tab always offers Import, because an import updates the nodes that it names and creates the others.
 - A successful apply closes the import sheet. A toast confirms the import with the new mission version and the count of new nodes.
-- A `change` node card ends with a `Tasks (<count>)` section. Each task is a row that opens the node sheet of its node. A card without a task shows no section.
+- An `implement` node card ends with a `Tasks (<count>)` section. Each task is a row that opens the node sheet of its node. A card without a task shows no section.
 - The Mission tab offers `Export JSON` and `Export Markdown`. `Export Markdown` downloads one zip archive `<project name>-mission-v<mission version>.zip` that holds each plan file under its `filename`.
 
 ## Authorization integration
@@ -661,7 +661,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - Tests record the dependency set on the assessment at acceptance, copy it into the outcome context at closure, and keep it unchanged after a later dependency change or revision.
 - Tests accept 40 and 64 lower-case hexadecimal commits, refuse abbreviations, upper-case and ref names, and refuse a binding that the pinned revision does not name in each admission context. For a success override while the attempt reads 0, they check the revision current at the act.
-- Tests write `change` on every revision with the write path, the previous revision and the exact changed fields, list task changes on a `change` node revision, and revise both nodes on a task move.
+- Tests write `implement` on every revision with the write path, the previous revision and the exact changed fields, list task changes on an `implement` node revision, and revise both nodes on a task move.
 - Tests return every violation of the failing stage with its code, locators and a malformed file name, stop an apply at the first violation with the envelope and its status, and keep an authorization failure an operation failure.
 - Tests accept `type/subtype` at 255 bytes and refuse a parameter, a longer value, a missing subtype and a non-ASCII byte.
 - Tests record a signal name with a null exit code, a timed-out item with `timed_out: true`, a started process with neither fact and no result for an unstarted item, and they fail a run whose `results` miss a verification.
@@ -685,8 +685,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests derive each closing event of the outcome record, also after a forced delete of a request evidence.
 - Tests store only the landed-commit evidence and the override landed commit in `evidence_ids` of an outcome, and answer the union with the assessment set on the read.
 - Tests write a human assessment and its outcome in one transaction for an override, a discard and a block, and keep every human assessment out of the order check.
-- Tests admit `node ready` on a `report` node whose attempt reads 0 and whose direct dependencies are all `Completed`.
-  They also admit a `change` node whose attempt reads 0, with or without current tasks.
+- Tests admit `node ready` on an `examine` node whose attempt reads 0 and whose direct dependencies are all `Completed`.
+  They also admit an `implement` node whose attempt reads 0, with or without current tasks.
   They open attempt 1 with the pinned revision.
   They reach `Waiting` with a job in the same transaction.
 - Tests refuse a state or attempt mismatch of `node ready` with `mission.node.state_conflict`.
@@ -726,7 +726,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert that an asset delete deletes the object and withdraws access without recall of downloaded copies.
 - Tests keep every evidence record until a human delete, with or without outcome references, and run no automatic evidence delete.
 - Tests run no automatic sweep of unpublished upload objects.
-- Tests refuse both deletes on a live node or a live direct `report` dependent with `mission.evidence.remove_node_live`.
+- Tests refuse both deletes on a live node or a live direct `examine` dependent with `mission.evidence.remove_node_live`.
 - Tests refuse force without a reason with a validation failure and accept force with a reason on a live chain.
 - Tests accept an optional reason without force and require human access for both deletes.
 - Tests delete the content first and the row after it, delete an object at its recorded version, keep the evidence row after an asset delete, and remove the evidence identity from every `evidence_ids` set after an evidence delete.
@@ -739,7 +739,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests check front matter delimiters, the permitted `work` values and the required nonblank content.
 - Tests accept an absent `id` for a new node or task and preserve a known identity.
 - Tests require exactly one of `work` and `node` in each file, and refuse `depends_on`, `requires` and `work` in a task file.
-- Tests refuse a `node` key that names a task file or a `report` node with `mission.import.reference_kind_invalid`.
+- Tests refuse a `node` key that names a task file or an `examine` node with `mission.import.reference_kind_invalid`.
 - Tests reject unresolved `node` and dependency names and references outside the import set.
 - Tests refuse a self-dependency and a dependency cycle of two or more nodes through dependency add and import with `mission.import.cycle`.
 - Tests refuse a change of `work` on a node whose attempt reads 1 or more with `mission.node.work_locked`.
@@ -776,7 +776,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert that a stale mission version and a changed digest refuse the apply with no effect.
 - Tests assert that one retirement increments the mission version once.
 - Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
-- Tests refuse a `change` node verification that no task of the node holds with the exact text, and a `change` node with no task, with `mission.import.verification_uncovered`. The apply writes nothing.
+- Tests refuse an `implement` node verification that no task of the node holds with the exact text, and an `implement` node with no task, with `mission.import.verification_uncovered`. The apply writes nothing.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
@@ -804,7 +804,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests resolve project binding identities, and the binding names of a plan file, to the identities of their latest revisions at the write.
 - Tests reject absent or nonlist bindings and unknown or foreign-project identities and names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
-- Tests reject repeated repository names on a `change` node because its list requires exactly one entry.
+- Tests reject repeated repository names on an `implement` node because its list requires exactly one entry.
 - Tests take the one project binding of a kind that a node does not name, where the rule table permits one or more.
 - Tests refuse two project bindings of that kind with `mission.node.bindings_invalid`.
 - Tests keep identity, revision, state, attempt, priority and edges outside content.
@@ -817,7 +817,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert each recorded command, its exit code and the overall exit code for success and failure.
 - A start test refuses a host without bash.
 - Tests refuse success with a failed or unrun item under `mission.assessment.verification_failed`.
-- Tests refuse the success of a `change` node whose verification `results` miss a verification of the node or of a current task under `mission.assessment.verification_failed`.
+- Tests refuse the success of an `implement` node whose verification `results` miss a verification of the node or of a current task under `mission.assessment.verification_failed`.
 - A test permits judgement only after every verification passes; zero exits alone never establish success.
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.

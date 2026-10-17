@@ -1,5 +1,5 @@
 ---
-work: report
+work: examine
 depends_on:
   - foundation.md
   - persistence.md
@@ -18,7 +18,7 @@ verifications:
 
 Deliver a Node.js 24 and SQLite TODO API using Express 5 and ecosystem middleware. Account holders authenticate, manage only their own TODOs and receive predictable JSON errors. Operators can diagnose failures without exposing secrets and can run the service from a clean checkout.
 
-This report node integrates the outcomes of its direct dependencies and does not repeat their implementation. Derive the repository checkout from the `todoapp-repo` binding of its direct `change` dependencies. Judge the final repository snapshot and the current outcome of each direct dependency; publish an addressed integration report as produced evidence.
+This examine node integrates the outcomes of its direct dependencies and does not repeat their implementation. Derive the repository checkout from the `todoapp-repo` binding of its direct `implement` dependencies. Judge the final repository snapshot and the current outcome of each direct dependency; publish an addressed integration report as produced evidence.
 
 ## Criterion
 

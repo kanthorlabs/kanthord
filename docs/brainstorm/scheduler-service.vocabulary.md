@@ -49,7 +49,7 @@ Project `atlas` holds four worker bindings.
 | linux-reviewer | `reviewer@1` | `[]`                                  | evaluation               | no                                     |
 | macos-reviewer | `reviewer@1` | `[platform.macos]`                    | evaluation               | evaluation                             |
 
-The node "Add password reset to the iOS app" holds `work: change` and `requires: [platform.macos]`.
+The node "Add password reset to the iOS app" holds `work: implement` and `requires: [platform.macos]`.
 Only an instance of `macos-coder` obtains its steps claim, and only an instance of `macos-reviewer` obtains its evaluation claim.
 The node "Add password reset" holds `requires: []`, so every binding of the table admits it in its declared states.
 

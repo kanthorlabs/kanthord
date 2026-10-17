@@ -84,7 +84,7 @@ The repository strategy belongs to the project whichever harness executes the wo
 Whichever harness executes the work follows that strategy.
 An execution follows the project's repository strategy when it acts on a repository.
 Work on a repository requires a configured repository strategy, because configuration supplies the project's policy without an implicit default.
-The configured repository action of a `change` node follows a passing assessment and precedes a successful outcome of that node.
+The configured repository action of an `implement` node follows a passing assessment and precedes a successful outcome of that node.
 
 The configured repository action, the tasks and the criterion of the node are three different conditions.
 The shared outcome rules govern repository action failures.
@@ -92,9 +92,9 @@ The shared outcome rules govern repository action failures.
 ### Worked example: `tdd@1`
 
 `tdd@1` is one example among several workers.
-For each task of a `change` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
+For each task of an `implement` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
 
-For a `change` node, an execution of `tdd@1` creates a branch and makes a separate commit for each task on that branch.
+For an `implement` node, an execution of `tdd@1` creates a branch and makes a separate commit for each task on that branch.
 These branch and commit practices apply to `tdd@1`, not to every worker.
 
 Once all tasks of the node are complete, an execution of `tdd@1` releases the node for its evaluation.

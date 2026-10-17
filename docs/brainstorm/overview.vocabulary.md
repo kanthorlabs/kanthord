@@ -60,17 +60,17 @@ One verification of "Add password reset" is `npm run test:reset`.
 
 A node is a vertex of the mission graph and a unit of scheduling, with its own criterion and outcome.
 The term names no closed set.
-The [work](mission-service.vocabulary.md#work) of a node is `change` or `report`.
-A `tdd@1` instance claims the `change` node "Add password reset". A `reviewer@1` instance later claims the node.
-The `report` node "Account recovery" reports on the outcomes of "Add password reset" and "Add recovery codes".
+The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`.
+A `tdd@1` instance claims the `implement` node "Add password reset". A `reviewer@1` instance later claims the node.
+The `examine` node "Account recovery" reports on the outcomes of "Add password reset" and "Add recovery codes".
 Nothing else is a node. The word names a vertex of the graph.
 
 ## task
 
-A task is a part of the WHAT of a `change` node with its own criterion, but no outcome of its own.
+A task is a part of the WHAT of an `implement` node with its own criterion, but no outcome of its own.
 A task is never a unit of scheduling.
 The term names no closed set.
-The import set holds `add-password-reset.md`, a `change` node, and `add-reset-token-expiry.md`, a task of that node.
+The import set holds `add-password-reset.md`, an `implement` node, and `add-reset-token-expiry.md`, a task of that node.
 
 ## evidence
 
@@ -118,7 +118,7 @@ A worker is the HOW: a template that defines how executions happen.
 A worker declares the node states that its instances claim and the works that its method takes.
 The term names no closed set.
 `tdd@1` is one example among several workers.
-For each task of a `change` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
+For each task of an `implement` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
 `tdd@1` declares `Available`, and `reviewer@1` declares `Waiting` and `External.Requested`.
 `claude-code@1` is a worker that an external harness hosts, and it declares `Available`, `Waiting` and `External.Requested`.
 

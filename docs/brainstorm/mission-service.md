@@ -26,9 +26,9 @@ The name is a title and no identity.
 A node revision covers that whole content.
 Dependency is the only edge kind.
 
-The [work](mission-service.vocabulary.md#work) of a node is `change` or `report`, and it selects the method of the execution.
-A `change` node changes one repository, and its tasks state the final-state requirements of that change.
-A `report` node reports on the outcomes of its direct dependencies, and it holds no task.
+The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`, and it selects the method of the execution.
+An `implement` node changes one repository, and its tasks state the final-state requirements of that change.
+An `examine` node reports on the outcomes of its direct dependencies, and it holds no task.
 A human changes the work of a node only while the attempt of the node reads 0.
 A later change of the work answers `mission.node.work_locked`.
 The [requires](mission-service.vocabulary.md#requires) list of a node names the traits that a worker binding needs to claim the node.
@@ -36,13 +36,13 @@ The [Scheduler Service](scheduler-service.md#match) matches the work and the req
 A node write that adds an unmatched pair of a node and a claimable state answers `mission.node.requires_unmatched`.
 A node write that keeps an existing unmatched pair succeeds.
 
-A task is content of a `change` node.
+A task is content of an `implement` node.
 Each task holds its own identity, its own plan file, its name, its requirement, its criterion and its verifications.
 A task carries no dependency edge, no state, no attempt and no priority.
 A task is a unit of execution inside a worker.
 A task is never a unit of scheduling.
-The Mission Service permits a `change` node with no task on the node API.
-An import refuses a `change` node with no task, as [Criterion and authority](#criterion-and-authority) states.
+The Mission Service permits an `implement` node with no task on the node API.
+An import refuses an `implement` node with no task, as [Criterion and authority](#criterion-and-authority) states.
 
 A dependency relates two nodes of the same mission, whatever their work.
 A dependency makes its dependent unavailable until the node that it names is `Completed`.
@@ -79,23 +79,23 @@ Two or more project bindings of a kind that the node does not name refuse the wr
 An omitted `bindings` field and `bindings: []` both take the project binding.
 An existing node keeps its stored bindings of each kind that a write omits.
 The node revision stores the resolved bindings, so a later change of the project moves no existing node.
-A `change` node names exactly one repository binding, and it names any repository binding that its project holds.
-A `report` node names no repository binding.
+An `implement` node names exactly one repository binding, and it names any repository binding that its project holds.
+An `examine` node names no repository binding.
 A task names no binding, and a task acts on the repository that its node names.
 A node names at most one storage binding, and its uploads use that binding.
-Two `change` nodes name the same binding or different bindings.
-An execution of a `report` node derives its repositories from the repository bindings of its direct `change` dependencies, for its verifications too.
-One `report` node reports on work in many repositories.
+Two `implement` nodes name the same binding or different bindings.
+An execution of an `examine` node derives its repositories from the repository bindings of its direct `implement` dependencies, for its verifications too.
+One `examine` node reports on work in many repositories.
 
 The mission holds no branch, no merge and no repository action.
-A `change` node supplies the grouping that a repository strategy uses.
+An `implement` node supplies the grouping that a repository strategy uses.
 
 A worker takes a node, and it never takes a task.
 A worker executes a model judgement and an end-to-end test.
 The mission holds precedence alone.
 The priority of a node orders the work queue of the Scheduler Service.
 It is not part of the WHAT.
-The mission holds no order over the tasks of a `change` node.
+The mission holds no order over the tasks of an `implement` node.
 
 A human sets the priority of a node through the node API.
 A task holds no priority, because a task is never a unit of scheduling.
@@ -117,7 +117,7 @@ The import and the node API are the two write paths for a node and for a criteri
 The node API updates a node that holds an attempt, and that update carries the human override authority.
 A human retires a node through an import that omits its plan file, or through the node API.
 The node API creates a node at any time.
-A node API update creates, changes and removes the tasks of a `change` node.
+A node API update creates, changes and removes the tasks of an `implement` node.
 The node API edits no node in a terminal state.
 The node API reads no condition of the import when it updates a node.
 A human takes responsibility for an edit through the node API.
@@ -219,9 +219,9 @@ The read of a worker resolves to the revision that its attempt pins.
 That revision is the head of the list that the Mission Service returns to it.
 The read of a human returns every revision.
 The list of a worker holds the pinned revision and every older revision, and the Mission Service computes no difference between revisions, because each record carries its change.
-An execution reads no content of another node, except that a `report` execution reads each direct dependency through the current outcome of that dependency.
+An execution reads no content of another node, except that an `examine` execution reads each direct dependency through the current outcome of that dependency.
 That read resolves to the revision that the attempt of that outcome pins, or to the revision current at the human act when the outcome names no attempt.
-A `report` dependency of a `report` node gives its outcome and its produced evidence, and no repository.
+An `examine` dependency of an `examine` node gives its outcome and its produced evidence, and no repository.
 No read follows the dependencies of a dependency.
 An execution reads no dependency edge of another node and no historical record of another node.
 
@@ -239,7 +239,7 @@ An edit of a node that holds an open attempt states that its revision reaches th
 A task holds no revision of its own, exactly as a task holds no state and holds no attempt.
 The content of a task belongs to the node revision of its node.
 An edit of a task writes a node revision of its node.
-The execution of the `change` node reads its tasks from the revision that its attempt pins.
+The execution of the `implement` node reads its tasks from the revision that its attempt pins.
 
 The read of a node names the revision that each attempt pins.
 A revision that no attempt pins is visible as such.
@@ -254,10 +254,10 @@ Its criterion and its verifications hold at the head of the node branch.
 The verifications are an ordered list in the node content, and an import carries them.
 A human writes their value.
 No execution identity infers a verification from prose.
-An import requires that each verification of a `change` node equals a verification of at least one task of that node in the import set.
-An import therefore refuses a `change` node with no task.
+An import requires that each verification of an `implement` node equals a verification of at least one task of that node in the import set.
+An import therefore refuses an `implement` node with no task.
 The node API and the change of an unblock do not check this coverage.
-A `report` node holds no task on every write path.
+An `examine` node holds no task on every write path.
 The [tested input](mission-service.vocabulary.md#tested-input) names the content that the verification reads, and that content stays mutable.
 Attribution and judgement against the criterion protect the verification.
 An exit status of zero proves that one verification returned zero.
@@ -304,10 +304,10 @@ An address resolves while its repository holds the content.
 
 Evidence durability differs by work.
 A task commit is an internal step of the execution of its node, and no record names it.
-The outcome of a `change` node represents its tasks.
-A `report` node reads the outcome of each direct dependency and the evidence set that the outcome carries.
-A landed commit is a commit identity that the expected end state of a repository request appends or that a success override carries, and it is the durable repository evidence of a `change` node.
-A `change` node that a success override completes without a landed commit identity, and a node whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assessment or on the stored content.
+The outcome of an `implement` node represents its tasks.
+An `examine` node reads the outcome of each direct dependency and the evidence set that the outcome carries.
+A landed commit is a commit identity that the expected end state of a repository request appends or that a success override carries, and it is the durable repository evidence of an `implement` node.
+An `implement` node that a success override completes without a landed commit identity, and a node whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assessment or on the stored content.
 
 The evidence of a node is a set of items, and it holds one item most of the time.
 When a repository request reaches its expected end state, the Mission Service writes each landed commit as its own evidence record, with the Mission Service as provenance and the attempt of the request.
@@ -337,7 +337,7 @@ A correction is a new evidence record, and an assessment names the record that i
 - A human deletes one asset, or deletes an evidence with every asset of it. The Mission Service deletes the content first and the row after it.
 - A delete of an evidence also removes its identity from every evidence set of an assessment and of an outcome.
 - The span of the delete in the Tracking Service names the remover, any reason and the time.
-- A human deletes an evidence asset or an evidence only when the node of the evidence and every direct `report` dependent of that node hold a terminal state, unless the human forces the delete with a reason.
+- A human deletes an evidence asset or an evidence only when the node of the evidence and every direct `examine` dependent of that node hold a terminal state, unless the human forces the delete with a reason.
 - A reason is optional without force.
 - Force permits the immediate delete of content that holds a credential.
 - A human deletes a request evidence only with force, in every state of the node, and the delete of a request evidence of the open attempt holds the node.
@@ -369,12 +369,12 @@ Under kanthord's own harness the executing worker never chooses the reviewer, an
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.
 That separation is a separation of duties, and it is not independent verification.
 A task holds no assessment and no outcome.
-The reviewer of a `change` node judges each current task of the pinned revision against its criterion.
+The reviewer of an `implement` node judges each current task of the pinned revision against its criterion.
 The independent review sits at the node whose outcome persists.
 
 The scope of an evaluation differs by work.
-The evaluation of a `change` node weighs the tested input and the criterion of each current task.
-The evaluation of a `report` node weighs the dependency outcomes and the tested input.
+The evaluation of an `implement` node weighs the tested input and the criterion of each current task.
+The evaluation of an `examine` node weighs the dependency outcomes and the tested input.
 A model judgement transcript is evidence of its invocation, and it is not an assessment.
 The boundary is authority, and it is not a file format.
 
@@ -388,7 +388,7 @@ Only this case permits an empty judgement.
 The assessment of an execution whose worker kanthord hosts also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
 A worker that an external harness hosts runs no system layer, so its assessment weighs the criterion alone.
 An assessment that finds a violation of the default standard does not pass.
-An assessment of a `report` node names the current outcome of each direct dependency, and it weighs each one.
+An assessment of an `examine` node names the current outcome of each direct dependency, and it weighs each one.
 It names the actor that performs it.
 An assessment holds no method field.
 Its actor and evaluation fields identify who judged.
@@ -397,7 +397,7 @@ A human writes an assessment only through a human act on the node: a success ove
 A human assessment weighs no verification, names no tested input and names no dependency outcome.
 The execution code, never the agent, runs the verifications before the judgement.
 A success assessment names exactly one evidence whose verification covers every verification of the pinned revision, and it names no evidence with a pending asset.
-For a `change` node, that verification covers the verifications of the node and of each current task of the pinned revision.
+For an `implement` node, that verification covers the verifications of the node and of each current task of the pinned revision.
 A named evidence with a partial verification does not count.
 
 Currency needs three checks.
@@ -485,7 +485,7 @@ The attempt names the actor of the act that opens it.
 The attempt records its start point, `base_branch` or `node_branch`.
 Attempt 1 records `base_branch`.
 A later attempt records the start point that its unblock names.
-The start point of a `report` attempt has no effect, because a `report` node has no node branch.
+The start point of an `examine` attempt has no effect, because an `examine` node has no node branch.
 An execution pins the attempt that it starts under.
 The required external actions of an attempt follow from the binding row that its pinned node revision names.
 Every record names its attempt, and it stays the record of that attempt forever.
@@ -548,7 +548,7 @@ The configuration file of the server sets the limit.
 The ordinary path needs a current passing assessment and the observed expected end state of every required external action of the attempt.
 Neither fact alone publishes a successful outcome.
 A node that requires no external action needs the assessment alone.
-A `report` node configures no external action.
+An `examine` node configures no external action.
 Evaluation and assessment owns the currency of an assessment.
 The evaluation of a node precedes its external request.
 The reviewer execution requests each required external action, and an action that follows another action is requested after that action reaches its expected end state.
@@ -748,7 +748,7 @@ Every other node is unaffected.
 
 A block exists for every node.
 A task is never blocked, because Outcome and completion states that a task holds no state.
-The execution of the `change` node drives every task lifecycle.
+The execution of the `implement` node drives every task lifecycle.
 
 The transition that reaches `Blocked` closes the attempt and sets the state in one transaction.
 A claim serializes with that transaction, so the Mission Service holds no dispatch window.

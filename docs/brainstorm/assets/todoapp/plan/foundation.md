@@ -1,5 +1,5 @@
 ---
-work: change
+work: implement
 depends_on: []
 bindings:
   - todoapp-repo

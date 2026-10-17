@@ -80,7 +80,7 @@ The steps method is the method of a worker whose executions carry out the steps 
 `coder@1` holds the steps method.
 A `coder@1` instance of worker binding `coder-main` claims "Add password reset" from `Available`.
 Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
-A `coder@1` instance claims the `report` node "Account recovery" from `Available`.
+A `coder@1` instance claims the `examine` node "Account recovery" from `Available`.
 Its execution writes the report on the outcomes of the direct dependencies, submits it as produced evidence and releases with no further work.
 
 ## evaluation method
@@ -273,19 +273,19 @@ A raise of the count to 3 adds slot 2.
 ## compatibility declarations
 
 The compatibility declarations are the worker name, the declared node states and the declared works that an instance carries on a work pull.
-An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the declared works `change` and `report`.
-An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the declared works `change` and `report`.
+An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the declared works `implement` and `examine`.
+An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the declared works `implement` and `examine`.
 
 ## declared works
 
 The declared works are the values of [work](mission-service.vocabulary.md#work) that the method of a worker takes.
 Every worker of this page declares both values.
 
-- **change**
-- **report**
+- **implement**
+- **examine**
 
 The [match rule](scheduler-service.md#match) admits a node only when the declared works of the worker hold the work of the node.
-`coder@1` declares `change` and `report`, so a `coder@1` instance takes the steps claim of "Add password reset" and of "Account recovery".
+`coder@1` declares `implement` and `examine`, so a `coder@1` instance takes the steps claim of "Add password reset" and of "Account recovery".
 
 ## instance healthcheck
 
@@ -309,11 +309,11 @@ The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorla
 Execution 3 of the same node under the same repository binding reuses it.
 The Worker Service removes it after the fixed retention period.
 The reviewer execution of the node uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
-The steps execution of the `report` node "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
+The steps execution of the `examine` node "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
 
 ## node branch
 
-The node branch is the branch that the steps method uses for one `change` node in one repository, from the latest attempt that starts from the base branch.
+The node branch is the branch that the steps method uses for one `implement` node in one repository, from the latest attempt that starts from the base branch.
 The node branch of "Add password reset" takes its name from the node identity, for example `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
 Attempt 1 and attempt 2 both work on that branch when attempt 2 records the start point `node_branch`.
 When attempt 2 records the start point `base_branch`, attempt 2 starts the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2` from the base branch.
