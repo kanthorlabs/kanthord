@@ -301,10 +301,11 @@ Stored content stays retrievable until a human deletes it.
 An address resolves while its repository holds the content.
 
 The server selects the storage binding of an upload, and the execution never selects one.
-The grant takes the first storage binding of the pinned revision whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check for that asset.
+The grant takes the first storage binding of the pinned revision whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check in the open attempt of the node.
 An upload check fails when it finds a mismatch, finds no object or fails at the store.
-A failed upload check records the binding as failed for that asset.
-A node with no remaining storage binding refuses the upload with `mission.evidence.storage_unavailable`.
+A failed upload check records the binding as failed for the open attempt of the node.
+A new attempt tries every storage binding again.
+A node with no remaining storage binding refuses the upload with `mission.evidence.storage_exhausted`.
 A read and a delete of an asset use the storage binding that the asset pins, and no read moves to another binding.
 
 The evidence snapshot of an `implement` node is one evidence that holds one repository asset for each repository binding of the pinned revision.
