@@ -520,6 +520,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
 - `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
 - For each `pull_request` action with the resolution `other-end`, the read calls `intake.action.read` through the direct adapter. It uses the method `github-pull-request-change-request-get` and the request evidence of that action.
+- Each item of `worker.execution.change_request.get` holds `binding_id`, the repository binding of its `pull_request` action.
 - The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request, and it names the repository binding of each change request. It also holds the path, the line and the body of each review comment of that change request.
 - The requested-changes text stops at 4 KiB.
 - The requested-changes text is the prior rationale. It enters the task judgement of the start check and the criterion revision of each task that the agent judges unmet.
@@ -560,6 +561,7 @@ Reviewer tests assert a failed assessment without judgement for a failed or unru
 The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
+Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
