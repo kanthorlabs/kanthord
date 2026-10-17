@@ -549,6 +549,7 @@ A node with two or more repository bindings uses one subdirectory for each bindi
 A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
 A test checks base-branch heads and one tested commit per binding for an `examine` node with two repository bindings.
 A test checks the evidence-placement rule for an `examine` node that names no repository binding.
+A test checks that an `examine` node with one repository binding places the produced evidence in the `evidence` directory of the workspace and keeps its checkout clean.
 A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
