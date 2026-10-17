@@ -15,7 +15,6 @@ const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));
 const TICK_MS = 15000;
 const PR_EVERY_TICKS = 4;
 const PROCESS_ABSENT = "ESRCH";
-const TASK_KIND = "task";
 const now = () => new Date().toISOString().slice(11, 19);
 const githubToken = readEnvFile(resolve(MAIN, state.env_file))[
   state.github_token_env
@@ -88,7 +87,6 @@ async function watchNodes(quiet) {
   const page = await api.get(`/api/mission/${state.mission_id}/node?limit=200`);
   const completedNodes = [];
   for (const node of page.items) {
-    if (node.kind === TASK_KIND) continue;
     const label = `${node.state}/a${node.attempt}`;
     const before = nodes.get(node.id);
     if (!quiet && before !== label)
