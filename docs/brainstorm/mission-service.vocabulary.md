@@ -13,21 +13,24 @@ This file is not a design document, and `mission-service.md` stays the single so
 The bindings of a node are the project binding identities in its content.
 A plan file names each binding by its name.
 The write resolves each identity or name to the latest revision of its binding and checks these counts.
+A node that names no binding of a kind takes the one project binding of that kind when its column permits one or more.
+A task names no binding.
 A new binding kind adds a row.
 
-| Binding kind | Initiative | Objective | Task |
-| ------------ | ---------- | --------- | ---- |
-| Repository   | 0          | Exactly 1 | 0    |
-| Worker       | 0          | 0         | 0    |
-| Storage      | At most 1  | At most 1 | 0    |
+| Binding kind | `change`  | `report`  |
+| ------------ | --------- | --------- |
+| Repository   | Exactly 1 | 0         |
+| Worker       | 0         | 0         |
+| Storage      | At most 1 | At most 1 |
 
 ## node content
 
-- Every kind has the same five required plan content fields and a plan file name.
+- Every node and every task has the same five required plan content fields and a plan file name.
+- A node also holds its `work` and its `requires` list.
 - A name is a nonblank title, not an identity, and is not unique.
 - A criterion can hold several checkable statements.
-- Identity, kind, revision, state, attempt, priority and edges stay outside content.
-- These YAML documents show the plan content of an initiative, its objective and a task of that objective, respectively.
+- Identity, revision, state, attempt, priority and edges stay outside content.
+- These YAML documents show the plan content of a `report` node, a `change` node and a task of that `change` node, respectively.
 
 ```yaml
 name: Account recovery
@@ -36,6 +39,8 @@ criterion: A password reset restores access and rejects expired tokens.
 verifications:
   - cd api-repo && npm run e2e
 bindings: []
+work: report
+requires: []
 ---
 name: Add password reset
 requirement: Let account holders reset a forgotten password.
@@ -45,6 +50,8 @@ verifications:
   - npm run test:reset
 bindings:
   - api-repo
+work: change
+requires: []
 ---
 name: Expire the reset token
 requirement: Reject a reset token after its expiry.
@@ -55,23 +62,50 @@ verifications:
 bindings: []
 ```
 
-Verification guidance depends on the node kind.
+Verification guidance depends on the work of the node.
 The service does not validate this guidance.
 
-- Initiative: end-to-end tests.
-- Objective: end-to-end and unit tests.
+- `report` node: end-to-end tests.
+- `change` node: end-to-end and unit tests.
 - Task: unit tests and functional checks.
 
 A node with no verification need holds `true`, not an empty list.
 
+## work
+
+The kind of work that a node asks for, which selects the method of its execution.
+The set is closed and it holds two values.
+
+- **change**: The node changes one repository, and its tasks state the final-state requirements of that change.
+- **report**: The node reports on the outcomes of its direct dependencies, and it holds no task.
+
+The `change` node "Add password reset" holds two tasks and names `api-repo`.
+The `report` node "Account recovery" depends on "Add password reset" and "Add recovery codes", and it holds no task.
+A human changes the `work` of "Add password reset" while its attempt reads 0.
+After the first claim opens attempt 1, a change of its `work` answers `mission.node.work_locked`.
+
+## requires
+
+The list of traits that a worker binding needs to claim a node.
+The current worker bindings of a project supply its trait keys, so the term names no closed set.
+
+- Each key follows the form of a [trait](project-service.vocabulary.md#trait) of the Project Service.
+- A list holds each key once, and an absent list reads `[]`.
+- A malformed key answers `mission.node.content_invalid`.
+- A node with `requires: []` matches every worker binding whose worker declares its work and its state.
+
+The node "Add password reset on iOS" holds `requires: [platform.macos]`.
+The worker binding `macos-coder` holds `traits: [platform.macos, toolchain.xcode]`, so its instances claim the steps of that node.
+The worker binding `linux-coder` holds `traits: []`, so its instances never claim that node.
+An import of that node into a project with no worker binding that holds `platform.macos` answers `mission.node.requires_unmatched`.
+
 ## priority
 
-The human act that orders an initiative or an objective in the work queue.
+The human act that orders a node in the work queue.
 A task holds no priority.
 A human sets the priority of "Add password reset" to -2, then to 7.
 The second act overwrites the value -2, and no Mission record keeps the earlier value, the actor or the time.
 Any signed safe integer is valid; absent priority reads 0.
-A priority write on "Expire the reset token" answers `mission.node.priority_task`, because that node is a task.
 
 ## object evidence
 
@@ -105,12 +139,12 @@ The overview owns the term.
 Write `node attempt` where `evaluation attempt` appears nearby, because the two are different objects.
 Write `attempt` alone everywhere else.
 
-Take the objective "Add password reset".
+Take the `change` node "Add password reset".
 A `tdd@1` instance and a `reviewer@1` instance each execute it using their worker's method.
 
-The import creates the objective with no attempt, and its attempt reads 0.
+The import creates the node with no attempt, and its attempt reads 0.
 
-1. A `tdd@1` instance claims the objective.
+1. A `tdd@1` instance claims the node.
    The first claim opens attempt 1, and Execution 1 starts.
    Attempt 1 requires one external action, a pull request that must merge, from the repository strategy of the binding row that its pinned revision names.
 2. The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
@@ -118,7 +152,7 @@ The import creates the objective with no attempt, and its attempt reads 0.
 3. The instance releases with the evidence of Execution 1, and the execution of the attempt requires no further work.
    Execution 1 ends, and the node reaches `Waiting`.
    Attempt 1 stays open.
-4. The readiness condition holds, and a `reviewer@1` instance claims the objective.
+4. The readiness condition holds, and a `reviewer@1` instance claims the node.
    Execution 2 starts.
 5. Execution 2 publishes a current passing assessment of the tested input.
 6. Execution 2 requests the required external action: the Intake Service opens pull request 42, and the Mission Service writes its request evidence.
@@ -134,9 +168,9 @@ Every record in this example names attempt 1 forever.
 
 A node whose attempt never opened holds no attempt, and its attempt reads 0.
 [Attempt](mission-service.md#attempt) owns the acts that open an attempt.
-The attempt of the objective above reads 1 for every record in the attempt example.
+The attempt of the node above reads 1 for every record in the attempt example.
 The import condition requires `Pending` or `Available` and an attempt that reads 0.
-A task modification reads the state and the attempt of its objective.
+A task modification reads the state and the attempt of its node.
 Attempt identity establishes no currency by itself.
 
 ## evaluation attempt
@@ -146,7 +180,7 @@ An evaluation has a durable lifecycle, and one evaluation attempt is one try ins
 
 Take the evaluation claim in step 4 of the attempt example.
 
-1. A `reviewer@1` instance claims the objective.
+1. A `reviewer@1` instance claims the node.
    Evaluation attempt 1 starts.
 2. The reviewer instance becomes unreachable and publishes no assessment.
    Evaluation attempt 1 ends.
@@ -166,9 +200,9 @@ The act that ends an attempt and every execution and evaluation attempt in fligh
 The term names no closed set.
 
 Take "Add password reset" while the `tdd@1` instance executes it in Execution 1 under attempt 1.
-A human discards the objective.
+A human discards the node.
 The Mission Service closes attempt 1 by force and ends Execution 1.
-It writes the outcome of the objective.
+It writes the outcome of the node.
 The records of attempt 1 remain records of that attempt.
 
 ## start point
@@ -180,7 +214,7 @@ The start point says where the work starts, not what the work is.
 Take "Add password reset" after a human rejects the work of attempt 1 on `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
 
 1. Attempt 1 records `base_branch`, because every attempt 1 starts from the base branch.
-2. A human blocks the objective and unblocks it with `start_point: base_branch`.
+2. A human blocks the node and unblocks it with `start_point: base_branch`.
    Attempt 2 opens and records `base_branch`.
 3. The claim of attempt 2 names the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2`.
    The steps execution starts that branch from the base branch.
@@ -188,11 +222,11 @@ Take "Add password reset" after a human rejects the work of attempt 1 on `kantho
    Attempt 3 continues `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2`.
 
 The branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV` and its commits stay unchanged.
-The start point of an initiative attempt has no effect.
+The start point of a `report` attempt has no effect.
 
 ## state of a node
 
-The state of an initiative or an objective.
+The state of a node.
 The set is closed and it holds twelve values.
 
 - **Pending**
@@ -239,42 +273,30 @@ The asserted result of a discard is that nothing is established.
 
 ## readiness condition
 
-The condition over current objective terminal states that admits an evaluation claim.
+The condition over the direct dependencies of a node that admits an evaluation claim and the human ready act.
 The term names no closed set.
 [Readiness condition](mission-service.md#readiness-condition) states the rule.
 
-Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
-The steps execution releases with no further work, and the objective reaches `Waiting`.
-Neither task holds an outcome, because a task holds no record.
+Take the `change` node "Add password reset" with no dependency.
+The steps execution releases with no further work, and the node reaches `Waiting`.
 The readiness condition admits an evaluation claim.
 
-Take the initiative "Account recovery" with the objectives "Add password reset" and "Add recovery codes".
-The initiative reaches `Waiting`.
+Take the `report` node "Account recovery" with the direct dependencies "Add password reset" and "Add recovery codes".
 "Add password reset" holds `Completed`, and "Add recovery codes" holds `Discarded`.
-Both current objectives hold terminal states, and the initiative configures no external action.
-The readiness condition admits an evaluation claim.
+A discarded node satisfies no dependency, so "Account recovery" stays `Pending` and admits no claim.
+A human removes the dependency on "Add recovery codes", and "Account recovery" moves to `Available`.
+Its steps execution releases it to `Waiting`, and the readiness condition admits an evaluation claim.
 
 ## continuation condition
 
 The condition over the required external actions of the attempt that admits an evaluation claim from `External.Requested`.
 The term names no closed set.
 
-Take the objective "Add password reset" with two required external actions: pull request 42 that must merge, and a notification with the landed commit in `#account-recovery` that follows the merge.
+Take the `change` node "Add password reset" with two required external actions: pull request 42 that must merge, and a notification with the landed commit in `#account-recovery` that follows the merge.
 Execution 2 opens pull request 42 after the passing assessment and releases, because the notification is not requestable before the merge.
 A human merges pull request 42, and delivery admission sets the expected end state with the landed commit `abc123`.
 The notification is unrequested and the action that it follows has reached its expected end state, so the continuation condition holds.
-A `reviewer@1` instance claims the objective from `External.Requested`, and Execution 3 posts the notification with commit `abc123`.
-
-## initiative steps condition
-
-The condition over the current objectives of an initiative that admits a steps claim from `Available`.
-The term names no closed set.
-
-The initiative "Account recovery" holds `Available` while "Add password reset" holds `Executing`.
-The condition does not hold, so "Account recovery" holds no job.
-"Add password reset" reaches `Completed`, and "Add recovery codes" already holds `Discarded`.
-The transaction that commits `Completed` inserts the steps job of "Account recovery".
-If `ulrich` then adds the objective "Add login alerts", the graph change deletes that job.
+A `reviewer@1` instance claims the node from `External.Requested`, and Execution 3 posts the notification with commit `abc123`.
 
 ## terminal state
 
@@ -296,7 +318,7 @@ An assessment names seven things.
 
 - the evidence set that it evaluates
 - the node revision whose criterion it evaluates
-- every immutable child outcome record that it weighs
+- every immutable dependency outcome record that it weighs
 - the actor that performs it
 - the tested input of its verifications
 - one result
@@ -309,14 +331,14 @@ That set is closed and it holds three values.
 - The results do not meet the criterion or the default standard.
 - The available evidence establishes neither.
 
-Take the objective "Add password reset" above.
-A `reviewer@1` instance evaluates that objective, and it writes one assessment.
-That assessment names the evidence set of the objective and the node revision pinned by the attempt, and its rationale names each task whose criterion is unmet.
+Take the `change` node "Add password reset" above.
+A `reviewer@1` instance evaluates that node, and it writes one assessment.
+That assessment names the evidence set of the node and the node revision pinned by the attempt, and its rationale names each task whose criterion is unmet.
 It names the reviewer execution as the actor and holds no method field.
 An external harness assessment identifies the client identity of the harness worker.
 A human writes an assessment only through a human act.
 The assessment names the tested input of the verifications of the pinned revision.
-Assessments accumulate, so a second assessment of the same objective never overwrites the first.
+Assessments accumulate, so a second assessment of the same node never overwrites the first.
 
 The assessment result follows this order for "Add password reset":
 
@@ -334,20 +356,19 @@ Only the first case permits an empty judgement, and no case permits an absent ra
 What the verifications read, named by the assessment that weighs their results.
 The term names a closed set of four forms.
 
-- **a repository snapshot**, for an objective or task whose evidence names one
-- **a list of repository snapshots**, one commit per distinct binding from the current objectives of an initiative
+- **a repository snapshot**, for a `change` node whose evidence names one
+- **a list of repository snapshots**, one commit per distinct binding of the direct `change` dependencies of a `report` node
 - **the content address of produced evidence**, when no repository supplies the tested input
 - **the address of object evidence**, when the verifications read an object that the storage binding holds
 
 The tested input never names the produced evidence that records the verification results.
 A later addition to the evidence set changes no earlier tested input.
 
-Take the objective "Add password reset" above.
+Take the `change` node "Add password reset" above.
 Its evidence names the head commit of the node branch, so the tested input is that repository snapshot.
 
-Take the initiative "Account recovery" with current objectives on `api-repo` and `web-repo`.
-The reviewer removes duplicate bindings, even when several objectives name `api-repo`.
-A discarded objective still contributes its repository binding.
+Take the `report` node "Account recovery" with direct `change` dependencies on `api-repo` and `web-repo`.
+The reviewer removes duplicate bindings, even when several dependencies name `api-repo`.
 The reviewer checks out each base-branch head under the binding name in the workspace.
 The tested input names `api-repo` at `a41b9c0` and `web-repo` at `9f1c2e7`, one commit per binding.
 The end-to-end suite lives in `web-repo`.
@@ -357,14 +378,14 @@ The verification runs from the workspace root:
 cd web-repo && npm run e2e -- --api ../api-repo
 ```
 
-Take an initiative whose objectives name no repository.
+Take a `report` node whose direct dependencies are `report` nodes alone, so no dependency names a repository.
 Its steps execution submits a report as produced evidence.
 The reviewer places that evidence in the workspace, and the tested input is the content address of that report.
 
 ## node revision
 
 One immutable snapshot of the whole content of a node.
-It covers the plan file name, the name, the requirement, the criterion, the verifications and the bindings.
+It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the work, the requires list and the tasks.
 A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.
 
@@ -380,34 +401,34 @@ The Mission Service returns its revisions as a list ordered by revision descendi
   - actor: `ulrich`
   - time: `2026-09-10T15:00:00Z`
 - **revision 1**
-  - reason: create the objective
+  - reason: create the node
   - actor: `ulrich`
   - time: `2026-09-09T09:00:00Z`
 
 A `tdd@1` instance claims "Add password reset" under attempt 3, and attempt 3 pins revision 3.
 An active attempt keeps the node revision that it pins.
 A new node revision authorizes no later attempt by itself.
-The identifier of the objective stays the same across all three revisions.
+The identifier of the node stays the same across all three revisions.
 
 ## content owner
 
-The node whose node revision holds the content of a node.
-An initiative and an objective are their own content owner.
-The content owner of a task is its objective, because the content of a task belongs to the node revision of its objective.
+The node whose node revision holds the content of a node or of a task.
+A node is its own content owner.
+The content owner of a task is its `change` node, because the content of a task belongs to the node revision of that node.
 The term names no closed set.
 
-Take the task "Write the reset email" under the objective "Add password reset".
+Take the task "Write the reset email" of the `change` node "Add password reset".
 
 - The content owner of "Write the reset email" is "Add password reset".
 - A change to "Write the reset email" creates the next revision of "Add password reset".
-- A move of "Write the reset email" to "Add recovery codes" creates the next revision of both objectives. The content owner becomes "Add recovery codes".
+- An import whose task file of "Write the reset email" names `add-recovery-codes.md` moves the task. The import creates the next revision of both nodes. The content owner becomes "Add recovery codes".
 
 ## currency
 
 The property of an assessment that three checks admit.
 The set of checks is closed and it holds three members.
 
-- **context**: Context checks the evidence that the assessment names, its criterion, the structure and the selected child outcomes.
+- **context**: Context checks the evidence that the assessment names, its criterion, the direct dependencies and the selected dependency outcomes.
   The check never requires equality with the whole evidence set.
 - **authority**: Authority checks intervening acts: a block, an unblock, a pause, a resume, a discard, a human override and an attempt closure.
   The authority check determines whether an assessment still affects current state.
@@ -418,31 +439,18 @@ An attempt closure scopes a record to its own attempt.
 A pause and a resume never invalidate a passing assessment by themselves.
 An assessment is current only when all three checks admit it.
 The record order answers the order check alone.
-A `reviewer@1` instance assesses the initiative "Account recovery" and names an outcome of its objective "Add password reset".
+A `reviewer@1` instance assesses the `report` node "Account recovery" and names an outcome of its direct dependency "Add password reset".
 The context check fails when that assessment names an outcome other than the current outcome of "Add password reset".
 That assessment is not current, and it stays in the record.
-
-## edge kind
-
-The kind of an edge of the mission graph.
-The set is closed and it holds two values.
-
-- **containment**: Every task belongs to exactly one objective.
-  Every objective belongs to exactly one initiative.
-  An initiative is a root of the graph.
-- **dependency**: A dependency relates an initiative or an objective.
-
-Containment descends from a parent to a child, so a containment edge alone forms no cycle.
-The initiative "Account recovery" waits for its objective "Add password reset" through the initiative steps condition, so a dependency of "Add password reset" on "Account recovery" forms a cycle.
 
 ## dependency
 
 A graph relation that makes its dependent unavailable until the node that it names is `Completed`.
 The term names no closed set.
-A dependency relates an initiative or an objective, and a task carries no dependency edge.
-A dependency determines availability.
+A dependency relates two nodes of one mission, and a task carries no dependency edge.
+A dependency is the only edge of the mission graph, and it determines availability.
 
-The objective "Add password reset email" depends on "Add password reset".
+The node "Add password reset email" depends on "Add password reset".
 "Add password reset email" stays `Pending` until "Add password reset" is `Completed`.
 A human override of "Add password reset" to `Completed` releases it as well.
 A human adds a dependency to "Add password reset email" while no live claim holds it, and the Mission Service reroutes it at once.
@@ -452,10 +460,10 @@ The node read of "Add password reset email" holds `depends_on` with the identity
 
 ## dependency closure
 
-The set of nodes that the dependencies of a node and of its ancestors name.
+The set of nodes that the dependencies of a node name, its direct dependencies.
 The term names no closed set.
-The initiative "Account recovery" depends on the initiative "Onboarding", and its objective "Add password reset" depends on "Add recovery codes".
-The dependency closure of "Add password reset" holds "Add recovery codes" and "Onboarding", and it holds no node of the subtree of either.
+The `report` node "Account recovery" depends on "Add password reset", and "Add password reset" depends on "Add recovery codes".
+The dependency closure of "Account recovery" holds "Add password reset" alone.
 
 ## external object
 
@@ -476,9 +484,9 @@ The human block of a paused node.
 The term names no closed set.
 
 Take another history of "Add password reset", in which attempt 1 closes on a block.
-A human pauses the objective while attempt 2 is open.
-The human blocks the paused objective with the reason "the reset provider is unavailable".
-The human unblocks the objective into attempt 3.
+A human pauses the node while attempt 2 is open.
+The human blocks the paused node with the reason "the reset provider is unavailable".
+The human unblocks the node into attempt 3.
 
 ## request evidence
 
@@ -486,7 +494,7 @@ The evidence record of one requested external action.
 It holds the requirement key of the attempt, one `platform` asset that addresses the external object, and at most one end state.
 The term names no closed set.
 
-Take the objective "Add password reset".
+Take the `change` node "Add password reset".
 
 Example of a landing case:
 
@@ -524,14 +532,13 @@ The import condition holds when the node holds `Pending` or `Available` and its 
 
 An import modifies no node that holds an attempt, whatever its state.
 A release to `Pending` or `Available` leaves the node with an attempt and its records.
-A create reads the condition on the parent whose child set changes.
-The import condition of a task is the condition of its objective.
-A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
-This rule covers a create, an update and a retirement of a task.
-A modification covers the record of the node, its parent link and its child set.
-A containment move reads the condition on the moved node, the old parent and the new parent.
+The import condition of a task is the condition of its node.
+A task modification requires its node to hold `Pending` or `Available` and its attempt to read 0.
+This rule covers a create, an update and a removal of a task.
+A modification covers the record of the node and its tasks.
+A task move reads the condition on the old node and on the new node.
 A dependency edit follows the dependency rule, not the import condition.
-A dependency addition requires that no live claim holds the dependent or a node in its subtree.
+A dependency addition requires that no live claim holds the dependent.
 A dependency removal requires a dependent that is not terminal.
 A human who stops the work of a node discards that node.
 The discard closes the attempt, and the closure writes the outcome of the node.
@@ -548,7 +555,7 @@ The import set is authoritative.
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.
 
-- The node API retires a node and its current descendants.
+- The node API retires one node.
 
 The node API edits no node in a terminal state.
 The node API reads no condition of the import when it updates a node.
@@ -560,23 +567,23 @@ No execution identity writes a node, and no execution identity writes a criterio
 - The complete set of nodes that one import carries for the whole mission.
 - An import accepts the Markdown format or the JSON format.
 - A plan file name is unique inside the import set.
-- Each parent and dependency names a plan file inside that set, never a path or a node outside the set.
+- Each dependency and the `node` key of each task file name a plan file inside that set, never a path or a node outside the set.
 - The membership changes with each import, so the term names no closed set.
 
 A human keeps the whole mission plan in Markdown, and one import set holds these six files.
 
-- `account-recovery.md`, the initiative
-- `add-password-reset.md`, an objective of that initiative
-- `add-reset-request.md`, a task of that objective that holds each verification of the objective
-- `add-reset-token-expiry.md`, another task of that objective
-- `add-password-reset-email.md`, another objective of that initiative, with `add-password-reset.md` as a dependency
-- `send-reset-email.md`, a task of that objective that holds each verification of the objective
+- `account-recovery.md`, a `report` node that depends on the two `change` nodes
+- `add-password-reset.md`, a `change` node
+- `add-reset-request.md`, a task of that node that holds each verification of the node
+- `add-reset-token-expiry.md`, another task of that node
+- `add-password-reset-email.md`, another `change` node, with `add-password-reset.md` as a dependency
+- `send-reset-email.md`, a task of that node that holds each verification of the node
 
 - The import resolves the name `add-password-reset.md` inside this set.
 - The omission of a file from this set requests a retirement of its node.
 
 Each modification requires `Pending` or `Available` and an attempt that reads 0.
-A task modification reads the state and the attempt of its objective.
+A task modification reads the state and the attempt of its node.
 An inadmissible modification aborts the whole import with no effect.
 A rewrite of `add-password-reset.md` with no identifier creates a new node, and the unchanged `add-password-reset-email.md` now names that new node, so the import modifies "Add password reset email" and reads its condition.
 
@@ -585,25 +592,27 @@ A rewrite of `add-password-reset.md` with no identifier creates a new node, and 
 - The name of the plan file of a node, unique among the nodes of its mission that are not retired.
 - An import or a create sets it, and every export writes it unchanged.
 - The term names no closed set.
-- Two objectives titled "Add tests" hold `add-tests-api.md` and `add-tests-web.md`.
+- Two nodes titled "Add tests" hold `add-tests-api.md` and `add-tests-web.md`.
 - After the first leaves the plan, the export still writes `add-tests-web.md` for the other.
-- A human retires the objective `add-recovery-codes.md` and imports a new objective with the same file name and no `id`.
+- A human retires the node `add-recovery-codes.md` and imports a new node with the same file name and no `id`.
 - The import creates a new node with that name, and `node list --include-retired` returns both nodes with distinct identities.
 
 ## plan file
 
-- The Markdown document that represents one node under the [plan file grammar](mission-service.impl.md#the-plan-file-grammar).
-- Its file name is the import-set key and the plan file name of the node.
+- The Markdown document that represents one node or one task under the [plan file grammar](mission-service.impl.md#the-plan-file-grammar).
+- Its file name is the import-set key and the plan file name of the node or the task.
 - The term names no closed set.
-- This example is `add-password-reset.md`, the objective "Add password reset" in the import set above.
-- The `id` names a known node; a new node omits it.
+- A node file holds `work`, and a task file holds `node`.
+- The first example is `add-password-reset.md`, the `change` node "Add password reset" in the import set above.
+- The second example is `add-reset-request.md`, a task of that node.
+- The `id` names a known node or task; a new node or task omits it.
 
 ```markdown
 ---
 id: node_01ARZ3NDEKTSV4RRFFQ69G5FAV
-kind: objective
-parent: account-recovery.md
+work: change
 depends_on: []
+requires: []
 bindings:
   - api-repo
 verifications:
@@ -620,6 +629,27 @@ Let account holders reset a forgotten password.
 ## Criterion
 
 A valid token permits one reset and an expired token permits none.
+```
+
+```markdown
+---
+id: task_01ARZ3NDEKTSV4RRFFQ69G5FB0
+node: add-password-reset.md
+bindings: []
+verifications:
+  - npm run e2e
+  - npm run test:reset
+---
+
+# Add the reset request
+
+## Requirement
+
+Accept a reset request for an account and send one reset token.
+
+## Criterion
+
+A valid token permits one reset.
 ```
 
 ## retirement
@@ -642,24 +672,20 @@ A retirement preserves four things.
 
 A retirement never reaches a node that holds an attempt.
 An import retirement requires the import condition on every node that the retirement modifies.
-The condition covers the retired node and the parent whose child set changes.
+The condition covers the retired node.
 It also covers every dependent whose edges change.
 Each check requires `Pending` or `Available` and an attempt that reads 0.
-The import condition of a task is the condition of its objective.
-A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
-This rule covers a create, an update and a retirement of a task.
 One failed check aborts the whole import with no effect.
 The import that retires a node removes every current inbound reference to that node.
-A retirement removes the node from the current child set that the readiness condition reads.
 A preview confirms every retirement before the import applies.
 
 Take the import set above, and drop the file `add-reset-token-expiry.md`.
-The objective of that task holds `Available`, and its attempt reads 0.
-The next import retires that task when the import condition holds.
-The assessment and the evidence of that task stay retrievable.
+That file holds a task, so the import retires no node.
+The node of that task holds `Available`, and its attempt reads 0.
+The import writes the next revision of "Add password reset" without that task.
 
-A human retires `add-recovery-codes.md`, an objective with two tasks, through the node API.
-The retirement set holds that objective and its two tasks.
+A human retires `add-recovery-codes.md`, a `change` node with two tasks, through the node API.
+The retirement set holds that node, and its two tasks leave the work of the mission with it.
 `add-recovery-email.md` holds `Pending` and depends on `add-recovery-codes.md`, so the retirement fails until the human forces it.
 The forced retirement removes that dependency.
 `add-recovery-email.md` moves to `Available` when it has no other unmet dependency.
@@ -671,10 +697,10 @@ The human deletes the `id` line and imports again, and the import creates a new 
 ## retirement set
 
 The nodes that one retirement retires.
-For a node API retirement, the set holds the named node and every current descendant.
+For a node API retirement, the set holds the named node.
 For an import, the set holds every current node that the import set omits.
 The term names no closed set.
-When a human retires `add-recovery-codes.md` through the node API, the set holds that objective and its two tasks.
+When a human retires `add-recovery-codes.md` through the node API, the set holds that node alone.
 
 ## delivery admission
 
