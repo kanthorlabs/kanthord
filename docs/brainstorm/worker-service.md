@@ -551,6 +551,7 @@ The tested input names every commit, one per binding.
 An `examine` node that names no repository binding keeps the evidence-placement rule.
 For an `implement` node whose evidence names no repository snapshot, the reviewer also uses that rule.
 Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
+For an `examine` node with repository bindings, the reviewer places the produced evidence in the `evidence` directory of the workspace, outside the agent root.
 The reviewer execution code, never the agent, runs the verifications of the pinned revision from the agent root.
 The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
 The assessment names that evidence in its evidence set.
