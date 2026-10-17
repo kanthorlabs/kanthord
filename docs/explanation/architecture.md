@@ -243,12 +243,12 @@ flowchart TB
 ## Component boundaries that must remain explicit
 
 - **Project and Mission:** Mission is mandatory project content. Bindings allocate independently existing resources, never the mission. Mission continues to own its record schemas and operations.
-- **Graph and records:** The Mission graph contains initiatives, objectives and tasks. Revisions, attempts, criteria, evidence, external objects, assessments and outcomes remain distinct records. Only initiatives and objectives are scheduled; tasks run inside an execution.
+- **Graph and records:** The Mission graph holds nodes and their dependency edges. An `implement` node holds its tasks. Revisions, attempts, criteria, evidence, external objects, assessments and outcomes remain distinct records. Only nodes are scheduled; tasks run inside an execution.
 - **Queue and claim:** Queue order suggests work. The atomic claim operation rechecks admission and creates the execution record and lease. A waiting node holds no job and keeps no instance busy.
 - **Registration and claim:** Worker owns runtime identities and registration heartbeat. Scheduler owns execution claims and leases. Neither a registration nor a healthcheck is a claim.
 - **Agents and tools:** The prompt composer provides instructions, not permissions. Native agents use model and repository connectors; MCP exposes permitted platform reads and the controlled action tool for external reviewers.
 - **Acquisition and interpretation:** Intake owns webhook/poll/stream transport. [Repository platform implementations][repository-platform] decode platform payloads. Scheduler admission owns their business effects.
-- **Evidence and telemetry:** Mission evidence supports assessment. Tracking telemetry explains behavior and may expire. Operational logs are a third, separate facility.
+- **Evidence and telemetry:** Mission evidence supports assessment. Tracking telemetry explains behavior and expires at the end of its retention. Operational logs are a third, separate facility.
 
 ## Persistence and deployment
 

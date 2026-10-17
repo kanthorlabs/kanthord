@@ -265,7 +265,7 @@ Each method uses the session in its own way:
 
 - **Steps** (`coder@1` with `swe@1`). The agent works on each task, and the worker commits, verifies and asks for a judgement. [How the coder@1 worker works](coder-worker.md#tasks-step-7) shows the loop.
 - **Evaluation** (`reviewer@1` with `re@1`). The worker runs the verification commands first. A failure ends the evaluation without the agent. On success, the agent receives the evidence and returns a JSON judgement.
-- **Initiative report** (`coder@1` with `swe@1`). When every objective of an initiative ends, the agent writes a report from the objectives, the outcomes and the evidence. The worker stores the report as evidence.
+- **Examine** (`coder@1` with `swe@1`). The agent checks out the base-branch head of each repository binding of the node. It runs tools and the verifications, and reads the outcome and the evidence of each direct dependency. It writes its findings as produced evidence.
 
 ### Budget
 

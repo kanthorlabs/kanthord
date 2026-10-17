@@ -4,7 +4,7 @@
 
 ## Function description
 
-An assessment records a conclusion about the criterion of a runnable node for one attempt. A runnable node is an initiative or an objective.
+An assessment records a conclusion about the criterion of a node for one attempt.
 
 - `assessment list` returns one page of the assessments of a node. A human JWT is required.
 - `assessment get` returns one assessment. A human JWT is required.
@@ -14,7 +14,7 @@ An execution writes an assessment through `assessment submit`. A human control, 
 
 Each read of an execution assessment computes its currency at read time. An assessment is current when three conditions hold:
 
-1. Its context matches: the pinned revision, the named evidence and, for an initiative, the child outcomes are still current.
+1. Its context matches: the pinned revision, the named evidence and, for an `examine` node, the dependency outcomes are still current. The nodes of `dependency_outcome_ids` equal the direct dependencies of the node, and each named outcome is the current outcome of its node.
 2. No later human assessment in the same attempt supersedes it.
 3. It is the latest execution assessment in the attempt that meets conditions 1 and 2.
 
@@ -24,6 +24,19 @@ A submit can close the attempt. When the new assessment is current, two cases cl
 - The result is `success`, and the pinned revision has no required external action. The node moves to `Completed`.
 
 A closure ends the live claim, closes the attempt and writes an outcome. The outcome names the landed-commit evidence of the attempt. A `success` result with required external actions writes no outcome. The attempt stays open for those actions. After each accepted submit, the server wakes the scheduler of the project.
+
+### Fix-node proposals
+
+The submit of an `undetermined` execution assessment of an `examine` node takes at most 10 fix-node proposals in `proposals`. Each proposal names one defect inside a completed direct dependency with `work: implement`. The submit closes the attempt, moves the `examine` node to `Blocked` and records each proposal in the same transaction.
+
+- `proposal list` returns one page of the proposals of a proposer. `--attempt` selects the proposals of one attempt.
+- `proposal approve` creates an `implement` node with the one task of the proposal and adds the dependency of the proposer on the new node. The same transaction unblocks the proposer into a new attempt and sets `created_node_id` and `approved_at` of the proposal.
+- The new node takes `bindings` and `requires` from the current revision of `dependency_id`. The proposer routes to `Pending` until the new node reaches `Completed`.
+- `proposal approve` answers `{ created, proposer }`. `created` is the [node change result](node.md#node-change-result) of the new node, and `proposer` is the [control result](node-control.md) of the unblock.
+- A proposer that is not `Blocked` in the attempt of the proposal fails with `409 mission.node.state_conflict`. An approved proposal fails with `409 mission.proposal.already_approved`. A new unmatched pair fails with `409 mission.node.requires_unmatched`.
+- A human rejects a proposal with `node unblock` or `node discard` of the proposer.
+
+A proposal record holds `id`, `node_id` of the proposer, `attempt`, `assessment_id`, `content`, `created_node_id`, `approved_at` and `created_at`. `content` holds `dependency_id`, `name`, `requirement`, `criterion` and `task`. `task` holds `name`, `requirement`, `criterion` and a nonempty `verifications` list. `created_node_id` and `approved_at` are `null` until the approval.
 
 The read operations change nothing. Each list call reads one page. The CLI does not follow `next_cursor`.
 
@@ -43,8 +56,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
       "attempt": 1,
       "node_revision": 3,
       "evidence_ids": ["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],
-      "child_outcome_ids": [],
-      "child_node_ids": [],
+      "dependency_outcome_ids": [],
       "result": "success",
       "rationale": "All verification commands passed on the tested commit.",
       "tested_input": {
@@ -59,6 +71,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
         "name": "worker-a"
       },
       "created_at": 1791398400000,
+      "dependency_node_ids": [],
       "currency": {
         "current": true,
         "context_matches": true,
@@ -86,30 +99,30 @@ The API returns HTTP `200` with one `Assessment`. The CLI writes it as one JSON 
 
 ### `Assessment`
 
-| Property            | Type                         | Purpose                                                                                         |
-| ------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------- |
-| `id`                | `assessment_<ulid>`          | Identity of the assessment.                                                                     |
-| `node_id`           | `node_<ulid>`                | Assessed node.                                                                                  |
-| `execution_id`      | `execution_<ulid>` or `null` | Execution that submitted the assessment; `null` for a human assessment.                         |
-| `attempt`           | nonnegative safe integer     | Attempt of the assessment.                                                                      |
-| `node_revision`     | positive safe integer        | Node revision that the assessment judges.                                                       |
-| `evidence_ids`      | array of `evidence_<ulid>`   | Evidence that the assessment weighs. A delete of an evidence removes its identity here.         |
-| `child_outcome_ids` | array of `outcome_<ulid>`    | Child objective outcomes that an initiative assessment weighs.                                  |
-| `child_node_ids`    | array of `node_<ulid>`       | Nodes of those child outcomes, sorted.                                                          |
-| `result`            | string                       | `success`, `criterion-not-met` or `undetermined`.                                               |
-| `rationale`         | string                       | Reason for the result.                                                                          |
-| `tested_input`      | `TestedInput` or `null`      | Input that the verification tested; `null` for a human assessment.                              |
-| `actor`             | `Actor`                      | `execution` actor, or `human` actor for a human assessment. See [attempts](attempt.md#attempt). |
-| `created_at`        | Unix milliseconds            | Time of the assessment.                                                                         |
-| `currency`          | `Currency` or `null`         | Read-time currency; `null` for a human assessment.                                              |
-| `worker_version`    | string or `null`             | Worker name of the execution; `null` for a human assessment.                                    |
+| Property                 | Type                         | Purpose                                                                                                        |
+| ------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`                     | `assessment_<ulid>`          | Identity of the assessment.                                                                                    |
+| `node_id`                | `node_<ulid>`                | Assessed node.                                                                                                 |
+| `execution_id`           | `execution_<ulid>` or `null` | Execution that submitted the assessment; `null` for a human assessment.                                        |
+| `attempt`                | nonnegative safe integer     | Attempt of the assessment.                                                                                     |
+| `node_revision`          | positive safe integer        | Node revision that the assessment judges.                                                                      |
+| `evidence_ids`           | array of `evidence_<ulid>`   | Evidence that the assessment weighs. A delete of an evidence removes its identity here.                        |
+| `dependency_outcome_ids` | array of `outcome_<ulid>`    | Current outcomes of the direct dependencies that an `examine` assessment weighs; `[]` for an `implement` node. |
+| `dependency_node_ids`    | array of `node_<ulid>`       | Nodes of those dependency outcomes, sorted.                                                                    |
+| `result`                 | string                       | `success`, `criterion-not-met` or `undetermined`.                                                              |
+| `rationale`              | string                       | Reason for the result.                                                                                         |
+| `tested_input`           | `TestedInput` or `null`      | Input that the verification tested; `null` for a human assessment.                                             |
+| `actor`                  | `Actor`                      | `execution` actor, or `human` actor for a human assessment. See [attempts](attempt.md#attempt).                |
+| `created_at`             | Unix milliseconds            | Time of the assessment.                                                                                        |
+| `currency`               | `Currency` or `null`         | Read-time currency; `null` for a human assessment.                                                             |
+| `worker_version`         | string or `null`             | Worker name of the execution; `null` for a human assessment.                                                   |
 
 `Currency` holds these properties:
 
 | Property           | Type             | Purpose                                                                   |
 | ------------------ | ---------------- | ------------------------------------------------------------------------- |
 | `current`          | boolean          | `true` when the other three checks are all `true`.                        |
-| `context_matches`  | boolean          | The pinned revision, evidence and child outcomes still match.             |
+| `context_matches`  | boolean          | The pinned revision, evidence and dependency outcomes still match.        |
 | `authority_admits` | boolean          | No later human assessment in the attempt supersedes this assessment.      |
 | `order_selected`   | boolean          | This assessment is the latest admitted execution assessment.              |
 | `reasons`          | array of strings | One fixed sentence for each failed check; empty when `current` is `true`. |
@@ -161,29 +174,28 @@ Identity formats follow the [identity reference](../identities.md). Timestamps a
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                              | Commands      | Meaning                                                                                                                                                       |
-| ----------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`       | All           | Absent, invalid or expired token. A machine token on `list` or `get`, or a human token on `submit`.                                                           |
-| `400 gateway.request.validation_failed`         | All           | Invalid path, query or body. On `submit`, details name `rationale`, `evidence_ids`, `child_outcome_ids`, `tested_input` or `result` when a submit rule fails. |
-| `400 gateway.request.unexpected_body`           | `list`, `get` | The request carries a body.                                                                                                                                   |
-| `400 system.pagination.cursor_invalid`          | `list`        | The `cursor` value is not a cursor that this operation issued.                                                                                                |
-| `404 mission.node.not_found`                    | `list`        | The node does not exist.                                                                                                                                      |
-| `400 mission.node.control_task`                 | `list`        | The node is a task.                                                                                                                                           |
-| `404 mission.record.not_found`                  | `get`         | The assessment does not exist.                                                                                                                                |
-| `403 gateway.registration.required`             | `submit`      | The machine identity holds no live worker registration.                                                                                                       |
-| `403 gateway.invocation.execution_proof_failed` | `submit`      | `execution_id` is not a live claim of this registration.                                                                                                      |
-| `415 gateway.request.unsupported_media_type`    | `submit`      | The body is not `application/json`.                                                                                                                           |
-| `413 gateway.request.body_too_large`            | `submit`      | The body exceeds 10 MiB.                                                                                                                                      |
-| `400 gateway.idempotency.invalid_key`           | `submit`      | Absent or malformed idempotency key.                                                                                                                          |
-| `409 gateway.idempotency.conflict`              | `submit`      | Conflict on the reuse of an idempotency key.                                                                                                                  |
-| `409 scheduler.execution.not_running`           | `submit`      | The claim of the execution is no longer live.                                                                                                                 |
-| `409 mission.execution.context_mismatch`        | `submit`      | The route node, `execution_id`, `attempt` or `node_revision` differs from the claim. Details name the `field`.                                                |
-| `409 mission.execution.claim_not_evaluation`    | `submit`      | The node is not in `Evaluating`.                                                                                                                              |
-| `409 mission.assessment.evidence_unpublished`   | `submit`      | A named evidence holds an unpublished asset.                                                                                                                  |
-| `409 mission.assessment.verification_failed`    | `submit`      | A `success` result does not name exactly one verification that covers and passes the required commands.                                                       |
-| `400 mission.evidence.binding_mismatch`         | `submit`      | A repository address in `tested_input` names a binding that does not match the node. Details hold `binding_id`.                                               |
-| `409 mission.node.action_unresolved`            | `submit`      | A `success` result that closes the attempt meets an unresolved external request. Details hold `requirement_keys`.                                             |
-| `504 gateway.invocation.timeout`                | All           | The operation did not complete in 30 seconds.                                                                                                                 |
+| HTTP status / code                              | Commands      | Meaning                                                                                                                                                                         |
+| ----------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`       | All           | Absent, invalid or expired token. A machine token on `list` or `get`, or a human token on `submit`.                                                                             |
+| `400 gateway.request.validation_failed`         | All           | Invalid path, query or body. On `submit`, details name `rationale`, `evidence_ids`, `dependency_outcome_ids`, `tested_input`, `proposals` or `result` when a submit rule fails. |
+| `400 gateway.request.unexpected_body`           | `list`, `get` | The request carries a body.                                                                                                                                                     |
+| `400 system.pagination.cursor_invalid`          | `list`        | The `cursor` value is not a cursor that this operation issued.                                                                                                                  |
+| `404 mission.node.not_found`                    | `list`        | The node does not exist.                                                                                                                                                        |
+| `404 mission.record.not_found`                  | `get`         | The assessment does not exist.                                                                                                                                                  |
+| `403 gateway.registration.required`             | `submit`      | The machine identity holds no live worker registration.                                                                                                                         |
+| `403 gateway.invocation.execution_proof_failed` | `submit`      | `execution_id` is not a live claim of this registration.                                                                                                                        |
+| `415 gateway.request.unsupported_media_type`    | `submit`      | The body is not `application/json`.                                                                                                                                             |
+| `413 gateway.request.body_too_large`            | `submit`      | The body exceeds 10 MiB.                                                                                                                                                        |
+| `400 gateway.idempotency.invalid_key`           | `submit`      | Absent or malformed idempotency key.                                                                                                                                            |
+| `409 gateway.idempotency.conflict`              | `submit`      | Conflict on the reuse of an idempotency key.                                                                                                                                    |
+| `409 scheduler.execution.not_running`           | `submit`      | The claim of the execution is no longer live.                                                                                                                                   |
+| `409 mission.execution.context_mismatch`        | `submit`      | The route node, `execution_id`, `attempt` or `node_revision` differs from the claim. Details name the `field`.                                                                  |
+| `409 mission.execution.claim_not_evaluation`    | `submit`      | The node is not in `Evaluating`.                                                                                                                                                |
+| `409 mission.assessment.evidence_unpublished`   | `submit`      | A named evidence holds an unpublished asset.                                                                                                                                    |
+| `409 mission.assessment.verification_failed`    | `submit`      | A `success` result does not name exactly one verification that covers and passes the required commands.                                                                         |
+| `400 mission.evidence.binding_mismatch`         | `submit`      | A repository address in `tested_input` names a binding that does not match the node. Details hold `binding_id`.                                                                 |
+| `409 mission.node.action_unresolved`            | `submit`      | A `success` result that closes the attempt meets an unresolved external request. Details hold `requirement_keys`.                                                               |
+| `504 gateway.invocation.timeout`                | All           | The operation did not complete in 30 seconds.                                                                                                                                   |
 
 The CLI checks some input before it sends a request. Each local failure exits `1` and sends no request.
 
@@ -267,18 +279,19 @@ To read the next page, send the `next_cursor` value as the `cursor` query parame
 | `Idempotency-Key` | Yes      | Canonical ULID; retain it for retries of that request.                |
 | `Content-Type`    | Yes      | `application/json`.                                                   |
 
-| Body field          | Type                                             | Rule                                                                                                                                                                                                                                                             |
-| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `execution_id`      | `execution_<ulid>`                               | Required. The live execution; the Gateway proves it against the caller registration.                                                                                                                                                                             |
-| `attempt`           | positive safe integer                            | Required. Equal to the claimed attempt.                                                                                                                                                                                                                          |
-| `node_revision`     | positive safe integer                            | Required. Equal to the pinned revision of the claim.                                                                                                                                                                                                             |
-| `evidence_ids`      | array of unique `evidence_<ulid>`                | Required. Each evidence belongs to this node and attempt, with every asset published.                                                                                                                                                                            |
-| `child_outcome_ids` | array of unique `outcome_<ulid>`                 | Required. Empty for an objective. For an initiative, exactly the current outcomes of its current child objectives.                                                                                                                                               |
-| `result`            | `success`, `criterion-not-met` or `undetermined` | Required.                                                                                                                                                                                                                                                        |
-| `rationale`         | nonblank string                                  | Required. At most `mission.text_max_bytes` UTF-8 bytes, 32768 by default.                                                                                                                                                                                        |
-| `tested_input`      | `TestedInput`                                    | Required. An objective takes one address; a repository address names the repository binding of the pinned revision. An initiative with child repository bindings takes one repository address for each repository; otherwise it takes one nonrepository address. |
+| Body field               | Type                                             | Rule                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `execution_id`           | `execution_<ulid>`                               | Required. The live execution; the Gateway proves it against the caller registration.                                                                                                                                                                                                                     |
+| `attempt`                | positive safe integer                            | Required. Equal to the claimed attempt.                                                                                                                                                                                                                                                                  |
+| `node_revision`          | positive safe integer                            | Required. Equal to the pinned revision of the claim.                                                                                                                                                                                                                                                     |
+| `evidence_ids`           | array of unique `evidence_<ulid>`                | Required. Each evidence belongs to this node and attempt, with every asset published.                                                                                                                                                                                                                    |
+| `dependency_outcome_ids` | array of unique `outcome_<ulid>`                 | Required. Empty for an `implement` node. For an `examine` node, exactly the current outcome of each direct dependency.                                                                                                                                                                                   |
+| `result`                 | `success`, `criterion-not-met` or `undetermined` | Required.                                                                                                                                                                                                                                                                                                |
+| `rationale`              | nonblank string                                  | Required. At most `mission.text_max_bytes` UTF-8 bytes, 32768 by default.                                                                                                                                                                                                                                |
+| `tested_input`           | `TestedInput`                                    | Required. A node with one repository binding takes one repository address of that binding, or one nonrepository address. A node with two or more repository bindings takes one repository address for each binding, in binding order. A node with no repository binding takes one nonrepository address. |
+| `proposals`              | array of `ProposalContent`                       | Optional, `[]` by default, at most 10 items. Only an `examine` node with the result `undetermined` takes a nonempty list. Each `dependency_id` names a current direct dependency with `work: implement`.                                                                                                 |
 
-The required verification commands are the verifications of the pinned revision. For an objective, they also include the verifications of each task in that revision. A verification covers them when its results name exactly those commands. It passes when every exit code is `0`.
+The required verification commands are the verifications of the pinned revision. For an `implement` node, they also include the verifications of each task in that revision. A verification covers them when its results name exactly those commands. It passes when every exit code is `0`.
 
 | `result`            | Verification rule                                                                                                       |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -291,7 +304,7 @@ curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8
   -H 'Authorization: Bearer <machine-jwt>' \
   -H 'Idempotency-Key: 01M4C5G6DGWEVZYSPETSQR65JH' \
   -H 'Content-Type: application/json' \
-  -d '{"execution_id":"execution_01M4C5G6BP0355Z52M6JCYZCSK","attempt":1,"node_revision":3,"evidence_ids":["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],"child_outcome_ids":[],"result":"success","rationale":"All verification commands passed on the tested commit.","tested_input":{"kind":"repository","binding_id":"binding_01M4C5G6BP5EWTVTTXFH1R25MC","commit":"4b825dc642cb6eb9a060e54bf8d69288fbee4904"}}'
+  -d '{"execution_id":"execution_01M4C5G6BP0355Z52M6JCYZCSK","attempt":1,"node_revision":3,"evidence_ids":["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],"dependency_outcome_ids":[],"result":"success","rationale":"All verification commands passed on the tested commit.","tested_input":{"kind":"repository","binding_id":"binding_01M4C5G6BP5EWTVTTXFH1R25MC","commit":"4b825dc642cb6eb9a060e54bf8d69288fbee4904"}}'
 ```
 
 The Gateway keeps idempotency records in process memory for `gateway.idempotency_ttl` seconds, 86400 by default. A repeat of the same key, caller and body replays the recorded answer, failures included.
@@ -315,9 +328,9 @@ kanthord mission assessment list <node-id> [--attempt <attempt>] [--limit <count
 kanthord mission assessment list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --attempt 1
 ```
 
-| Positional argument | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `<node-id>`         | Required `node_<ulid>` of a runnable node. |
+| Positional argument | Purpose                 |
+| ------------------- | ----------------------- |
+| `<node-id>`         | Required `node_<ulid>`. |
 
 | Option                | Default / resolution | Purpose                                              |
 | --------------------- | -------------------- | ---------------------------------------------------- |

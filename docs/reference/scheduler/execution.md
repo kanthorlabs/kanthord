@@ -14,11 +14,11 @@ Each `execution list` call reads one page. The CLI does not follow `next_cursor`
 
 `execution release` accepts only an execution that is live and that belongs to the runtime identity of the caller. The gateway proves this before the idempotency check and before the handler. The release transaction checks it again. The Mission Service then applies the release rule of the node state:
 
-| Node state   | `further_work` | Requirement                                                                                                         | Node state after release |
-| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `Executing`  | `false`        | The execution has evidence; otherwise `obligation` is `evidence`.                                                   | `Waiting`                |
-| `Executing`  | `true`         | None.                                                                                                               | `Available`              |
-| `Evaluating` | Either value   | A current successful assessment; otherwise `assessment`. No eligible action without a request; otherwise `request`. | `External.Requested`     |
+| Node state   | `further_work` | Requirement                                                                                                                                                                                                               | Node state after release |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `Executing`  | `false`        | A published evidence of the execution: for an `implement` node, a `repository` asset of the repository binding of the pinned revision; for an `examine` node, one `produced` asset. Otherwise `obligation` is `evidence`. | `Waiting`                |
+| `Executing`  | `true`         | None.                                                                                                                                                                                                                     | `Available`              |
+| `Evaluating` | Either value   | A current successful assessment; otherwise `assessment`. No eligible action without a request; otherwise `request`.                                                                                                       | `External.Requested`     |
 
 The release body can carry a `stop`, which tells why the execution ended early. A `stop` requires `further_work: true`. A `stop` with a reason other than `budget_end` counts as a failure toward `mission.consecutive_failure_limit`. A `budget_end` stop counts toward `mission.further_work_limit`. A release without a `budget_end` stop resets that count. [ERD 2](../erd/02-execution.md) holds the exact count rules.
 

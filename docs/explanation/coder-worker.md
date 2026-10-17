@@ -2,23 +2,23 @@
 
 [Explanations](README.md)
 
-`coder@1` is the native worker that does the work of an objective. It drives one LLM agent, `swe@1`, in a git checkout until every task of the objective passes its verifications and meets its criterion. It then pushes the node branch and hands the objective to `reviewer@1`.
+`coder@1` is the native worker that does the work of an `implement` node. It drives one LLM agent, `swe@1`, in a git checkout until every task of the node passes its verifications and meets its criterion. It then pushes the node branch and hands the node to `reviewer@1`.
 
 Read [How a worker works](worker.md) first. That page defines the terms of this page: node, attempt, claim, execution, release, evidence and assessment.
 
-| Property        | Value                                                                                                                    |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Method          | `steps`                                                                                                                  |
-| Agent           | `swe@1`                                                                                                                  |
-| Claims          | An objective or an initiative in state `Available`                                                                       |
-| Default budget  | 200 agent turns and 2 hours of wall time for each execution                                                              |
-| Repository      | The repository binding of the objective, after [binding inheritance](../reference/mission/import.md#binding-inheritance) |
-| Git branch      | The node branch `kanthord/<node_id>`                                                                                     |
-| After a success | The node moves to `Waiting`, and `reviewer@1` evaluates the whole objective                                              |
+| Property        | Value                                                                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Method          | `steps`                                                                                                                                   |
+| Agent           | `swe@1`                                                                                                                                   |
+| Claims          | An `implement` node or an `examine` node in state `Available`                                                                             |
+| Default budget  | 200 agent turns and 2 hours of wall time for each execution                                                                               |
+| Repository      | The one repository binding that the `implement` node names, under [bindings of a node](../reference/mission/import.md#bindings-of-a-node) |
+| Git branch      | The node branch `kanthord/<node_id>`                                                                                                      |
+| After a success | The node moves to `Waiting`, and `reviewer@1` evaluates the whole node                                                                    |
 
 ## In short
 
-- One execution of `coder@1` works on one objective. It can finish the objective, or stop at the budget and leave the rest to the next execution.
+- One execution of `coder@1` works on one `implement` node. It can finish the node, or stop at the budget and leave the rest to the next execution.
 - All work goes to the node branch. The node branch, the records of the Mission Service and a local judgement cache are the only memory between two executions.
 - At the start, the worker checks which tasks are already done, so a new execution never redoes finished work.
 - For each open task, `swe@1` edits files. The worker commits, runs the verification commands of the task and, when they pass, asks `swe@1` whether the criterion is met.
@@ -47,7 +47,7 @@ A task is complete when two conditions are true: every verification of the task 
 
 ## The execution at a glance
 
-An execution of an objective has four phases and 11 steps. An initiative has no tasks, so `coder@1` writes a report instead, as [An initiative](#an-initiative-the-report) explains.
+An execution of an `implement` node has four phases and 11 steps. An `examine` node has no tasks, so `coder@1` writes a report instead, as [An examine node](#an-examine-node-the-report) explains.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
@@ -56,12 +56,12 @@ flowchart TB
     accDescr: Four phases. Prepare reads the revision and the prior rationale, prepares the workspace and opens swe@1. Start merges the base branch and checks every task. Tasks runs each pending task. Finish merges the base branch again, pushes, submits the head commit and releases the node to Waiting.
     claim(["Claim: node Available → Executing"]) --> s1
     subgraph prepare ["Prepare"]
-        s1["<b>1</b> Read the pinned revision"] --> kind{"Node has tasks?"}
-        kind -- yes --> s2["<b>2</b> Read the prior rationale"]
+        s1["<b>1</b> Read the pinned revision"] --> kind{"Work of the node?"}
+        kind -- implement --> s2["<b>2</b> Read the prior rationale"]
         s2 --> s3["<b>3</b> Prepare the workspace<br/>on the node branch"]
         s3 --> s4["<b>4</b> Open swe@1"]
     end
-    kind -- "no: initiative" --> report(["Initiative report"])
+    kind -- examine --> report(["Examine report"])
     subgraph start ["Start"]
         s5["<b>5</b> Merge origin/&lt;base_branch&gt;"]
         s5 --> s6["<b>6</b> Start check:<br/>which tasks are pending?"]
@@ -94,7 +94,7 @@ flowchart TB
 
 ## Example: a run with no problem
 
-The objective `node_01JZ8Q0K4M6N8P0R2S4T6V8W0X` adds a health endpoint. Its base branch is `main`, and it has two tasks:
+The `implement` node `node_01JZ8Q0K4M6N8P0R2S4T6V8W0X` adds a health endpoint. Its base branch is `main`, and it has two tasks:
 
 | Task                                | Criterion                                      | Verifications                    |
 | ----------------------------------- | ---------------------------------------------- | -------------------------------- |
@@ -158,7 +158,7 @@ The sections below explain each phase, and then every way that a run can differ 
 
 ## Prepare: steps 1 to 4
 
-**Step 1** reads the node revision that the attempt pins. The revision holds the objective and its tasks. A node with no task list is an initiative.
+**Step 1** reads the node revision that the attempt pins. The revision holds the content of the node, its work and its tasks. The work selects the form of the method: `implement` or `examine`. An `implement` node with no task is its own single work unit, and the worker treats the content of the node as its one task.
 
 **Step 2** reads the **prior rationale**: the reason why earlier work did not pass. The start check in step 6 uses it. The worker takes the first source that exists:
 
@@ -168,7 +168,7 @@ The sections below explain each phase, and then every way that a run can differ 
 
 On attempt 1 with no rework, no prior rationale exists.
 
-**Step 3** prepares the **workspace**, the git checkout of the objective:
+**Step 3** prepares the **workspace**, the git checkout of the `implement` node:
 
 - The workspace is `workspaces/<node_id>/<binding_id>/` in the state directory of the worker host. The worker reuses it when the host holds it, and clones the repository otherwise.
 - The worker then fetches and checks out the node branch of the attempt from the remote. It resets the checkout to the remote branch and removes untracked files, so every execution starts from the pushed state. When the remote holds no node branch yet, the worker creates it from the base branch.
@@ -192,7 +192,7 @@ The start check runs the verifications of each task on the head of the node bran
 
 | #   | Condition                                                                                                          | Result                                                                                                                                                                       |
 | --- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | In a rework, `swe@1` chose this task for a failed verification of the objective.                                   | Pending. The task starts with that failure as its revision instruction.                                                                                                      |
+| 0   | In a rework, `swe@1` chose this task for a failed verification of the node.                                        | Pending. The task starts with that failure as its revision instruction.                                                                                                      |
 | 1   | A verification of the task fails.                                                                                  | Pending. The task starts with its plain work prompt.                                                                                                                         |
 | 2   | The task was judged met at this same head, in this attempt and revision, and the prior rationale does not name it. | Skipped. The judgement still holds.                                                                                                                                          |
 | 3   | The prior rationale names the task.                                                                                | Pending. The task starts with the prior rationale as its revision instruction.                                                                                               |
@@ -200,7 +200,7 @@ The start check runs the verifications of each task on the head of the node bran
 
 The prior rationale **names** a task when its text holds the task id. `reviewer@1` lists each unmet task id in its assessment for this reason.
 
-A rationale can name no task. `re@1` names the objective id for an unmet objective criterion or a default-standard violation, and a failed-verification rationale names only the command. Then no task is pending by name. A task whose own verification fails is still pending at row 1. `swe@1` judges each other passing task at row 4, with the rationale as context. When `swe@1` judges every task met, no task is pending, and the execution releases the same head. The next review can then reach `mission.rework_limit` and move the node to `Blocked`.
+A rationale can name no task. `re@1` names the node id for an unmet node criterion or a default-standard violation, and a failed-verification rationale names only the command. Then no task is pending by name. A task whose own verification fails is still pending at row 1. `swe@1` judges each other passing task at row 4, with the rationale as context. When `swe@1` judges every task met, no task is pending, and the execution releases the same head. The next review can then reach `mission.rework_limit` and move the node to `Blocked`.
 
 The worker keeps its judgements in `judged-tasks.json` in the workspace. The file is a cache of the host: a fresh clone on another host has no file, so row 4 judges each passing task again.
 
@@ -224,7 +224,7 @@ flowchart TB
     class skip outcome;
 ```
 
-**A rework adds one check first.** A rework is an execution after a `criterion-not-met` assessment in the same attempt. The reviewer runs the verifications of the objective, not only those of the tasks, so a rework can fail on an objective command that no task owns. Before the task checks, the start check of a rework therefore runs the verifications of the objective once. When one fails, `swe@1` chooses the task that is most related to the failure. That task is pending, and its revision instruction holds the failure and the last 4 KiB of its output. An invalid choice selects the last task of the plan.
+**A rework adds one check first.** A rework is an execution after a `criterion-not-met` assessment in the same attempt. The reviewer runs the verifications of the node, not only those of the tasks, so a rework can fail on a node command that no task owns. Before the task checks, the start check of a rework therefore runs the verifications of the node once. When one fails, `swe@1` chooses the task that is most related to the failure. That task is pending, and its revision instruction holds the failure and the last 4 KiB of its output. An invalid choice selects the last task of the plan.
 
 ## Tasks: step 7
 
@@ -261,7 +261,7 @@ Each pass through the loop does these things:
 
 The worker guards the loop against an agent that makes no progress. After a failed verification, a revision that changes no file counts as unchanged. After the first unchanged revision, the worker verifies the head again. After the second unchanged revision in a row, it stops with `no_progress` before it verifies, because the same head gives the same result. A `no_progress` stop counts toward `mission.consecutive_failure_limit`. An agent commit also counts as unchanged, because the worker finds nothing to commit.
 
-`coder@1` holds no review of its own. The judgement of `swe@1` only ends the task loop. The review of `reviewer@1`, after the release, is the only review of the objective.
+`coder@1` holds no review of its own. The judgement of `swe@1` only ends the task loop. The review of `reviewer@1`, after the release, is the only review of the node.
 
 ## Finish: steps 8 to 11
 
@@ -273,7 +273,7 @@ The worker guards the loop against an agent that makes no progress. After a fail
 
 **Step 9** pushes the node branch. Every end after step 4 pushes, except a revocation. A stop before the workspace exists, for example `repository.node_branch.missing`, has nothing to push.
 
-**Step 10** submits the head commit of the node branch as the evidence of the objective. `reviewer@1` checks out exactly this commit.
+**Step 10** submits the head commit of the node branch as the evidence of the node. `reviewer@1` checks out exactly this commit.
 
 **Step 11** releases with `further_work: false`. The Mission Service moves the node to `Waiting`.
 
@@ -437,16 +437,16 @@ At step 8, `origin/main` holds a new commit. The merge has no conflict, so the w
 
 The human pauses the node during the work on the first task. After the next turn, the claim check reads a claim that is not `running`. The worker ends the execution as revoked. It does not push and does not release, because the claim is no longer its own.
 
-## An initiative: the report
+## An examine node: the report
 
-An initiative has no tasks and no node branch. `coder@1` claims an initiative only when every objective of the initiative is `Completed` or `Discarded`. The execution then does these steps:
+An `examine` node has no tasks and no node branch. `coder@1` claims it in `Available`, after every direct dependency is `Completed`. The execution then does these steps:
 
-1. It checks out the base branch of each repository of the objectives, in a fresh directory, one subdirectory for each repository binding.
-2. It runs the verifications of the initiative, for example an end-to-end suite.
-3. It sends `swe@1` the objectives, their outcomes, their evidence and the verification results, and asks for a report.
-4. It submits the report as evidence with the subject `Report on current objective outcomes`, and releases with `further_work: false`.
+1. It checks out the base-branch head of each repository binding that the node names, read-only, under `checkouts/<binding name>/` of a fresh directory. A node with no repository binding gets an empty directory.
+2. When the node names a repository binding, it runs the verifications of the node, for example an end-to-end suite.
+3. It sends `swe@1` the direct dependencies, their outcomes, their evidence and the verification results, and asks for its findings.
+4. It submits the findings as produced evidence with the subject `Report on current dependency outcomes`, and releases with `further_work: false`.
 
-When a human adds an open objective during the execution, the worker releases with `further_work: true` instead. `reviewer@1` then judges the initiative from the report and the outcomes.
+`reviewer@1` then judges the `examine` node from the report and the outcomes of its direct dependencies.
 
 ## Under the hood: how coder@1 drives pi
 
@@ -497,9 +497,9 @@ The worker process also writes one JSON log line to stderr for each task start, 
 
 ## Limits
 
-- **One review, at the objective.** `coder@1` judges each task itself. Only `reviewer@1` reviews the work, and only after the release.
-- **One repository.** An objective works on its one repository binding. Work in two repositories needs two objectives.
+- **One review, at the node.** `coder@1` judges each task itself. Only `reviewer@1` reviews the work, and only after the release.
+- **One repository.** An `implement` node names exactly one repository binding. Work in two repositories needs two `implement` nodes.
 - **No memory in the agent.** Each execution starts a new agent conversation. Only the node branch, the records of the Mission Service and the local `judged-tasks.json` carry over.
-- **A stalled objective pauses.** An execution that completes no task before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`. An initiative budget end releases with no stop and does not count.
+- **A stalled node pauses.** An execution that completes no task before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`. An `examine` budget end releases with no stop and does not count.
 - **The agent can use git.** `swe@1` has `bash`, and its commands run with the git and SSH configuration of the host. Nothing blocks a `git commit` or a `git push` by the agent. The worker does not depend on it: an agent commit leaves the worker nothing to commit, and after a failed verification that counts as an unchanged revision.
-- **Workspace reuse on one host.** The worker holds the workspace of an objective for one execution at a time. Today that hold covers the executions of one worker process only. Two worker processes on the same host share the `workspaces/` directory, so an execution can reuse a workspace in which a lost earlier execution of another process still runs a command.
+- **Workspace reuse on one host.** The worker holds the workspace of an `implement` node for one execution at a time. Today that hold covers the executions of one worker process only. Two worker processes on the same host share the `workspaces/` directory, so an execution can reuse a workspace in which a lost earlier execution of another process still runs a command.

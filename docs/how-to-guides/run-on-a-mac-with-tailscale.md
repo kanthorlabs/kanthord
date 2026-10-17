@@ -87,6 +87,28 @@ The command prints a human token on the terminal. See [auth jwt generate](../ref
 2. Keep the Endpoint value. The dashboard fills it with the address of the page.
 3. Paste the token, then select **Login**.
 
+## Run macOS nodes on this Mac
+
+A node that needs macOS names the trait `platform.macos` in its `requires` list. Only a worker binding with that trait claims the node. The node needs a match in `Available` and in `Waiting`, so give the trait to a `coder@1` binding and to a `reviewer@1` binding.
+
+1. Export the binding set of the project:
+
+   ```sh
+   kanthord project binding export <project-id> > bindings.json
+   ```
+
+2. In `bindings.json`, add `"traits": ["platform.macos"]` to the `config` of each worker binding whose instances run on this Mac.
+3. Apply the binding set:
+
+   ```sh
+   kanthord project binding apply <project-id> --file bindings.json
+   ```
+
+4. In the plan file of each node that needs macOS, add `requires: [platform.macos]` to the front matter.
+5. Import the plan. See [mission import](../reference/mission/import.md).
+
+Apply the traits before the import. An import that adds a node that no worker binding of the project matches fails with `mission.node.requires_unmatched`. See [project bindings](../reference/project/binding.md).
+
 ## Stop sharing the server
 
 ```sh

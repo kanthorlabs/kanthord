@@ -9,7 +9,7 @@ Read the jobs in the work queue of one project. The queue holds one job for each
 - `queue list` returns one page of jobs in queue order.
 - `queue peek` returns the first job in queue order, or `null` for an empty queue.
 
-Queue order is `priority` descending, then `job_id` ascending. A work pull uses the same order when it selects a job. A read removes no job, reserves no node and does not predict which instance claims a job.
+Queue order is `priority` descending, then `job_id` ascending. A work pull uses the same order when it selects a job. A read removes no job, reserves no node and does not predict which instance claims a job. A job whose node no worker binding of the project matches stays in the queue, and no claim selects it.
 
 Each `queue list` call reads one page. The CLI does not follow `next_cursor`. The list is a live view and holds no history.
 

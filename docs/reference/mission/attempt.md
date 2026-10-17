@@ -4,14 +4,14 @@
 
 ## Function description
 
-Read the attempt records of a runnable node and the required external actions of each attempt. A runnable node is an initiative or an objective. A task has no attempts.
+Read the attempt records of a node and the required external actions of each attempt. A task has no attempts.
 
 - `attempt list` returns one page of the attempts of a node, highest attempt first.
 - `attempt get` returns one attempt of a node.
 - `external-action list` returns one page of the required external actions across the attempts of a node.
 - `external-action get` returns one required external action of one attempt.
 
-An attempt pins one node revision. The server derives the required external actions of an attempt at read time from the repository bindings of that pinned revision. Each repository binding with a configured action yields one action. An initiative has no required external actions.
+An attempt pins one node revision. The server derives the required external actions of an attempt at read time from the repository bindings of that pinned revision. Each repository binding with a configured action yields one action. An `examine` node has no required external actions.
 
 An external-action record joins the frozen action with its request evidence and resolution. These reads do not inspect a platform. To read the request evidence, use [`mission evidence get`](evidence.md).
 
@@ -72,7 +72,7 @@ The answer is one `Attempt` record.
 | `attempt`                   | positive safe integer          | Attempt number. The first attempt is `1`.                                                                                                               |
 | `node_revision`             | positive safe integer          | Node revision that the attempt pins.                                                                                                                    |
 | `start_point`               | `base_branch` or `node_branch` | Branch that the work of the attempt starts from. Attempt 1 records `base_branch`. An unblock records the value that it names, `node_branch` by default. |
-| `required_external_actions` | array of `FrozenAction`        | Actions derived from the pinned revision, sorted by `key`. Empty for an initiative.                                                                     |
+| `required_external_actions` | array of `FrozenAction`        | Actions derived from the pinned revision, sorted by `key`. Empty for an `examine` node.                                                                 |
 | `opened_at`                 | Unix milliseconds              | Time that the attempt opened.                                                                                                                           |
 | `closed_at`                 | Unix milliseconds or `null`    | Time that the attempt closed; `null` while the attempt is open.                                                                                         |
 | `outcome_ids`               | array of `outcome_<ulid>`      | Outcomes of the attempt.                                                                                                                                |
@@ -161,7 +161,6 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 gateway.request.unexpected_body`     | All         | The request carries a body.                                                                      |
 | `400 system.pagination.cursor_invalid`    | Both `list` | The `cursor` value is not a cursor that this operation issued.                                   |
 | `404 mission.node.not_found`              | All         | The node does not exist.                                                                         |
-| `400 mission.node.control_task`           | All         | The node is a task. Details hold `node_id`.                                                      |
 | `404 mission.record.not_found`            | Both `get`  | The attempt does not exist, or the attempt has no required action with that key.                 |
 | `504 gateway.invocation.timeout`          | All         | The operation did not complete in 30 seconds.                                                    |
 
@@ -268,9 +267,9 @@ kanthord mission attempt list <node-id> [--limit <count>] [--cursor <cursor>] [-
 kanthord mission attempt list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --limit 20
 ```
 
-| Positional argument | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `<node-id>`         | Required `node_<ulid>` of a runnable node. |
+| Positional argument | Purpose                 |
+| ------------------- | ----------------------- |
+| `<node-id>`         | Required `node_<ulid>`. |
 
 | Option              | Default / resolution | Purpose                                   |
 | ------------------- | -------------------- | ----------------------------------------- |
@@ -289,7 +288,7 @@ kanthord mission attempt get node_01M4C5G6BNQQPFNM7M8W0GW1W4 1
 
 | Positional argument | Purpose                                            |
 | ------------------- | -------------------------------------------------- |
-| `<node-id>`         | Required `node_<ulid>` of a runnable node.         |
+| `<node-id>`         | Required `node_<ulid>`.                            |
 | `<attempt>`         | Required positive attempt number, for example `1`. |
 
 ### `external-action list`
@@ -302,9 +301,9 @@ kanthord mission external-action list <node-id> [--attempt <attempt>] [--limit <
 kanthord mission external-action list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --attempt 1
 ```
 
-| Positional argument | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `<node-id>`         | Required `node_<ulid>` of a runnable node. |
+| Positional argument | Purpose                 |
+| ------------------- | ----------------------- |
+| `<node-id>`         | Required `node_<ulid>`. |
 
 | Option                | Default / resolution | Purpose                                              |
 | --------------------- | -------------------- | ---------------------------------------------------- |
@@ -324,6 +323,6 @@ kanthord mission external-action get node_01M4C5G6BNQQPFNM7M8W0GW1W4 1 app.pull_
 
 | Positional argument | Purpose                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------- |
-| `<node-id>`         | Required `node_<ulid>` of a runnable node.                                                  |
+| `<node-id>`         | Required `node_<ulid>`.                                                                     |
 | `<attempt>`         | Required positive attempt number.                                                           |
 | `<action-key>`      | Required action key: a lower-case binding name, a dot, then `pull_request` or `merge_push`. |
