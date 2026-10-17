@@ -1,6 +1,5 @@
 ---
-kind: objective
-parent: todo-api.md
+work: change
 depends_on:
   - persistence.md
 bindings:

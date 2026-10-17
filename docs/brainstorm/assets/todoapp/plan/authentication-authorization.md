@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: authentication.md
+node: authentication.md
 bindings: []
 verifications:
   - node --test test/authentication-authorization.test.js
@@ -19,4 +18,4 @@ Mount explicit public and authenticated routers, with role checks after authenti
 - Header/body/query attempts to supply a role cannot override the stored account role. Tests include role escalation attempts.
 - Tests show role authorization reads current account state rather than trusting token content or a stale process-local role cache.
 - Shared authentication middleware exposes a server-derived user identity for later TODO routes, with a deny-by-default private-router pattern.
-- Tests send direct unauthenticated requests to every private route implemented in this objective.
+- Tests send direct unauthenticated requests to every private route implemented in this node.
