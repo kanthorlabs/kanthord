@@ -372,8 +372,9 @@ The file path is local input, not an evidence address.
    This operation requires execution access and a live claim for the node.
    The server checks the live claim, the storage bindings of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
-   The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check for that asset.
-   A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_unavailable`.
+   The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check in the open attempt of the node.
+   A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_exhausted`. `details` holds `{ node_id, attempt, bindings }`, and `bindings` lists the storage bindings that failed in the attempt.
+   503 `mission.evidence.storage_unavailable` answers only when no object storage is wired.
    It creates the evidence and one pending asset for each `object` asset, with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence asset id>`.
    The asset pins that storage binding revision in `storage_binding_id` of its `ObjectAddress`.
    The Intake Service signs a presigned PUT for that key with a lifetime of 1 hour through `intake.storage.put`, with the material that custody releases.
@@ -382,7 +383,7 @@ The file path is local input, not an evidence address.
    No transfer through the server proxies those bytes.
 3. The component calls `mission.evidence.asset.complete` under execution access with the asset identity and execution context.
    The server checks the live claim, and the Intake Service checks the object size and, when given, the checksum through `intake.storage.check`.
-   A check that finds a mismatch, finds no object or fails at the store prevents publication, and it records that binding as failed for that asset.
+   A check that finds a mismatch, finds no object or fails at the store prevents publication, and it records that binding as failed for the open attempt of the node.
    The server sets `published_at` of the asset only after those checks pass.
    The asset holds the object location, version when the store returns one, size, media type and optional SHA-256.
    The answer holds the asset identity and the `s3://` URI.
@@ -788,9 +789,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse an `implement` node with no repository binding with `mission.node.bindings_invalid`, accept an `examine` node with zero, one and two repository bindings, and take no binding from the project.
 - Tests refuse an `implement` evidence that misses a repository binding or names another binding with `mission.evidence.binding_mismatch`, at the submit and at the release, and accept one asset for each of two bindings.
 - Tests write a tested input list in binding order for a node with two repository bindings.
-- Tests skip a disabled storage binding, a removed storage binding, a binding that the signing call refuses and a binding with a failed upload check for that asset.
+- Tests skip a disabled storage binding, a removed storage binding, a binding that the signing call refuses and a binding with a failed upload check in the open attempt. Tests try every binding again in the next attempt.
 - Tests record a failed upload check for a mismatch, for a missing object and for a store failure.
-- Tests answer `mission.evidence.storage_unavailable` when no binding is left.
+- Tests answer 409 `mission.evidence.storage_exhausted` when no binding is left in the attempt.
+- Tests keep 503 `mission.evidence.storage_unavailable` when no object storage is wired.
 - Tests read and delete each asset through the binding that it pins.
 - Tests admit a `branch_push` address on the base branch of the binding on a `pull_request` request. They fold it to `pull_request_merged` with that landed commit.
 - Tests answer the import preview with the unmatched pairs of the probe transaction, and leave no write after the preview.
