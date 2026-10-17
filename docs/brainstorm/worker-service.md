@@ -550,9 +550,9 @@ An end-to-end suite lives in a repository of one of those bindings.
 The tested input names every commit, one per binding.
 An `examine` node that names no repository binding keeps the evidence-placement rule.
 For an `implement` node whose evidence names no repository snapshot, the reviewer also uses that rule.
-Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
+Under that rule, the reviewer places the produced evidence of the attempt in the workspace, which is the agent root.
 For every node whose evaluation checks out repositories, the reviewer places the produced evidence in the `evidence` directory of the workspace, outside the agent root.
-Each checkout stays an exact, clean copy, and the path of a placed asset stays relative to the agent root.
+Each checkout stays an exact, clean copy, and each asset path in the review bundle is relative to the agent root.
 The reviewer execution code, never the agent, runs the verifications of the pinned revision from the agent root.
 The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
 The assessment names that evidence in its evidence set.
