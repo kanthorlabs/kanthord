@@ -13,6 +13,7 @@ for copy in "$DESIGN"/*.md; do
 	fi
 done
 for source in "$FIXTURE"/*; do
+	[ -e "$source" ] || continue
 	name=$(basename -- "$source")
 	if [ ! -e "$DESIGN/$name" ]; then
 		echo "engine/src/apps/server/__fixtures__/todoapp/plan/$name has no design text in docs/brainstorm/assets/todoapp/plan. Delete the engine copy."
