@@ -237,7 +237,7 @@ The `credential.credential.in_use` details list the dependents:
 }
 ```
 
-The CLI exits `1` for every failure and writes one diagnostic line to stderr in the form `<code>: <message>`. A declared API failure of a read prints `<code>: request failed (HTTP <status>).` A declared API failure of a mutation prints `<code>: request failed (HTTP <status>); idempotency key <key>.` A transport failure, timeout or malformed response gives `cli.repository.credential.<command>.indeterminate`. A read diagnostic says `retry the command`. A mutation diagnostic says `retry with --idempotency-key <key>`. For `update-metadata`, `<command>` is `update_metadata`.
+The CLI exits `1` for every failure and writes a diagnostic line `<code>: <message>` to stderr. A failure whose `details` are not null adds the line `details: <compact JSON>`, as [CLI diagnostics](../errors.md#cli-diagnostics) states. A declared API failure of a read prints `<code>: request failed (HTTP <status>).` A declared API failure of a mutation prints `<code>: request failed (HTTP <status>); idempotency key <key>.` A transport failure, timeout or malformed response gives `cli.repository.credential.<command>.indeterminate`. A read diagnostic says `retry the command`. A mutation diagnostic says `retry with --idempotency-key <key>`. For `update-metadata`, `<command>` is `update_metadata`.
 
 | CLI code                                                             | Commands                               | Meaning                                                                            |
 | -------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
