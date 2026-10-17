@@ -27,7 +27,7 @@ A closure ends the live claim, closes the attempt and writes an outcome. The out
 
 ### Fix-node proposals
 
-An `undetermined` execution assessment of an `examine` node holds at most 10 fix-node proposals in `proposals`. Each proposal names one defect inside a completed direct dependency with `work: implement`. The submit closes the attempt, moves the `examine` node to `Blocked` and records each proposal in the same transaction.
+The submit of an `undetermined` execution assessment of an `examine` node takes at most 10 fix-node proposals in `proposals`. Each proposal names one defect inside a completed direct dependency with `work: implement`. The submit closes the attempt, moves the `examine` node to `Blocked` and records each proposal in the same transaction.
 
 - `proposal list` returns one page of the proposals of a proposer. `--attempt` selects the proposals of one attempt.
 - `proposal approve` creates an `implement` node with the one task of the proposal and adds the dependency of the proposer on the new node. The same transaction unblocks the proposer into a new attempt and sets `created_node_id` and `approved_at` of the proposal.

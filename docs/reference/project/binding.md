@@ -113,7 +113,7 @@ The schema accepts `follows` type `action_end_state` with a `binding` name, but 
 
 The Agent Service validates the effective configuration of each agent of the worker.
 
-A trait states a fact of the host of the instances, for example `platform.macos`. The [Scheduler match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match) admits a node for a worker binding only when the traits of the binding hold every key of the `requires` list of the node. Before and after its change, the apply reads the pairs of a node and a claimable state that no current worker binding covers. An apply that adds such a pair fails with `project.bindings.worker.node_unmatched`. A pair that exists before the apply refuses no apply. Configure the worker bindings of a project before the first import.
+A trait states a fact of the host of the instances, for example `platform.macos`. The [Scheduler match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match) admits a node for a worker binding only when its traits hold every key of the `requires` list of the node. Before and after its change, the apply reads the pairs of a node and a claimable state that no current worker binding covers. An apply that adds such a pair fails with `project.bindings.worker.node_unmatched`. A pair that exists before the apply refuses no apply. Configure the worker bindings of a project before the first import.
 
 An entry can name `fallback_configurations`: an array of at most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items. An entry can hold only this field; the default configuration is then the head of the chain. A named field, also `[]`, replaces the `fallback_configurations` of the enablement whole. An omitted field inherits them. `[]` means no fallback. Each item passes the validation of the default configuration. A repeated `agent_provider` and `model_identifier`, or an item with the `agent_provider` and `model_identifier` of the head of the entry, fails with `agent.configuration.fallback_duplicate`.
 
@@ -128,7 +128,7 @@ An entry can name `fallback_configurations`: an array of at most 7 complete `{ a
 | `prefix`     | string  | Required. Can be empty.                               |
 | `credential` | string  | Required. Name of a live credential of platform `s3`. |
 
-A node names zero or more storage bindings as an ordered list, and its uploads use the first working binding of that list. A node names every binding that it uses and takes no binding from the project. A node with no storage binding accepts only inline evidence content.
+A node names zero or more storage bindings as an ordered list. Its uploads use the first binding of that list that accepts the grant. A node names every binding that it uses and takes no binding from the project. A node with no storage binding accepts only inline evidence content.
 
 ## Expected response
 

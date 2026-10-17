@@ -12,6 +12,8 @@ An import replaces the whole plan of a mission in one transaction. The import se
 
 `mission import preview` validates an import set and reports its effect. It writes nothing and stores no receipt. `mission import apply` validates the same set again, checks the preview digest and the confirmed retirements, and then writes all changes atomically.
 
+An entry with the `id` of a retired node, of a task of a retired node, or of a task that an earlier write removed fails with `mission.import.retired_id`.
+
 The import set has one of two formats:
 
 - `markdown`: plan files `{ filename, content }`. The Mission service parses each file. The [mission export](mission.md#function-description) page shows the plan file format.
@@ -33,7 +35,7 @@ An `implement` node with no task file is its own single work unit. An `implement
 
 ### Bindings of a node
 
-A node names every binding that it uses. No node takes a binding from the project. The service resolves each binding name at write time and stores the resolved binding revision. A later change of the project moves no existing node. A node update or a [rebind](node.md#node-rebind) changes the stored bindings explicitly.
+A node names every binding that it uses. No node takes a binding from the project. The service resolves each binding name at write time and stores the resolved binding revision. A later change of the project moves no stored binding of a node. A node update or a [rebind](node.md#node-rebind) changes the stored bindings explicitly.
 
 The work of a node sets the count of each binding kind. A count outside the rule refuses the write with `mission.node.bindings_invalid`.
 
@@ -44,7 +46,7 @@ The work of a node sets the count of each binding kind. A count outside the rule
 
 - An `implement` node names exactly one repository binding. A second repository binding fails with `mission.node.bindings_invalid`.
 - An `examine` node changes none of its repository bindings. Its execution checks out the base-branch head of each one read-only.
-- The storage bindings of a node form an ordered upload list. An upload uses the first working storage binding of that list, under [evidence](evidence.md#object-upload).
+- The storage bindings of a node form an ordered upload list. An upload uses the first storage binding of that list that accepts the grant, under [evidence](evidence.md#object-upload).
 - A task names no binding. A task acts on the repository of its node.
 - A [mission export](mission.md#mission-export) writes the binding names of each node, so an exported plan names every binding explicitly.
 
@@ -106,9 +108,9 @@ The API returns HTTP `200` with the preview. A plan violation does not fail the 
 | `no_ops`                   | array of node IDs       | Kept nodes without a change.                                                                           |
 | `violations`               | array                   | `{ code, message, filename, node_id, details }` for each failed check. Empty when the import is valid. |
 
-The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.verification_uncovered`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing`, `mission.node.bindings_invalid`, `mission.node.filename_conflict` and `mission.node.requires_unmatched`.
+The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.verification_uncovered`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing`, `mission.node.bindings_invalid`, `mission.node.state_conflict` and `mission.node.requires_unmatched`.
 
-The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there. When the three stages pass, the preview runs the write steps of the apply and rolls them back. It then lists one `mission.node.requires_unmatched` violation for each node file with an added unmatched pair. That violation holds `details.claims`, and `node_id` is `null` for a created node.
+The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there. When the three stages pass, the preview runs the write steps of the apply and rolls them back. It then lists one `mission.node.requires_unmatched` violation for each node file with an added unmatched pair. That violation holds `details.claims`, and `node_id` is `null` for a created node, also in each claim.
 
 ### import apply
 
@@ -154,22 +156,24 @@ The CLI writes the result plus `idempotency_key` as one JSON line to stdout and 
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                           | Operation | Meaning                                                                                                                                                                                                                                                                             |
-| -------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`    | Both      | Absent, invalid or expired token, or a machine token.                                                                                                                                                                                                                               |
-| `415 gateway.request.unsupported_media_type` | Both      | `Content-Type` is not `application/json`.                                                                                                                                                                                                                                           |
-| `400 gateway.request.invalid_json`           | Both      | The body is not valid JSON with unique object members.                                                                                                                                                                                                                              |
-| `400 gateway.request.validation_failed`      | Both      | The body fails the schema, for example an unknown field.                                                                                                                                                                                                                            |
-| `413 gateway.request.body_too_large`         | Both      | The body exceeds 10 MiB.                                                                                                                                                                                                                                                            |
-| `400 gateway.idempotency.invalid_key`        | Apply     | Absent or malformed `Idempotency-Key`.                                                                                                                                                                                                                                              |
-| `409 gateway.idempotency.conflict`           | Apply     | The key belongs to another request, or its first request is still in progress.                                                                                                                                                                                                      |
-| `404 mission.mission.not_found`              | Both      | The mission ID is unknown.                                                                                                                                                                                                                                                          |
-| `409 mission.version.conflict`               | Both      | `mission_version` is stale; `details.current` holds the current version.                                                                                                                                                                                                            |
-| `400 mission.node.content_invalid`           | Both      | `reason` is blank or exceeds the text limit.                                                                                                                                                                                                                                        |
-| `400` or `409` with a violation code         | Apply     | The first violation of the preview. `409` for `mission.import.condition_failed`, `mission.import.terminal_change`, `mission.node.filename_conflict`, `mission.node.requires_unmatched` and `mission.node.state_conflict`, otherwise `400`. `details` adds `filename` and `node_id`. |
-| `409 mission.import.retirement_mismatch`     | Apply     | `preview_digest` or `confirmed_retirements` does not match the current preview.                                                                                                                                                                                                     |
-| `409 mission.node.claim_live`                | Apply     | A new dependency names a dependent with a live claim.                                                                                                                                                                                                                               |
-| `504 gateway.invocation.timeout`             | Both      | The operation exceeded 30 seconds. An apply can still complete.                                                                                                                                                                                                                     |
+| HTTP status / code                           | Operation | Meaning                                                                                                                                                                                                        |
+| -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`    | Both      | Absent, invalid or expired token, or a machine token.                                                                                                                                                          |
+| `415 gateway.request.unsupported_media_type` | Both      | `Content-Type` is not `application/json`.                                                                                                                                                                      |
+| `400 gateway.request.invalid_json`           | Both      | The body is not valid JSON with unique object members.                                                                                                                                                         |
+| `400 gateway.request.validation_failed`      | Both      | The body fails the schema, for example an unknown field.                                                                                                                                                       |
+| `413 gateway.request.body_too_large`         | Both      | The body exceeds 10 MiB.                                                                                                                                                                                       |
+| `400 gateway.idempotency.invalid_key`        | Apply     | Absent or malformed `Idempotency-Key`.                                                                                                                                                                         |
+| `409 gateway.idempotency.conflict`           | Apply     | The key belongs to another request, or its first request is still in progress.                                                                                                                                 |
+| `404 mission.mission.not_found`              | Both      | The mission ID is unknown.                                                                                                                                                                                     |
+| `409 mission.version.conflict`               | Both      | `mission_version` is stale; `details.current` holds the current version.                                                                                                                                       |
+| `400 mission.node.content_invalid`           | Both      | `reason` is blank or exceeds the text limit.                                                                                                                                                                   |
+| `400` or `409` with a violation code         | Apply     | The first violation of the preview. `409` for `mission.import.condition_failed`, `mission.import.terminal_change` and `mission.node.state_conflict`, otherwise `400`. `details` adds `filename` and `node_id`. |
+| `409 mission.node.requires_unmatched`        | Apply     | The import adds an unmatched pair; `details.claims` lists each pair as `{ node_id, revision, claim }`.                                                                                                         |
+| `409 mission.node.filename_conflict`         | Apply     | Another current node or task of the mission uses the file name; `details.filename` names it.                                                                                                                   |
+| `409 mission.import.retirement_mismatch`     | Apply     | `preview_digest` or `confirmed_retirements` does not match the current preview.                                                                                                                                |
+| `409 mission.node.claim_live`                | Apply     | A new dependency names a dependent with a live claim.                                                                                                                                                          |
+| `504 gateway.invocation.timeout`             | Both      | The operation exceeded 30 seconds. An apply can still complete.                                                                                                                                                |
 
 The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 

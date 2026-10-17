@@ -248,7 +248,7 @@ flowchart TB
 - **Registration and claim:** Worker owns runtime identities and registration heartbeat. Scheduler owns execution claims and leases. Neither a registration nor a healthcheck is a claim.
 - **Agents and tools:** The prompt composer provides instructions, not permissions. Native agents use model and repository connectors; MCP exposes permitted platform reads and the controlled action tool for external reviewers.
 - **Acquisition and interpretation:** Intake owns webhook/poll/stream transport. [Repository platform implementations][repository-platform] decode platform payloads. Scheduler admission owns their business effects.
-- **Evidence and telemetry:** Mission evidence supports assessment. Tracking telemetry explains behavior and may expire. Operational logs are a third, separate facility.
+- **Evidence and telemetry:** Mission evidence supports assessment. Tracking telemetry explains behavior and expires at the end of its retention. Operational logs are a third, separate facility.
 
 ## Persistence and deployment
 

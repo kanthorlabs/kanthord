@@ -292,7 +292,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A content change of a node inserts the next `mission_node_revision` row of that node in the same transaction. `mission_node.filename` equals the `filename` of the current revision.
 - A task change inserts the next revision of its node. An import that moves a task to another node inserts the next revision of both nodes.
 - A retired node keeps its row, its `filename`, its revisions and its last state. A retirement is final.
-- A node API retirement retires the named node alone, and its tasks leave the work of the mission with it. A retirement inserts no revision. A retired node accepts no write. A node API write or a human control on it answers 409 `mission.node.retired`, and an import entry with its identifier or with the identity of one of its tasks answers 400 `mission.import.retired_id`. No write names a retired node as a dependency.
+- A node API retirement retires the named node alone, and its tasks leave the work of the mission with it. A retirement inserts no revision. A retired node accepts no write. A node API write or a human control on it answers 409 `mission.node.retired`. An import entry with its identity or with the identity of one of its tasks answers 400 `mission.import.retired_id`. No write names a retired node as a dependency.
 - A node in a terminal state takes no new revision.
 - A dependency on a retiring node from a nonterminal dependent outside the retirement set refuses the retirement, unless the human forces it. A forced retirement deletes that dependency row. A dependency from a terminal dependent stays.
 - A retirement deletes the job of every retired node in its transaction.

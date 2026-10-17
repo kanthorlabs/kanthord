@@ -14,7 +14,7 @@ The catalog contains these workers:
 | `coder@1`       | `kanthord`         | method `steps`        | `Available`                                  | `implement`, `examine` |
 | `reviewer@1`    | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              | `implement`, `examine` |
 
-The Scheduler Service admits a node for a worker only when the declared node states hold the state of the node and the declared works hold the work of the node.
+The Scheduler Service admits a node for a worker only when two conditions hold. The declared node states hold the state of the node. The declared works hold the work of the node.
 
 `worker list` returns a page of summaries in ascending worker-name order. `worker get` returns the full declaration of one worker. Both operations are read-only.
 
