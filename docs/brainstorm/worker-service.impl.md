@@ -474,7 +474,9 @@ It refuses path traversal, symbolic-link escapes and path replacement races.
 A refused path answers `worker.evidence_upload.path_refused`, whose `details.reason` is `outside_workspace`, `symbolic_link`, `not_regular` or `replaced`.
 It calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list, where the file is an `object` asset with its size, media type and optional SHA-256.
 It sends the file directly to the presigned PUT destination of that asset, then calls `mission.evidence.asset.complete`.
-A failed transfer answers `worker.evidence_upload.transfer_failed`, and its message holds no URL and no header.
+A failed transfer goes to `mission.evidence.asset.complete`, and its check records the binding as failed.
+The helper then submits again, and the server grants the next binding.
+A file above the size limit answers `worker.evidence_upload.transfer_failed`, and its message holds no URL and no header.
 It follows [the object evidence contract](mission-service.impl.md#object-evidence) for all placements and co-locations.
 It returns the evidence identity, the asset identity and the `s3://` URI to the agent.
 At the `worker` placement the agent calls the helper through the host tool `evidence-upload`, whose one argument is the workspace-relative `path`; the subject of the evidence is that path, and the media type is `application/octet-stream`.

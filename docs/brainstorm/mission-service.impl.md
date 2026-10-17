@@ -202,7 +202,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - `dependency add` on a `Paused` dependent whose open attempt holds a request evidence answers the same code. The rule applies to the node API and to the import.
 - A self addition answers 409 `mission.import.cycle` after the endpoint checks. `dependency remove` checks no endpoint pair, and an absent edge is a no-op.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
-- An import entry with the identity of a task of a retired node, or of a task that an earlier write removed, fails with 400 `mission.import.retired_id`.
+- An import entry with the identity of a task of a retired node fails with 400 `mission.import.retired_id`. An import entry with the identity of a task that an earlier write removed fails with the same code. The identity of a task that a current node holds stays valid, even when the last revision of a retired node holds it.
 - `node create` admits a node at any time.
 - The import keeps the import condition.
 - A human control whose `expected_state` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
@@ -373,7 +373,8 @@ The file path is local input, not an evidence address.
    The server checks the live claim, the storage bindings of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
    The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check in the open attempt of the node.
-   A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_exhausted`. `details` holds `{ node_id, attempt, bindings }`, and `bindings` lists the storage bindings that failed in the attempt.
+   The grant moves to the next binding when the signing call answers `binding_disabled`, `binding_removed` or a `storage.platform.s3.*` failure. Every other refusal of the signing call stops the upload.
+   A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_exhausted`. `details` holds `{ node_id, attempt, bindings }`, and `bindings` lists the storage bindings that hold a failed upload check in the open attempt, in list order.
    503 `mission.evidence.storage_unavailable` answers only when no object storage is wired.
    It creates the evidence and one pending asset for each `object` asset, with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence asset id>`.
    The asset pins that storage binding revision in `storage_binding_id` of its `ObjectAddress`.
@@ -612,11 +613,12 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
 - `change.write` is the write path: `import`, `node.create`, `node.update`, `node.rebind`, `criterion.set` or `unblock`.
-- An import that moves a task between two nodes that it keeps changes the content of both nodes. Each node takes a node revision with `write: import`.
-- An import writes no node revision on a node that it retires. The last revision of that node keeps its tasks.
+- An import that moves a task between two nodes that it does not retire changes the content of both nodes. Each node takes a node revision with `write: import`.
+- An import writes no node revision on a node that it retires. The last revision of that node holds its tasks.
+- When a task moves out of a node that the import retires, the new node takes a node revision with a `moved-in` task change. The import writes no `moved-out` on the retired node.
 - `change.previous_revision` is the previous revision, or null on revision 1.
 - `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `work`, `requires` and `tasks`.
-- `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node. An import omission and a node update that drops the task both write it.
+- `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node. An import that omits a task of a node that it does not retire writes it. A node update that drops the task also writes it.
 - The result of the change is the `content` of the same record.
 
 ## The graph write answer
@@ -672,6 +674,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests record the dependency set on the assessment at acceptance, copy it into the outcome context at closure, and keep it unchanged after a later dependency change or revision.
 - Tests accept 40 and 64 lower-case hexadecimal commits, refuse abbreviations, upper-case and ref names, and refuse a binding that the pinned revision does not name in each admission context. For a success override while the attempt reads 0, they check the revision current at the act.
 - Tests write `implement` on every revision with the write path, the previous revision and the exact changed fields, list task changes on an `implement` node revision, and revise both nodes on a task move.
+- Tests retire an `implement` node through an import and keep its tasks in its last revision. Tests move a task out of a node that an import retires. They assert `moved-in` on the new node and no new revision of the retired node.
 - Tests return every violation of the failing stage with its code, locators and a malformed file name, stop an apply at the first violation with the envelope and its status, and keep an authorization failure an operation failure.
 - Tests accept `type/subtype` at 255 bytes and refuse a parameter, a longer value, a missing subtype and a non-ASCII byte.
 - Tests record a signal name with a null exit code, a timed-out item with `timed_out: true`, a started process with neither fact and no result for an unstarted item, and they fail a run whose `results` miss a verification.
@@ -756,6 +759,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse a node write that adds an unmatched pair with `mission.node.requires_unmatched`, and accept a write that keeps an existing unmatched pair.
 - Tests refuse a node write and a proposal approval that take a used node or task plan file name with `mission.node.filename_conflict`, and export and import both formats with every task file name unchanged.
 - Tests refuse a node update that names a task of another node with `mission.node.content_invalid`, refuse a nonempty task `bindings` list with `mission.node.bindings_invalid`, and refuse the identity of a removed task with `mission.import.retired_id`.
+- Tests refuse a task identity of a retired node with `mission.import.retired_id`. They accept a task that moved out of that node in the import that retired it.
 - Tests refuse a dependency add and a dependency remove on a dependent in `Waiting`, `Evaluating` and each `External.*` state with `mission.node.state_conflict`.
 - Tests refuse a dependency add through the node API and through the import on a `Paused` dependent whose open attempt holds a request evidence with `mission.node.state_conflict`, and accept it on a `Paused` dependent with no request evidence.
 - Tests refuse a forced retirement that removes a dependency of a dependent in `Waiting`, `Evaluating`, each `External.*` state or that `Paused` case with `mission.node.state_conflict`, and write nothing.
