@@ -77,14 +77,14 @@ The node revision stores the resolved bindings, so a later change of the project
 An `implement` node names one or more repository bindings, and it names any repository binding that its project holds.
 An `implement` node with no repository binding answers `mission.node.bindings_invalid`.
 An `examine` node names zero or more repository bindings, and it changes none of them.
-By convention, a node names one repository binding.
+Usually, a node names one repository binding.
 A human names more when one change needs one verification across repositories, for example a backend and a frontend.
 A task names no binding, and a task acts on every repository that its node names.
 A node names zero or more storage bindings as an ordered list.
 An upload of a node uses the first working storage binding of that list, under [Evidence](#evidence).
 A node that names no storage binding accepts only inline evidence content.
 Two `implement` nodes name the same binding or different bindings.
-An `examine` node requires no external action, whatever repository binding it names.
+An `examine` node requires no external action, also when it names a repository binding.
 
 The mission holds no branch, no merge and no repository action.
 An `implement` node supplies the grouping that a repository strategy uses.
@@ -301,7 +301,8 @@ Stored content stays retrievable until a human deletes it.
 An address resolves while its repository holds the content.
 
 The server selects the storage binding of an upload, and the execution never selects one.
-The grant takes the first storage binding of the pinned revision that is enabled, that the signing call accepts, and that holds no failed upload check for that asset.
+The grant takes the first storage binding of the pinned revision whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check for that asset.
+An upload check fails when it finds a mismatch, finds no object or fails at the store.
 A failed upload check records the binding as failed for that asset.
 A node with no remaining storage binding refuses the upload with `mission.evidence.storage_unavailable`.
 A read and a delete of an asset use the storage binding that the asset pins, and no read moves to another binding.

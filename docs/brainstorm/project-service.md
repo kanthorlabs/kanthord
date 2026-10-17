@@ -40,7 +40,7 @@ A project holds one binding for each repository that it uses.
 It holds any number of bindings of one worker and any number of [storage bindings](project-service.vocabulary.md#storage-binding).
 A storage binding names one S3-compatible bucket for object evidence.
 A node names zero or more storage bindings as an ordered list for its uploads, and a node without one accepts only inline evidence content.
-A node names every binding that it uses under the [rule table](mission-service.vocabulary.md#bindings-of-a-node), and the [Mission Service](mission-service.md#mission-structure-and-nodes) takes no binding from the project.
+A node names every binding that it uses under the [rule table of the bindings of a node](mission-service.vocabulary.md#bindings-of-a-node), and the [Mission Service](mission-service.md#mission-structure-and-nodes) takes no binding from the project.
 A binding references no other binding.
 A project shares a resource with another project.
 A binding belongs to one project, and no project shares a binding.

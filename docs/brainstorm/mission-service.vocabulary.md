@@ -376,7 +376,7 @@ Take the `examine` node "Account recovery" that names `api-repo` and `web-repo`.
 The reviewer checks out each base-branch head under the binding name in the workspace.
 The tested input names `api-repo` at `a41b9c0` and `web-repo` at `9f1c2e7`, one commit per binding.
 The end-to-end suite lives in `web-repo`.
-The verification runs from the workspace root:
+The verification runs from the agent root:
 
 ```bash
 cd web-repo && npm run e2e -- --api ../api-repo

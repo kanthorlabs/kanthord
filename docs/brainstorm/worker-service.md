@@ -287,9 +287,10 @@ It fetches the external content that the request evidence addresses through `int
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
 The workspace of the steps method on an `implement` node holds one checkout for each repository binding of the pinned revision, on the node branch of its attempt.
-With one repository binding, that checkout is the workspace root.
-With two or more, the workspace root holds only one directory for each binding, named after the binding name.
-The agent works from the workspace root, and the execution code runs every verification from the workspace root.
+The agent root is the directory that the agent works from.
+With one repository binding, that checkout is the agent root.
+With two or more, the agent root holds only one directory for each binding, named after the binding name.
+The agent works from the agent root, and the execution code runs every verification from the agent root.
 The same layout rule holds for the steps method on an `examine` node and for the evaluation method.
 The Worker Service keys the workspace of an `implement` node by the node, and it keys each checkout by its repository binding.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
@@ -324,6 +325,7 @@ The execution uses the [node-branch push](repository.md#write-operations) of the
 The steps method chooses the order of the tasks of the pinned revision.
 An `implement` node with no task is its own single work unit.
 The agent then works from the requirement of the node, the execution runs the verifications of the node, and the agent judges the criterion of the node.
+The commit message of the single work unit names the node identity.
 For each work unit the agent performs the steps in the workspace, and the execution commits the changes of each checkout that holds a change, with the task commit message.
 The task commit is the set of heads of the node branches after the last commit of the task work in the attempt that executed the task.
 A checkout with no change keeps its head, and a revision that changes no checkout counts as no progress.
@@ -339,22 +341,22 @@ At each steps claim on an `implement` node, the execution first merges `origin/<
 `swe@1` resolves a merge conflict as task work.
 A conflict that stays unresolved in one checkout aborts that merge and stops the execution with `operation_failed`.
 
-At its start, every execution runs the verifications of each task of the pinned revision against the head of the node branch.
-A task whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
-The execution executes every other task.
+At its start, every execution runs the verifications of each work unit of the pinned revision against the heads of the node branches.
+A work unit whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
+The execution executes every other work unit.
 No record of an earlier attempt decides that a task is complete.
 Inside one attempt, a task whose last judged task commit equals the current heads of every node branch keeps that judgement, unless the rationale of the latest rework names the task.
 Its verifications still run.
 The judgement of a task at the start reads the rationale of the assessment that caused the latest rework of the attempt, or else the cause of the outcome of the cleared attempt.
 A task that the agent judges unmet with that rationale is revised with the rationale as the revision instruction.
-At the start of a rework, the execution also runs the verifications of the node against the head of the node branch.
+At the start of a rework, the execution also runs the verifications of the node against the heads of the node branches.
 When a node verification fails, the agent chooses the task that is most related to the failure, and the execution revises that task with the failure.
 
-Before a release with evidence, the execution merges `origin/<base_branch>` again in every checkout and runs the task verifications on the merged heads.
+Before a release with evidence, the execution merges `origin/<base_branch>` again in every checkout and runs the verifications of every work unit on the merged heads.
 A conflict in one checkout or a failed verification resets every checkout to its head before that merge, and the release carries further work.
 The execution pushes the node branch of every checkout before every release, and it submits the evidence only after every push succeeds.
 Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding, whatever the task results establish.
-When every task of the revision is complete, the execution releases with no further work.
+When every work unit of the revision is complete, the execution releases with no further work.
 The boundary of the budget end is the task commit.
 A task commit whose verification run failed or left an item unrun, with no later task work when the resource budget ends, ends the task work, and the execution releases with no further work.
 Otherwise, when the resource budget ends before the task commit of the current task work or during the judgement of a passing run, the agent stops and the execution performs cleanup.
@@ -419,7 +421,8 @@ sequenceDiagram
 
 For an `examine` node the steps method checks out the base-branch head of each repository binding under the layout rule.
 It creates no node branch, makes no commit, pushes nothing and requests no external action.
-The agent runs tools and the verifications of the node, then collects and summarizes the results.
+The agent runs tools in the checkouts.
+The execution code runs the verifications of the node and gives the results to the agent, which collects and summarizes them.
 When the node has direct dependencies, the steps method also reads the current outcome and the produced evidence of each direct dependency.
 An `examine` node holds `Available` only when every direct dependency is `Completed`, under the [dependency rules](mission-service.md#mission-structure-and-nodes).
 The read of an `examine` dependency gives its outcome and its produced evidence, and no repository.
@@ -548,7 +551,7 @@ The tested input names every commit, one per binding.
 An `examine` node that names no repository binding keeps the evidence-placement rule.
 For an `implement` node whose evidence names no repository snapshot, the reviewer also uses that rule.
 Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
-The reviewer execution code, never the agent, runs the verifications of the pinned revision from the workspace root.
+The reviewer execution code, never the agent, runs the verifications of the pinned revision from the agent root.
 The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
 The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.

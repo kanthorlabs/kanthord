@@ -7,6 +7,7 @@ bindings:
 verifications:
   - test -f LICENSE && grep -q "MIT License" LICENSE
   - test -f CONTRIBUTING.md && grep -q "npm run verify" CONTRIBUTING.md
+  - npm ci && npm run format:check
 ---
 
 # Add the license and the contribution guide
@@ -17,6 +18,6 @@ Add an MIT `LICENSE` file at the repository root. Add a `CONTRIBUTING.md` that s
 
 ## Criterion
 
-- `LICENSE` holds the MIT License text with the current year and the project owner.
+- `LICENSE` holds the MIT License text with the current year and the owner `kanthorlabs`.
 - `CONTRIBUTING.md` names Node.js 24, `npm ci` and `npm run verify`, and it states that a pull request passes `npm run verify`.
 - No other file changes.

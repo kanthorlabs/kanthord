@@ -308,5 +308,6 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A test covers a repeat of a `failed` request whose read-back finds nothing, and it asserts no second write and the recorded error.
 - A test covers an unmapped action, and it asserts the 422 and no request.
 - Tests cover a discard of a running request, a delete without `force`, and a delete list that names a pending request.
-- Tests answer a `github.pull_request` whose snapshot commit the base branch contains with the `branch_push` address of the oldest first-parent commit that contains it, open no pull request, and fold the check to `pull_request_merged` with that landed commit.
+- Tests answer a `github.pull_request` whose snapshot commit the base branch contains with the `branch_push` address of the oldest first-parent commit that contains it.
+- Tests open no pull request for that snapshot, and they fold the check to `pull_request_merged` with that landed commit.
 - A test covers a CLI child, and it asserts the fresh `HOME`, the environment allowlist, the removal of its directory and the kill of its process group at the deadline.

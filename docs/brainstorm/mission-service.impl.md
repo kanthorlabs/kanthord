@@ -63,7 +63,7 @@ A new binding kind adds a row.
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or unknown `work`, a nonlist `requires`, a repeated or malformed trait key, and a task on an `examine` node answer `mission.node.content_invalid`.
 A write that changes `work` of a node whose attempt reads 1 or more answers 409 `mission.node.work_locked` with `details: { node_id, attempt }`.
-A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.requires_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, an unblock with a change and a proposal approval.
+A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.requires_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, a rebind, an unblock with a change and a proposal approval.
 Each of these writes reads `unmatchedClaims` of the Scheduler Service before and after its change, in its own `BEGIN IMMEDIATE` transaction.
 A node write that keeps an existing unmatched pair succeeds.
 A node update that names the identity of a task of another node answers `mission.node.content_invalid`.
@@ -111,7 +111,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
   Its input holds `execution_id`, `attempt`, `node_revision`, `requirement_key`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
   Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
-- A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirement_key` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resource_identity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirement_key }`. A `pull_request` request admits a `branch_push` address of its base branch when the base branch already contains the snapshot commit, under the [read-backs](intake-service.impl.md#the-read-backs) of the Intake Service. That address holds the landed commit, and the check folds it to `pull_request_merged`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
+- A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirement_key` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resource_identity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirement_key }`. A `pull_request` request admits a `branch_push` address on the base branch of its binding. The Intake Service answers that address only for a contained snapshot, under the [read-backs](intake-service.impl.md#the-read-backs). That address holds the landed commit, and the check folds it to `pull_request_merged`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
 
 ## Configuration
 
@@ -211,7 +211,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 ## The verifications
 
 The execution runs the verifications in list order, one by one, never in parallel.
-Each item runs through `bash -c` in the workspace root of the execution.
+Each item runs through `bash -c` at the agent root of the execution workspace, under the [workspace layout](worker-service.impl.md#workspace).
 The run stops at the first failed item.
 The verification records one result `{ command, exit_code, signal, timed_out }` per item that the execution started, in list order.
 `Verification` holds `tested_input` and `results`, and the evidence that records the run holds it in `verification`.
@@ -372,7 +372,7 @@ The file path is local input, not an evidence address.
    This operation requires execution access and a live claim for the node.
    The server checks the live claim, the storage bindings of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
-   The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, that is enabled, that the signing call accepts, and that holds no failed upload check for that asset.
+   The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check for that asset.
    A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_unavailable`.
    It creates the evidence and one pending asset for each `object` asset, with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence asset id>`.
    The asset pins that storage binding revision in `storage_binding_id` of its `ObjectAddress`.
@@ -382,7 +382,7 @@ The file path is local input, not an evidence address.
    No transfer through the server proxies those bytes.
 3. The component calls `mission.evidence.asset.complete` under execution access with the asset identity and execution context.
    The server checks the live claim, and the Intake Service checks the object size and, when given, the checksum through `intake.storage.check`.
-   A mismatch prevents publication, and it records that binding as failed for that asset.
+   A check that finds a mismatch, finds no object or fails at the store prevents publication, and it records that binding as failed for that asset.
    The server sets `published_at` of the asset only after those checks pass.
    The asset holds the object location, version when the store returns one, size, media type and optional SHA-256.
    The answer holds the asset identity and the `s3://` URI.
@@ -788,8 +788,11 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse an `implement` node with no repository binding with `mission.node.bindings_invalid`, accept an `examine` node with zero, one and two repository bindings, and take no binding from the project.
 - Tests refuse an `implement` evidence that misses a repository binding or names another binding with `mission.evidence.binding_mismatch`, at the submit and at the release, and accept one asset for each of two bindings.
 - Tests write a tested input list in binding order for a node with two repository bindings.
-- Tests skip a disabled storage binding, a binding that the signing call refuses and a binding with a failed upload check for that asset, answer `mission.evidence.storage_unavailable` when no binding is left, and read and delete each asset through the binding that it pins.
-- Tests admit a `branch_push` address of the base branch on a `pull_request` request whose snapshot commit the base branch contains, and fold it to `pull_request_merged` with that landed commit.
+- Tests skip a disabled storage binding, a removed storage binding, a binding that the signing call refuses and a binding with a failed upload check for that asset.
+- Tests record a failed upload check for a mismatch, for a missing object and for a store failure.
+- Tests answer `mission.evidence.storage_unavailable` when no binding is left.
+- Tests read and delete each asset through the binding that it pins.
+- Tests admit a `branch_push` address on the base branch of the binding on a `pull_request` request. They fold it to `pull_request_merged` with that landed commit.
 - Tests answer the import preview with the unmatched pairs of the probe transaction, and leave no write after the preview.
 - Tests answer `tasks` on the node read at the pinned revision, else at the current revision.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
@@ -824,7 +827,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests answer `depends_on` on the node read after a dependency add, a dependency remove, an import and a forced retirement.
 - A test keeps task content inside the node revision, and a test mints each task identity as `task_<ulid>`.
 - Tests accept verification kinds outside the guidance for each work.
-- A test runs verifications serially in list order through `bash -c` from the execution workspace root.
+- A test runs verifications serially in list order through `bash -c` from the agent root of the execution workspace.
 - A test uses shell syntax to prove that each item is a full bash command.
 - A test stops at the first nonzero exit and records no result for a later item.
 - Tests assert each recorded command, its exit code and the overall exit code for success and failure.

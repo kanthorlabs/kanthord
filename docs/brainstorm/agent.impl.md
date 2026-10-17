@@ -254,7 +254,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-choice`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `report` and `repair`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-judgement`, `task-choice`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine` and `repair`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
@@ -265,21 +265,23 @@ The Agent component owns these keys of the section `agent`.
 - The execution setup carries the resolved template set, so the worker application reads no template file.
 - The values of each template:
 
-| Template             | Values                                                                                  |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command` |
-| `layer-message`      | `source`, `text`                                                                        |
-| `framing-worker`     | none                                                                                    |
-| `framing-workbench`  | none                                                                                    |
-| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                     |
-| `task-choice`        | `failure`, `tasks[].filename`, `tasks[].name`, `tasks[].criterion`, `marker`            |
-| `task-revision`      | `rationale`, `results`, `output`                                                        |
-| `criterion-revision` | `rationale`                                                                             |
-| `conflict`           | `base_branch`, `files`                                                                  |
-| `evaluation`         | `tasks`, `tested_input`, `evidence`, `dependencies`, `marker`                           |
-| `report`             | `dependencies`, `outcomes`, `evidence`                                                  |
-| `repair`             | `marker`                                                                                |
+| Template             | Values                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`, `repositories` |
+| `layer-message`      | `source`, `text`                                                                                        |
+| `framing-worker`     | none                                                                                                    |
+| `framing-workbench`  | none                                                                                                    |
+| `task-judgement`     | `task_id`, `criterion`, `prior_rationale`, `marker`                                                     |
+| `task-choice`        | `failure`, `tasks[].filename`, `tasks[].name`, `tasks[].criterion`, `marker`                            |
+| `task-revision`      | `rationale`, `results`, `output`                                                                        |
+| `criterion-revision` | `rationale`                                                                                             |
+| `conflict`           | `binding`, `directory`, `base_branch`, `files`                                                          |
+| `evaluation`         | `tasks`, `tested_input`, `evidence`, `dependencies`, `marker`                                           |
+| `examine`            | `repositories`, `verification`, `dependencies`, `outcomes`, `evidence`                                  |
+| `repair`             | `marker`                                                                                                |
 
+- `repositories` lists `{ name, directory, base_branch }` for each repository binding of the pinned revision, in binding order. `work` receives an empty list for a node with one repository binding.
+- `verification` holds the results of the node verifications that the execution code runs. `dependencies`, `outcomes` and `evidence` are empty for an `examine` node with no direct dependency.
 - `marker` is the marker that the worker parses. A replacement of `task-judgement`, `task-choice`, `evaluation` or `repair` keeps the marker line, or the worker treats the reply as invalid.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.
 

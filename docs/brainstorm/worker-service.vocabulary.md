@@ -81,7 +81,8 @@ The steps method is the method of a worker whose executions carry out the steps 
 A `coder@1` instance of worker binding `coder-main` claims "Add password reset" from `Available`.
 Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
 A `coder@1` instance claims the `examine` node "Account recovery" from `Available`.
-Its execution checks out the base-branch heads of `api-repo` and `web-repo`, runs the verifications and reads the outcomes of the direct dependencies.
+Its execution checks out the base-branch heads of `api-repo` and `web-repo`, runs the verifications of the node and reads the outcomes of the direct dependencies.
+The agent runs tools in the checkouts and summarizes the results.
 It submits its findings as produced evidence and releases with no further work.
 
 ## evaluation method
@@ -323,7 +324,7 @@ A revision of the node that names another repository binding starts a new node b
 
 ## task commit
 
-The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
+The task commit is the set of heads of the node branches after the last commit of the task work in the attempt that executed the task.
 Task "Add reset token expiry" of "Add password reset" ends with two commits on the node branch: the commit of the first task work and the commit of the revision after the first verification failed, and the second one is the task commit.
 No record of the Mission Service names that commit.
 

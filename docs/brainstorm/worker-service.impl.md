@@ -405,7 +405,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 ## Prompt composition
 
 The prompt composer resolves the system layer and the agent layer under [agent.impl.md](agent.impl.md#prompt-composer-configuration).
-The working layer of an execution joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workspace root, then the `project_prompt` of the repository binding.
+The working layer of an execution holds one part for each repository binding, in binding order. Each part joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the checkout of that binding, then the `project_prompt` of that binding.
 It takes each source that the switch of the pinned binding revision turns on.
 The worker application composes only the working layer and the work prompt, and it reads no home file.
 An empty or absent `project_prompt` is an absent source.
@@ -544,7 +544,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 ## The verifications
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
-The workspace root for that run is the root of the execution workspace, not the server's `workspaces/` directory.
+That run starts at the agent root of the execution workspace, not at the server's `workspaces/` directory.
 A node with two or more repository bindings uses one subdirectory for each binding under the layout rule of [worker-service.md](worker-service.md#executions).
 A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
 A test checks base-branch heads and one tested commit per binding for an `examine` node with two repository bindings.
@@ -558,9 +558,11 @@ The review bundle holds `added_files`: the files that each evidenced commit adds
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
-Steps tests run every task verification at the head of the node branch at the start of an execution, and skip each task that passes.
+Steps tests run every task verification at the heads of the node branches at the start of an execution, and skip each task that passes.
 Steps tests run an `implement` node with no task as one work unit, with the node verifications and the node criterion, under the node identity as the judged key.
-Steps tests with two repository bindings commit only the checkouts with a change, merge every checkout before a release and reset every checkout on one conflict, push every node branch before the evidence, and submit one evidence with one asset per binding.
+Steps tests with two repository bindings commit only the checkouts with a change.
+They merge every checkout before a release, and they reset every checkout on one conflict.
+They push every node branch before the evidence, and they submit one evidence with one asset per binding.
 Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
 Tests permit judgement only after every verification passes.
 Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
@@ -576,7 +578,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
 - The workspace of a steps execution on an `implement` node is `workspaces/<node identity>/`, keyed as [worker-service.md](worker-service.md#executions) states. Each checkout is `workspaces/<node identity>/checkouts/<binding name>/`.
-- The agent root is the one checkout for one repository binding, and `checkouts/` for two or more.
+- The agent root is the directory that the agent works from. It is the one checkout for one repository binding, and `checkouts/` for two or more.
 - The workspace of an evaluation execution and of a steps execution on an `examine` node is `workspaces/<execution identity>/`, with the same layout rule, and the Worker Service removes it at the release.
 - `.kanthord-scratch/` sits at the agent root. The preparation adds it to `.git/info/exclude` of each checkout, so a task commit never stages the scratch files of the agent.
 - The preparation holds the node key once and prepares one checkout for each repository binding.
