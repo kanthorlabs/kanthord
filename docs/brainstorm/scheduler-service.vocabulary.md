@@ -42,12 +42,12 @@ The term names no closed set.
 
 Project `atlas` holds four worker bindings.
 
-| Binding        | Worker       | traits                                | Node with `requires: []` | Node with `requires: [platform.macos]` |
-| -------------- | ------------ | ------------------------------------- | ------------------------ | -------------------------------------- |
-| linux-coder    | `coder@1`    | `[]`                                  | steps                    | no                                     |
-| macos-coder    | `coder@1`    | `[platform.macos, toolchain.xcode]`   | steps                    | steps                                  |
-| linux-reviewer | `reviewer@1` | `[]`                                  | evaluation               | no                                     |
-| macos-reviewer | `reviewer@1` | `[platform.macos]`                    | evaluation               | evaluation                             |
+| Binding        | Worker       | traits                              | Node with `requires: []` | Node with `requires: [platform.macos]` |
+| -------------- | ------------ | ----------------------------------- | ------------------------ | -------------------------------------- |
+| linux-coder    | `coder@1`    | `[]`                                | steps                    | no                                     |
+| macos-coder    | `coder@1`    | `[platform.macos, toolchain.xcode]` | steps                    | steps                                  |
+| linux-reviewer | `reviewer@1` | `[]`                                | evaluation               | no                                     |
+| macos-reviewer | `reviewer@1` | `[platform.macos]`                  | evaluation               | evaluation                             |
 
 The node "Add password reset to the iOS app" holds `work: implement` and `requires: [platform.macos]`.
 Only an instance of `macos-coder` obtains its steps claim, and only an instance of `macos-reviewer` obtains its evaluation claim.
