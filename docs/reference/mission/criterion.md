@@ -6,17 +6,16 @@
 
 The criterion is the condition that a node must meet. The verifications are the checks that support it. Both are fields of the node content. `criterion set` replaces both fields of one node in one human revision and keeps the other content fields.
 
-- For an initiative or an objective, the write creates the next revision of that node.
-- For a task, the write creates the next revision of its objective and changes the task inside it.
+- The write creates the next revision of the node. It changes no task of the node. A task changes through [`node update`](node.md#node-update) or an import.
 - The write creates no separate criterion record, state or ID. Read the criterion with [`node get` or `node revision get`](node.md).
 - A write that changes neither field returns an empty change and keeps the mission version. Otherwise the mission version increases by one.
-- The node, and for a task its objective, must be current and nonterminal. A node with an open attempt stays editable. The open attempt keeps its pinned revision.
+- The node must be current and nonterminal. A node with an open attempt stays editable. The open attempt keeps its pinned revision.
 
 **Authority:** every authenticated human holds the same authority under the server-owner ruling. Any verified human token changes any mission.
 
 ## Expected response
 
-The API returns HTTP `200` with a [node change result](node.md#node-change-result). `revisions` holds the new revision. Its `change.write` is `criterion.set`, and `change.changed_fields` lists `criterion`, `verifications` or both. For a task, `change.changed_fields` is `["tasks"]`, and `change.tasks` names the task with its changed fields.
+The API returns HTTP `200` with a [node change result](node.md#node-change-result). `revisions` holds the new revision. Its `change.write` is `criterion.set`, and `change.changed_fields` lists `criterion`, `verifications` or both.
 
 ```json
 {
@@ -34,7 +33,9 @@ The API returns HTTP `200` with a [node change result](node.md#node-change-resul
         "requirement": "The application shows a login form.",
         "criterion": "A user with valid credentials reaches the dashboard, and the audit log records the login.",
         "verifications": ["pnpm test", "pnpm test:audit"],
-        "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"]
+        "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
+        "work": "implement",
+        "requires": []
       },
       "tasks": [],
       "change": {
@@ -81,9 +82,9 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 gateway.idempotency.invalid_key`        | Absent or malformed `Idempotency-Key`.                                                                |
 | `409 gateway.idempotency.conflict`           | The key belongs to another request, or its first request is still in progress.                        |
 | `404 mission.node.not_found`                 | The node ID is unknown.                                                                               |
-| `409 mission.node.retired`                   | The node or the objective of the task is retired.                                                     |
+| `409 mission.node.retired`                   | The node is retired.                                                                                  |
 | `409 mission.version.conflict`               | `expected_mission_version` is stale; `details.current` holds the current version.                     |
-| `409 mission.node.terminal`                  | The node or the objective of the task is `Completed` or `Discarded`.                                  |
+| `409 mission.node.terminal`                  | The node is `Completed` or `Discarded`.                                                               |
 | `409 mission.revision.conflict`              | `expected_revision` is stale; `details.current` holds the current revision.                           |
 | `400 mission.node.content_invalid`           | `criterion`, a verification or `reason` is blank or exceeds the text limit; `details.field` names it. |
 | `504 gateway.invocation.timeout`             | The operation exceeded 30 seconds. The write can still complete.                                      |
@@ -113,13 +114,13 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | Query parameters | None                                       |
 | Request body     | JSON object, below                         |
 
-| Body field                 | Type                      | Required | Purpose                                                           |
-| -------------------------- | ------------------------- | -------- | ----------------------------------------------------------------- |
-| `criterion`                | nonblank string           | Yes      | New criterion text.                                               |
-| `verifications`            | array of nonblank strings | Yes      | New verifications; at least one.                                  |
-| `reason`                   | nonblank string           | Yes      | Reason recorded on the revision.                                  |
-| `expected_revision`        | positive integer          | Yes      | Current revision of the content owner; for a task, its objective. |
-| `expected_mission_version` | positive integer          | Yes      | Current mission version.                                          |
+| Body field                 | Type                      | Required | Purpose                          |
+| -------------------------- | ------------------------- | -------- | -------------------------------- |
+| `criterion`                | nonblank string           | Yes      | New criterion text.              |
+| `verifications`            | array of nonblank strings | Yes      | New verifications; at least one. |
+| `reason`                   | nonblank string           | Yes      | Reason recorded on the revision. |
+| `expected_revision`        | positive integer          | Yes      | Current revision of the node.    |
+| `expected_mission_version` | positive integer          | Yes      | Current mission version.         |
 
 The body accepts no unknown field.
 

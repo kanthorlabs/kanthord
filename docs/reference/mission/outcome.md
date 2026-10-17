@@ -4,7 +4,7 @@
 
 ## Function description
 
-An outcome records how an attempt of a runnable node closed. A runnable node is an initiative or an objective. Clients cannot write an outcome directly; an [assessment submit](assessment.md) or a human control writes it.
+An outcome records how an attempt of a node closed. Clients cannot write an outcome directly; an [assessment submit](assessment.md) or a human control writes it.
 
 - `outcome list` returns one page of the outcomes of a node.
 - `outcome get` returns one outcome.
@@ -88,7 +88,6 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 gateway.request.unexpected_body`     | Both     | The request carries a body.                                                                      |
 | `400 system.pagination.cursor_invalid`    | `list`   | The `cursor` value is not a cursor that this operation issued.                                   |
 | `404 mission.node.not_found`              | `list`   | The node does not exist.                                                                         |
-| `400 mission.node.control_task`           | `list`   | The node is a task. Details hold `node_id`.                                                      |
 | `404 mission.record.not_found`            | `get`    | The outcome does not exist.                                                                      |
 | `504 gateway.invocation.timeout`          | Both     | The operation did not complete in 30 seconds.                                                    |
 
@@ -170,9 +169,9 @@ kanthord mission outcome list <node-id> [--attempt <attempt>] [--limit <count>] 
 kanthord mission outcome list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --limit 20
 ```
 
-| Positional argument | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `<node-id>`         | Required `node_<ulid>` of a runnable node. |
+| Positional argument | Purpose                 |
+| ------------------- | ----------------------- |
+| `<node-id>`         | Required `node_<ulid>`. |
 
 | Option                | Default / resolution | Purpose                                              |
 | --------------------- | -------------------- | ---------------------------------------------------- |

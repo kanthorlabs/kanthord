@@ -4,9 +4,9 @@
 
 ## Function description
 
-Human controls change the state, the attempt or the priority of an initiative or an objective. A task has no state, no attempt and no priority, and every control on a task fails.
+Human controls change the state, the attempt or the priority of a node. A task has no state, no attempt and no priority, and no control names a task.
 
-A runnable node has one of these states: `Pending`, `Available`, `Executing`, `Waiting`, `Evaluating`, `Blocked`, `Paused`, `Completed`, `Discarded`, `External.Requested`, `External.Success` and `External.Failed`. `Completed` and `Discarded` are terminal. Only `Completed` satisfies a dependency.
+A node has one of these states: `Pending`, `Available`, `Executing`, `Waiting`, `Evaluating`, `Blocked`, `Paused`, `Completed`, `Discarded`, `External.Requested`, `External.Success` and `External.Failed`. `Completed` and `Discarded` are terminal. Only `Completed` satisfies a dependency.
 
 An attempt is one try to complete a node. The attempt number starts at `0`, which means no attempt. At most one attempt is open. An attempt pins the node revision that it opens with.
 
@@ -34,23 +34,24 @@ After `External.Success` or `External.Failed`, a current assessment with result 
 
 ### ready
 
-Readiness requires two conditions. For an initiative, every current objective is terminal. For the open attempt, no request is unresolved. An objective needs no task. Child success is not required. `ready` publishes no assessment.
+Readiness requires two conditions. The dependency closure of the node holds. For the open attempt, no request is unresolved. An `implement` node needs no task. `ready` publishes no assessment.
 
 ### block, discard and override
 
 - An attempt closes only when the node holds an open attempt that is not `Blocked`. With attempt `0`, the outcome records attempt `0`.
 - `override` and `discard` revoke a live claim. They fail while the open attempt has an unresolved external request.
-- `override` with `landed_commit` adds repository evidence attributed to the human. The node must be an objective, and the binding must be a repository binding that the revision of the act pins. The service does not check the repository.
+- `override` with `landed_commit` adds repository evidence attributed to the human. The node must be an `implement` node, and the binding must be a repository binding that the revision of the act pins. The service does not check the repository.
 - `discard` cancels no external request. A `Discarded` node satisfies no dependency.
 
 ### unblock
 
 - `blocked_attempt` must equal the current attempt, and `expected_revision` must equal the current revision.
-- `change` holds new `content`, a `reason` and, for an objective, the complete current task set. A task in the set has no bindings. An initiative sends no `tasks`.
+- `change` holds new `content`, a `reason` and `tasks`, the complete task list of the node. `tasks` follows the task list rules of [`node update`](node.md#node-update). A task in the list has no bindings. An `examine` node sends `tasks: []`.
+- A change of `work` while the attempt reads `1` or more fails with `mission.node.work_locked`. A change that adds an unmatched pair fails with `mission.node.requires_unmatched`.
 - A content change writes a revision with `change.write` `unblock` and increases the mission version.
 - With attempt `0`, `unblock` opens no attempt. Otherwise it opens the next attempt, pinned to the current revision, with the human as `opened_by`.
 - `start_point` names where the next attempt starts. `node_branch`, the default, continues the node branch of the cleared attempt. `base_branch` starts a new node branch `kanthord/<node id>-a<attempt>` from the base branch. Another value answers 400 `gateway.request.validation_failed`, and nothing is written.
-- A start from the base branch deletes, renames and force-pushes no branch. An open pull request of the earlier node branch stays open, and a human closes it. The start point of an initiative attempt has no effect.
+- A start from the base branch deletes, renames and force-pushes no branch. An open pull request of the earlier node branch stays open, and a human closes it. The start point of an `examine` attempt has no effect.
 
 To redirect an open attempt, pause the node, block it, and unblock it with the changed content.
 To restart an open attempt from the base branch, pause the node, block it, and unblock it with `start_point: "base_branch"`.
@@ -61,7 +62,7 @@ To restart an open attempt from the base branch, pause the node, block it, and u
 
 ### priority set
 
-`priority set` writes the priority of a nonterminal initiative or objective without a live claim. Any signed safe integer is valid. The default priority is `0`. The write keeps no history, records no actor or reason, and does not change the mission version.
+`priority set` writes the priority of a nonterminal node without a live claim. Any signed safe integer is valid. The default priority is `0`. The write keeps no history, records no actor or reason, and does not change the mission version.
 
 **Authority:** every authenticated human holds the same authority under the server-owner ruling. Any verified human token controls any mission.
 
@@ -77,7 +78,7 @@ All operations return HTTP `200`. The CLI writes the API answer plus `idempotenc
 {
   "node": {
     "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
-    "kind": "objective",
+    "work": "implement",
     "state": "Paused",
     "attempt": 1,
     "...": "..."
@@ -170,7 +171,6 @@ The state controls check in this order, and the first failure answers:
 | HTTP status / code                 | Meaning                                                                                                                  |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `409 mission.node.retired`         | The node is retired.                                                                                                     |
-| `400 mission.node.control_task`    | The node is a task.                                                                                                      |
 | `409 mission.version.conflict`     | The mission version is stale.                                                                                            |
 | `409 mission.node.terminal`        | The node is `Completed` or `Discarded`.                                                                                  |
 | `409 mission.node.state_conflict`  | `expected_state` or `expected_attempt` (`blocked_attempt` for `unblock`) differs; `details` holds `state` and `attempt`. |
@@ -179,21 +179,21 @@ The state controls check in this order, and the first failure answers:
 
 Command-specific failures:
 
-| HTTP status / code                       | Operation             | Meaning                                                                                                                                       |
-| ---------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `409 mission.node.not_ready`             | `ready`, `resume`     | Readiness fails, or for `resume` with `Waiting` a dependency is unsatisfied. `details` holds `objectives_not_terminal` and `unsatisfied_ids`. |
-| `409 mission.node.action_unresolved`     | `override`, `discard` | The open attempt has unresolved requests; `details.requirement_keys` lists them.                                                              |
-| `400 mission.evidence.binding_mismatch`  | `override`            | `landed_commit` does not name a repository binding that the objective pins.                                                                   |
-| `409 mission.revision.conflict`          | `unblock`             | `expected_revision` is stale; `details.current` holds the current revision.                                                                   |
-| `400 mission.node.content_invalid`       | `unblock`             | The change content is invalid, or `tasks` does not match the current task set.                                                                |
-| `400 mission.node.bindings_invalid`      | `unblock`             | A change binding does not resolve or breaks the binding rule.                                                                                 |
-| `409 mission.node.filename_conflict`     | `unblock`             | A task file name is in use by another current node.                                                                                           |
-| `400 mission.node.control_task`          | `check`               | The node is a task.                                                                                                                           |
-| `409 mission.node.no_unresolved_request` | `check`               | The open attempt has no unresolved request.                                                                                                   |
-| `409 mission.node.retired`               | `priority set`        | The node is retired.                                                                                                                          |
-| `400 mission.node.priority_task`         | `priority set`        | The node is a task.                                                                                                                           |
-| `409 mission.node.terminal`              | `priority set`        | The node is `Completed` or `Discarded`.                                                                                                       |
-| `409 mission.node.claim_live`            | `priority set`        | The node has a live claim; `details` holds `node_id` and `execution_id`.                                                                      |
+| HTTP status / code                       | Operation             | Meaning                                                                                                                                    |
+| ---------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `409 mission.node.not_ready`             | `ready`, `resume`     | Readiness fails, or for `resume` with `Waiting` a dependency is unsatisfied. `details.unsatisfied_ids` lists the unsatisfied dependencies. |
+| `409 mission.node.action_unresolved`     | `override`, `discard` | The open attempt has unresolved requests; `details.requirement_keys` lists them.                                                           |
+| `400 mission.evidence.binding_mismatch`  | `override`            | `landed_commit` does not name a repository binding that the node pins, or the node is an `examine` node.                                   |
+| `409 mission.revision.conflict`          | `unblock`             | `expected_revision` is stale; `details.current` holds the current revision.                                                                |
+| `400 mission.node.content_invalid`       | `unblock`             | The change content is invalid, or a task `id` in `tasks` is unknown, repeated or names a task of another node.                             |
+| `400 mission.node.bindings_invalid`      | `unblock`             | A change binding does not resolve or breaks the binding rule.                                                                              |
+| `409 mission.node.filename_conflict`     | `unblock`             | A task file name is in use by another current node or task.                                                                                |
+| `409 mission.node.work_locked`           | `unblock`             | The change changes `work` while the attempt reads `1` or more; `details` holds `node_id` and `attempt`.                                    |
+| `409 mission.node.requires_unmatched`    | `unblock`             | The change adds an unmatched pair; `details.claims` lists each pair.                                                                       |
+| `409 mission.node.no_unresolved_request` | `check`               | The open attempt has no unresolved request.                                                                                                |
+| `409 mission.node.retired`               | `priority set`        | The node is retired.                                                                                                                       |
+| `409 mission.node.terminal`              | `priority set`        | The node is `Completed` or `Discarded`.                                                                                                    |
+| `409 mission.node.claim_live`            | `priority set`        | The node has a live claim; `details` holds `node_id` and `execution_id`.                                                                   |
 
 `node check` checks the mission version again before it records each result. A stale version then fails the call with `409 mission.version.conflict`, and the results that committed before stay committed. The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 
@@ -237,11 +237,11 @@ All operations use `POST`, access `human` (human bearer JWT), a 30-second timeou
 | `landed_commit`            | object                         | `override`, optional | `{ "kind": "repository", "binding_id": "binding_<ulid>", "commit": "<40 or 64 lower-case hex>" }`. |
 | `blocked_attempt`          | integer `>= 0`                 | `unblock`            | Current attempt number of the blocked node.                                                        |
 | `expected_revision`        | positive integer               | `unblock`            | Current revision of the node.                                                                      |
-| `change`                   | object                         | `unblock`, optional  | `{ content, tasks?, reason }`; `tasks` holds `{ id, filename, content }`.                          |
+| `change`                   | object                         | `unblock`, optional  | `{ content, tasks, reason }`; `tasks` holds task writes `{ id?, filename, content }`.              |
 | `start_point`              | `base_branch` or `node_branch` | `unblock`, optional  | Start point of the next attempt. The default is `node_branch`.                                     |
 | `value`                    | signed safe integer            | `priority set`       | New priority.                                                                                      |
 
-The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications` and `bindings` (binding IDs). Bodies accept no unknown field.
+The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications`, `bindings` (binding IDs), `work` and the optional `requires`, as in [node create](node.md#request-bodies). Bodies accept no unknown field.
 
 | Header            | Required | Purpose                                              |
 | ----------------- | -------- | ---------------------------------------------------- |
