@@ -115,7 +115,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
 - `workbench/<agent name>/` of the state directory, the workbench directory of an agent, a path template that [workbench-service.impl.md](workbench-service.impl.md#workbench-session) declares.
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
-- `workspaces/<node identity>/<repository binding identity>/` of the state directory, the workspace of a steps execution on an `implement` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `workspaces/<node identity>/` of the state directory, with one checkout `checkouts/<binding name>/` for each repository binding, the workspace of a steps execution on an `implement` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution or of a steps execution on an `examine` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 

@@ -62,7 +62,7 @@ A node is a vertex of the mission graph and a unit of scheduling, with its own c
 The term names no closed set.
 The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`.
 A `tdd@1` instance claims the `implement` node "Add password reset". A `reviewer@1` instance later claims the node.
-The `examine` node "Account recovery" reports on the outcomes of "Add password reset" and "Add recovery codes".
+The `examine` node "Account recovery" reads `api-repo` and `web-repo` and the outcomes of "Add password reset" and "Add recovery codes", and it changes no repository.
 Nothing else is a node. The word names a vertex of the graph.
 
 ## task

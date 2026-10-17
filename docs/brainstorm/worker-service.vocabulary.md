@@ -81,7 +81,8 @@ The steps method is the method of a worker whose executions carry out the steps 
 A `coder@1` instance of worker binding `coder-main` claims "Add password reset" from `Available`.
 Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
 A `coder@1` instance claims the `examine` node "Account recovery" from `Available`.
-Its execution writes the report on the outcomes of the direct dependencies, submits it as produced evidence and releases with no further work.
+Its execution checks out the base-branch heads of `api-repo` and `web-repo`, runs the verifications and reads the outcomes of the direct dependencies.
+It submits its findings as produced evidence and releases with no further work.
 
 ## evaluation method
 
@@ -309,7 +310,8 @@ The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorla
 Execution 3 of the same node under the same repository binding reuses it.
 The Worker Service removes it after the fixed retention period.
 The reviewer execution of the node uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
-The steps execution of the `examine` node "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
+The steps execution of the `examine` node "Account recovery" uses a fresh workspace with the directories `api-repo` and `web-repo`, one base-branch checkout for each binding.
+An `examine` node that names no repository binding uses a workspace with no checkout, and its agent writes the report there.
 
 ## node branch
 

@@ -387,8 +387,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
 - Each entry of `repositories` holds `{ binding_id, name, address, ssh_identity, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
 - `ssh_identity` is the metadata `{ host, hostname, port, identity_file }` of the `ssh` record of the binding. The worker application runs the [`ssh` validation](repository.impl.md#platform-validators) with it before each clone, fetch and push.
-- For an `implement` node, `repositories` holds the repository binding that the pinned node revision names.
-- For an `examine` node, `repositories` holds one row per resource identity of the repository bindings of its direct `implement` dependencies, at the greatest revision.
+- `repositories` holds one row for each repository binding that the pinned node revision names, in binding order, for an `implement` node and for an `examine` node.
 - `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
@@ -510,7 +509,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 ## The further-work release
 
 - A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
-- `startCheck` stores the judged commit of each task in the workspace of the `implement` node. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged commit equals the head, unless the rationale of the latest rework names the task.
+- `startCheck` stores the judged task commit of each task in `judged-tasks.json` of `workspaces/<node identity>/`. The key is the task identity, and the node identity for an `implement` node with no task. The value is the commit for one repository binding, else the canonical head set `<binding name>=<commit>,...` in binding order. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged task commit equals the current heads, unless the rationale of the latest rework names the task.
 
 ## The unblock reads
 
@@ -519,7 +518,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
 - `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
 - For each `pull_request` action with the resolution `other-end`, the read calls `intake.action.read` through the direct adapter. It uses the method `github-pull-request-change-request-get` and the request evidence of that action.
-- The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request. It also holds the path, the line and the body of each review comment of that change request.
+- The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request, and it names the repository binding of each change request. It also holds the path, the line and the body of each review comment of that change request.
 - The requested-changes text stops at 4 KiB.
 - The requested-changes text is the prior rationale. It enters the task judgement of the start check and the criterion revision of each task that the agent judges unmet.
 - When the read finds no current change request, the prior rationale is the rationale of the cleared assessment.
@@ -537,6 +536,7 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - The agent receives one `task-choice` instruction with the failure text and the filename, the name and the criterion of each task. The reply names one task by its filename.
 - The worker parses the reply once, with no repair turn. A reply with no valid marker line, or with a filename outside the task set, selects the last task in plan order.
 - The run logs `task chosen` with the task identity, the head commit and `fallback`.
+- For an `implement` node with no task, the run sends no `task-choice` instruction. The node work unit is pending with the failure text.
 - The chosen task is pending with the criterion revision of the failure text. It gets no judgement at the start check, and its judged commit does not skip it.
 - Every other task keeps the rules of the start check.
 - When the budget ends during the node check or the choice turn, the execution releases with further work and no checkpoint commit.
@@ -545,19 +545,23 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
 The workspace root for that run is the root of the execution workspace, not the server's `workspaces/` directory.
-An `examine` node uses one subdirectory per distinct repository binding from its direct `implement` dependencies.
+A node with two or more repository bindings uses one subdirectory for each binding under the layout rule of [worker-service.md](worker-service.md#executions).
 A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
-A test checks duplicate removal, base-branch heads and one tested commit per binding for an `examine` node.
-A test checks the evidence-placement rule when the direct dependencies of an `examine` node name no repository.
+A test checks base-branch heads and one tested commit per binding for an `examine` node with two repository bindings.
+A test checks the evidence-placement rule for an `examine` node that names no repository binding.
+A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
 The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
-The review bundle holds `added_files`: the files that the evidenced commit adds against `origin/<base branch>`. An `examine` node has none.
+The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
 Steps tests run every task verification at the head of the node branch at the start of an execution, and skip each task that passes.
+Steps tests run an `implement` node with no task as one work unit, with the node verifications and the node criterion, under the node identity as the judged key.
+Steps tests with two repository bindings commit only the checkouts with a change, merge every checkout before a release and reset every checkout on one conflict, push every node branch before the evidence, and submit one evidence with one asset per binding.
+Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
 Tests permit judgement only after every verification passes.
 Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
 Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
@@ -571,9 +575,11 @@ Tests assert that the action performer does not reuse an open pull request of th
 ## Workspace
 
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
-- The workspace of a steps execution on an `implement` node is `workspaces/<node identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
-- The workspace of an evaluation execution and of a steps execution on an `examine` node is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
-- The preparation of the workspace of an `implement` node adds `.kanthord-scratch/` to `.git/info/exclude`, so a task commit never stages the scratch files of the agent.
+- The workspace of a steps execution on an `implement` node is `workspaces/<node identity>/`, keyed as [worker-service.md](worker-service.md#executions) states. Each checkout is `workspaces/<node identity>/checkouts/<binding name>/`.
+- The agent root is the one checkout for one repository binding, and `checkouts/` for two or more.
+- The workspace of an evaluation execution and of a steps execution on an `examine` node is `workspaces/<execution identity>/`, with the same layout rule, and the Worker Service removes it at the release.
+- `.kanthord-scratch/` sits at the agent root. The preparation adds it to `.git/info/exclude` of each checkout, so a task commit never stages the scratch files of the agent.
+- The preparation holds the node key once and prepares one checkout for each repository binding.
 - The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists. Else it checks out the local node branch without a reset when the workspace holds one, so that commits of a failed push stay. Else it checks out the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
 - Two records show an earlier push of the node branch. The first is the remote-tracking ref `refs/remotes/origin/<node branch>` of the node workspace before the fetch. The second is an evidence of the claimed attempt with a `repository` asset of the repository binding. The preparation reads that evidence through `execution.evidence.list`.
 - When either record exists and the remote node branch is missing, `fetchAndCheckout` refuses with `repository.node_branch.missing` and keeps the checkout. The execution stops with `operation_failed` and that code.
