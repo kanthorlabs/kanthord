@@ -1,6 +1,5 @@
 ---
-kind: objective
-parent: todo-api.md
+work: implement
 depends_on:
   - todos.md
   - operations.md
@@ -14,7 +13,7 @@ verifications:
 
 ## Requirement
 
-Integrate the completed Node 24/Express 5/SQLite API. Wire readiness and shutdown to the real migrated SQLite connection. Deliver OpenAPI 3.1, a developer README, an operations runbook, CI and a black-box end-to-end suite. Add `test:acceptance`, `test:e2e` and `verify` scripts. `verify` runs lint, format checks, all six objective suites and the end-to-end suite, with no recursive invocation and no silent skipped suites.
+Integrate the completed Node 24/Express 5/SQLite API. Wire readiness and shutdown to the real migrated SQLite connection. Deliver OpenAPI 3.1, a developer README, an operations runbook, CI and a black-box end-to-end suite. Add `test:acceptance`, `test:e2e` and `verify` scripts. `verify` runs lint, format checks, all six node suites and the end-to-end suite, with no recursive invocation and no silent skipped suites.
 
 Document public GET /health/live and GET /health/ready; public POST /api/v1/auth/register and POST /api/v1/auth/login; private GET /api/v1/auth/me and POST /api/v1/auth/logout; admin GET /api/v1/admin/stats; and owner-only POST/GET /api/v1/todos plus GET/PATCH/DELETE /api/v1/todos/:id. Describe bearer security, exact snake_case fields, validation bounds, pagination, error codes/statuses, conditional ETags, CORS and rate limits. The TODO role of an admin still grants no ownership bypass.
 

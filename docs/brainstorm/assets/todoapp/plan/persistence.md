@@ -1,6 +1,5 @@
 ---
-kind: objective
-parent: todo-api.md
+work: implement
 depends_on:
   - foundation.md
 bindings:
@@ -19,7 +18,7 @@ Use Node 24's `node:sqlite` behind repositories, with versioned transactional mi
 
 Create tables `users` with `id`, `email`, `password_hash`, `role`, `created_at`; `sessions` with `id`, `user_id`, `token_hash`, `created_at`, `expires_at`; and `todos` with `id`, `user_id`, `title`, `description`, `completed`, `version`, `created_at`, `updated_at`. Use UUID text identities, UTC ISO-8601 timestamp strings and snake_case domain/JSON fields matching column names. Represent `completed` as a domain boolean and a SQLite integer. A user owns its sessions and TODOs through foreign keys. Keep session secrets and password hashes internal.
 
-Email is trimmed and lowercased before storage and comparison. Email and session token digests are unique. A TODO starts at version 1. Enforce closed values in code, with no SQL CHECK constraints and no non-unique indexes. Primary keys and unique indexes are permitted. Define `UserRole` as the closed code enum `user | admin`. Do not create HTTP endpoints in this objective.
+Email is trimmed and lowercased before storage and comparison. Email and session token digests are unique. A TODO starts at version 1. Enforce closed values in code, with no SQL CHECK constraints and no non-unique indexes. Primary keys and unique indexes are permitted. Define `UserRole` as the closed code enum `user | admin`. Do not create HTTP endpoints in this node.
 
 ## Criterion
 

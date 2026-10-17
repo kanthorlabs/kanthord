@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: persistence.md
+node: persistence.md
 bindings: []
 verifications:
   - node --test test/persistence-migrations.test.js

@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: operations.md
+node: operations.md
 bindings: []
 verifications:
   - node --test test/operations-security.test.js

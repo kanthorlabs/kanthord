@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: foundation.md
+node: foundation.md
 bindings: []
 verifications:
   - node --test test/foundation-http.test.js

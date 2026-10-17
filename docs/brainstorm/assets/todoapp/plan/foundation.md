@@ -1,6 +1,5 @@
 ---
-kind: objective
-parent: todo-api.md
+work: implement
 depends_on: []
 bindings:
   - todoapp-repo
@@ -13,9 +12,9 @@ verifications:
 
 ## Requirement
 
-Create a JavaScript ESM application on Node.js 24.x using Express 5.x. Separate the side-effect-free app factory from the process entrypoint. Organize `src/config`, `src/http` and `src/db`. Create a directory only when it holds code, and add no `.gitkeep` placeholder. Later objectives create `src/modules/auth`, `src/modules/todos` and `src/modules/admin` with their code. Routes delegate to services and services to repositories. Inject database, clock and logger dependencies rather than relying on mutable global state.
+Create a JavaScript ESM application on Node.js 24.x using Express 5.x. Separate the side-effect-free app factory from the process entrypoint. Organize `src/config`, `src/http` and `src/db`. Create a directory only when it holds code, and add no `.gitkeep` placeholder. Later nodes create `src/modules/auth`, `src/modules/todos` and `src/modules/admin` with their code. Routes delegate to services and services to repositories. Inject database, clock and logger dependencies rather than relying on mutable global state.
 
-Use npm with a committed lockfile, ESLint, Prettier, Node's test runner and Supertest. Provide `test:foundation`, `lint` and `format:check` scripts, with substantive tests in the three task-named files. Later objectives add their suites. Do not pre-create passing placeholder suites.
+Use npm with a committed lockfile, ESLint, Prettier, Node's test runner and Supertest. Provide `test:foundation`, `lint` and `format:check` scripts, with substantive tests in the three task-named files. Later nodes add their suites. Do not pre-create passing placeholder suites.
 
 Establish HTTP conventions now: JSON responses, snake_case property names shared by domain objects and HTTP payloads, and errors shaped `{ error: { code, message, request_id, details } }`. `details` is a safe list, empty when not applicable. The error middleware is last; no error response leaks stack traces or SQL. Expose public `GET /health/live` with 200 and `{ status: "ok" }`.
 

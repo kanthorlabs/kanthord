@@ -1,6 +1,5 @@
 ---
-kind: objective
-parent: todo-api.md
+work: implement
 depends_on:
   - foundation.md
 bindings:
@@ -15,7 +14,7 @@ verifications:
 
 ## Requirement
 
-Extend the Express foundation with Helmet, explicit-origin `cors`, `express-rate-limit`, Pino and `pino-http`. This objective may run alongside persistence: define injectable readiness/resource-close hooks and a typed storage-error interface, and test them with controlled adapters. Do not require unfinished authentication or TODO modules. The final acceptance objective wires these hooks to real SQLite.
+Extend the Express foundation with Helmet, explicit-origin `cors`, `express-rate-limit`, Pino and `pino-http`. This node may run alongside persistence: define injectable readiness/resource-close hooks and a typed storage-error interface, and test them with controlled adapters. Do not require unfinished authentication or TODO modules. The final acceptance node wires these hooks to real SQLite.
 
 Use the existing error envelope `{ error: { code, message, request_id, details } }` and server-generated request IDs. Define stable codes for validation, malformed JSON, body size, media type, authentication, permission, absence, conflicts, preconditions, throttling, storage unavailable and unexpected errors. Expose only safe details. Translate bounded storage lock exhaustion/unavailability to 503 with Retry-After, not an internal SQL error.
 

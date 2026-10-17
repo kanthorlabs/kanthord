@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: persistence.md
+node: persistence.md
 bindings: []
 verifications:
   - node --test test/persistence-repositories.test.js
@@ -16,7 +15,7 @@ verifications:
 
 Implement account, session and TODO repositories with prepared statements and explicit results for absent rows, uniqueness conflicts and stale versions. Bind every external SQL operand. Use UUID text identities and UTC ISO-8601 timestamp strings. Represent `completed` as a domain boolean and a SQLite integer. Repositories expose domain objects with the same snake_case field names as the table columns and the API, without allowing clients to choose ownership. Keep session secrets and password hashes internal.
 
-Trim and lowercase email before storage and comparison. A TODO starts at version 1. Define `UserRole` as the closed code enum `user | admin`. Enforce closed values in code before the write, not in SQL. Create no HTTP endpoint in this objective. Provide the `test:persistence` script, which runs the three persistence suites.
+Trim and lowercase email before storage and comparison. A TODO starts at version 1. Define `UserRole` as the closed code enum `user | admin`. Enforce closed values in code before the write, not in SQL. Create no HTTP endpoint in this node. Provide the `test:persistence` script, which runs the three persistence suites.
 
 ## Criterion
 
@@ -27,4 +26,4 @@ Trim and lowercase email before storage and comparison. A TODO starts at version
 - Owner-scoped list, get, update and delete take the authenticated owner identity as a required operand. They never return or modify another user's TODO.
 - Conditional update and delete compare both owner and expected version in the write, not only in an earlier read. An update increments the version once. A conflict changes no field.
 - Public projections omit `password_hash` and `token_hash`. Session lookup returns only what authentication needs.
-- This objective adds no HTTP endpoint.
+- This node adds no HTTP endpoint.
