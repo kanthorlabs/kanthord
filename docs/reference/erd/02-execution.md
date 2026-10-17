@@ -15,8 +15,8 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Capability limits
 
-- An objective whose attempt requires no external action completes after a current passing assessment.
-- An objective whose attempt requests a required external action stops in `External.Requested`. Delivery admission in [ERD 3](03-integration.md) or a human check sets the end state of its request evidence.
+- An `implement` node whose attempt requires no external action completes after a current passing assessment.
+- An `implement` node whose attempt requests a required external action stops in `External.Requested`. Delivery admission in [ERD 3](03-integration.md) or a human check sets the end state of its request evidence.
 - A success override and a discard do not end that attempt, because a node reaches a terminal state only when no external action of its open attempt is unresolved. A human pauses the node, blocks it and unblocks it. The next attempt reads the binding row that its pinned revision names.
 - An action that the attempt requires but has not requested is not unresolved, so it prevents no terminal transition.
 - The kind of an ended execution of an externally hosted worker derives from the records that name it: an assessment proves an evaluation claim, and a work evidence proves a steps claim. An execution that no record names holds no kind.
@@ -77,7 +77,7 @@ erDiagram
     }
 
     mission_attempt {
-        text node_id PK, FK "initiative or objective"
+        text node_id PK, FK "node"
         integer attempt PK "1 or more"
         integer node_revision "pinned revision"
         text start_point "base_branch or node_branch, StartPoint enum in code"
@@ -88,7 +88,7 @@ erDiagram
 
     mission_evidence {
         text id PK "evidence_ + ULID"
-        text node_id FK "initiative or objective"
+        text node_id FK "node"
         integer attempt "0 only for override landed commit"
         text subject "nonblank Text"
         text requirement_key "FrozenAction key, request only, else null"
@@ -107,15 +107,23 @@ erDiagram
         integer expired_at "Unix ms, object upload deadline, else null"
     }
 
+    mission_evidence_upload_failure {
+        text node_id PK, FK "node"
+        integer attempt PK "open attempt of the failed check"
+        text storage_binding_id PK "storage binding row of the failed check"
+        text asset_id "evidence asset of the failed check"
+        integer failed_at "Unix ms"
+    }
+
     mission_assessment {
         text id PK "assessment_ + ULID"
-        text node_id FK "initiative or objective"
+        text node_id FK "node"
         integer sequence "acceptance order in the node"
         integer attempt "0 only for a human assessment"
         text result "success | criterion-not-met | undetermined"
         text rationale "nonblank"
         text evidence_ids "JSON set"
-        text child_outcome_ids "JSON set, empty for an objective and a human assessment"
+        text dependency_outcome_ids "JSON set, empty for an implement node and a human assessment"
         text tested_input "JSON TestedInput, null for a human assessment"
         text execution_id "execution_ + ULID, null for a human assessment"
         text actor "JSON human Actor, null for an execution assessment"
@@ -125,7 +133,7 @@ erDiagram
 
     mission_outcome {
         text id PK "outcome_ + ULID"
-        text node_id FK "initiative or objective"
+        text node_id FK "node"
         integer sequence "acceptance order in the node"
         text result "success | criterion-not-met | undetermined"
         text assessment_id FK "basis, required"
@@ -135,11 +143,11 @@ erDiagram
 
     mission_proposal {
         text id PK "proposal_ + ULID"
-        text node_id FK "initiative"
+        text node_id FK "examine node"
         integer attempt "attempt of the assessment"
         text assessment_id FK "undetermined execution assessment"
-        text content "canonical JSON: objective_id, name, requirement, criterion, task"
-        text objective_node_id FK "objective that the approval creates, nullable"
+        text content "canonical JSON: dependency_id, name, requirement, criterion, task"
+        text created_node_id FK "implement node that the approval creates, nullable"
         integer approved_at "Unix ms, nullable"
         integer created_at "Unix ms"
     }
@@ -156,6 +164,9 @@ erDiagram
     scheduler_execution |o..o{ mission_evidence : "ref execution_id in provenance, no FK"
     mission_evidence ||--o{ mission_evidence_asset : "FK evidence_id"
     project_binding |o..o{ mission_evidence_asset : "ref binding_id, storage_binding_id in content, no FK"
+    mission_node ||--o{ mission_evidence_upload_failure : "FK node_id"
+    project_binding |o..o{ mission_evidence_upload_failure : "ref storage_binding_id, no FK"
+    mission_evidence_asset |o..o{ mission_evidence_upload_failure : "ref asset_id, no FK"
 
     mission_node ||..o{ mission_assessment : "FK node_id"
     mission_attempt |o..o{ mission_assessment : "ref (node_id, attempt), validated"
@@ -164,7 +175,7 @@ erDiagram
     mission_node ||..o{ mission_outcome : "FK node_id"
     mission_assessment ||..o{ mission_outcome : "FK assessment_id"
 
-    mission_node ||..o{ mission_proposal : "FK node_id, FK objective_node_id"
+    mission_node ||..o{ mission_proposal : "FK node_id, FK created_node_id"
     mission_assessment ||..o{ mission_proposal : "FK assessment_id"
 
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
@@ -178,21 +189,22 @@ erDiagram
     class project_binding,mission_node stub
     class worker_instance worker
     class scheduler_execution scheduler
-    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal mission
+    class mission_attempt,mission_evidence,mission_evidence_asset,mission_evidence_upload_failure,mission_assessment,mission_outcome,mission_proposal mission
 ```
 
 ## Tables
 
-| Table                    | Owner             | Basis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker_instance`        | Worker Service    | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters).                                                                                                                                                                                                                   |
-| `scheduler_execution`    | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts); [configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration) rules the fixed deadline, and [loss settlement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#loss-settlement) rules the loss declaration. |
-| `mission_attempt`        | Mission Service   | Derived from [the attempt](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). `opened_by` names the actor of the act that opens the attempt. `start_point` holds the `StartPoint` enum of code: attempt 1 records `base_branch`, and an unblock records the value that it names.                       |
-| `mission_evidence`       | Mission Service   | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention).                                                                                         |
-| `mission_evidence_asset` | Mission Service   | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content) and [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence). `content` holds the canonical JSON of the shape that `kind` names.                                                                                                                                                                |
-| `mission_assessment`     | Mission Service   | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order.                                                                                                                                                                                                                         |
-| `mission_outcome`        | Mission Service   | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). `sequence` is derived: the current outcome is the outcome with the greatest `sequence`, and neither a timestamp nor an identity establishes that order.                                                                                                                                                                                                        |
-| `mission_proposal`       | Mission Service   | Derived from the fix-objective proposal of [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment).                                                                                                                                                                                                                                                                                                                                          |
+| Table                             | Owner             | Basis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `worker_instance`                 | Worker Service    | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters).                                                                                                                                                                                                                   |
+| `scheduler_execution`             | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts); [configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration) rules the fixed deadline, and [loss settlement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#loss-settlement) rules the loss declaration. |
+| `mission_attempt`                 | Mission Service   | Derived from [the attempt](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). `opened_by` names the actor of the act that opens the attempt. `start_point` holds the `StartPoint` enum of code: attempt 1 records `base_branch`, and an unblock records the value that it names.                       |
+| `mission_evidence`                | Mission Service   | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention).                                                                                         |
+| `mission_evidence_asset`          | Mission Service   | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content) and [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence). `content` holds the canonical JSON of the shape that `kind` names.                                                                                                                                                                |
+| `mission_evidence_upload_failure` | Mission Service   | Ruled: [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence). A row records a failed upload check of a storage binding in an attempt of a node.                                                                                                                                                                                                                                                                                          |
+| `mission_assessment`              | Mission Service   | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order.                                                                                                                                                                                                                         |
+| `mission_outcome`                 | Mission Service   | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). `sequence` is derived: the current outcome is the outcome with the greatest `sequence`, and neither a timestamp nor an identity establishes that order.                                                                                                                                                                                                        |
+| `mission_proposal`                | Mission Service   | Derived from [the fix-node proposal](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-fix-node-proposal).                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Keys and relationship notation
 
@@ -228,14 +240,14 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
-- The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
+- The claim admits a node only in a state that the worker of the binding declares, through the [match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match). The claimant admits the node only when the worker declares the work of the node and the traits of the worker binding hold every key of the requires list of the node. The work and the requires list come from the revision that the claim pins. A worker name with no worker declaration gives no claimant. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
 - The claim transaction inserts the execution row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node.
 - `agent_selections` is `TEXT`, a JSON list that the claim writes once with the row. Each item holds `agent_name`, `position`, `level` (`enablement` or `binding`), `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. It is `[]` for a worker with no native agent, and null for a row that predates the column. A null column reads as `[]`.
 - The claim selects, for each native agent of the worker, the first chain entry with no live `agent_cooldown` row. When one agent has none, the claim inserts no row. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
 - A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction settles an expired unsettled execution of the pulling runtime identity, then reads its `running` row. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the instance selects new work.
 - The claim sets `expired_at = created_at + wall_time_ms + 1000 × scheduler.release_reserve`, under [Scheduler configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration). The effective `wall_time_ms` comes from the worker binding row that `worker_binding_id` pins. The deadline never moves, including at a registration resume. A later configuration change affects only later claims.
 - Every execution mutation repeats the full proof in its write transaction: the claimant, a null `ended_at` and time before `expired_at`. This includes release, evidence and assessment submissions, and every operation that requires a live execution. The transaction reads the clock once at its start, and a terminal write uses that reading as `ended_at`. Equality with `expired_at` is a loss. A failed check answers 409 `scheduler.execution.not_running`. The invocation-chain proof before the handler stays in place. Of two terminal writes, only one wins, and only the winner routes the Mission Service.
-- The Mission Service checks the release predicate of [the release admission](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-release-admission) in the release transaction, before the terminal write. A steps release with no further work requires a published evidence of the open attempt, submitted by the releasing execution, that holds for an objective one `repository` asset whose `binding_id` equals the repository binding of the pinned revision, and for an initiative one `produced` asset. A reviewer release requires a current passing assessment of the attempt and no eligible unrequested required action. A failed check answers 409 `mission.release.obligation_unmet` with `details.obligation` in `evidence`, `assessment` and `request`, and it changes no execution row, no node state and no job.
+- The Mission Service checks the release predicate of [the release admission](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-release-admission) in the release transaction, before the terminal write. A steps release with no further work requires a published evidence of the open attempt, submitted by the releasing execution, that holds for an `implement` node exactly one `repository` asset for each repository binding of the pinned revision and no other, and for an `examine` node one `produced` asset. A reviewer release requires a current passing assessment of the attempt and no eligible unrequested required action. A failed check answers 409 `mission.release.obligation_unmet` with `details.obligation` in `evidence`, `assessment` and `request`, and it changes no execution row, no node state and no job.
 - An admitted release sets `ended_at` and answers `{ execution_id, ended_at }`. The Mission Service reads the `ExecutionRelease.further_work` and `ExecutionRelease.stop` inputs in that transaction. The row stores `stop` as JSON, and nothing stores `further_work`. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
 - The Mission Service routes a steps release in the same transaction. With no further work, it sets `Waiting` and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
 - The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested` and inserts no job. The transaction that makes the continuation condition hold inserts the evaluation job.
@@ -248,14 +260,13 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The end of a registration ends no execution row by itself. Its live execution follows its deadline and the loss declaration.
 - No sweep deletes an execution row.
 - The Scheduler derives `claim_state`: `running` means `ended_at` is null and time is before `expired_at`; `lost` means `ended_at` is at or after `expired_at`, or `ended_at` is null and time is at or after `expired_at`; `finished` means `ended_at` is before `expired_at`. So the table holds no claim state column.
-- An initiative in `Available` holds a steps job only while every current objective holds a terminal state. The transaction that commits the terminal state of its last objective inserts the job, and a graph change that adds a nonterminal objective deletes it.
 
 ### Mission Service: attempts and human controls
 
-- `mission_attempt` has a partial unique index on `node_id` where `closed_at` is null, so a node holds at most one open attempt. A task holds no attempt row.
+- `mission_attempt` has a partial unique index on `node_id` where `closed_at` is null, so a node holds at most one open attempt.
 - Attempt numbers of a node start at 1 and have no gap. `mission_node.attempt` equals the highest number.
 - Three acts open an attempt: a claim of a node that holds no attempt, a human ready act on a node that holds no attempt, and a human unblock of a blocked attempt. `opened_by` names the actor of that act: the execution of the claim, or the human of the ready act or the unblock. An attempt of 2 or more always opens by an unblock.
-- An attempt pins `node_revision` at its opening and never changes it. The required external actions of the attempt are the policy of the `project_binding` row that its pinned revision names. An initiative requires none.
+- An attempt pins `node_revision` at its opening and never changes it. The required external actions of the attempt are the policy of the `project_binding` row that its pinned revision names. An `examine` node requires none.
 - A human ready act opens attempt 1 when the node holds none, sets `Waiting` and inserts the evaluation job in one transaction.
 - A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition and the dependency closure. `Available` routes to `Pending` when the closure does not hold.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node, in one transaction. A closed attempt never reopens.
@@ -268,12 +279,15 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The provenance of an execution submission is that execution. An evidence has no natural key, so a repeat after a restart creates a second row.
 - A submission writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
 - `content` of an asset holds the RFC 8785 canonical JSON of the shape that `kind` names. A repository shape holds `binding_id` and `commit`. A produced shape holds `media_type`, `sha256` and canonical base64 `data` of at most 5 MiB decoded, and `sha256` equals the digest of those bytes. An object shape holds `location`, `size`, `media_type`, `storage_binding_id` of the pinned storage binding row, `object_version` when the store returns one, and an optional `sha256`. A platform shape holds `kind`, `resource_identity` and the fields of its kind.
-- `binding_id` of a repository shape names a repository binding row of the project in every context. For the evidence of an objective, and for a landed commit, it equals the repository binding of the pinned revision, or, for a success override while the attempt reads 0, the binding of the revision current at the act. For the tested input of an initiative, the list holds one address for each distinct repository binding of its current objectives.
+- `binding_id` of a repository shape names a repository binding row of the project in every context. For the evidence of an `implement` node, and for a landed commit, it equals a repository binding of the pinned revision, or, for a success override while the attempt reads 0, a binding of the revision current at the act. For the tested input of an `examine` node, the list holds one address for each repository binding of the pinned revision, in binding order.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` 1 hour after the submission. The complete checks the size and the optional checksum, then sets `published_at`. An asset whose `expired_at` has passed never completes.
 - An evidence is published when every asset of it holds `published_at`. An unpublished evidence joins no evidence set.
 - An object is at most 5 GiB. Without a storage binding, the Mission Service accepts no object asset.
+- The grant takes the first storage binding of the pinned revision, in list order, that is available, that no tombstone removed, that the signing call accepts, and that holds no `mission_evidence_upload_failure` row of the open attempt.
+- A failed upload check inserts the row `(node_id, attempt, storage_binding_id)` with the `asset_id` of the checked asset. A new attempt tries every storage binding again.
+- A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_exhausted`.
 - A row is append-only, except `end_state` of a request and a human delete.
-- A human delete removes the content first and the row after it. `mission.evidence.asset.delete` deletes one asset and keeps the evidence row. `mission.evidence.delete` deletes every asset and the evidence row, and it removes the identity from every `evidence_ids` set. Both need a terminal state of the node and of every ancestor, unless a human forces the delete with a reason. No row records the remover, the reason or the time.
+- A human delete removes the content first and the row after it. `mission.evidence.asset.delete` deletes one asset and keeps the evidence row. `mission.evidence.delete` deletes every asset and the evidence row, and it removes the identity from every `evidence_ids` set. Both need a terminal state of the node and of every direct `examine` dependent of the node, unless a human forces the delete with a reason. No row records the remover, the reason or the time.
 - kanthord runs no automatic delete and no cleanup process of evidence or of unpublished objects.
 - `attempt` is 1 or more, except the landed-commit evidence of a success override on a node whose attempt reads 0.
 - An `expected` result of a repository request writes each landed commit as its own evidence row with one `repository` asset, the provenance `{ kind: "service", service: "mission" }` and the attempt of the request. When delivery admission writes it, the provenance also holds `inbound_event_id`, the identity of the inbound event of ERD 3.
@@ -283,12 +297,12 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: assessments
 
-- Exactly one of `execution_id` and `actor` is set. An execution assessment names the execution of its evaluation claim in `execution_id`, and the read derives the `Actor` of the execution form from it. A human assessment holds a human `actor`, a null `tested_input` and an empty `child_outcome_ids`. An evaluation attempt is one reviewer execution and holds no row of its own.
+- Exactly one of `execution_id` and `actor` is set. An execution assessment names the execution of its evaluation claim in `execution_id`, and the read derives the `Actor` of the execution form from it. A human assessment holds a human `actor`, a null `tested_input` and an empty `dependency_outcome_ids`. An evaluation attempt is one reviewer execution and holds no row of its own.
 - A human override, discard or block writes its human assessment and the outcome that names it in one transaction. No other act writes a human assessment.
-- `node_revision` equals the pin of `mission_attempt` at `(node_id, attempt)`, or the revision current at the act when a human assessment names attempt 0. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
-- `child_outcome_ids` of an initiative names the current outcome of each current objective at the acceptance, and no other outcome. `child_outcome_ids` of an objective is empty. The child set of the assessment is the set of nodes of those outcomes. `evidence_ids` and `child_outcome_ids` are sets.
+- `node_revision` equals the pin of `mission_attempt` at `(node_id, attempt)`, or the revision current at the act when a human assessment names attempt 0. Its evidence, its tested input and its dependency outcomes belong to the node and to the context of that attempt.
+- `dependency_outcome_ids` of an `examine` node names the current outcome of each direct dependency at the acceptance, and no other outcome. `dependency_outcome_ids` of an `implement` node is empty. The read derives `dependency_node_ids` from the nodes of those outcomes. `evidence_ids` and `dependency_outcome_ids` are sets.
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
-- A success execution assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification of the node and, for an objective, of each current task of the pinned revision, each with `exit_code` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
+- A success execution assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification of the node and, for an `implement` node, of each current task of the pinned revision, each with `exit_code` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
 - For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
 - `sequence` is the acceptance order of the assessments of one node, from 1 with no gap. The order check of the currency reads it over the execution assessments only. `mission_assessment` has a unique index on `(node_id, sequence)`.
 - Assessments accumulate. The Mission Service overwrites none and deletes none. A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment row.
@@ -307,9 +321,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: proposals
 
-- Only an `undetermined` execution assessment of an initiative holds proposals. `objective_id` in `content` names a live objective child of that initiative.
+- Only an `undetermined` execution assessment of an `examine` node holds proposals, at most 10. `dependency_id` in `content` names a current direct dependency of that node with `work: implement`.
 - The service writes the proposal rows in the transaction that closes the attempt and writes the outcome.
-- An approval sets `objective_node_id` and `approved_at` once. No other write changes a proposal row.
+- An approval creates an `implement` node with the one task of the proposal, adds the dependency of the proposer on it, and sets `created_node_id` and `approved_at` once. No other write changes a proposal row.
 
 ### Mission Service: requests
 
