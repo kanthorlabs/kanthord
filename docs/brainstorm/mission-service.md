@@ -61,6 +61,7 @@ A dependency edit acts on the live graph at once.
 A dependency addition requires that no live claim holds the dependent.
 A dependency removal requires a dependent that is not terminal, because a removal never makes a closure stop holding.
 A dependency addition or removal on a dependent in `Waiting`, `Evaluating`, `External.Requested`, `External.Success` or `External.Failed` answers `mission.node.state_conflict`.
+A dependency addition on a `Paused` dependent whose open attempt holds a request evidence answers `mission.node.state_conflict`, because its resume goes to an external state.
 This condition applies on both write paths, and it replaces the import condition for a dependency edit.
 In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it writes the jobs of those nodes.
 The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing, the resume target and the readiness condition.
@@ -164,6 +165,8 @@ A node API retirement retires the named node, and its tasks leave the work of th
 The check requires `Pending` or `Available` and an attempt that reads 0.
 A dependency on a retiring node from a nonterminal dependent outside the [retirement set](mission-service.vocabulary.md#retirement-set) refuses the retirement.
 A human who forces the retirement removes that dependency.
+A forced retirement answers `mission.node.state_conflict` when it removes a dependency of a dependent in `Waiting`, `Evaluating` or an `External.*` state.
+The same refusal applies to a `Paused` dependent whose open attempt holds a request evidence.
 Each freed dependent moves between `Pending` and `Available` by its remaining dependencies.
 A dependency from a terminal dependent stays as a historical relation.
 A preview confirms the retirement set and the removed dependencies before the retirement applies.
@@ -502,6 +505,7 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 The readiness condition admits an evaluation claim from `Waiting` and from `External.Requested`.
 It also admits the human assertion of `Available -> Waiting`.
 It holds when the dependency closure of the node holds.
+The dependency rules of Mission structure and nodes keep it true at `Waiting` and at `External.Requested`, and the claim rechecks it.
 
 ### Continuation condition
 
@@ -636,7 +640,7 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `External.Requested -> External.Success` | Delivery admission, a reviewer release fold, the deferred check, or a human check sets the expected end state on the request evidence of the last unresolved required external action | No effect                                                                               | End state of the request evidence; a repository request adds one landed-commit evidence for each commit; an external action that is not a repository action adds none |
 | `External.Requested -> External.Failed`  | Delivery admission, a reviewer release fold, the deferred check, or a human check sets the end state `other` on a request evidence                                                    | No effect                                                                               | End state of the request evidence                                                                                                                                     |
 | `External.Requested -> Paused`           | Human holds the node                                                                                                                                                                  | Stays open                                                                              | None                                                                                                                                                                  |
-| `External.Requested -> Evaluating`       | Evaluation claim; the continuation condition and the readiness condition hold                                                                                                         | No effect                                                                               | None                                                                                                                                                                  |
+| `External.Requested -> Evaluating`       | Evaluation claim; the continuation condition holds; the claim rechecks the readiness condition                                                                                        | No effect                                                                               | None                                                                                                                                                                  |
 | `External.Success -> Completed`          | Current passing assessment stands, or human override asserts success after the end state resolves the request                                                                         | Closes                                                                                  | Outcome                                                                                                                                                               |
 | `External.Success -> Paused`             | Human holds the node                                                                                                                                                                  | Stays open                                                                              | None                                                                                                                                                                  |
 | `External.Success -> Discarded`          | Human discards the node                                                                                                                                                               | Closes by force                                                                         | Outcome                                                                                                                                                               |

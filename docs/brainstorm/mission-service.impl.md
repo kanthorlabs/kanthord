@@ -196,6 +196,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - A write that names a retired node as a dependency answers 409 `mission.node.retired` with `details: { node_id }` of that node.
 - `dependency add` with endpoints in two missions answers 409 `mission.dependency.endpoint_invalid` with `details: { reason, node_id, depends_on_id }`, where `reason` is `cross_mission`.
 - `dependency add` and `dependency remove` on a dependent in `Waiting`, `Evaluating`, `External.Requested`, `External.Success` or `External.Failed` answer 409 `mission.node.state_conflict` with the current `state` and `attempt` in `details`.
+- `dependency add` on a `Paused` dependent whose open attempt holds a request evidence answers the same code. The rule applies to the node API and to the import.
 - A self addition answers 409 `mission.import.cycle` after the endpoint checks. `dependency remove` checks no endpoint pair, and an absent edge is a no-op.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
 - An import entry with the identity of a task that an earlier write removed fails with 400 `mission.import.retired_id`.
@@ -553,6 +554,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A checked node that fails `Pending` or `Available` with attempt 0 answers 409 `mission.node.retire_refused` with `details: { node_id, state, attempt }` of the first failed node.
 - A dependency on a node of the set from a nonterminal dependent outside the set answers 409 `mission.node.retire_has_dependents` with `details: { dependents: NodeId[] }` when `force` is false.
 - With `force: true`, the retirement removes each such dependency and moves each freed dependent between `Pending` and `Available` in the same transaction. A dependency from a terminal dependent stays.
+- A forced retirement that removes a dependency of a dependent in `Waiting`, `Evaluating` or an `External.*` state, or of a `Paused` dependent whose open attempt holds a request evidence, answers 409 `mission.node.state_conflict` with `details: { node_id, state, attempt }` of that dependent.
 - Preview and apply answer the same refusals.
 - The preview answers `RetirePreview`: `node_id`, `force`, `mission_version`, `retired_node_ids`, `removed_edges`, `preview_digest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
 - The apply request `Retire` holds `expected_mission_version`, `force`, `preview_digest` and `reason`. A stale mission version answers 409 `mission.version.conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
@@ -745,6 +747,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse a node write and a proposal approval that take a used node or task plan file name with `mission.node.filename_conflict`, and export and import both formats with every task file name unchanged.
 - Tests refuse a node update that names a task of another node with `mission.node.content_invalid`, refuse a nonempty task `bindings` list with `mission.node.bindings_invalid`, and refuse the identity of a removed task with `mission.import.retired_id`.
 - Tests refuse a dependency add and a dependency remove on a dependent in `Waiting`, `Evaluating` and each `External.*` state with `mission.node.state_conflict`.
+- Tests refuse a dependency add through the node API and through the import on a `Paused` dependent whose open attempt holds a request evidence with `mission.node.state_conflict`, and accept it on a `Paused` dependent with no request evidence.
+- Tests refuse a forced retirement that removes a dependency of a dependent in `Waiting`, `Evaluating`, each `External.*` state or that `Paused` case with `mission.node.state_conflict`, and write nothing.
 - Tests assert that the file name becomes the import-set key and the node's `filename`.
 - Tests refuse upper-case names, names without `.md`, and path separators.
 - Tests require `filename` on create and return it on node reads.

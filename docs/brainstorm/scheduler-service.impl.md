@@ -89,7 +89,7 @@ It predicts no claim, because a work pull rechecks every admission condition at 
 - `mission-condition` reads the Mission condition of that state.
   - `External.Requested` reads the [continuation condition](mission-service.md#continuation-condition) as `continuation`.
   - `Available` and `Waiting` read no condition, and the check holds `not-applicable` with `condition: null`.
-  - The [readiness condition](mission-service.md#readiness-condition) always holds at `Waiting` and at `External.Requested`. A dependency edit on a dependent in those states answers `mission.node.state_conflict`, and `Completed` is terminal.
+  - The [readiness condition](mission-service.md#readiness-condition) always holds at `Waiting` and at `External.Requested`. A dependency edit on a dependent in those states answers `mission.node.state_conflict`. A dependency addition on a `Paused` dependent that resumes into an external state, and a forced retirement that removes a dependency of such a dependent, answer the same code. `Completed` is terminal.
   - When `node-state` fails, the check holds `not-applicable` with `condition: null`.
 - `queue-job` passes when the work queue of the project holds a job of the node, and that job holds no `not_before` after the clock reading.
 - `no-live-claim` passes when no execution of the node holds the claim state `running`.
