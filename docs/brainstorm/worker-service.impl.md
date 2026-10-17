@@ -549,7 +549,7 @@ A node with two or more repository bindings uses one subdirectory for each bindi
 A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
 A test checks base-branch heads and one tested commit per binding for an `examine` node with two repository bindings.
 A test checks the evidence-placement rule for an `examine` node that names no repository binding.
-A test checks that an `examine` node with one repository binding places the produced evidence in the `evidence` directory of the workspace and keeps its checkout clean.
+A test checks that an `examine` node with one repository binding and an `implement` node with an evidence snapshot each place the produced evidence in the `evidence` directory of the workspace and keep the checkout clean.
 A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
@@ -580,7 +580,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
 - The workspace of a steps execution on an `implement` node is `workspaces/<node identity>/`, keyed as [worker-service.md](worker-service.md#executions) states. Each checkout is `workspaces/<node identity>/checkouts/<binding name>/`.
 - The agent root is the directory that the agent works from. It is the one checkout for one repository binding, and `checkouts/` for two or more.
-- The workspace of an evaluation execution and of a steps execution on an `examine` node is `workspaces/<execution identity>/`, with the same layout rule, and the Worker Service removes it at the release. An evaluation of an `examine` node with repository bindings also holds `workspaces/<execution identity>/evidence/`, beside `checkouts/`.
+- The workspace of an evaluation execution and of a steps execution on an `examine` node is `workspaces/<execution identity>/`, with the same layout rule, and the Worker Service removes it at the release. An evaluation that checks out repositories also holds `workspaces/<execution identity>/evidence/`, beside `checkouts/`. This covers an `implement` node with an evidence snapshot.
 - `.kanthord-scratch/` sits at the agent root. The preparation adds it to `.git/info/exclude` of each checkout, so a task commit never stages the scratch files of the agent.
 - The preparation holds the node key once and prepares one checkout for each repository binding.
 - The preparation reads the node branch from `node_branch` of the claim. `fetchAndCheckout` checks out the remote node branch when it exists. Else it checks out the local node branch without a reset when the workspace holds one, so that commits of a failed push stay. Else it checks out the base branch. It runs `git clean -ffd` when the workspace HEAD is on the node branch of the claim, and `git clean -ffdx` otherwise, so a branch switch also removes `.kanthord-scratch/` and the other ignored files of the earlier branch.
