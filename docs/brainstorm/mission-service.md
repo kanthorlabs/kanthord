@@ -32,8 +32,8 @@ A `report` node reports on the outcomes of its direct dependencies, and it holds
 A human changes the work of a node only while the attempt of the node reads 0.
 A later change of the work answers `mission.node.work_locked`.
 The [requires](mission-service.vocabulary.md#requires) list of a node names the traits that a worker binding needs to claim the node.
-The [Scheduler Service](scheduler-service.md#matching) matches the work and the requires list of a node against each worker binding of the project.
-A node write that adds an unmatched pair of a node and a claim kind answers `mission.node.requires_unmatched`.
+The [Scheduler Service](scheduler-service.md#match) matches the work and the requires list of a node against each worker binding of the project.
+A node write that adds an unmatched pair of a node and a claimable state answers `mission.node.requires_unmatched`.
 A node write that keeps an existing unmatched pair succeeds.
 
 A task is content of a `change` node.
@@ -63,13 +63,14 @@ A dependency removal requires a dependent that is not terminal, because a remova
 A dependency addition or removal on a dependent in `Waiting`, `Evaluating`, `External.Requested`, `External.Success` or `External.Failed` answers `mission.node.state_conflict`.
 This condition applies on both write paths, and it replaces the import condition for a dependency edit.
 In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it writes the jobs of those nodes.
-The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing and the resume precedence, and nowhere else.
+The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing, the resume target and the readiness condition.
 An addition on a node whose execution ended changes no routing of that node, because the gate gates the start.
 
 The check of a landing is a platform operation of the Intake Service, and it uses the credential of a repository binding.
 
 A node names the bindings that its work permits, and each binding kind states how many a node of each work names.
-The Mission Service resolves each binding kind on its own, at write time: the bindings that the node names, else the one binding of that kind that the project holds.
+The Mission Service resolves each binding kind on its own, at write time.
+It takes the bindings that the node names, else the one binding of that kind that the project holds.
 The fallback to the project binding applies only to a binding kind whose count permits one or more bindings for the work of the node.
 The first level that names a kind wins, and bindings of one kind never merge across the two levels.
 The fallback tail of an agent follows the same replace rule, under the [fallback chain](agent.md#fallback-chain) of the Agent component.
@@ -500,7 +501,7 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 `Waiting` means released, and it does not mean claimable.
 The readiness condition admits an evaluation claim from `Waiting` and from `External.Requested`.
 It also admits the human assertion of `Available -> Waiting`.
-It holds when every direct dependency of the node is `Completed`.
+It holds when the dependency closure of the node holds.
 
 ### Continuation condition
 
@@ -583,7 +584,7 @@ When a required action ended in a state other than its expected end state, the n
 Otherwise, when a required action is requested and every required action has reached its expected end state, the node goes to `External.Success`.
 Otherwise, when a required action is requested, the node goes to `External.Requested`.
 Otherwise the target of the resume selects the state.
-The target `Waiting` needs the readiness condition and the dependency closure, as the ready act does.
+The target `Waiting` needs the readiness condition, as the ready act does.
 The target `Available` sends the node to `Available` when the dependency closure holds, or to `Pending` when it does not hold.
 
 A forced delete of the request evidence of the open attempt holds the node, and every `-> Paused` row below whose event is a human hold covers that delete.
@@ -623,7 +624,7 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Blocked -> Pending`                     | Human unblock; closure does not hold                                                                                                                                                  | Next attempt opens when the cleared attempt exists                                      | Unblock record                                                                                                                                                        |
 | `Blocked -> Completed`                   | Human override asserts success                                                                                                                                                        | No open attempt                                                                         | Outcome                                                                                                                                                               |
 | `Blocked -> Discarded`                   | Human discards the node                                                                                                                                                               | No open attempt                                                                         | Outcome                                                                                                                                                               |
-| `Paused -> Waiting`                      | Human resumes the node with target Waiting; readiness condition and closure hold                                                                                                      | Opens the attempt when the node holds none; stays open otherwise                        | None                                                                                                                                                                  |
+| `Paused -> Waiting`                      | Human resumes the node with target Waiting; readiness condition holds                                                                                                                 | Opens the attempt when the node holds none; stays open otherwise                        | None                                                                                                                                                                  |
 | `Paused -> Available`                    | Human resumes the node with target Available; closure holds                                                                                                                           | Stays open                                                                              | None                                                                                                                                                                  |
 | `Paused -> Pending`                      | Human resumes the node with target Available; closure does not hold                                                                                                                   | Stays open                                                                              | None                                                                                                                                                                  |
 | `Paused -> External.Requested`           | Human resumes the node; resume precedence selects External.Requested                                                                                                                  | Stays open                                                                              | None                                                                                                                                                                  |

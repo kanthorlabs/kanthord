@@ -104,10 +104,10 @@ The namespace prefix of a key is a convention, and no rule reads it.
 A trait holds no version, no range and no operator, so a version is part of the key, for example `toolchain.xcode_16`.
 A key that violates the form, or a repeated key, refuses the write with `project.bindings.worker.traits_invalid`.
 The current worker bindings of a project state the trait vocabulary of that project.
-The [Scheduler Service](scheduler-service.md#matching) matches the traits of a worker binding against the requires list of each node.
-A binding-set write that adds an unmatched claim refuses the write with `project.bindings.worker.node_unmatched`, and the error names the nodes.
-An unmatched claim that exists before the write refuses no write.
-A human configures the worker bindings of a project before the first import, because a node write also refuses an unmatched claim.
+The [Scheduler Service](scheduler-service.md#match) matches the traits of a worker binding against the requires list of each node.
+A binding-set write that adds an unmatched pair of a node and a claimable state refuses the write with `project.bindings.worker.node_unmatched`, and the error names the nodes.
+An unmatched pair that exists before the write refuses no write.
+A human configures the worker bindings of a project before the first import, because a node write also refuses an unmatched pair.
 
 Each worker binding of one worker holds its own configuration, and two bindings of one worker with equal values are valid.
 A binding identity is separate from a worker name.

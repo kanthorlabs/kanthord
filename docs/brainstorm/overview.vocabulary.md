@@ -63,7 +63,7 @@ The term names no closed set.
 The [work](mission-service.vocabulary.md#work) of a node is `change` or `report`.
 A `tdd@1` instance claims the `change` node "Add password reset". A `reviewer@1` instance later claims the node.
 The `report` node "Account recovery" reports on the outcomes of "Add password reset" and "Add recovery codes".
-Nothing else is a node. The word names a vertex of the graph, and it never names a tier or a degree.
+Nothing else is a node. The word names a vertex of the graph.
 
 ## task
 

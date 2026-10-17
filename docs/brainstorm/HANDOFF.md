@@ -33,6 +33,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Mission Service
 
+- [ ] RULED 2026-10-17 by Ulrich. Implement the flat-node model of [mission-service.md](mission-service.md): no node kinds and no containment, `work` and `requires` on each node, tasks as content of a `change` node with `task_<ulid>` identities, and the [match](scheduler-service.md#match) of the Scheduler Service. kanthord is not deployed, so the refactor rewrites the mission schema in place with no data migration. The design pages already state the result; update the engine code, the tests, the OpenAPI files, `engine/docs/cli/`, `apps`, `docs/reference/`, `docs/explanation/`, `docs/README.md:27`, the ERD anchor `#edge-kind` of `docs/reference/erd/01-setup.md:196`, and the work and trait match of the dashboard "no taker" view in `apps/src/lib/claim-takers.ts`.
+
 - [ ] Added 2026-10-02 from the debate of the Intake redesign. A human-act admission invokes the Mission operation under the linked human identity, and since 2026-10-03 no admission row exists. A crash after the act lets a repeat of the same inbound event repeat the human act. Decide how the human act becomes idempotent by the event identity.
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
@@ -156,7 +158,7 @@ Each item names its owner. Read the owning design document before taking an item
 
 Run data is in `.dev/e2e/automerge-1`. Each item names its owner.
 
-Ruled 2026-10-16 by Ulrich: the run ends with the project paused. `todo-api.md` stays Blocked with two app defects of the review of that `report` node: `src/http/errors.js` leaks log data through `console.error`, and `RepositoryError database_busy` answers 500 instead of 503.
+Ruled 2026-10-16 by Ulrich: the run ends with the project paused. `todo-api.md` stays Blocked with two app defects of the initiative review: `src/http/errors.js` leaks log data through `console.error`, and `RepositoryError database_busy` answers 500 instead of 503.
 
 Ruled 2026-10-16 by Ulrich: one engine pull request fixes the findings below, branched from engine main after engine PR #59 merges. The layer order is the unpushed work loss (S25 gap), the git error text, the git spans of the finish, the claim backoff, then the flaky test. Each layer carries a test that fails without its change.
 

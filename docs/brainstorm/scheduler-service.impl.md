@@ -102,7 +102,7 @@ The report never answers a check that needs a selected claimant:
 - the declared node states of a worker;
 - the count of a claimant;
 - the instance healthcheck;
-- the [match](scheduler-service.md#matching) of the declared works and the traits.
+- the [match](scheduler-service.md#match) of the declared works and the traits.
 
 The report takes no instance healthcheck and reads no registration.
 It names no worker binding, no instance and no claimant.
@@ -148,7 +148,7 @@ The instance healthcheck stays out of every human inspection command under [work
 
 ## The match
 
-The Scheduler Service implements the [match](scheduler-service.md#matching) in `claim.ts`.
+The Scheduler Service implements the [match](scheduler-service.md#match) in `claim.ts`.
 
 ```ts
 function admits(claimant: Claimant, facts: ClaimFacts): boolean {
@@ -174,7 +174,8 @@ function covered(
 - `ClaimFacts` holds `work` and `requires` at the node revision that the claim pins.
 - The claim walk calls `claimFacts` for each job, applies `admits`, then calls `transitions.claim` of the Mission Service. The on-demand path applies the same `admits`.
 - `declarationOf` answers `null` for a worker name with no declaration. The claim then has no claimant and answers `{ kind: "no-work" }`. It asserts nothing.
-- `unmatchedClaims` computes `covered` for each needed pair. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores `instance_count`.
+- `unmatchedClaims` computes `covered` for each pair of a node and a claimable state. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores `instance_count`.
+- `claim` of a pair is its claimable state: `Available`, `Waiting` or `External.Requested`. `claims` of `claimFactsOf` lists the claimable states of the node.
 
 The collaborations of the match are below.
 

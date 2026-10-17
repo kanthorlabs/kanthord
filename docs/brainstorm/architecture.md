@@ -202,7 +202,7 @@ Every service that versions a resource follows these rules.
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
 - The Scheduler Service reads the worker bindings and their instance counts from the Project Service.
 - The Scheduler Service reads the claim facts of the nodes from the Mission Service.
-- The Mission Service and the Project Service read the unmatched claims of a project from the Scheduler Service in the transaction of their write.
+- The Mission Service and the Project Service read the unmatched pairs of a project from the Scheduler Service in the transaction of their write.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
 - The Mission Service checks the external object of a request evidence through the Intake Service.
 - The Intake Service uses a repository credential through custody after the authorization of the service that owns the entity of the operation.

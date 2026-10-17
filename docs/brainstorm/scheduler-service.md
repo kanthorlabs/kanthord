@@ -101,7 +101,7 @@ That authorization starts at the first operation under the execution identity th
 The work pull requires an instance healthcheck taken for the claim and fewer live executions of the binding than its instance count.
 The Worker Service produces the instance healthcheck and the compatibility declarations.
 The Scheduler selects the first job of the project's work queue that the claimant admits.
-The match reads the node states that the worker declares and the [match](#matching) of the node and the claimant.
+The Scheduler admits the claim when the worker declares the node state and the claimant admits the node under [Match](#match).
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
 The [Mission Service](mission-service.md#criterion-and-authority) owns that revision selection.
 The worker requests work and never authorizes its own claim.
@@ -230,7 +230,7 @@ The revoked execution leaves its claimant's count at revocation.
 An instance-count change stops new admissions where the new count requires it.
 The Scheduler counts live executions during the drain and treats no configuration edit as a discard of a node.
 
-## Matching
+## Match
 
 The Scheduler Service owns the match of a node and a claimant.
 A claimant admits a node when two facts hold.
@@ -253,7 +253,8 @@ A worker name with no worker declaration gives no claimant, and its work pull an
 A claimant covers a node in a state when its worker declares that state and the claimant admits the node.
 Each node that is not terminal and not retired needs a claimant for `Available` and for `Waiting`.
 It also needs a claimant for `External.Requested` when its bindings require an external action.
-A pair of a node and one of these states is unmatched when no current worker binding of the project covers it.
+These states are the claimable states of the node.
+A pair of a node and a claimable state is unmatched when no current worker binding of the project covers it.
 The check reads the current revision of the node and the revision that its open attempt pins.
 The check ignores the instance count.
 

@@ -50,7 +50,7 @@ The write resolves each binding identity, or each binding name of a plan file, t
 The write accepts the identity of a revision of the current binding of that resource. An identity from before a removal of that binding answers `mission.node.bindings_invalid`, also when a binding of the same resource exists again.
 The work of the node determines the column.
 A node that names no binding of a kind takes the one project binding of that kind when its column permits one or more.
-A task names no binding.
+A task names no binding, and a task with a nonempty `bindings` list answers `mission.node.bindings_invalid`.
 A new binding kind adds a row.
 
 | Binding kind | `change`  | `report`  |
@@ -62,9 +62,10 @@ A new binding kind adds a row.
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or unknown `work`, a nonlist `requires`, a repeated or malformed trait key, and a task on a `report` node answer `mission.node.content_invalid`.
 A write that changes `work` of a node whose attempt reads 1 or more answers 409 `mission.node.work_locked` with `details: { node_id, attempt }`.
-A node write that adds an unmatched claim of the [Scheduler Service](scheduler-service.md#matching) answers 409 `mission.node.requires_unmatched` with `details: { claims }`. The node writes are import apply, node create, node update, an unblock with a change and a proposal approval.
+A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.requires_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The node writes are import apply, node create, node update, an unblock with a change and a proposal approval.
 Each of these writes reads `unmatchedClaims` of the Scheduler Service before and after its change, in its own `BEGIN IMMEDIATE` transaction.
-A node write that keeps an existing unmatched claim succeeds.
+A node write that keeps an existing unmatched pair succeeds.
+A node update that names the identity of a task of another node answers `mission.node.content_invalid`.
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
 A nonlist `verifications` value or a blank or nontext item answers `mission.node.content_invalid`.
 A node with no verification need holds an always-successful command such as `true`.
@@ -134,7 +135,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - The front matter of a task file permits only these keys:
   - `id`: the task identity `task_<ulid>`; absent on a new task.
   - `node`: the plan file name of a node file of the import set with `work: change`; required.
-  - `bindings`: an empty list.
+  - `bindings`: an empty list; another list answers `mission.node.bindings_invalid`.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
 - A task file refuses `depends_on`, `requires` and `work`.
 - After the front matter, exactly one H1 supplies `name`.
@@ -155,6 +156,8 @@ The service derives it from the policy of the `project_binding` row that the pin
 - Node reads return `filename`, and every export writes it unchanged.
 - A node update that changes `filename` changes content and creates a node revision.
 - A task change creates a node revision of its node.
+- A task holds `filename` in the content of its node. A task plan file name is unique among the node and task plan file names of the current nodes of its mission that are not retired.
+- A node write that takes a used node or task plan file name answers 409 `mission.node.filename_conflict`. A proposal approval follows the same rule.
 - A taken name answers 409 `mission.node.filename_conflict`.
 
 ## Export and the two formats
@@ -177,13 +180,13 @@ The service derives it from the policy of the `project_binding` row that the pin
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
-- The import result holds the map from file name to node identity.
+- The import result maps each node file name to its node identity and each task file name to its task identity.
 - A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
-- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.mission_mismatch`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.reference_kind_invalid` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, `mission.import.verification_uncovered` with `details: { name, command }`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict`, `mission.node.requires_unmatched` and, on apply alone, `mission.import.retirement_mismatch`.
+- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.mission_mismatch`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.reference_kind_invalid` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, `mission.import.verification_uncovered` with `details: { name, command }`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict`, `mission.node.requires_unmatched`, `mission.node.state_conflict` and `mission.node.claim_live` for a dependency edit, and, on apply alone, `mission.import.retirement_mismatch`.
 - A body `mission_id` that differs from the route is a first-stage violation `mission.import.mission_mismatch`. A `node` name that resolves inside the set to a task file or to a node file with `work: report`, and a dependency name that resolves to a task file, are second-stage violations `mission.import.reference_kind_invalid`. A verification of a `change` node that equals no verification of a task of that node in the import set is a second-stage violation `mission.import.verification_uncovered`, with the node file as `name` and the verification as `command`.
-- A preview reports every unmatched claim that the import adds, and the apply refuses it with `mission.node.requires_unmatched`.
+- A preview reports every unmatched pair that the import adds, and the apply refuses it with `mission.node.requires_unmatched`.
 
 ## Node API admission
 
@@ -195,6 +198,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - `dependency add` and `dependency remove` on a dependent in `Waiting`, `Evaluating`, `External.Requested`, `External.Success` or `External.Failed` answer 409 `mission.node.state_conflict` with the current `state` and `attempt` in `details`.
 - A self addition answers 409 `mission.import.cycle` after the endpoint checks. `dependency remove` checks no endpoint pair, and an absent edge is a no-op.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
+- An import entry with the identity of a task that an earlier write removed fails with 400 `mission.import.retired_id`.
 - `node create` admits a node at any time.
 - The import keeps the import condition.
 - A human control whose `expected_state` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
@@ -296,10 +300,10 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - `mission.proposal.list` uses `GET /api/mission/node/:node_id/proposal` with `human` access, and it answers a page of proposals with an optional `attempt` filter.
 - `mission.proposal.approve` uses `POST /api/mission/proposal/:proposal_id/approve` with `human` access. Its body holds `expected_mission_version` and an optional nonblank `reason`.
 - In one transaction, the approval creates a `change` node with the one task of the proposal and copies `bindings` and `requires` from the node of `dependency_id`.
-- The same transaction adds the dependency of the proposer `report` node on the new node and reads the unmatched claims of the Scheduler Service.
+- The same transaction adds the dependency of the proposer `report` node on the new node and reads the unmatched pairs of the Scheduler Service.
 - It then unblocks the proposer into a new attempt with the default start point `node_branch` and sets `created_node_id` and `approved_at` of the proposal.
 - The proposer routes to `Pending` and stays unclaimable until the new node reaches `Completed`, under the dependency rule.
-- An approved proposal answers 409 `mission.proposal.already_approved`. A proposer that is not `Blocked` in the attempt of the proposal answers 409 `mission.node.state_conflict`. A new unmatched claim answers 409 `mission.node.requires_unmatched`.
+- An approved proposal answers 409 `mission.proposal.already_approved`. A proposer that is not `Blocked` in the attempt of the proposal answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.requires_unmatched`.
 - A human rejects a proposal with the existing unblock or discard.
 
 ## The release admission
@@ -490,7 +494,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `node ready` requires `expected_state: Available` and an `expected_attempt` equal to the attempt of the node.
   A mismatch answers 409 `mission.node.state_conflict`.
 - When the attempt reads 0, the readiness condition reads no attempt-scoped record.
-- A node that is not ready answers 409 `mission.node.not_ready`.
+- A node that is not ready answers 409 `mission.node.not_ready`. A resume with `target: Waiting` answers the same code under [Node resume](#node-resume).
   Its `details` hold `unsatisfied_ids: NodeId[]`.
   `unsatisfied_ids` names the dependencies of the closure that are not `Completed`.
   The refusal opens no attempt, changes no state and writes no job.
@@ -511,7 +515,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
   A mismatch answers 409 `mission.node.state_conflict`.
 - The external action records of the attempt take precedence over the target, under [the state transitions](mission-service.md#state-transitions).
   A resume that they route to `External.Failed`, `External.Success` or `External.Requested` does not read the target.
-- `target: Waiting` requires the readiness condition and the dependency closure.
+- `target: Waiting` requires the readiness condition.
   A node that is not ready answers 409 `mission.node.not_ready` with the `details` of [Node ready](#node-ready).
   The refusal changes no state and writes no job.
 - `target: Available` moves the node to `Available` when the dependency closure holds, and to `Pending` when it does not hold.
@@ -539,6 +543,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
 
 - The Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service through its `contract.ts`. It answers every node that is not terminal and not retired when its current revision or the node revision of its open attempt pins the binding revision. A rebind keeps the node revision of an open attempt, so the node keeps the old pin until that attempt ends.
+- The Mission Service offers `claimFacts(tx, nodeId)` and `claimFactsOf(tx, projectId)` to the Scheduler Service through its `contract.ts`. `claimFacts` answers `work` and `requires` at the revision that the open attempt pins, else at the current revision. `claimFactsOf` answers each node that is not terminal and not retired, at its current revision and at the revision that its open attempt pins. Neither writes a record.
 
 ## Node retire
 
@@ -595,11 +600,11 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A human control checks the mission version and leaves it unchanged, except an unblock that carries a change.
 - A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
-- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.retire`, `node.rebind`, `criterion.set` or `unblock`.
+- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.rebind`, `criterion.set` or `unblock`.
 - An import that moves a task changes the content of both nodes, so each one takes a node revision with `write: import`.
 - `change.previous_revision` is the previous revision, or null on revision 1.
 - `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `work`, `requires` and `tasks`.
-- `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node.
+- `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node. An import omission and a node update that drops the task both write it.
 - The result of the change is the `content` of the same record.
 
 ## The graph write answer
@@ -608,7 +613,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `NodeChange` holds the new mission version, the node revisions created, the retired node identities, and the edges added and removed.
 - It also holds `open_attempts_unchanged`, one `{ node_id, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
 - A write with no structure or content change answers the current mission version with empty arrays.
-- A node revision keeps its own actor, reason and time, including the node revision that a task removal inserts. No record keeps the actor, the reason or the time of a dependency edit, or the actor and the reason of a retirement that inserts no node revision. `retired_at` keeps the time of every retirement.
+- A node revision keeps its own actor, reason and time, including the node revision that a task removal inserts. No record keeps the actor, the reason or the time of a dependency edit, or the actor and the reason of a retirement. `retired_at` keeps the time of every retirement.
 
 ## The mission screen of the dashboard
 
@@ -736,7 +741,9 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests reject unresolved `node` and dependency names and references outside the import set.
 - Tests refuse a self-dependency and a dependency cycle of two or more nodes through dependency add and import with `mission.import.cycle`.
 - Tests refuse a change of `work` on a node whose attempt reads 1 or more with `mission.node.work_locked`.
-- Tests refuse a node write that adds an unmatched claim with `mission.node.requires_unmatched`, and accept a write that keeps an existing unmatched claim.
+- Tests refuse a node write that adds an unmatched pair with `mission.node.requires_unmatched`, and accept a write that keeps an existing unmatched pair.
+- Tests refuse a node write and a proposal approval that take a used node or task plan file name with `mission.node.filename_conflict`, and export and import both formats with every task file name unchanged.
+- Tests refuse a node update that names a task of another node with `mission.node.content_invalid`, refuse a nonempty task `bindings` list with `mission.node.bindings_invalid`, and refuse the identity of a removed task with `mission.import.retired_id`.
 - Tests refuse a dependency add and a dependency remove on a dependent in `Waiting`, `Evaluating` and each `External.*` state with `mission.node.state_conflict`.
 - Tests assert that the file name becomes the import-set key and the node's `filename`.
 - Tests refuse upper-case names, names without `.md`, and path separators.
@@ -794,7 +801,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests reject absent or nonlist bindings and unknown or foreign-project identities and names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject repeated repository names on a `change` node because its list requires exactly one entry.
-- Tests take the one project binding of a kind that a node does not name where the rule table permits one or more, and refuse two project bindings of that kind with `mission.node.bindings_invalid`.
+- Tests take the one project binding of a kind that a node does not name, where the rule table permits one or more.
+- Tests refuse two project bindings of that kind with `mission.node.bindings_invalid`.
 - Tests keep identity, revision, state, attempt, priority and edges outside content.
 - Tests answer `depends_on` on the node read after a dependency add, a dependency remove, an import and a forced retirement.
 - A test keeps task content inside the node revision, and a test mints each task identity as `task_<ulid>`.

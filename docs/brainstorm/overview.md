@@ -86,7 +86,7 @@ An execution follows the project's repository strategy when it acts on a reposit
 Work on a repository requires a configured repository strategy, because configuration supplies the project's policy without an implicit default.
 The configured repository action of a `change` node follows a passing assessment and precedes a successful outcome of that node.
 
-Completing the configured repository action, completing all tasks, and meeting the criterion of the node are three different conditions.
+The configured repository action, the tasks and the criterion of the node are three different conditions.
 The shared outcome rules govern repository action failures.
 
 ### Worked example: `tdd@1`

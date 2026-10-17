@@ -24,7 +24,7 @@ A worker that kanthord hosts also declares its method and its agents, at least o
 It references the [catalog declaration](agent.md#agent-catalog) of each agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
-The [match rule](scheduler-service.md#matching) of the Scheduler Service admits a node whose work the worker declares and whose [requires list](mission-service.vocabulary.md#requires) the [traits](project-service.vocabulary.md#trait) of the worker binding hold.
+The [match rule](scheduler-service.md#match) of the Scheduler Service admits a node when the worker declares its work and the [traits](project-service.vocabulary.md#trait) of the worker binding hold every trait of its [requires list](mission-service.vocabulary.md#requires).
 Every agent of a kanthord-hosted worker is [in the catalog](agent.vocabulary.md#in-the-catalog) of the [Agent component](agent.md#agent-catalog).
 A worker reads no other project configuration.
 The declared works name the values of [work](mission-service.vocabulary.md#work) that the method takes.

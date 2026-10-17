@@ -32,15 +32,8 @@ The set of a worker is a subset of the closed set of states that admit a claim, 
 
 ## declared works
 
-The declared works are the [works](mission-service.vocabulary.md#work) that a worker declares its instances execute.
-The set of a worker is a subset of the closed set of works, and that set holds two values.
-
-- **change**
-- **report**
-
-`coder@1` declares `change` and `report`.
-`reviewer@1` declares `change` and `report`.
-Every released worker declares both works.
+The [Worker Service Vocabulary](worker-service.vocabulary.md#declared-works) owns the term.
+The [match](#match) reads the declared works of the worker of a claimant.
 
 ## match
 
@@ -60,7 +53,7 @@ The node "Add password reset to the iOS app" holds `work: change` and `requires:
 Only an instance of `macos-coder` obtains its steps claim, and only an instance of `macos-reviewer` obtains its evaluation claim.
 The node "Add password reset" holds `requires: []`, so every binding of the table admits it in its declared states.
 
-## unmatched claim
+## unmatched pair
 
 A pair of a node and a claimable state that no current worker binding of the project covers.
 The term names no closed set.

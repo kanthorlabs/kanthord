@@ -12,7 +12,7 @@ This file is not a design document, and `workbench-service.md` stays the single 
 An agent session that a human drives with one agent of the catalog, through the chat of the dashboard or through the API.
 The term names no closed set.
 Ulrich picks `swe@1` on the Agents page and starts a workbench session in the chat.
-In that session, `swe@1` pulls "Add password reset" of "Account recovery" and reads the plan of "Billing".
+In that session, `swe@1` pulls "Add password reset", a dependency of "Account recovery", and reads the plan of "Billing".
 
 ## run
 

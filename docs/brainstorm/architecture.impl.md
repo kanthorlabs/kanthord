@@ -684,10 +684,10 @@ The public interfaces have three kinds.
 - The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement through the Agent component.
 - The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. A removal or an unavailability of a worker binding and the end of its live registrations commit in the transaction of the binding-set write.
 - The Project Service offers `bindingsNaming(tx, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential archive and its dependency check are atomic, so both run in the transaction of the archive.
-- The Scheduler Service offers `unmatchedClaims(tx, projectId)` to the Mission Service and the Project Service. A node write and a binding-set write read it before and after the change in one `BEGIN IMMEDIATE` transaction, so the write never adds an unmatched claim.
+- The Scheduler Service offers `unmatchedClaims(tx, projectId)` to the Mission Service and the Project Service. A node write and a binding-set write read it before and after the change in one `BEGIN IMMEDIATE` transaction, so the write never adds an unmatched pair of a node and a claimable state.
 - The Mission Service offers `claimFacts(tx, nodeId)` and `claimFactsOf(tx, projectId)`, and the Project Service offers `workerBindingsOf(tx, projectId)`, to the Scheduler Service. [The match](scheduler-service.impl.md#the-match) of the Scheduler Service lists their invariants.
 - These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
-- They co-locate the Project Service and Worker Service in one process on one database.
+- They co-locate the Project, Worker, Mission and Scheduler Services in one process on one database.
 - [Agent configuration validation](agent.impl.md#agent-configuration-validation) defines the checks and refusals.
 - Kind 3, a client, carries every other call between services through `ServiceClient<typeof peerOperations>`.
 - Kind 3 is the default.

@@ -43,7 +43,6 @@ These are the capabilities that `project-service.md` names, and the page closes 
 ## trait
 
 One fact of the host of a worker binding, which a human writes in the configuration of that binding.
-The word "capability" names a class of authenticated operation, so a fact of a host takes the word "trait".
 The current worker bindings of a project state its trait vocabulary, so the term names no closed set.
 
 These prefixes are examples, and the list closes no set.

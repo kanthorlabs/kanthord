@@ -284,7 +284,7 @@ Every worker of this page declares both values.
 - **change**
 - **report**
 
-The [match rule](scheduler-service.md#matching) admits a node only when the declared works of the worker hold the work of the node.
+The [match rule](scheduler-service.md#match) admits a node only when the declared works of the worker hold the work of the node.
 `coder@1` declares `change` and `report`, so a `coder@1` instance takes the steps claim of "Add password reset" and of "Account recovery".
 
 ## instance healthcheck

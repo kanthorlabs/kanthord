@@ -589,7 +589,7 @@ A rewrite of `add-password-reset.md` with no identifier creates a new node, and 
 
 ## plan file name
 
-- The name of the plan file of a node, unique among the nodes of its mission that are not retired.
+- The name of the plan file of a node or a task, unique among the node and task plan file names of the nodes of its mission that are not retired.
 - An import or a create sets it, and every export writes it unchanged.
 - The term names no closed set.
 - Two nodes titled "Add tests" hold `add-tests-api.md` and `add-tests-web.md`.
