@@ -152,6 +152,7 @@ No other write changes it.
 Every `human` write that changes a node, its edges or its state names the mission version that it expects, and a stale value refuses the write, so a human reviews every change of the mission before the next write. A `client` write of an execution names no mission version.
 A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier, an identifier of another mission and an identifier of a retired node.
+It also rejects the identifier of a task of a retired node.
 
 A retirement removes the executable work of its node.
 A retirement preserves the outcomes, the assessments, the evidence and the historical relations of that node.
