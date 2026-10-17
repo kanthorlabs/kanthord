@@ -148,7 +148,7 @@ The instance healthcheck stays out of every human inspection command under [work
 
 ## The match
 
-The Scheduler Service implements the [match](scheduler-service.md#match) in `claim.ts`.
+The Scheduler Service implements the [match](scheduler-service.md#match) in `match.ts`.
 
 ```ts
 function admits(claimant: Claimant, facts: ClaimFacts): boolean {
