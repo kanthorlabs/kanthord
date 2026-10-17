@@ -199,7 +199,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The pool host sends a `parentPort` message `{ kind: "drain" }` or `{ kind: "stop" }`. `thread.ts` maps it to `drain()` or `stop()`.
 - A start in drain mode sends the thread `{ kind: "drain" }`.
 - After `run()` returns, `thread.ts` closes its port, and the thread ends by itself.
-- The release build embeds a bundle of `src/apps/worker/thread.ts` as the SEA asset `worker-thread.cjs`. It uses the same esbuild flags as `kanthord.cjs`. The pool host starts it with `eval: true`.
+- The release build embeds a bundle of `src/apps/worker/thread.ts` as the SEA asset `worker-thread.cjs`. It uses the esbuild flags of `kanthord.cjs`, but its banner resolves `import.meta.url` from `process.execPath`, because `__filename` of eval code is `[worker eval]`. The release build checks that URL. The pool host starts it with `eval: true`.
 - A development checkout starts the TypeScript file.
 - No module of the worker unit names a placement. The placement exists only in the wrappers, in the transports and in the binding.
 
