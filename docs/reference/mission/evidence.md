@@ -37,7 +37,7 @@ The storage bindings of the pinned revision form an ordered upload list. The ser
 3. The grant moves to the next binding when the signing call refuses with `binding_disabled`, `binding_removed` or `storage.platform.s3.*`. Every other refusal of the signing call stops the submission.
 4. The grant takes the first binding that passes these checks. The asset pins that binding revision in `storage_binding_id`.
 
-The complete checks the object size and the optional checksum. A check that finds a mismatch, finds no object or fails at the store prevents publication. That failed upload check records the binding as failed for the open attempt of the node. The record stays after the refusal. The uploader then submits again, and the server grants the next binding.
+The complete checks the object size and the optional checksum. A check that finds a mismatch, finds no object or fails at the store prevents publication. That failed upload check records the binding as failed for the open attempt of the node, as `failed_at` of the checked asset. The record stays after the refusal. A delete of that asset, or of its evidence, removes the record, and the binding is grantable again. The failed check also writes a Mission span with the operation `mission.evidence.asset.complete` and the status `Error`. The uploader then submits again, and the server grants the next binding.
 
 With no binding left, the submission fails with `409 mission.evidence.storage_exhausted`. A new attempt tries every storage binding again. A read and a delete of an asset use the binding that the asset pins, and no read moves to another binding.
 
