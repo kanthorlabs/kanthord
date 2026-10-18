@@ -60,7 +60,7 @@ One verification of "Add password reset" is `npm run test:reset`.
 
 A node is a vertex of the mission graph and a unit of scheduling, with its own criterion and outcome.
 The term names no closed set.
-The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`.
+The [intent](mission-service.vocabulary.md#intent) of a node is `implement` or `examine`.
 A `tdd@1` instance claims the `implement` node "Add password reset". A `reviewer@1` instance later claims the node.
 The `examine` node "Account recovery" reads `api-repo` and `web-repo` and the outcomes of "Add password reset" and "Add recovery codes", and it changes no repository.
 Nothing else is a node. The word names a vertex of the graph.
@@ -115,7 +115,7 @@ A passing assessment of "Add password reset" precedes the request of its pull re
 ## worker
 
 A worker is the HOW: a template that defines how executions happen.
-A worker declares the node states that its instances claim and the works that its method takes.
+A worker declares the node states that its instances claim and the intents that its method takes.
 The term names no closed set.
 `tdd@1` is one example among several workers.
 For each task of an `implement` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.

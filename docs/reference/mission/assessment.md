@@ -27,13 +27,13 @@ A closure ends the live claim, closes the attempt and writes an outcome. The out
 
 ### Fix-node proposals
 
-The submit of an `undetermined` execution assessment of an `examine` node takes at most 10 fix-node proposals in `proposals`. Each proposal names one defect inside a completed direct dependency with `work: implement`. The submit closes the attempt, moves the `examine` node to `Blocked` and records each proposal in the same transaction.
+The submit of an `undetermined` execution assessment of an `examine` node takes at most 10 fix-node proposals in `proposals`. Each proposal names one defect inside a completed direct dependency with `intent: implement`. The submit closes the attempt, moves the `examine` node to `Blocked` and records each proposal in the same transaction.
 
 - `proposal list` returns one page of the proposals of a proposer. `--attempt` selects the proposals of one attempt.
 - `proposal approve` creates an `implement` node with the one task of the proposal and adds the dependency of the proposer on the new node. The same transaction unblocks the proposer into a new attempt and sets `created_node_id` and `approved_at` of the proposal.
-- The new node takes `bindings` and `requires` from the current revision of `dependency_id`. The proposer routes to `Pending` until the new node reaches `Completed`.
+- The new node takes `bindings` and `tags` from the current revision of `dependency_id`. The proposer routes to `Pending` until the new node reaches `Completed`.
 - `proposal approve` answers `{ created, proposer }`. `created` is the [node change result](node.md#node-change-result) of the new node, and `proposer` is the [control result](node-control.md) of the unblock.
-- A proposer that is not `Blocked` in the attempt of the proposal fails with `409 mission.node.state_conflict`. An approved proposal fails with `409 mission.proposal.already_approved`. A new unmatched pair fails with `409 mission.node.requires_unmatched`.
+- A proposer that is not `Blocked` in the attempt of the proposal fails with `409 mission.node.state_conflict`. An approved proposal fails with `409 mission.proposal.already_approved`. A new unmatched pair fails with `409 mission.node.tags_unmatched`.
 - A human rejects a proposal with `node unblock` or `node discard` of the proposer.
 
 A proposal record holds `id`, `node_id` of the proposer, `attempt`, `assessment_id`, `content`, `created_node_id`, `approved_at` and `created_at`. `content` holds `dependency_id`, `name`, `requirement`, `criterion` and `task`. `task` holds `name`, `requirement`, `criterion` and a nonempty `verifications` list. `created_node_id` and `approved_at` are `null` until the approval.
@@ -289,7 +289,7 @@ To read the next page, send the `next_cursor` value as the `cursor` query parame
 | `result`                 | `success`, `criterion-not-met` or `undetermined` | Required.                                                                                                                                                                                                                                                                                                |
 | `rationale`              | nonblank string                                  | Required. At most `mission.text_max_bytes` UTF-8 bytes, 32768 by default.                                                                                                                                                                                                                                |
 | `tested_input`           | `TestedInput`                                    | Required. A node with one repository binding takes one repository address of that binding, or one nonrepository address. A node with two or more repository bindings takes one repository address for each binding, in binding order. A node with no repository binding takes one nonrepository address. |
-| `proposals`              | array of `ProposalContent`                       | Optional, `[]` by default, at most 10 items. Only an `examine` node with the result `undetermined` takes a nonempty list. Each `dependency_id` names a current direct dependency with `work: implement`.                                                                                                 |
+| `proposals`              | array of `ProposalContent`                       | Optional, `[]` by default, at most 10 items. Only an `examine` node with the result `undetermined` takes a nonempty list. Each `dependency_id` names a current direct dependency with `intent: implement`.                                                                                               |
 
 The required verification commands are the verifications of the pinned revision. For an `implement` node, they also include the verifications of each task in that revision. A verification covers them when its results name exactly those commands. It passes when every exit code is `0`.
 

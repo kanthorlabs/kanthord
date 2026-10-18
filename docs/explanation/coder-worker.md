@@ -56,7 +56,7 @@ flowchart TB
     accDescr: Four phases. Prepare reads the revision and the prior rationale, prepares the workspace and opens swe@1. Start merges the base branch and checks every task. Tasks runs each pending task. Finish merges the base branch again, pushes, submits the head commit and releases the node to Waiting.
     claim(["Claim: node Available → Executing"]) --> s1
     subgraph prepare ["Prepare"]
-        s1["<b>1</b> Read the pinned revision"] --> kind{"Work of the node?"}
+        s1["<b>1</b> Read the pinned revision"] --> kind{"Intent of the node?"}
         kind -- implement --> s2["<b>2</b> Read the prior rationale"]
         s2 --> s3["<b>3</b> Prepare the workspace<br/>on the node branch"]
         s3 --> s4["<b>4</b> Open swe@1"]
@@ -87,7 +87,7 @@ flowchart TB
 
 | Phase   | Steps   | Question that the phase answers                           |
 | ------- | ------- | --------------------------------------------------------- |
-| Prepare | 1 to 4  | What is the work, and where is the checkout?              |
+| Prepare | 1 to 4  | What is the intent, and where is the checkout?            |
 | Start   | 5 and 6 | Which tasks still need work after the last execution?     |
 | Tasks   | 7       | How does each open task reach a pass and a met criterion? |
 | Finish  | 8 to 11 | Is the result still correct on the newest base branch?    |
@@ -158,7 +158,7 @@ The sections below explain each phase, and then every way that a run can differ 
 
 ## Prepare: steps 1 to 4
 
-**Step 1** reads the node revision that the attempt pins. The revision holds the content of the node, its work and its tasks. The work selects the form of the method: `implement` or `examine`. An `implement` node with no task is its own single work unit, and the worker treats the content of the node as its one task.
+**Step 1** reads the node revision that the attempt pins. The revision holds the content of the node, its intent and its tasks. The intent selects the form of the method: `implement` or `examine`. An `implement` node with no task is its own single work unit, and the worker treats the content of the node as its one task.
 
 **Step 2** reads the **prior rationale**: the reason why earlier work did not pass. The start check in step 6 uses it. The worker takes the first source that exists:
 

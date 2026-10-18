@@ -184,8 +184,8 @@ For an otherwise eligible node, the Scheduler admits a claim only when the worke
 A claim from `Available` is a steps claim and authorizes the steps work.
 A claim from `Waiting` or `External.Requested` is an evaluation claim and authorizes the evaluation.
 The claim records no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes its kind.
-The declared states and the declared works come from the worker declaration that the Worker Service publishes, never from a registering instance.
-A new worker declares its states and its works without a change to a rule of the Scheduler.
+The declared states and the declared intents come from the worker declaration that the Worker Service publishes, never from a registering instance.
+A new worker declares its states and its intents without a change to a rule of the Scheduler.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the separation between the execution of the steps of a node and its assessment.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`, and one of its instances can perform both through the corresponding claims.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the policy on the verification of that separation inside an external harness.
@@ -235,17 +235,17 @@ The Scheduler counts live executions during the drain and treats no configuratio
 The Scheduler Service owns the match of a node and a claimant.
 A claimant admits a node when two facts hold.
 
-- The [work](mission-service.vocabulary.md#work) of the node is a member of the declared works of the worker of the claimant.
-- Every trait of the [requires](mission-service.vocabulary.md#requires) list of the node is a member of the [traits](project-service.vocabulary.md#trait) of the worker binding of the claimant.
+- The [intent](mission-service.vocabulary.md#intent) of the node is a member of the declared intents of the worker of the claimant.
+- Every [tag](mission-service.vocabulary.md#tags) of the node is a member of the [tags](project-service.vocabulary.md#tag) of the worker binding of the claimant.
 
 The match compares exact strings, and it reads no version, no range and no operator.
-The work and the requires list come from the node revision that the claim pins: the revision of the open attempt, else the current revision.
-The traits come from the worker binding row that the claim pins.
-A worker declares its works in code, because a work selects a method of the worker.
-A human writes the traits of a worker binding, because a trait states a fact of a host.
-A new worker host therefore needs a worker binding with its traits, and no code.
+The intent and the tags of the node come from the node revision that the claim pins: the revision of the open attempt, else the current revision.
+The tags of the worker binding come from the worker binding row that the claim pins.
+A worker declares its intents in code, because an intent selects a method of the worker.
+A human writes the tags of a worker binding, because a tag states a fact of a host.
+A new worker host therefore needs a worker binding with its tags, and no code.
 
-The claim walk reads the work and the requires list of each job from the Mission Service, and it skips each job that the claimant does not admit.
+The claim walk reads the intent and the tags of each job from the Mission Service, and it skips each job that the claimant does not admit.
 The [Mission Service](mission-service.md#state-transitions) then rechecks the state and the conditions of the node inside the claim.
 An on-demand request applies the same match.
 A worker name with no worker declaration gives no claimant, and its work pull answers no work.
@@ -258,7 +258,7 @@ A pair of a node and a claimable state is unmatched when no current worker bindi
 The check reads the current revision of the node and the revision that its open attempt pins.
 The check ignores the instance count.
 
-- A Mission node write that adds an unmatched pair answers `mission.node.requires_unmatched`.
+- A Mission node write that adds an unmatched pair answers `mission.node.tags_unmatched`.
 - A binding-set write of the Project Service that adds an unmatched pair answers `project.bindings.worker.node_unmatched`.
 - Each write reads the unmatched pairs of the project from the Scheduler Service before and after its change, in its own transaction.
 - An unmatched pair that exists before a write refuses no write.

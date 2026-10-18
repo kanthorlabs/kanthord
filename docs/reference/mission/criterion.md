@@ -34,8 +34,8 @@ The API returns HTTP `200` with a [node change result](node.md#node-change-resul
         "criterion": "A user with valid credentials reaches the dashboard, and the audit log records the login.",
         "verifications": ["pnpm test", "pnpm test:audit"],
         "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
-        "work": "implement",
-        "requires": []
+        "intent": "implement",
+        "tags": []
       },
       "tasks": [],
       "change": {

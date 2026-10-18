@@ -4,13 +4,13 @@
 
 ## Function description
 
-A mission node is the unit that the Scheduler Service schedules. Every node holds a `work` and a `requires` list. An `implement` node holds zero or more tasks. Each node has a plan file name that is unique among the current nodes of its mission. Dependency is the only edge kind.
+A mission node is the unit that the Scheduler Service schedules. Every node holds an `intent` and a `tags` list. An `implement` node holds zero or more tasks. Each node has a plan file name that is unique among the current nodes of its mission. Dependency is the only edge kind.
 
-The `work` of a node is `implement` or `examine`. An `implement` node changes one or more repositories, and its tasks state the final-state requirements of that change. An `examine` node reads zero or more repositories and the outcomes of its direct dependencies, changes no repository and holds no task. A human changes the work of a node only while the attempt of the node reads `0`.
+The `intent` of a node is `implement` or `examine`. An `implement` node changes one or more repositories, and its tasks state the final-state requirements of that change. An `examine` node reads zero or more repositories and the outcomes of its direct dependencies, changes no repository and holds no task. A human changes the intent of a node only while the attempt of the node reads `0`.
 
-The `requires` list names the traits that a worker binding needs to claim the node. The Scheduler Service matches the work and the requires list of a node against each worker binding of the project.
+The tags of a node state the facts of a host that a worker binding needs to claim the node. The Scheduler Service matches the intent and the tags of a node against each worker binding of the project.
 
-Node content has `name`, `requirement`, `criterion`, `verifications`, `bindings`, `work` and `requires`. In the node API, `bindings` holds binding IDs of the project. A node names every binding that it uses, and no node takes a binding from the project. The service stores the latest revision of each named binding. The [bindings of a node](import.md#bindings-of-a-node) rule states the count of each binding kind. An `implement` node names one or more repository bindings, and the convention is one binding. No node names a worker binding.
+Node content has `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent` and `tags`. In the node API, `bindings` holds binding IDs of the project. A node names every binding that it uses, and no node takes a binding from the project. The service stores the latest revision of each named binding. The [bindings of a node](import.md#bindings-of-a-node) rule states the count of each binding kind. An `implement` node names one or more repository bindings, and the convention is one binding. No node names a worker binding.
 
 A task is content of an `implement` node. A task holds a `task_<ulid>` ID, a plan file name and its own content, and names no binding. A task has no revision, state, attempt or priority. The tasks are part of each revision of their node, and a task write creates a new revision of that node. An `implement` node with no task is its own single work unit. Revision numbers start at `1` for each node.
 
@@ -25,7 +25,7 @@ Every write requires the current mission version in `expected_mission_version`. 
 
 No write reaches a retired node or a terminal node (`Completed` or `Discarded`), except that `node rebind` reports these nodes as skipped. The [node control](node-control.md) page describes states and controls.
 
-A node write that adds an unmatched pair of a node and a claimable state fails with `mission.node.requires_unmatched`. A pair is unmatched when no current worker binding of the project covers it. A write that keeps an unmatched pair that the node held before the write succeeds. `node create`, `node update` and `node rebind` run this check.
+A node write that adds an unmatched pair of a node and a claimable state fails with `mission.node.tags_unmatched`. A pair is unmatched when no current worker binding of the project covers it. A write that keeps an unmatched pair that the node held before the write succeeds. `node create`, `node update` and `node rebind` run this check.
 
 **Authority:** every authenticated human holds the same authority under the server-owner ruling. Any verified human token reads and changes any mission.
 
@@ -42,7 +42,7 @@ A node write that adds an unmatched pair of a node and a claimable state fails w
 - `expected_revision` names the current revision of the node.
 - `tasks` is the complete task list. A task write with an `id` keeps or updates that task. A task write without an `id` creates a task. The update retires each current task that the list omits.
 - An unknown `id`, a repeated `id` or the `id` of a task of another node fails with `mission.node.content_invalid`.
-- A change of `work` while the attempt reads `1` or more fails with `mission.node.work_locked`.
+- A change of `intent` while the attempt reads `1` or more fails with `mission.node.intent_locked`.
 - The node must be nonterminal. A node with an open attempt stays editable.
 
 ### node retire preview and node retire
@@ -74,8 +74,8 @@ All operations return HTTP `200`. The CLI writes the API answer as one JSON line
   "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
   "filename": "login.md",
   "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
-  "work": "implement",
-  "requires": [],
+  "intent": "implement",
+  "tags": [],
   "visible_revision": 3,
   "content": {
     "name": "Add the login page",
@@ -83,8 +83,8 @@ All operations return HTTP `200`. The CLI writes the API answer as one JSON line
     "criterion": "A user with valid credentials reaches the dashboard.",
     "verifications": ["pnpm test"],
     "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
-    "work": "implement",
-    "requires": []
+    "intent": "implement",
+    "tags": []
   },
   "tasks": [
     {
@@ -113,8 +113,8 @@ All operations return HTTP `200`. The CLI writes the API answer as one JSON line
 | `id`                 | `node_<ulid>`            | Node ID.                                                                                               |
 | `filename`           | plan file name           | Unique name among current nodes of the mission.                                                        |
 | `mission_id`         | `mission_<ulid>`         | Mission of the node.                                                                                   |
-| `work`               | `implement` or `examine` | Work at the claim revision: the revision that the open attempt pins, else the current revision.        |
-| `requires`           | array of trait keys      | Requires list at the claim revision.                                                                   |
+| `intent`             | `implement` or `examine` | Intent at the claim revision: the revision that the open attempt pins, else the current revision.      |
+| `tags`               | array of tags            | Tags at the claim revision.                                                                            |
 | `visible_revision`   | positive integer         | Current revision of the node.                                                                          |
 | `content`            | object                   | Current content; `bindings` holds binding revision IDs.                                                |
 | `tasks`              | array                    | `{ id, filename, content }` of each task at the claim revision; `[]` for an `examine` node.            |
@@ -146,8 +146,8 @@ The `tasks` of a node read can come from an older revision than `content`. To ed
     "criterion": "...",
     "verifications": ["pnpm test"],
     "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
-    "work": "implement",
-    "requires": []
+    "intent": "implement",
+    "tags": []
   },
   "tasks": [
     {
@@ -277,42 +277,42 @@ An edge is `{ "dependent_id", "depends_on_id" }`.
 
 API failures use the shared [error envelope](../errors.md#api-failures). These failures apply to every operation on this page:
 
-| HTTP status / code                           | Meaning                                                                                                                                                                                                                                                                                            |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`    | Absent, invalid or expired token, or a machine token.                                                                                                                                                                                                                                              |
-| `400 gateway.request.validation_failed`      | A path, query or body value fails the schema, for example an unknown body field, an empty `verifications` list or an unknown `work` query value.                                                                                                                                                   |
-| `400 gateway.request.unexpected_body`        | A read request has a body.                                                                                                                                                                                                                                                                         |
-| `415 gateway.request.unsupported_media_type` | A write request has no `application/json` content type.                                                                                                                                                                                                                                            |
-| `400 gateway.request.invalid_json`           | The body is not valid JSON with unique object members.                                                                                                                                                                                                                                             |
-| `413 gateway.request.body_too_large`         | The body exceeds 10 MiB.                                                                                                                                                                                                                                                                           |
-| `400 gateway.idempotency.invalid_key`        | A write request has an absent or malformed `Idempotency-Key`.                                                                                                                                                                                                                                      |
-| `409 gateway.idempotency.conflict`           | The key belongs to another request, or its first request is still in progress.                                                                                                                                                                                                                     |
-| `504 gateway.invocation.timeout`             | The operation exceeded 30 seconds. A write can still complete.                                                                                                                                                                                                                                     |
-| `404 mission.mission.not_found`              | The mission ID is unknown.                                                                                                                                                                                                                                                                         |
-| `404 mission.node.not_found`                 | The node or the revision is unknown.                                                                                                                                                                                                                                                               |
-| `400 system.pagination.cursor_invalid`       | A list cursor is not a cursor that the list returned.                                                                                                                                                                                                                                              |
-| `409 mission.version.conflict`               | `expected_mission_version` is stale; `details.current` holds the current version.                                                                                                                                                                                                                  |
-| `409 mission.revision.conflict`              | An expected revision is stale; `details.current` holds the current revision.                                                                                                                                                                                                                       |
-| `409 mission.node.retired`                   | The node is retired.                                                                                                                                                                                                                                                                               |
-| `409 mission.node.terminal`                  | The node is `Completed` or `Discarded`.                                                                                                                                                                                                                                                            |
-| `400 mission.node.content_invalid`           | A text field or `reason` is blank or exceeds the text limit. A `verifications` item is blank. `work` is absent or unknown. `requires` is no list, or holds a repeated or malformed trait key. An `examine` node holds a task. A task `id` is wrong for the write. `details.field` names the field. |
+| HTTP status / code                           | Meaning                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `401 gateway.authentication.unauthorized`    | Absent, invalid or expired token, or a machine token.                                                                                                                                                                                                                                      |
+| `400 gateway.request.validation_failed`      | A path, query or body value fails the schema, for example an unknown body field, an empty `verifications` list or an unknown `intent` query value.                                                                                                                                         |
+| `400 gateway.request.unexpected_body`        | A read request has a body.                                                                                                                                                                                                                                                                 |
+| `415 gateway.request.unsupported_media_type` | A write request has no `application/json` content type.                                                                                                                                                                                                                                    |
+| `400 gateway.request.invalid_json`           | The body is not valid JSON with unique object members.                                                                                                                                                                                                                                     |
+| `413 gateway.request.body_too_large`         | The body exceeds 10 MiB.                                                                                                                                                                                                                                                                   |
+| `400 gateway.idempotency.invalid_key`        | A write request has an absent or malformed `Idempotency-Key`.                                                                                                                                                                                                                              |
+| `409 gateway.idempotency.conflict`           | The key belongs to another request, or its first request is still in progress.                                                                                                                                                                                                             |
+| `504 gateway.invocation.timeout`             | The operation exceeded 30 seconds. A write can still complete.                                                                                                                                                                                                                             |
+| `404 mission.mission.not_found`              | The mission ID is unknown.                                                                                                                                                                                                                                                                 |
+| `404 mission.node.not_found`                 | The node or the revision is unknown.                                                                                                                                                                                                                                                       |
+| `400 system.pagination.cursor_invalid`       | A list cursor is not a cursor that the list returned.                                                                                                                                                                                                                                      |
+| `409 mission.version.conflict`               | `expected_mission_version` is stale; `details.current` holds the current version.                                                                                                                                                                                                          |
+| `409 mission.revision.conflict`              | An expected revision is stale; `details.current` holds the current revision.                                                                                                                                                                                                               |
+| `409 mission.node.retired`                   | The node is retired.                                                                                                                                                                                                                                                                       |
+| `409 mission.node.terminal`                  | The node is `Completed` or `Discarded`.                                                                                                                                                                                                                                                    |
+| `400 mission.node.content_invalid`           | A text field or `reason` is blank or exceeds the text limit. A `verifications` item is blank. `intent` is absent or unknown. `tags` is no list, or holds a repeated or malformed tag. An `examine` node holds a task. A task `id` is wrong for the write. `details.field` names the field. |
 
 Command-specific failures:
 
-| HTTP status / code                       | Operation              | Meaning                                                                                                                                     |
-| ---------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `400 mission.node.bindings_invalid`      | Create, update         | A binding ID does not resolve in the project. The count of a binding kind breaks the rule for the work of the node. A task names a binding. |
-| `409 mission.node.filename_conflict`     | Create, update         | Another current node or task of the mission uses the file name.                                                                             |
-| `409 mission.node.work_locked`           | Update                 | The write changes `work` while the attempt reads `1` or more; `details` holds `node_id` and `attempt`.                                      |
-| `409 mission.node.requires_unmatched`    | Create, update, rebind | The write adds an unmatched pair; `details.claims` lists each pair as `{ node_id, revision, claim }`.                                       |
-| `409 mission.node.retire_refused`        | Retire, preview        | The node fails the state and attempt condition; `details` holds `node_id`, `state` and `attempt`.                                           |
-| `409 mission.node.retire_has_dependents` | Retire, preview        | Nonterminal dependents exist and `force` is false; `details.dependents` lists them.                                                         |
-| `409 mission.node.state_conflict`        | Retire, preview        | With `force`, a dependent that loses its edge is in a guarded state; `details` holds `node_id`, `state` and `attempt`.                      |
-| `409 mission.node.retire_mismatch`       | Retire                 | `preview_digest` does not match the current retirement plan.                                                                                |
-| `404 mission.binding.not_found`          | Rebind                 | The binding revision is unknown or belongs to another project.                                                                              |
-| `409 mission.binding.removed`            | Rebind                 | The binding is removed.                                                                                                                     |
-| `409 mission.binding.disabled`           | Rebind                 | The binding is disabled.                                                                                                                    |
-| `409 mission.binding.mismatch`           | Rebind                 | The named node pins no earlier or equal revision of the binding.                                                                            |
+| HTTP status / code                       | Operation              | Meaning                                                                                                                                       |
+| ---------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `400 mission.node.bindings_invalid`      | Create, update         | A binding ID does not resolve in the project. The count of a binding kind breaks the rule for the intent of the node. A task names a binding. |
+| `409 mission.node.filename_conflict`     | Create, update         | Another current node or task of the mission uses the file name.                                                                               |
+| `409 mission.node.intent_locked`         | Update                 | The write changes `intent` while the attempt reads `1` or more; `details` holds `node_id` and `attempt`.                                      |
+| `409 mission.node.tags_unmatched`        | Create, update, rebind | The write adds an unmatched pair; `details.claims` lists each pair as `{ node_id, revision, claim }`.                                         |
+| `409 mission.node.retire_refused`        | Retire, preview        | The node fails the state and attempt condition; `details` holds `node_id`, `state` and `attempt`.                                             |
+| `409 mission.node.retire_has_dependents` | Retire, preview        | Nonterminal dependents exist and `force` is false; `details.dependents` lists them.                                                           |
+| `409 mission.node.state_conflict`        | Retire, preview        | With `force`, a dependent that loses its edge is in a guarded state; `details` holds `node_id`, `state` and `attempt`.                        |
+| `409 mission.node.retire_mismatch`       | Retire                 | `preview_digest` does not match the current retirement plan.                                                                                  |
+| `404 mission.binding.not_found`          | Rebind                 | The binding revision is unknown or belongs to another project.                                                                                |
+| `409 mission.binding.removed`            | Rebind                 | The binding is removed.                                                                                                                       |
+| `409 mission.binding.disabled`           | Rebind                 | The binding is disabled.                                                                                                                      |
+| `409 mission.binding.mismatch`           | Rebind                 | The named node pins no earlier or equal revision of the binding.                                                                              |
 
 The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 
@@ -321,7 +321,7 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | CLI code                                                                                      | Meaning                                                                                                                                                  |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cli.mission.node.<command>.invalid_mission_id`, `cli.mission.node.<command>.invalid_node_id` | A positional or option ID has the wrong prefix or is not a canonical ULID.                                                                               |
-| `cli.mission.node.list.invalid_work`, `cli.mission.node.list.invalid_state`                   | `--work` is not `implement` or `examine`, or `--state` is not a known state.                                                                             |
+| `cli.mission.node.list.invalid_intent`, `cli.mission.node.list.invalid_state`                 | `--intent` is not `implement` or `examine`, or `--state` is not a known state.                                                                           |
 | `cli.mission.node.rebind.invalid_binding_id`                                                  | `<binding-id>` is not a `binding_<ulid>` value.                                                                                                          |
 | `cli.mission.node.revision.get.invalid_revision`                                              | `<revision>` is not a positive safe integer.                                                                                                             |
 | `cli.pagination.limit_invalid`, `cli.pagination.limit_out_of_range`                           | `--limit` is not a positive integer, or exceeds 1000.                                                                                                    |
@@ -360,14 +360,14 @@ The Gateway keeps the answer of a write for its idempotency key in process memor
 
 ### Query parameters
 
-| Operation             | Parameter         | Default | Purpose                                                              |
-| --------------------- | ----------------- | ------- | -------------------------------------------------------------------- |
-| List operations       | `limit`           | `100`   | Page size, `1` to `1000`.                                            |
-| List operations       | `cursor`          | Absent  | `next_cursor` of the previous page.                                  |
-| `node list`           | `work`            | Absent  | `implement` or `examine`; filters by the work at the claim revision. |
-| `node list`           | `state`           | Absent  | Exact state name.                                                    |
-| `node list`           | `include_retired` | `false` | `true` or `false`.                                                   |
-| `node retire preview` | `force`           | `false` | `true` or `false`.                                                   |
+| Operation             | Parameter         | Default | Purpose                                                                |
+| --------------------- | ----------------- | ------- | ---------------------------------------------------------------------- |
+| List operations       | `limit`           | `100`   | Page size, `1` to `1000`.                                              |
+| List operations       | `cursor`          | Absent  | `next_cursor` of the previous page.                                    |
+| `node list`           | `intent`          | Absent  | `implement` or `examine`; filters by the intent at the claim revision. |
+| `node list`           | `state`           | Absent  | Exact state name.                                                      |
+| `node list`           | `include_retired` | `false` | `true` or `false`.                                                     |
+| `node retire preview` | `force`           | `false` | `true` or `false`.                                                     |
 
 `node list` returns nodes from the highest node ID to the lowest. `node revision list` returns revisions from the highest revision to the lowest.
 
@@ -389,25 +389,25 @@ The Gateway keeps the answer of a write for its idempotency key in process memor
 | `node rebind` | `reason`, `expected_mission_version`                                 | as above                    | Yes                            |
 | `node rebind` | `node_id`                                                            | `node_<ulid>`               | No; absent rebinds the mission |
 
-The content object has `name`, `requirement` and `criterion` (nonblank strings), `verifications` (at least one nonblank string), `bindings` (binding IDs), `work` (`implement` or `examine`) and the optional `requires` (unique trait keys, `[]` by default). A trait key matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. A task write holds an optional `id` (`task_<ulid>`), `filename` and `content` with `name`, `requirement`, `criterion`, `verifications` and `bindings: []`. A plan file name matches `^[a-z][a-z0-9_-]*\.md$`. Bodies accept no unknown field.
+The content object has `name`, `requirement` and `criterion` (nonblank strings), `verifications` (at least one nonblank string), `bindings` (binding IDs), `intent` (`implement` or `examine`) and the optional `tags` (unique tags, `[]` by default). A tag matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. A task write holds an optional `id` (`task_<ulid>`), `filename` and `content` with `name`, `requirement`, `criterion`, `verifications` and `bindings: []`. A plan file name matches `^[a-z][a-z0-9_-]*\.md$`. Bodies accept no unknown field.
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/node \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PR' \
-  -d '{"filename":"signup.md","expected_mission_version":7,"reason":"Add sign-up","content":{"name":"Add sign-up","requirement":"Users create accounts.","criterion":"A new user signs in.","verifications":["pnpm test"],"bindings":["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],"work":"implement","requires":[]},"tasks":[]}'
+  -d '{"filename":"signup.md","expected_mission_version":7,"reason":"Add sign-up","content":{"name":"Add sign-up","requirement":"Users create accounts.","criterion":"A new user signs in.","verifications":["pnpm test"],"bindings":["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],"intent":"implement","tags":[]},"tasks":[]}'
 ```
 
 ```sh
-curl -i 'http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/node?work=implement&state=Available&limit=50' \
+curl -i 'http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/node?intent=implement&state=Available&limit=50' \
   -H 'Authorization: Bearer <human-jwt>'
 ```
 
 ## CLI shape
 
 ```text
-kanthord mission node list <mission-id> [--work <work>] [--state <state>] [--include-retired] [--limit <count>] [--cursor <cursor>]
+kanthord mission node list <mission-id> [--intent <intent>] [--state <state>] [--include-retired] [--limit <count>] [--cursor <cursor>]
 kanthord mission node get <node-id>
 kanthord mission node create <mission-id> --file <path> [--idempotency-key <ulid>]
 kanthord mission node update <node-id> --file <path> [--idempotency-key <ulid>]
@@ -436,7 +436,7 @@ kanthord mission node retire node_01M4C5J3SBEB4P8KDXAZ6GKB6R --force --file reti
 
 | Option                     | Commands                             | Default / resolution                                                        | Purpose                                                              |
 | -------------------------- | ------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `--work <work>`            | `node list`                          | Absent                                                                      | Sets `work`.                                                         |
+| `--intent <intent>`        | `node list`                          | Absent                                                                      | Sets `intent`.                                                       |
 | `--state <state>`          | `node list`                          | Absent                                                                      | Sets `state`.                                                        |
 | `--include-retired`        | `node list`                          | `false`                                                                     | Sets `include_retired=true`; the CLI always sends this value.        |
 | `--limit <count>`          | List commands                        | `100`                                                                       | Page size, `1` to `1000`.                                            |

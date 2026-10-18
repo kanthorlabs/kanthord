@@ -4,7 +4,7 @@
 
 ## Function description
 
-Dependency is the only edge kind of a mission. A dependency edge relates a dependent to a prerequisite. Both endpoints are nodes of the same mission, whatever their work. A task has no dependency.
+Dependency is the only edge kind of a mission. A dependency edge relates a dependent to a prerequisite. Both endpoints are nodes of the same mission, whatever their intent. A task has no dependency.
 
 An edge has no ID. Its endpoints identify it.
 

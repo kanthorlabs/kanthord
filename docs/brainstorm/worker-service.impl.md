@@ -51,9 +51,9 @@ Every runtime setup call carries an abort signal with a deadline.
 - A worker template is a static server module; the registry maps worker names to templates and loads no runtime plugin.
 - A worker references the declaration of its agent in the [agent catalog](agent.impl.md#the-agent-catalog) and carries no separate configuration version.
 - `coder@1` references `swe@1`; `reviewer@1` references `re@1`.
-- `coder@1`, `reviewer@1` and `claude-code@1` declare `declared_works: [implement, examine]`.
-- The Worker Service offers `declarationOf(workerName)` to the Scheduler Service through its `contract.ts`. It answers the worker name, `declared_node_states` and `declared_works` of the template, and null for a name that the registry does not hold.
-- The worker unit selects the method form from `work` of the pinned node revision.
+- `coder@1`, `reviewer@1` and `claude-code@1` declare `declared_intents: [implement, examine]`.
+- The Worker Service offers `declarationOf(workerName)` to the Scheduler Service through its `contract.ts`. It answers the worker name, `declared_node_states` and `declared_intents` of the template, and null for a name that the registry does not hold.
+- The worker unit selects the method form from `intent` of the pinned node revision.
 
 ## Externally hosted worker
 
@@ -92,7 +92,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## Inspection operations
 
 - Four `human` operations expose the published worker contract and the runtime-only instance record. Each one is `unary`, declares `mutation: false`, uses the default 30 s timeout and reads no table of another service.
-- `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in ascending alphabetical order, and the next page reads the names that are greater than the cursor. An item holds `name`, `host` (`kanthord` or `external-harness`), `declared_node_states` and `declared_works`. The answer lists the supplied workers; a registration adds no entry.
+- `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in ascending alphabetical order, and the next page reads the names that are greater than the cursor. An item holds `name`, `host` (`kanthord` or `external-harness`), `declared_node_states` and `declared_intents`. The answer lists the supplied workers; a registration adds no entry.
 - `worker.catalog.get` is `GET /api/worker/catalog/:worker_name`.
   The answer holds the item fields and `resource_budget` for every worker.
   It also holds `harness` for an externally hosted worker, or `method` and `agent_name` for a worker that kanthord hosts.

@@ -27,7 +27,7 @@ A new binding kind adds a row.
 ## node content
 
 - Every node and every task has the same five required plan content fields and a plan file name.
-- A node also holds its `work` and its `requires` list.
+- A node also holds its `intent` and its `tags` list.
 - A name is a nonblank title, not an identity, and is not unique.
 - A criterion can hold several checkable statements.
 - Identity, revision, state, attempt, priority and edges stay outside content.
@@ -42,8 +42,8 @@ verifications:
 bindings:
   - api-repo
   - web-repo
-work: examine
-requires: []
+intent: examine
+tags: []
 ---
 name: Add password reset
 requirement: Let account holders reset a forgotten password.
@@ -53,8 +53,8 @@ verifications:
   - npm run test:reset
 bindings:
   - api-repo
-work: implement
-requires: []
+intent: implement
+tags: []
 ---
 name: Expire the reset token
 requirement: Reject a reset token after its expiry.
@@ -65,7 +65,7 @@ verifications:
 bindings: []
 ```
 
-Verification guidance depends on the work of the node.
+Verification guidance depends on the intent of the node.
 The service does not validate this guidance.
 
 - `examine` node: end-to-end tests.
@@ -74,7 +74,7 @@ The service does not validate this guidance.
 
 A node with no verification need holds `true`, not an empty list.
 
-## work
+## intent
 
 The kind of work that a node asks for, which selects the method of its execution.
 The set is closed and it holds two values.
@@ -86,23 +86,23 @@ The `implement` node "Add password reset" holds two tasks and names `api-repo`.
 The `implement` node "Add the audit log" holds no task, so it is its own single work unit: the agent works from its requirement, and the execution runs its verifications.
 The `examine` node "Account recovery" names `api-repo` and `web-repo`, depends on "Add password reset" and "Add recovery codes", and holds no task.
 Its execution checks out each base-branch head, runs its verifications and submits its findings as produced evidence.
-A human changes the `work` of "Add password reset" while its attempt reads 0.
-After the first claim opens attempt 1, a change of its `work` answers `mission.node.work_locked`.
+A human changes the `intent` of "Add password reset" while its attempt reads 0.
+After the first claim opens attempt 1, a change of its `intent` answers `mission.node.intent_locked`.
 
-## requires
+## tags
 
-The list of traits that a worker binding needs to claim a node.
-The current worker bindings of a project supply its trait keys, so the term names no closed set.
+The list of tags that a worker binding needs to claim a node.
+The current worker bindings of a project state its tag vocabulary, so the term names no closed set.
 
-- Each key follows the form of a [trait](project-service.vocabulary.md#trait) of the Project Service.
-- A list holds each key once, and an absent list reads `[]`.
-- A malformed key answers `mission.node.content_invalid`.
-- A node with `requires: []` matches every worker binding whose worker declares its work and its state.
+- Each tag follows the form of a [tag](project-service.vocabulary.md#tag) of the Project Service.
+- A list holds each tag once, and an absent list reads `[]`.
+- A malformed tag answers `mission.node.content_invalid`.
+- A node with `tags: []` matches every worker binding whose worker declares its intent and its state.
 
-The node "Add password reset on iOS" holds `requires: [platform.macos]`.
-The worker binding `macos-coder` holds `traits: [platform.macos, toolchain.xcode]`, so its instances claim the steps of that node.
-The worker binding `linux-coder` holds `traits: []`, so its instances never claim that node.
-An import of that node into a project with no worker binding that holds `platform.macos` answers `mission.node.requires_unmatched`.
+The node "Add password reset on iOS" holds `tags: [platform.macos]`.
+The worker binding `macos-coder` holds `tags: [platform.macos, toolchain.xcode]`, so its instances claim the steps of that node.
+The worker binding `linux-coder` holds `tags: []`, so its instances never claim that node.
+An import of that node into a project with no worker binding that holds `platform.macos` answers `mission.node.tags_unmatched`.
 
 ## priority
 
@@ -391,7 +391,7 @@ The reviewer places that evidence in the workspace, and the tested input is the 
 ## node revision
 
 One immutable snapshot of the whole content of a node.
-It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the work, the requires list and the tasks.
+It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the intent, the tags and the tasks.
 A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.
 
@@ -608,7 +608,7 @@ A rewrite of `add-password-reset.md` with no identifier creates a new node, and 
 - The Markdown document that represents one node or one task under the [plan file grammar](mission-service.impl.md#the-plan-file-grammar).
 - Its file name is the import-set key and the plan file name of the node or the task.
 - The term names no closed set.
-- A node file holds `work`, and a task file holds `node`.
+- A node file holds `intent`, and a task file holds `node`.
 - The first example is `add-password-reset.md`, the `implement` node "Add password reset" in the import set above.
 - The second example is `add-reset-request.md`, a task of that node.
 - The `id` names a known node or task; a new node or task omits it.
@@ -616,9 +616,9 @@ A rewrite of `add-password-reset.md` with no identifier creates a new node, and 
 ```markdown
 ---
 id: node_01ARZ3NDEKTSV4RRFFQ69G5FAV
-work: implement
+intent: implement
 depends_on: []
-requires: []
+tags: []
 bindings:
   - api-repo
 verifications:

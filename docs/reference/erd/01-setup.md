@@ -122,8 +122,8 @@ erDiagram
         text criterion
         text verifications "JSON list of bash commands"
         text bindings "JSON list of binding identities"
-        text work "implement | examine"
-        text requires "JSON set of trait keys"
+        text intent "implement | examine"
+        text tags "JSON set of tags"
         text tasks "JSON task content, [] for an examine node"
         text change "JSON: write, previous_revision, changed_fields, tasks"
         text reason
@@ -271,14 +271,14 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 - `mission_mission.project_id` has a unique index. `project.create` inserts the project row and calls `createMission` in one transaction.
 - `mission_node` has a partial unique index on `(mission_id, filename)` where `retired_at` is null.
-- Every node holds one `work`: `implement` or `examine`. The Mission Service validates the value before the write.
+- Every node holds one `intent`: `implement` or `examine`. The Mission Service validates the value before the write.
 - A task is content of an `implement` node. It holds a `task_<ulid>` identity, and no task identity takes the prefix `node_`.
 - A dependency names a node of the same mission.
 - A binding in `bindings` belongs to the project of the mission.
 - A task holds no row, no revision, no state, no attempt and no priority. Its content is in the `tasks` column of the revision of its node. An `examine` node holds `[]`, and an `implement` node with `[]` is its own single work unit.
 - `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
 - `name`, `requirement` and `criterion` are nonblank text. `verifications` is a nonempty ordered list of nonblank bash commands.
-- `requires` holds unique trait keys under the [trait](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.vocabulary.md#trait) form. An absent list reads `[]`.
+- `tags` holds unique tags under the [tag](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.vocabulary.md#tag) form. An absent list reads `[]`.
 - `bindings` obeys the rule table of [the node content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-node-content). A node names every binding that it uses, and no node takes a binding from the project. The storage bindings of `bindings` form an ordered upload list in the order of the write. An `implement` node names one or more repository bindings, and the convention is one binding. An `implement` node with no repository binding answers `mission.node.bindings_invalid`. A task names no binding.
 
   | Binding kind | `implement` | `examine` |
@@ -287,8 +287,8 @@ The owning service enforces every rule below in the transaction of its write. A 
   | Worker       | 0           | 0         |
   | Storage      | 0 or more   | 0 or more |
 
-- A write that changes `work` of a node whose attempt reads 1 or more answers 409 `mission.node.work_locked`.
-- A node write that adds an unmatched pair of a node and a claimable state answers 409 `mission.node.requires_unmatched`. The [match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match) of the Scheduler Service defines the pair.
+- A write that changes `intent` of a node whose attempt reads 1 or more answers 409 `mission.node.intent_locked`.
+- A node write that adds an unmatched pair of a node and a claimable state answers 409 `mission.node.tags_unmatched`. The [match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match) of the Scheduler Service defines the pair.
 - A content change of a node inserts the next `mission_node_revision` row of that node in the same transaction. `mission_node.filename` equals the `filename` of the current revision.
 - A task change inserts the next revision of its node. An import that moves a task to another node inserts the next revision of both nodes.
 - A retired node keeps its row, its `filename`, its revisions and its last state. A retirement is final.
@@ -297,7 +297,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A dependency on a retiring node from a nonterminal dependent outside the retirement set refuses the retirement, unless the human forces it. A forced retirement deletes that dependency row. A dependency from a terminal dependent stays.
 - A retirement deletes the job of every retired node in its transaction.
 - A dependency edit and a retirement reroute every claim-free node whose dependency closure changes between `Pending` and `Available`. The dependency closure of a node is its direct dependencies. The same transaction inserts or deletes their jobs.
-- A dependency relates two nodes of one mission, whatever their work. A write that creates a cycle in a dependency closure is refused.
+- A dependency relates two nodes of one mission, whatever their intent. A write that creates a cycle in a dependency closure is refused.
 - A write that changes the structure or the content of the mission increments `mission_mission.version` once. A write with no change does not.
 - `mission_node.priority` holds the authoritative priority. A priority act overwrites it, and no Mission row keeps the earlier value. `scheduler_job.priority` holds a copy for the selection order.
 - An `actor` column holds one of three JSON forms: a human, an execution or a service. In this group only the human form occurs.
@@ -313,15 +313,15 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 ## Cross-group references
 
-| From                               | To                                 | Kind                                                                                                                                          |
-| ---------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mission_mission.project_id`       | `project_project.id`               | Reference, no FK.                                                                                                                             |
-| `mission_node_revision.bindings`   | `project_binding.id`               | Reference in JSON, no FK. Each item pins one row. The [Mission Service](#mission-service) rules state the count of each binding kind by work. |
-| `project_binding.config`           | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                             |
-| `project_binding.config`           | `agent_enablement.agent_name`      | Reference through the catalog agents of the worker, no FK.                                                                                    |
-| `project_binding.config`           | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK.                                                                                         |
-| `agent_cooldown.credential`        | `credential.name`                  | Reference by name, no FK.                                                                                                                     |
-| `agent_cooldown.execution_id`      | `scheduler_execution.id`           | Reference, no FK. See [ERD 2](02-execution.md).                                                                                               |
-| `agent_enablement.agent_providers` | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                             |
-| `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                             |
-| `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                             |
+| From                               | To                                 | Kind                                                                                                                                            |
+| ---------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mission_mission.project_id`       | `project_project.id`               | Reference, no FK.                                                                                                                               |
+| `mission_node_revision.bindings`   | `project_binding.id`               | Reference in JSON, no FK. Each item pins one row. The [Mission Service](#mission-service) rules state the count of each binding kind by intent. |
+| `project_binding.config`           | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                               |
+| `project_binding.config`           | `agent_enablement.agent_name`      | Reference through the catalog agents of the worker, no FK.                                                                                      |
+| `project_binding.config`           | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK.                                                                                           |
+| `agent_cooldown.credential`        | `credential.name`                  | Reference by name, no FK.                                                                                                                       |
+| `agent_cooldown.execution_id`      | `scheduler_execution.id`           | Reference, no FK. See [ERD 2](02-execution.md).                                                                                                 |
+| `agent_enablement.agent_providers` | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                               |
+| `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                               |
+| `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                               |

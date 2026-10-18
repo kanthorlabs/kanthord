@@ -40,10 +40,10 @@ These are the capabilities that `project-service.md` names, and the page closes 
 
 - A commit, a branch and a merge are local, so none of them is a capability.
 
-## trait
+## tag
 
 One fact of the host of a worker binding, which a human writes in the configuration of that binding.
-The current worker bindings of a project state its trait vocabulary, so the term names no closed set.
+The current worker bindings of a project state its tag vocabulary, so the term names no closed set.
 
 These prefixes are examples, and the list closes no set.
 
@@ -52,7 +52,7 @@ These prefixes are examples, and the list closes no set.
 
 Project `atlas` holds four worker bindings.
 
-| Binding        | Worker       | traits                              |
+| Binding        | Worker       | tags                                |
 | -------------- | ------------ | ----------------------------------- |
 | linux-coder    | `coder@1`    | `[]`                                |
 | macos-coder    | `coder@1`    | `[platform.macos, toolchain.xcode]` |
@@ -64,15 +64,15 @@ name: macos-coder
 worker: coder@1
 placement: worker
 instance_count: 2
-traits:
+tags:
   - platform.macos
   - toolchain.xcode
 ```
 
-The node "Add password reset to the iOS app" holds `requires: [platform.macos]`.
-`macos-coder` and `macos-reviewer` hold that trait, so only their instances claim the node.
-A Linux binding with `traits: []` claims only a node with `requires: []`.
-The key `platform.macOS` holds an upper-case letter, so the write answers `project.bindings.worker.traits_invalid`.
+The node "Add password reset to the iOS app" holds `tags: [platform.macos]`.
+`macos-coder` and `macos-reviewer` hold that tag, so only their instances claim the node.
+A Linux binding with `tags: []` claims only a node with `tags: []`.
+The tag `platform.macOS` holds an upper-case letter, so the write answers `project.bindings.worker.tags_invalid`.
 
 ## binding name
 

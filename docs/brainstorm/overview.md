@@ -63,7 +63,7 @@ A specific agent or a human participant supplies the WHO and takes responsibilit
 A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
 A worker instance claims a node in a node state that its worker declares, and it executes that node.
-The claim also needs a worker that declares the work of the node and a worker binding that holds every trait that the node requires.
+The claim also needs a worker that declares the intent of the node and a worker binding whose tags include every tag of the node.
 The instance produces an execution object each time it takes a node.
 The execution is the unit of work that the Scheduler Service records, and it represents the state of the work that the instance holds.
 The Worker Service hosts the executions of kanthord's own harness.

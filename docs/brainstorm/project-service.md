@@ -95,15 +95,15 @@ The worker that a worker binding names never changes. A project removes the bind
 - The Worker Service validates an entry during the binding write through the [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters).
 - The [agent enablement rules](agent.md#agent-configuration) govern that validation.
 - A project reaches an agent only through its worker binding and worker.
-- A worker binding holds its [traits](project-service.vocabulary.md#trait), a list of unique trait keys. The list is empty by default.
+- A worker binding holds its [tags](project-service.vocabulary.md#tag), a list of unique tags. The list is empty by default.
 
-A human writes the traits of a worker binding, and a trait states a fact of the host of its instances.
-A trait key matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes.
-The namespace prefix of a key is a convention, and no rule reads it.
-A trait holds no version, no range and no operator, so a version is part of the key, for example `toolchain.xcode_16`.
-A key that violates the form, or a repeated key, refuses the write with `project.bindings.worker.traits_invalid`.
-The current worker bindings of a project state the trait vocabulary of that project.
-The [Scheduler Service](scheduler-service.md#match) matches the traits of a worker binding against the requires list of each node.
+A human writes the tags of a worker binding, and a tag states a fact of the host of its instances.
+A tag matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes.
+The namespace prefix of a tag is a convention, and no rule reads it.
+A tag holds no version, no range and no operator, so a version is part of the tag, for example `toolchain.xcode_16`.
+A tag that violates the form, or a repeated tag, refuses the write with `project.bindings.worker.tags_invalid`.
+The current worker bindings of a project state the tag vocabulary of that project.
+The [Scheduler Service](scheduler-service.md#match) matches the tags of a worker binding against the tags of each node.
 A binding-set write that adds an unmatched pair of a node and a claimable state refuses the write with `project.bindings.worker.node_unmatched`, and the error names the nodes.
 An unmatched pair that exists before the write refuses no write.
 A human configures the worker bindings of a project before the first import, because a node write also refuses an unmatched pair.

@@ -57,8 +57,8 @@ The answer is one `Revision`:
     "criterion": "The checkout page submits an order.",
     "verifications": ["npm test"],
     "bindings": ["binding_01M4C5G6BP5EWTVTTXFH1R25MC"],
-    "work": "implement",
-    "requires": []
+    "intent": "implement",
+    "tags": []
   },
   "tasks": [],
   "change": {
@@ -70,18 +70,18 @@ The answer is one `Revision`:
 }
 ```
 
-| Property             | Type                            | Purpose                                                                                             |
-| -------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `node_id`            | `node_<ulid>`                   | Node of the revision.                                                                               |
-| `filename`           | string                          | Plan file name at this revision.                                                                    |
-| `revision`           | positive safe integer           | Revision number.                                                                                    |
-| `reason`             | string                          | Reason of the write that made the revision.                                                         |
-| `actor`              | `Actor`                         | Actor of that write. See [attempts](attempt.md#attempt).                                            |
-| `created_at`         | Unix milliseconds               | Time of the revision.                                                                               |
-| `content`            | object                          | `name`, `requirement`, `criterion`, `verifications`, `bindings`, `work` and `requires` of the node. |
-| `tasks`              | array                           | Each task with `id`, `filename` and `content`; `[]` for an `examine` node.                          |
-| `change`             | object                          | `write` kind, `previous_revision` (or `null`), `changed_fields`, and optional `tasks` changes.      |
-| `pinned_by_attempts` | array of positive safe integers | Attempts that pin this revision.                                                                    |
+| Property             | Type                            | Purpose                                                                                           |
+| -------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `node_id`            | `node_<ulid>`                   | Node of the revision.                                                                             |
+| `filename`           | string                          | Plan file name at this revision.                                                                  |
+| `revision`           | positive safe integer           | Revision number.                                                                                  |
+| `reason`             | string                          | Reason of the write that made the revision.                                                       |
+| `actor`              | `Actor`                         | Actor of that write. See [attempts](attempt.md#attempt).                                          |
+| `created_at`         | Unix milliseconds               | Time of the revision.                                                                             |
+| `content`            | object                          | `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent` and `tags` of the node. |
+| `tasks`              | array                           | Each task with `id`, `filename` and `content`; `[]` for an `examine` node.                        |
+| `change`             | object                          | `write` kind, `previous_revision` (or `null`), `changed_fields`, and optional `tasks` changes.    |
+| `pinned_by_attempts` | array of positive safe integers | Attempts that pin this revision.                                                                  |
 
 ### `execution revision list`
 

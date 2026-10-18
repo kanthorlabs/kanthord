@@ -274,19 +274,19 @@ A raise of the count to 3 adds slot 2.
 
 ## compatibility declarations
 
-The compatibility declarations are the worker name, the declared node states and the declared works that an instance carries on a work pull.
-An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the declared works `implement` and `examine`.
-An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the declared works `implement` and `examine`.
+The compatibility declarations are the worker name, the declared node states and the declared intents that an instance carries on a work pull.
+An instance of `coder@1` carries the worker name `coder@1`, the declared node state `Available` and the declared intents `implement` and `examine`.
+An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the declared intents `implement` and `examine`.
 
-## declared works
+## declared intents
 
-The declared works are the values of [work](mission-service.vocabulary.md#work) that the method of a worker takes.
+The declared intents are the values of [intent](mission-service.vocabulary.md#intent) that the method of a worker takes.
 Every worker of this page declares both values.
 
 - **implement**
 - **examine**
 
-The [match rule](scheduler-service.md#match) admits a node only when the declared works of the worker hold the work of the node.
+The [match rule](scheduler-service.md#match) admits a node only when the declared intents of the worker include the intent of the node.
 `coder@1` declares `implement` and `examine`, so a `coder@1` instance takes the steps claim of "Add password reset" and of "Account recovery".
 
 ## instance healthcheck
