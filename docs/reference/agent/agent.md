@@ -118,6 +118,13 @@ Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `source
 | `digest`  | string or null | SHA-256 hex digest of the text when `state` is `present`, else `null`.                                                                                                  |
 | `text`    | string or null | Text of the source when `state` is `present`, else `null`.                                                                                                              |
 
+### Selection
+
+- The claim selects the first chain entry whose credential is not cooling. It records each selection as the agent name, the enablement revision and the chain position.
+- The execution record and the release rebuild the selection from these pins.
+- Today the worker setup (`workerAgentView`) and the authorization of custody (`authorization.ts`) resolve the credential through the newest enablement revision.
+- An enablement edit during a live execution therefore reaches the credential of the setup and of the authorization, and it does not change the recorded selection.
+
 ### Failures
 
 API failures use the shared [error envelope](../errors.md#api-failures).
@@ -140,13 +147,6 @@ The CLI checks some input before it sends the request:
 | `cli.agent.get.indeterminate`                 | A transport failure, timeout or malformed response. Retry the command. |
 
 A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr.
-
-## Selection
-
-- The claim selects the first chain entry whose credential is not cooling. It records each selection as the agent name, the enablement revision and the chain position.
-- The execution record and the release rebuild the selection from these pins.
-- Today the worker setup (`workerAgentView`) and the authorization of custody (`authorization.ts`) resolve the credential through the newest enablement revision.
-- An enablement edit during a live execution therefore reaches the credential of the setup and of the authorization, and it does not change the recorded selection.
 
 ## API shape
 
