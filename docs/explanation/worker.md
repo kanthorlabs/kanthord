@@ -258,7 +258,15 @@ To run 3 instances of `coder@1` at the `worker` placement:
 
 1. Enable the agent `swe@1`, and add the worker binding as above, with `"placement": "worker"` or with no `placement`.
 2. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
-3. Start one `kanthord serve worker` process with each token. The host needs `git`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+3. Start one `kanthord serve worker` process with each token. The host needs `bash`, `git` 2.40 or later and OpenSSH 9.0 or later. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+
+A worker host needs the SSH setup of the server for each `ssh` credential of a repository binding. Before each clone, fetch and push, the worker runs `ssh -G -- <host>` and compares the `hostname`, `port` and `identity_file` with the metadata of the credential. The worker host needs:
+
+- the same alias in its SSH configuration, so that `ssh -G -- <host>` resolves it, with `identitiesonly yes` and exactly one `identityfile`;
+- the key file at the identical `identity_file` path;
+- the `known_hosts` entry of the git host in `~/.ssh/known_hosts`.
+
+A value that differs fails with `repository.credential.ssh_drift`. An alias that the host lacks fails with `repository.credential.ssh_identity_ambiguous`. See [credentials](../reference/repository/credential.md).
 
 An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
 
