@@ -101,7 +101,7 @@ flowchart TB
 
 - `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody and the Agent component share that file, and one file gives a collaboration of two services one transaction.
 - `tracking.db` of the data directory holds every table of ERD 4. It appears with the working tracer.
-- Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody. Before the first tag, it holds one row of version 1 for each service.
+- Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody. Before the first tag, it holds one row of version 1 for each service that owns tables.
 - Custody owns the unprefixed `credential` table.
 
 ## Owners without a table
