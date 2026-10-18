@@ -208,6 +208,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `cli.yaml` holds no version. A breaking change of that file states a new `kanthord auth jwt generate` in the release note.
 - An upgrade step never changes `master_key` or `gateway.auth.version`. A change of the JWT format, of a key label or of the authentication version invalidates every JWT and every client secret, and the release note states the reissue.
 - The worker application and the server run the same package version, because the worker refuses another version with `worker.version.mismatch`.
+- A worker application that cannot read the server package version stops its start with `worker.version.unavailable`. The version read returns `gateway.client.version_unavailable`, and the worker replaces it.
 - A removed CLI command gets no alias and no pointer. The release note names its replacement.
 - A container runs `kanthord upgrade` as a one-off container on the volume of the server, with the same `XDG_*` variables, while the server container is stopped.
 

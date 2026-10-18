@@ -113,7 +113,7 @@ The schema accepts `follows` type `action_end_state` with a `binding` name, but 
 
 The Agent Service validates the effective configuration of each agent of the worker.
 
-A tag states a fact of the host of the instances, for example `platform.macos`. The [Scheduler match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match) admits a node for a worker binding only when its tags include every tag of the node. Before and after its change, the apply reads the pairs of a node and a claimable state that no current worker binding covers. An apply that adds such a pair fails with `project.bindings.worker.node_unmatched`. A pair that exists before the apply refuses no apply. Configure the worker bindings of a project before the first import.
+A tag states a fact of the host of the instances, for example `platform.macos`. The Scheduler match admits a node for a worker binding only when the tags of the binding include every tag of the node. The match compares exact strings and reads no version, no range and no operator. Before and after its change, the apply reads the pairs of a node and a claimable state that no current worker binding covers. An apply that adds such a pair fails with `project.bindings.worker.node_unmatched`. A pair that exists before the apply refuses no apply. Configure the worker bindings of a project before the first import.
 
 An entry can name `fallback_configurations`: an array of at most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items. An entry can hold only this field; the default configuration is then the head of the chain. A named field, also `[]`, replaces the `fallback_configurations` of the enablement whole. An omitted field inherits them. `[]` means no fallback. Each item passes the validation of the default configuration. A repeated `agent_provider` and `model_identifier`, or an item with the `agent_provider` and `model_identifier` of the head of the entry, fails with `agent.configuration.fallback_duplicate`.
 
@@ -471,7 +471,27 @@ An example `bindings.json`:
 }
 ```
 
-A `repository.json` for `check` holds one `{ "kind": "repository", "config": { ... } }` object, with the configuration of `app` above.
+An example `repository.json` for `check`, with the configuration of `app` above:
+
+```json
+{
+  "kind": "repository",
+  "config": {
+    "available": true,
+    "platform": "github",
+    "address": "git@github.com:acme/app.git",
+    "strategy": {
+      "base_branch": "main",
+      "action": {
+        "name": "pull_request",
+        "follows": { "type": "assessment_passed" }
+      }
+    },
+    "ssh_credential": "<ssh-credential-name>",
+    "credential": "<github-credential-name>"
+  }
+}
+```
 
 ## CLI shape
 
@@ -541,6 +561,8 @@ The CLI reads the file as UTF-8 JSON, refuses repeated keys, and checks it again
 | `--file <path>` | Required             | JSON file with one `{ "kind": "repository", "config": { ... } }` object. |
 
 The CLI applies the file rules of `apply` to this file.
+
+The `repository.json` example in [API shape](#api-shape) is a complete file.
 
 ### Shared options
 

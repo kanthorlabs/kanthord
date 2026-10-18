@@ -257,6 +257,16 @@ curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8
   -d '{"reason":"Review the plan","expected_mission_version":8,"expected_state":"Executing","expected_attempt":1}'
 ```
 
+`resume` adds the required `target` to the human act fields:
+
+```sh
+curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/resume \
+  -H 'Authorization: Bearer <human-jwt>' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PS' \
+  -d '{"reason":"Plan reviewed","expected_mission_version":8,"expected_state":"Paused","expected_attempt":1,"target":"Available"}'
+```
+
 The Gateway keeps the answer of a mutation for its idempotency key in process memory for `idempotency_ttl` seconds, 86400 by default. A retry with the same key, human account and request replays that answer. This rule also applies to a failure. The controls carry no other request identifier. After a lost answer and an expired key, a retry answers a version or state conflict; read the node again.
 
 ## CLI shape
@@ -277,6 +287,7 @@ Every command also accepts `--token <jwt>` and `--endpoint <url>`.
 
 ```sh
 kanthord mission node pause node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file pause.json
+kanthord mission node resume node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file resume.json
 kanthord mission node override node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --result success --file override.json \
   --idempotency-key 01M4C5J3SBXJ52XQ9FSFRTK4PR
 ```
@@ -294,5 +305,17 @@ kanthord mission node override node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --result success 
 | `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                      |
 
 The `--file` of each command holds the complete request body, except for `override`. The `override` file holds no `result` field, and a `result` field fails the schema.
+
+An example `resume.json`:
+
+```json
+{
+  "reason": "Plan reviewed",
+  "expected_mission_version": 8,
+  "expected_state": "Paused",
+  "expected_attempt": 1,
+  "target": "Available"
+}
+```
 
 The CLI validates the ID, the token, the key and the file before it sends a request. Each option is accepted once. See [client configuration](../README.md#client-configuration). The HTTP client has a 31-second deadline.
