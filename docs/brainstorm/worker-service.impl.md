@@ -394,7 +394,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `repositories` holds one row for each repository binding that the pinned node revision names, in binding order, for an `implement` node and for an `examine` node.
 - `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
-- An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
+- An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled or removed current enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
@@ -450,7 +450,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
 - A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
-- The authorization reads the credential, the provider and the model of each native agent from the pinned selection of the execution. It validates the model against the metadata of the pinned credential revision. Before the first handover pins a revision, it validates against the newest revision.
+- The authorization reads the credential, the provider and the model of each native agent from the pinned selection of the execution. It validates the model against the metadata of the pinned credential revision. Before the first handover pins a revision, it validates against the newest live revision.
 - A disabled or removed current enablement answers 400 `agent.enablement.unavailable`, and a selection that fails validation answers the code of its first issue.
 
 ## The credential handover

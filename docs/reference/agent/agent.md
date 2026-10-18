@@ -121,9 +121,9 @@ Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `source
 ### Selection
 
 - The claim selects the first chain entry whose credential is not cooling. It records each selection as the agent name, the enablement revision and the chain position.
-- The execution record and the release rebuild the selection from these pins.
-- The authorization of custody and the execution setup of the Worker Service read the credential, the provider and the model from the rebuilt selection. A disabled or removed current enablement still stops both with 400 `agent.enablement.unavailable`.
-- An enablement edit during a live execution changes no credential, provider or model of that execution.
+- The execution record and the release rebuild the pinned selection from these pins.
+- The pinned selection fixes the agent provider, the provider, the credential, the model and the reasoning effort. The authorization of custody and the execution setup of the Worker Service read them from it.
+- An enablement edit during a live execution changes none of them. A disabled or removed current enablement still stops both with 400 `agent.enablement.unavailable`.
 
 ### Failures
 

@@ -44,7 +44,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `node_branch` is the node branch of the attempt. The Scheduler stores no node branch. It derives the value from the attempts of the Mission Service through the `MissionBranches` port, as [the attempt](mission-service.impl.md#the-attempt) states. `nodeBranchesOf(tx, keys)` answers one branch for each `{ node_id, attempt }` key, in key order. The execution record, the claim answer and `ExecutionClaim` carry the derived value, and a list derives the branches of one page with one call.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
-  - `agent_selections` is the list of the selections of the execution, one for each native agent of the worker whose agent view is valid. An agent with an invalid configuration gets no pin, and the claim goes on. It is `[]` for a worker with no native agent. A null column reads as `[]`.
+  - `agent_selections` is the list of the selections of the execution, one for each native agent of the worker. The claim health check refuses a claim when any agent configuration is invalid, so every native agent of a claimed execution holds a pin. It is `[]` for a worker with no native agent. A null column reads as `[]`.
   - The column stores pins, `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the claim selected, and `position` is the chain position.
   - The Scheduler rebuilds each selection from two immutable rows: the worker binding row that `worker_binding_id` pins and the enablement revision that the pin names. The `AgentChains` port does the rebuild. Every read of the execution answers the same selections.
   - A selection holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. `level` is `enablement | binding`.
@@ -141,12 +141,13 @@ The instance healthcheck stays out of every human inspection command under [work
 - The column `scheduler_execution.agent_selections` is `TEXT`. It holds the JSON list of the pins, which the claim writes once.
 - The execution row inserts the pins with the row. Nothing updates them later.
 - A pull that finds a `running` execution of its runtime identity returns that row and selects nothing.
+- After the claim commits a new execution, the work pull calls `AgentChains.selected` with the selections and the execution identity. A running execution and a probe call nothing.
 - The Scheduler Service declares the collaboration `projectPaused(tx, projectId)` in its `contract.ts` as the dependency `projects`. The Project Service implements it, and `apps/server/index.ts` wires it.
 - After that read, the claim reads `projectPaused`. A paused project answers `{ kind: "no-work" }` before the instance healthcheck, and the claim inserts no execution and changes no node.
 - When one agent has no chain entry whose credential is free, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
-- `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, rebuilt from the pins.
-- The release transaction calls the Agent component with the rebuilt selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
-- Custody and the execution setup of the Worker Service read the rebuilt selection and never the live chain.
+- `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, the pinned selections rebuilt from the pins.
+- The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
+- Custody and the execution setup of the Worker Service read the pinned selection and never the live chain.
 - A disabled or removed current enablement still stops the authorization and the setup with 400 `agent.enablement.unavailable`, as [agent.md](agent.md#selection) states.
 
 ## The match

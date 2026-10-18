@@ -164,7 +164,7 @@ The execution record holds these fields.
 - The pinned node revision.
 - The node branch of the attempt. The Scheduler derives it from the attempts of the Mission Service and stores no copy.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
-- The agent pins of the claim: the chain position and the enablement revision of one chain entry. The claim writes one pin for each native agent of the worker whose agent view is valid. An agent with an invalid configuration gets no pin, and the claim goes on. The record rebuilds the selection from its pins. A later cooldown changes no pin.
+- The agent pins of the claim: the chain position and the enablement revision of one chain entry. The claim writes one pin for each native agent of the worker. The claim health check refuses a claim when any agent configuration is invalid, so every native agent of a claimed execution holds a pin. The record rebuilds the selection from its pins. A later cooldown changes no pin.
 - The fixed deadline.
 - The trace identity of the execution.
 - The root span identity of the execution.
