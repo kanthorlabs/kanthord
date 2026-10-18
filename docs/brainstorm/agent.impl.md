@@ -173,14 +173,16 @@ The Agent component owns these keys of the section `agent`.
 ### The claim selection
 
 - The claim transaction calls the Agent component with the pinned worker binding row and the native agents of the worker.
-- The component builds the chain of each agent, reads the hold of the credential of each chain entry and returns the first chain entry whose credential is not cooling.
+- The component builds the chain of each agent and reads the hold of the credential of each chain entry.
+- It returns the first chain entry whose credential is not cooling.
 - A credential is cooling when its `available_at` is later than the clock reading. Every model of a cooling credential is skipped.
 - When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold.
 - The claim stores one pin for each selection in `scheduler_execution.agent_selections`: `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the selection read. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
 - The component rebuilds a selection from a pin with the pinned worker binding row and the pinned enablement revision. A later hold, enablement revision or worker binding revision changes no pin.
 - The claim logs `agent.fallback.selected` for each selection. Today the Agent component writes no such log.
 - The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection. Today no span carries them.
-- Tests cover the selection of the first entry with a free credential, the return of an earlier entry after its hold expires, the skip of every model of a cooling credential and the no-work answer.
+- Tests cover the selection of the first entry with a free credential and the return of an earlier entry after its hold expires.
+- Tests cover the skip of every model of a cooling credential and the no-work answer.
 - Tests cover the rebuild of a selection from a pin after a later enablement revision.
 
 ### The operator operations
@@ -196,7 +198,8 @@ The Agent component owns these keys of the section `agent`.
 ### The cooldown tests
 
 - Tests cover the hold, the strikes, the maximum for each code and the codes that do not advance.
-- Tests cover the release by a release with no `provider_failed` stop, the hold of every model of a credential and the hold that agents and projects share.
+- Tests cover the release of a credential by a release with no `provider_failed` stop.
+- Tests cover the hold of every model of a credential and the hold that agents and projects share.
 - A test asserts that a later cooldown leaves the pin of a live execution unchanged.
 - Tests cover the neutral advancing stop and the pin in the execution record.
 - A test asserts that a rotation of the credential keeps the hold.

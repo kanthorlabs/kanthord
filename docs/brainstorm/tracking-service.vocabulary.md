@@ -111,7 +111,8 @@ The set is closed and it holds two values.
 
 Retention is the period for which the Tracking Service holds a trace.
 The trace is the only unit of retention.
-The server deletes the trace of an execution of project `Billing` when its retention ends, and the deletion removes every span, record and telemetry text of that trace.
+The server deletes the trace of an execution of project `Billing` when its retention ends.
+The deletion removes every span, record and telemetry text of that trace.
 
 ## acknowledgement
 

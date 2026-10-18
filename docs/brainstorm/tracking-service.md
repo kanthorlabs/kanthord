@@ -180,7 +180,7 @@ A deletion of a trace deletes every span, every record and every telemetry text 
 A deletion of a span deletes no telemetry text.
 A reference to a deleted trace resolves to expired and never to missing.
 The operator configures the retention of a trace once for the server, and never per project.
-Today the server holds no retention value, no sweep and no delete operation of a trace, so it deletes no trace. The store keeps no tombstone, and a read of a deleted trace would answer `404 tracking.trace.not_found`.
+Today the server holds no retention value, no sweep and no delete operation of a trace, so it deletes no trace. The store keeps no tombstone, and a read of a deleted trace answers `404 tracking.trace.not_found`.
 The [architecture](architecture.md#tracking-service) owns the difference between telemetry retention and evidence retention.
 A deletion of a telemetry record changes no outcome, removes no evidence and changes no state of a node.
 

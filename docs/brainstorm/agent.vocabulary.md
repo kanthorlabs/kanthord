@@ -89,7 +89,7 @@ The chain entry that a claim selects for one native agent.
 It holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`.
 The execution record stores only the pin of it: `agent_name`, `enablement_id` and `position`. The component rebuilds the selection from the pin.
 The term names no closed set.
-The claim of Execution 2 selects position 1 of `swe@1` because the credential of position 0 cools down, and the execution runs the whole time with that selection.
+The claim of Execution 2 selects position 1 of `swe@1`, because the credential of position 0 cools down. The execution keeps that selection.
 
 ## agent session
 

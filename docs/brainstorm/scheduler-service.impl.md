@@ -233,7 +233,8 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that a claim exposes no identity of its own.
 - Tests assert that a release with a stop and a loss declaration hold the job for `scheduler.stop_backoff` seconds, that the hold doubles with the count, and that a count of 0 holds nothing.
-- Tests assert that the claim skips a held job until `available_at`, that a claim does not claim a node whose loss it settles, and that a parked work pull claims a held job when its hold ends.
+- Tests assert that the claim skips a held job until `available_at` and does not claim a node whose loss it settles.
+- Tests assert that a parked work pull claims a held job when its hold ends.
 - A test parses every input and output of the Scheduler operations through the direct adapter and the HTTP adapter and rejects an unknown field, a `null` outside its permitted fields and a bare ULID.
 - A test loses an accepted pull answer and repeats the pull from the same runtime identity, once with the same key and once with a new key, and asserts the same execution and no second execution or count.
 - A test pulls from another runtime identity of the same binding while an execution is live and asserts that it never receives that execution.
@@ -253,7 +254,8 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   A human act also checks its precondition against the settled state.
 - Tests sweep expired steps and evaluation claims below and at `mission.consecutive_failure_limit`.
 - Tests assert that a claim pins the first chain entry whose credential is free.
-- Tests assert that a later cooldown leaves the pin unchanged, that the record rebuilds the selection from the pinned worker binding row and enablement revision, and that a pull answers no work when every entry cools down.
+- Tests assert that a later cooldown leaves the pin unchanged and that a pull answers no work when every entry cools down.
+- Tests assert that the record rebuilds the selection from the pinned worker binding row and enablement revision.
 - Tests assert that an advancing `provider_failed` stop neither counts nor ends the count, and that `bad_request` and `unauthorized` count.
 - Tests release steps and evaluation claims with a `stop` below and at `mission.consecutive_failure_limit`, mix lost and stopped rows in one count, and assert that `execution get` answers the `stop`. A test refuses a `stop` with `further_work: false`.
   They assert one loss increment, the specified node state and a job only when claimable.

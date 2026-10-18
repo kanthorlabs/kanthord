@@ -382,7 +382,7 @@ The file path is local input, not an evidence address.
    The server checks the live claim, the storage bindings of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
    The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check in the open attempt of the node.
-   The failed upload checks of an attempt are the assets of the evidence of that node and attempt whose `failed_at` is set, as the third step states.
+   The third step states the failed upload checks: they are the assets of that node and attempt whose `failed_at` is set.
    The grant moves to the next binding when the signing call answers `binding_disabled`, `binding_removed` or a `storage.platform.s3.*` failure. Every other refusal of the signing call stops the upload.
    A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_exhausted`. `details` holds `{ node_id, attempt, bindings }`, and `bindings` lists the storage bindings that hold a failed upload check in the open attempt, in list order.
    503 `mission.evidence.storage_unavailable` answers only when no object storage is wired.
@@ -813,7 +813,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests skip a disabled storage binding, a removed storage binding, a binding that the signing call refuses and a binding with a failed upload check in the open attempt. Tests try every binding again in the next attempt.
 - Tests record a failed upload check for a mismatch, for a missing object and for a store failure.
 - Tests answer 409 `mission.evidence.storage_exhausted` when no binding is left in the attempt.
-- Tests assert that a failed check sets `failed_at` once, that a human delete of the failed asset or of its evidence makes the binding grantable again, and that a failed check writes one Mission span with the three attributes.
+- Tests assert that a failed check sets `failed_at` once and writes one Mission span with the three attributes.
+- Tests assert that a human delete of the failed asset, or of its evidence, makes the binding grantable again.
 - Tests keep 503 `mission.evidence.storage_unavailable` when no object storage is wired.
 - Tests read and delete each asset through the binding that it pins.
 - Tests admit a `branch_push` address on the base branch of the binding on a `pull_request` request. They fold it to `pull_request_merged` with that landed commit.

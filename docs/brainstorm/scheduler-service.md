@@ -141,8 +141,9 @@ Selection and claim form one acquisition operation without an unprotected gap.
 The operation rechecks the Mission state, the readiness condition, the [project pause](project-service.md#project-pause), the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
 A paused project returns the pull empty, and the claim selects no job.
 The claim reads the [fallback chain](agent.md#fallback-chain) of each native agent of the worker.
-It selects the first chain entry whose credential is not cooling and pins the chain position and the enablement revision of that entry in the execution record.
-When the credential of every chain entry of an agent is cooling, the claim returns no work and creates no block, no node pause and no execution.
+It selects the first chain entry whose credential is not cooling.
+It pins the chain position and the enablement revision of that entry in the execution record.
+When every chain entry of an agent has a cooling credential, the claim returns no work and creates no block, no node pause and no execution.
 The claim validates no effective configuration of an agent.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
