@@ -104,6 +104,8 @@ Each `chain` item holds these fields:
 | `reasoning_effort` | string         | Reasoning effort of the chain entry.                                                                                                       |
 | `cooldown`         | object or null | `null`, or `{ strikes, available_at }` of the [cooldown](cooldown.md) of the credential. Every model of a credential shows the same value. |
 
+A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats an expired hold as free.
+
 Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `sources`. A disabled layer resolves every source as `off`. Each source holds these fields:
 
 | Property  | Type           | Purpose                                                                                                                                                                 |
@@ -138,6 +140,13 @@ The CLI checks some input before it sends the request:
 | `cli.agent.get.indeterminate`                 | A transport failure, timeout or malformed response. Retry the command. |
 
 A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr.
+
+## Selection
+
+- The claim selects the first chain entry whose credential is not cooling. It records each selection as the agent name, the enablement revision and the chain position.
+- The execution record and the release rebuild the selection from these pins.
+- Today the worker setup (`workerAgentView`) and the authorization of custody (`authorization.ts`) resolve the credential through the newest enablement revision.
+- An enablement edit during a live execution therefore reaches the credential of the setup and of the authorization, and it does not change the recorded selection.
 
 ## API shape
 
