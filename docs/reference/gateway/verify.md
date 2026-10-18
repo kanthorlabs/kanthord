@@ -28,7 +28,7 @@ There are no aliases such as `account_id`, raw token, signing key, or token meta
 
 Missing, malformed, tampered, expired, banned, or wrong-key tokens receive HTTP `401 gateway.authentication.unauthorized`; a valid machine identity also fails the human access policy. API failures use the shared [error envelope](../errors.md#api-failures).
 
-A declared API failure makes the CLI exit `1` and print `<code>: gateway verify: request failed` and the row `status`. A transport failure, timeout, or invalid response exits `1` with `cli.gateway.verify.indeterminate`.
+A declared API failure makes the CLI exit `1` and print `<code>: gateway verify: request failed` and the row `status`. A transport failure, timeout, or invalid response exits `1` with `cli.gateway.verify.indeterminate` and the message `gateway verify: the result is unknown; retry the command`.
 
 ## API shape
 

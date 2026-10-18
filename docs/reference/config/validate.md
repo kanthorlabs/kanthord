@@ -25,7 +25,7 @@ valid: <path>
 | `valid: <path>`   | Confirms validation and identifies the resolved configuration file path. |
 | Exit code `0`     | File safety, YAML structure, and declared fields passed validation.      |
 
-Missing files, unsafe permissions, duplicate YAML keys, unknown fields, and invalid values produce a [diagnostic](../errors.md#cli-diagnostics) on stderr and exit `1`. Diagnostics identify fields without echoing their values. The command does not rewrite the file or print its properties; use [show configuration](show.md) to inspect masked effective values.
+Missing files, unsafe permissions, duplicate YAML keys, unknown fields, and invalid values produce a [diagnostic](../errors.md#cli-diagnostics) on stderr and exit `1`. Diagnostics identify fields without echoing their values: `system.config.invalid_field: invalid configuration fields` lists the issues as a JSON list in the `details` row. The command does not rewrite the file or print its properties; use [show configuration](show.md) to inspect masked effective values.
 
 ## API shape
 

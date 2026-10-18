@@ -33,7 +33,7 @@ The command runs these steps in this order:
 
 ## Expected response
 
-Success prints one `name: value` row for each change to stdout and exits `0`. Each row prints when its step happens, so the backup rows print before a later failure. The rows of one run align:
+Success prints one `name: value` row for each change to stdout and exits `0`. Each row prints when its step happens, so the backup rows print before a later failure. The rows of one run align, and every value starts in column 17, after the longest row name `config_version:` and one space:
 
 ```text
 backup:         /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
@@ -54,7 +54,7 @@ config_version: 1 -> 2
 | `up_to_date: <path>`                 | Nothing changed, and the command wrote nothing.                                                                              |
 | Exit code `0`                        | The configuration and the database match the binary.                                                                         |
 
-Failures exit `1` with a [diagnostic](errors.md#cli-diagnostics). A configuration that holds an old key and its new key fails with `system.config.rename_conflict`. An existing backup path fails with `system.database.backup_failed`. A failure after the backups keeps each committed migration. Run `kanthord upgrade` again to complete the remaining part.
+Failures exit `1` with a [diagnostic](errors.md#cli-diagnostics). A later failure keeps the earlier rows on stdout, for example the backup paths. A configuration that holds an old key and its new key fails with `system.config.rename_conflict` and the rows `old_key` and `new_key`. An existing backup path fails with `system.database.backup_failed` and the row `path`. A failure after the backups keeps each committed migration. Run `kanthord upgrade` again to complete the remaining part.
 
 ### Restore the backups
 
