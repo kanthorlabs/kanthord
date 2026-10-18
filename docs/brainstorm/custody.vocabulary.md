@@ -34,6 +34,12 @@ One immutable snapshot of the platform, the metadata and the secret material tha
 A rotation adds the next revision and keeps the older revisions live until custody drains them or a human revokes them.
 `github-main` holds revision 1 with key A. A rotation adds revision 2 with key B, an execution that pinned revision 1 finishes with key A, and a new execution takes key B.
 
+## credential hold
+
+The end time and the strike count of a cooldown on one credential name.
+Custody stores them in `available_at` and `strikes` of revision 1 of the name, and the Agent component decides their values.
+Credential `openai-main` fails with `rate_limited` at 12:00:00, so its hold lasts until 12:01:00 with 1 strike. A rotation to revision 2 keeps that hold.
+
 ## drain
 
 The automatic end of an older credential revision when no live execution pins it.
