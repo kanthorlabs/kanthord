@@ -118,7 +118,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - That answer creates no block, no pause and no failed execution.
 - The claim pins each selection in the execution record as the agent name, the enablement revision and the chain position. The component rebuilds the [agent selection](agent.vocabulary.md#agent-selection) from the pin, the pinned worker binding revision and the pinned enablement revision.
 - The model inference authorization of custody and the execution setup of the Worker Service read the rebuilt selection, and never the head.
-- Today the worker setup (`workerAgentView` of the execution setup) and the authorization of custody (`authorization.ts`) each resolve the credential of the pinned agent provider through the newest enablement revision. An enablement edit of that credential during a live execution therefore reaches the credential of the setup and of the authorization, and it does not change the recorded selection. [HANDOFF](HANDOFF.md) holds this gap.
+- A disabled or removed current enablement still stops the authorization and the setup with 400 `agent.enablement.unavailable`. An enablement edit during a live execution changes no credential, provider or model of that execution.
 - A switch of the selection happens only at the next execution.
 - The pin of a credential revision stays unchanged.
 

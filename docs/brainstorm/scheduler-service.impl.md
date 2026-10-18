@@ -147,7 +147,7 @@ The instance healthcheck stays out of every human inspection command under [work
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, rebuilt from the pins.
 - The release transaction calls the Agent component with the rebuilt selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
 - Custody and the execution setup of the Worker Service read the rebuilt selection and never the live chain.
-- Today the worker setup (`workerAgentView`) and the authorization (`authorization.ts`) resolve the credential through the newest enablement revision, as [agent.md](agent.md#selection) states. An enablement edit during a live execution reaches the credential of the setup and of the authorization, and not the recorded selection.
+- A disabled or removed current enablement still stops the authorization and the setup with 400 `agent.enablement.unavailable`, as [agent.md](agent.md#selection) states.
 
 ## The match
 

@@ -377,10 +377,13 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 
 - It declares `mutation: false`, no body and the default 30 s timeout. It has no CLI leaf.
 - The invocation chain proves the path identity, and the server derives the setup from the proven claim.
-- The answer is `{ execution_id, worker_name, agent_name, effective_configuration, credential_id, metadata, resource_budget, repositories, prompt }`.
-- `worker_name` comes from the worker binding revision that the claim pins, and `agent_name` comes from the declaration of that worker.
+- The answer is `{ execution_id, worker_name, agents, templates, resource_budget, intent, repositories }`.
+- Each entry of `agents` is `{ agent_name, effective_configuration, position, level, credential_id, metadata, prompt }`. The entry of each native agent of the worker is present, in the order of the declaration.
+- `worker_name` comes from the worker binding revision that the claim pins, and each `agent_name` comes from the declaration of that worker.
 - `effective_configuration` is the pinned selection of `agent_name` in `agent_selections` of the execution. It is never the head of the chain.
-- The resolution reads the pinned worker binding revision, its entry, the current enablement and the metadata of the pinned credential revision from one snapshot.
+- `position` and `level` are the chain position and the chain level of the pinned selection of `agent_name`.
+- `intent` is `implement` or `examine`, from the pinned node revision.
+- The resolution reads the pinned worker binding revision, the agent selection that the pin rebuilds from the pinned enablement revision, the state of the current enablement and the metadata of the pinned credential revision from one snapshot.
 - The credential revision is the revision that the handover of the execution pins for the credential name of the effective configuration. The read creates no pin and selects no other revision.
 - An execution that pins no revision of that name answers 409 `worker.execution.credential_not_pinned`. A revoked pinned revision answers 409 `credential.revision.revoked`.
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
@@ -447,6 +450,8 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
 - A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
+- The authorization reads the credential, the provider and the model of each native agent from the pinned selection of the execution. It validates the model against the metadata of the pinned credential revision. Before the first handover pins a revision, it validates against the newest revision.
+- A disabled or removed current enablement answers 400 `agent.enablement.unavailable`, and a selection that fails validation answers the code of its first issue.
 
 ## The credential handover
 

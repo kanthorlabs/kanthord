@@ -169,7 +169,9 @@ The Agent component owns these keys of the section `agent`.
 - A release with no `stop`, or with a `stop` whose reason is not `provider_failed`, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
 - A release of a credential sets `available_at` to null and `strikes` to 0. It changes a row only when `strikes` is above 0.
 - An advancing `stop` is neutral for the failure count, as [the failure count](scheduler-service.impl.md#loss-settlement) states.
-- The write logs `agent.fallback.cooldown_started`. A release of a hold logs `agent.fallback.cooldown_cleared`. Today the Agent component writes neither log.
+- The write logs `agent.fallback.cooldown_started` at level `info` with `execution_id`, `credential_name`, `code`, `strikes` and `available_at`, once for each held credential.
+- A release that changes a hold logs `agent.fallback.cooldown_cleared` with `execution_id` and `credential_name`. A release of a credential with no hold logs nothing.
+- A human clear of a cooldown logs `agent.fallback.cooldown_cleared` with `credential_name` and no `execution_id`.
 
 ### The claim selection
 
@@ -180,8 +182,10 @@ The Agent component owns these keys of the section `agent`.
 - When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold. No reader uses it today. A parked work pull waits for its wake or for the earliest job `available_at`, and not for the end of a hold.
 - The claim stores one pin for each selection in `scheduler_execution.agent_selections`: `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the selection read. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
 - The component rebuilds a selection from a pin with the pinned worker binding row and the pinned enablement revision. A later hold, enablement revision or worker binding revision changes no pin.
-- The claim logs `agent.fallback.selected` for each selection. Today the Agent component writes no such log.
-- The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection. Today no span carries them.
+- After the claim commits a new execution, the Scheduler Service passes the selections to the Agent component. The component logs `agent.fallback.selected` at level `info` for each selection with `execution_id`, `agent_name`, `chain_position`, `chain_level`, `agent_provider`, `provider`, `model_identifier` and `credential_name`.
+- A pull that claims no work logs no selection. A pull that answers the running execution logs no selection. The probe of a pull rolls back, so it logs no selection.
+- The log names the fields `chain_position` and `chain_level`, because the logger writes its own top-level key `level`.
+- The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection.
 - Tests cover the selection of the first entry with a free credential and the return of an earlier entry after its hold expires.
 - Tests cover the skip of every model of a cooling credential and the no-work answer.
 - Tests cover the rebuild of a selection from a pin after a later enablement revision.
