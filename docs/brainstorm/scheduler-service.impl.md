@@ -28,7 +28,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
   - The commit runs the full claim again. After quiescence starts, the commit settles losses and claims nothing.
 - `scheduler.execution.release` at `POST /api/scheduler/execution/:execution_id/release` is a `client` mutation of `unary` lifetime.
 - `scheduler.claim.get` at `GET /api/scheduler/claim/:execution_id` is a `client` read of `unary` lifetime with no body.
-- `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
+- `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-operation-mapping) lists.
 - `scheduler.eligibility.get` at `GET /api/scheduler/project/:project_id/eligibility/:node_id` is a `human` read of `unary` lifetime with no body, under [The eligibility report](#the-eligibility-report).
 - `scheduler.execution.get` and `scheduler.claim.get` answer 404 `scheduler.execution.not_found` for an execution identity that no row holds.
 - A field bound of a schema is declared with that schema, and the body limit bounds nothing at the field level.
@@ -44,7 +44,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `node_branch` is the node branch of the attempt. The Scheduler stores no node branch. It derives the value from the attempts of the Mission Service through the `MissionBranches` port, as [the attempt](mission-service.impl.md#the-attempt) states. `nodeBranchesOf(tx, keys)` answers one branch for each `{ node_id, attempt }` key, in key order. The execution record, the claim answer and `ExecutionClaim` carry the derived value, and a list derives the branches of one page with one call.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
-  - `agent_selections` is the list of the selections of the execution, one for each native agent of the worker. It is `[]` for a worker with no native agent. A null column reads as `[]`.
+  - `agent_selections` is the list of the selections of the execution, one for each native agent of the worker whose agent view is valid. An agent with an invalid configuration gets no pin, and the claim goes on. It is `[]` for a worker with no native agent. A null column reads as `[]`.
   - The column stores pins, `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the claim selected, and `position` is the chain position.
   - The Scheduler rebuilds each selection from two immutable rows: the worker binding row that `worker_binding_id` pins and the enablement revision that the pin names. The `AgentChains` port does the rebuild. Every read of the execution answers the same selections.
   - A selection holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. `level` is `enablement | binding`.
@@ -146,7 +146,7 @@ The instance healthcheck stays out of every human inspection command under [work
 - When one agent has no chain entry whose credential is free, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, rebuilt from the pins.
 - The release transaction calls the Agent component with the rebuilt selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
-- Custody and the execution setup of the Worker Service read the rebuilt selection and never the live chain.
+- Custody and the execution setup of the Worker Service read the rebuilt selection and never the live chain. Today they resolve the credential through the newest enablement revision, as [agent.md](agent.md#selection) states.
 
 ## The match
 

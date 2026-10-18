@@ -144,7 +144,7 @@ The claim reads the [fallback chain](agent.md#fallback-chain) of each native age
 It selects the first chain entry whose credential is not cooling.
 It pins the chain position and the enablement revision of that entry in the execution record.
 When every chain entry of an agent has a cooling credential, the claim returns no work and creates no block, no node pause and no execution.
-The claim validates no effective configuration of an agent.
+The claim fails on no invalid effective configuration of an agent. It pins no entry for that agent and goes on.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
 The Scheduler takes the instance healthcheck once more immediately before the claim commits.
@@ -164,7 +164,7 @@ The execution record holds these fields.
 - The pinned node revision.
 - The node branch of the attempt. The Scheduler derives it from the attempts of the Mission Service and stores no copy.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
-- The agent pins of the claim: the chain position and the enablement revision of one chain entry for each native agent of the worker. The record rebuilds the selection from its pins. A later cooldown changes no pin.
+- The agent pins of the claim: the chain position and the enablement revision of one chain entry. The claim writes one pin for each native agent of the worker whose agent view is valid. An agent with an invalid configuration gets no pin, and the claim goes on. The record rebuilds the selection from its pins. A later cooldown changes no pin.
 - The fixed deadline.
 - The trace identity of the execution.
 - The root span identity of the execution.
