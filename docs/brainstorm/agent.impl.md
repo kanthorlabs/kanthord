@@ -133,6 +133,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 - `chain` is a list of `{ position, level, agent_provider, provider, credential, model_identifier, reasoning_effort, cooldown }`. Position 0 is the head.
 - `cooldown` is `null` or `{ strikes, available_at }`. It reads the hold of the credential of the chain entry, so every chain entry of one credential shows the same `cooldown`.
+  - A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats it as free.
 - `active_position` is the position of the first chain entry whose `cooldown` is `null` or whose `available_at` is not later than the clock reading. It is `null` when every chain entry has a live cooldown.
 - `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", available_at }` when `active_position` is `null`. `available_at` is the earliest `available_at` of the chain.
 - The `agent.get` view of an agent builds the chain from the enablement alone. An absent enablement answers `chain: []`, `active_position: null` and `cooling: null`.
@@ -164,8 +165,8 @@ The Agent component owns these keys of the section `agent`.
 - The Scheduler Service calls the Agent component in the release transaction of an execution. The call carries the pinned selection of each agent of the execution and the `stop`.
 - A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` holds the credential of each pinned selection. A credential that two selections share is held once.
 - The hold adds 1 to `strikes`, so the first failure sets `strikes` to 1, and it sets `available_at`.
-- A `stop` with the code `bad_request` or `unauthorized` holds no credential and releases no credential.
-- A release with no `stop`, or with a `stop` of another reason, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
+- A `stop` with the reason `provider_failed` and the code `bad_request` or `unauthorized` holds no credential and releases no credential.
+- A release with no `stop`, or with a `stop` whose reason is not `provider_failed`, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
 - A release of a credential sets `available_at` to null and `strikes` to 0. It changes a row only when `strikes` is above 0.
 - An advancing `stop` is neutral for the failure count, as [the failure count](scheduler-service.impl.md#loss-settlement) states.
 - The write logs `agent.fallback.cooldown_started`. A release of a hold logs `agent.fallback.cooldown_cleared`. Today the Agent component writes neither log.
