@@ -78,17 +78,18 @@ Under `coder-main`, which names no tail, the chain is `gpt-6` at position 0 and 
 
 ## cooldown
 
-The record that excludes one credential and model identifier from a selection until its end time.
-Its code is the closed set `rate_limited`, `quota_exhausted` or `unavailable`.
+The hold that excludes every model of one credential from a selection until its end time `available_at`.
+It counts `strikes`. The code of the failure is one of the closed set `rate_limited`, `quota_exhausted` or `unavailable`, and it sets the base duration.
 Execution 1 releases with `provider_failed` and code `rate_limited` on credential `openai-main` and model `gpt-6`.
-The cooldown lasts 60 seconds, and the next claim of `swe@1` and `re@1` selects position 1 of the chain.
+The cooldown of `openai-main` lasts 60 seconds, and the next claim of `swe@1` and `re@1` selects position 1 of the chain.
 
 ## agent selection
 
-The chain entry that a claim selects for one native agent and pins in the execution record.
+The chain entry that a claim selects for one native agent.
 It holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`.
+The execution record stores only the pin of it: `agent_name`, `enablement_id` and `position`. The component rebuilds the selection from the pin.
 The term names no closed set.
-The claim of Execution 2 selects position 1 of `swe@1` because position 0 cools down, and the execution runs the whole time with that selection.
+The claim of Execution 2 selects position 1 of `swe@1` because the credential of position 0 cools down, and the execution runs the whole time with that selection.
 
 ## agent session
 

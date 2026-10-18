@@ -69,13 +69,13 @@ The result is the **effective configuration**. The same check runs at enablement
 
 The effective configuration is the head of a **fallback chain**. The fallback list is its tail. A worker binding entry that names its own fallback list replaces the list of the enablement whole; the two lists never merge.
 
-1. At each claim, the Scheduler picks the first chain entry that has no live cooldown. The execution record pins that selection, and the execution uses it until it ends.
-2. A worker execution that stops with `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` puts the credential and model of its selection into a **cooldown**.
-3. The next claim skips a cooling entry. When the cooldown ends, the next claim returns to the earlier entry.
-4. A repeated failure on the same entry doubles the cooldown, up to one day. A release with no provider failure clears it.
-5. When every entry cools down, the work pull answers "no work". No node blocks or pauses.
+1. At each claim, the Scheduler picks the first chain entry whose credential has no live cooldown. The execution record pins the chain position and the enablement revision of that entry, and the execution uses that selection until it ends.
+2. A worker execution that stops with `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` puts the credential of its selection into a **cooldown**. The cooldown covers every model of that credential.
+3. The next claim skips every entry of a cooling credential. When the cooldown ends, the next claim returns to the earlier entry.
+4. A repeated failure on the same credential doubles the cooldown, up to one day. A release with no provider failure clears it, whatever model the execution used.
+5. When the credential of every entry cools down, the work pull answers "no work". No node blocks or pauses.
 
-A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. `kanthord agent cooldown list` shows the cooldowns, and `kanthord agent cooldown clear <cooldown-id>` clears one. The agent page of the dashboard is to show a cooldown badge on each cooling chain entry, with a Clear action. That page does not show them yet, so use the CLI.
+A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. `kanthord agent cooldown list` shows the cooldowns, and `kanthord agent cooldown clear <credential>` clears one. The agent page of the dashboard is to show a cooldown badge on each cooling chain entry, with a Clear action. That page does not show them yet, so use the CLI.
 
 ## From configuration to a running session
 

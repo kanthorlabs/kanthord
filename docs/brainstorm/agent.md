@@ -94,37 +94,37 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ### Advance
 
-- An advance moves the selection of an agent to the next chain entry without a live cooldown.
+- An advance moves the selection of an agent to the next chain entry whose credential is not cooling.
 - A release with the stop reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` advances the chain.
-- The Scheduler Service calls the component in the release transaction. The component writes a cooldown for the pinned selection of that execution.
+- The Scheduler Service calls the component in the release transaction. The component holds the credential of the pinned selection of that execution.
 - The codes `bad_request` and `unauthorized` do not advance the chain. They count as failures.
 - An advancing stop is neutral for the [consecutive failure limit](mission-service.md#consecutive-failure-limit). It neither counts nor ends the count.
 
 ### Cooldown
 
-- A [cooldown](agent.vocabulary.md#cooldown) belongs to one credential and one model identifier.
-- `swe@1`, `re@1` and every project share that key.
+- A [cooldown](agent.vocabulary.md#cooldown) belongs to one credential. It cools every model of that credential.
+- `swe@1`, `re@1` and every project share that credential.
 - The duration is the base of the code, doubled for each strike after the first, up to the maximum.
-- A repeated advance on the same key adds one strike.
+- A repeated advance on the same credential adds one strike.
 - A cooldown is live while its end time is later than the clock. An expired cooldown keeps its strikes until a success.
-- A release with no `provider_failed` stop deletes the cooldown of its pinned selection.
-- A human clears a cooldown on the agent page or with the CLI. A clear deletes the cooldown.
+- A release with no `provider_failed` stop releases the credential of its pinned selection. A success on any model of the credential releases every model.
+- A human clears a cooldown on the agent page or with the CLI. A clear releases the credential.
 
 ### Selection
 
-- The claim scans the chain of each native agent of the worker. It selects the first chain entry without a live cooldown.
+- The claim scans the chain of each native agent of the worker. It selects the first chain entry whose credential is not cooling.
 - An earlier chain entry returns at the next claim after its cooldown expires.
-- When every entry of one agent cools down, the claim answers no work.
+- When the credential of every entry of one agent is cooling, the claim answers no work.
 - That answer creates no block, no pause and no failed execution.
-- The claim pins each selection in the execution record. A selection is an [agent selection](agent.vocabulary.md#agent-selection).
-- The model inference authorization of custody and the execution setup of the Worker Service read the pin, and never the head.
+- The claim pins each selection in the execution record as the agent name, the enablement revision and the chain position. The component rebuilds the [agent selection](agent.vocabulary.md#agent-selection) from the pin, the pinned worker binding revision and the pinned enablement revision.
+- The model inference authorization of custody and the execution setup of the Worker Service read the rebuilt selection, and never the head.
 - A switch of the selection happens only at the next execution.
 - The pin of a credential revision stays unchanged.
 
 ### Views
 
 - The agent configuration views add `chain` and `active_position`. These are the agent view of this component and the project agent configuration views.
-- `chain` lists each chain entry with its position, its level, its agent provider, provider, credential, model identifier, reasoning effort and cooldown. Position 0 is the head.
+- `chain` lists each chain entry with its position, its level, its agent provider, provider, credential, model identifier, reasoning effort and cooldown. Position 0 is the head. The cooldown of an entry is the hold of its credential, with its strikes and end time, or null.
 - `active_position` is the position that the next claim selects. It is null when every chain entry cools down.
 - When every chain entry cools down, the view carries `cooling` with the code `agent.configuration.chain_cooling` and the earliest end time. Otherwise `cooling` is null.
 - An invalid configuration answers an empty `chain`.

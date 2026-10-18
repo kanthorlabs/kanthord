@@ -25,8 +25,8 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 
 | Tool | Route | Approval | Description |
 | ---- | ----- | -------- | ----------- |
-| `agent--cooldown--clear` | `DELETE /api/agent/cooldown/:cooldown_id` | Yes | Clear one cooldown so that the next claim can select its chain entry again. |
-| `agent--cooldown--list` | `GET /api/agent/cooldown` | No | List the cooldowns of the fallback chain entries, live and expired, by credential and model. |
+| `agent--cooldown--clear` | `DELETE /api/agent/cooldown/:credential` | Yes | Clear the cooldown of one credential so that the next claim can select its chain entries again. |
+| `agent--cooldown--list` | `GET /api/agent/cooldown` | No | List the credentials that hold a cooldown, live and expired, ordered by credential name. |
 | `agent--enablement--disable` | `POST /api/agent/enablement/:agent_name/disable` | Yes | Disable an agent enablement without validating dependent bindings. |
 | `agent--enablement--enable` | `POST /api/agent/enablement/:agent_name/enable` | Yes | Validate and enable an existing agent enablement. |
 | `agent--enablement--get` | `GET /api/agent/enablement/:agent_name` | No | Get a live agent enablement. |

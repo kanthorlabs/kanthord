@@ -132,9 +132,9 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ## The chain view
 
 - `chain` is a list of `{ position, level, agent_provider, provider, credential, model_identifier, reasoning_effort, cooldown }`. Position 0 is the head.
-- `cooldown` is `null` or `{ cooldown_id, code, strikes, until_at }`. It reads the row with the credential and model of the chain entry.
-- `active_position` is the position of the first chain entry whose cooldown is absent or expired. It is `null` when every chain entry has a live cooldown.
-- `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", until_at }` when `active_position` is `null`. `until_at` is the earliest `until_at` of the chain.
+- `cooldown` is `null` or `{ strikes, available_at }`. It reads the hold of the credential of the chain entry, so every chain entry of one credential shows the same `cooldown`.
+- `active_position` is the position of the first chain entry whose `cooldown` is `null` or whose `available_at` is not later than the clock reading. It is `null` when every chain entry has a live cooldown.
+- `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", available_at }` when `active_position` is `null`. `available_at` is the earliest `available_at` of the chain.
 - The `agent.get` view of an agent builds the chain from the enablement alone. An absent enablement answers `chain: []`, `active_position: null` and `cooling: null`.
 - The project agent configuration views build the chain from the effective configuration and the entry of the worker binding. An invalid configuration answers `chain: []`.
 - The views read the clock once for each answer.
@@ -142,15 +142,13 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 ## The agent cooldown
 
-- The table `agent_cooldown` of [ERD 1](../reference/erd/01-setup.md) holds one row for each key.
-- `id` uses `agent_cooldown_<ulid>`. `credential` is a credential name. `model_identifier` is a model identifier.
-- `code` is `rate_limited`, `quota_exhausted` or `unavailable`. `strikes` is a positive integer.
-- `started_at`, `until_at` and `execution_id` hold the time of the latest advance, its end time and the execution that caused it.
-- The only index is the unique index on `(credential, model_identifier)`.
-- The duration is `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. `until_at` is `started_at` plus the duration.
+- The cooldown of a credential lives on the row of revision 1 of its name, in the columns `credential.available_at` and `credential.strikes` of [ERD 1](../reference/erd/01-setup.md). No table `agent_cooldown` exists.
+- `available_at` is the Unix millisecond end of the hold, and it is null while no hold exists. `strikes` is a non-negative integer, 0 while no hold exists.
+- A hold cools every model of the credential. No model identifier and no execution identity enter the hold.
+- The duration is `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. `available_at` is the clock reading of the transaction plus the duration.
 - `base(code)` is the value of `agent.cooldown.rate_limited_ms`, `agent.cooldown.quota_exhausted_ms` or `agent.cooldown.unavailable_ms`.
-- A cooldown is live when `until_at` is later than the clock reading of the transaction.
-- The Agent component owns this table. No other service writes it.
+- A cooldown is live when `available_at` is later than the clock reading of the transaction.
+- The Agent component owns the rules of the hold. [Custody](custody.impl.md#the-credential-hold) owns the columns and offers the port `CredentialHolds`. The Agent component reaches the columns through that port only.
 
 ### Configuration
 
@@ -163,40 +161,45 @@ The Agent component owns these keys of the section `agent`.
 
 ### The release write
 
-- The Scheduler Service calls the Agent component in the release transaction of an execution. The call carries the pinned selection of the agent of the execution and the `stop`.
-- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` writes the cooldown of the key of the pinned selection.
-- A write on an absent key inserts a row with `strikes` 1. A write on an existing key sets `code`, `execution_id` and `started_at`, adds 1 to `strikes` and sets `until_at`.
-- A `stop` with the code `bad_request` or `unauthorized` writes no cooldown.
-- A release with no `stop`, or with a `stop` of another reason, deletes the row of the key of the pinned selection.
+- The Scheduler Service calls the Agent component in the release transaction of an execution. The call carries the pinned selection of each agent of the execution and the `stop`.
+- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` holds the credential of each pinned selection. A credential that two selections share is held once.
+- The hold adds 1 to `strikes`, so the first failure sets `strikes` to 1, and it sets `available_at`.
+- A `stop` with the code `bad_request` or `unauthorized` holds no credential and releases no credential.
+- A release with no `stop`, or with a `stop` of another reason, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
+- A release of a credential sets `available_at` to null and `strikes` to 0. It changes a row only when `strikes` is above 0.
 - An advancing `stop` is neutral for the failure count, as [the failure count](scheduler-service.impl.md#loss-settlement) states.
-- The write logs `agent.fallback.cooldown_started`. A delete of a row logs `agent.fallback.cooldown_cleared`.
+- The write logs `agent.fallback.cooldown_started`. A release of a hold logs `agent.fallback.cooldown_cleared`. Today the Agent component writes neither log.
 
 ### The claim selection
 
 - The claim transaction calls the Agent component with the pinned worker binding row and the native agents of the worker.
-- The component builds the chain of each agent, reads the rows of `agent_cooldown` and returns the first chain entry with no live cooldown.
-- When every chain entry of one agent has a live cooldown, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution.
-- The claim stores the selections in `scheduler_execution.agent_selections`. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
-- The claim logs `agent.fallback.selected` for each selection.
+- The component builds the chain of each agent, reads the hold of the credential of each chain entry and returns the first chain entry whose credential is not cooling.
+- A credential is cooling when its `available_at` is later than the clock reading. Every model of a cooling credential is skipped.
+- When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold.
+- The claim stores one pin for each selection in `scheduler_execution.agent_selections`: `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the selection read. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
+- The component rebuilds a selection from a pin with the pinned worker binding row and the pinned enablement revision. A later hold, enablement revision or worker binding revision changes no pin.
+- The claim logs `agent.fallback.selected` for each selection. Today the Agent component writes no such log.
 - The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection.
-- Tests cover the selection of the first free entry, the return of an earlier entry after its cooldown expires and the no-work answer.
+- Tests cover the selection of the first entry with a free credential, the return of an earlier entry after its hold expires, the skip of every model of a cooling credential and the no-work answer.
+- Tests cover the rebuild of a selection from a pin after a later enablement revision.
 
 ### The operator operations
 
 - `agent.cooldown.list` is `GET /api/agent/cooldown`, `human`, `unary`, `mutation: false`.
-- It answers `{ items: [{ cooldown_id, credential, model_identifier, code, strikes, started_at, until_at, execution_id }] }`. It lists the live rows and the expired rows.
-- `agent.cooldown.clear` is `DELETE /api/agent/cooldown/:cooldown_id`, `human`, `unary`, `mutation: true`. It answers 204 and logs `agent.fallback.cooldown_cleared`.
-- A `cooldown_id` that names no row answers 404 `agent.cooldown.not_found`.
-- The CLI commands are `kanthord agent cooldown list` and `kanthord agent cooldown clear <cooldown-id>`.
+- It answers `{ items: [{ credential, strikes, available_at }] }`. It lists each credential with `strikes` above 0, live and expired, ordered by credential name.
+- `agent.cooldown.clear` is `DELETE /api/agent/cooldown/:credential`, `human`, `unary`, `mutation: true`. It releases the credential and answers 204.
+- A `credential` with no hold, that is `strikes` 0 or an unknown name, answers 404 `agent.cooldown.not_found` with `details: { credential }`.
+- The CLI commands are `kanthord agent cooldown list` and `kanthord agent cooldown clear <credential>`.
 - The static path `/api/agent/cooldown` does not match `GET /api/agent/:agent_name`.
-- Tests cover the list with live and expired rows, a clear and the 404.
+- Tests cover the list with live and expired holds, a clear and the 404.
 
 ### The cooldown tests
 
-- Tests cover the cooldown write, the strikes, the maximum for each code and the codes that do not advance.
-- Tests cover the reset by a release with no `provider_failed` stop and the shared key across agents and projects.
+- Tests cover the hold, the strikes, the maximum for each code and the codes that do not advance.
+- Tests cover the release by a release with no `provider_failed` stop, the hold of every model of a credential and the hold that agents and projects share.
 - A test asserts that a later cooldown leaves the pin of a live execution unchanged.
-- Tests cover the neutral advancing stop, the pin in the execution record and the migrations of the three columns.
+- Tests cover the neutral advancing stop and the pin in the execution record.
+- A test asserts that a rotation of the credential keeps the hold.
 - A test runs a fake provider that completes the execution on the first chain entry.
 
 ## Agent provider healthcheck
