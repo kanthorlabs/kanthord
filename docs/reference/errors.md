@@ -79,8 +79,9 @@ The rows after line 1 align with each other. Line 1 takes no part in the alignme
 | `supported_version` | Configuration version of the binary.                                           |
 | `bind`              | Listener address that the gateway cannot bind.                                 |
 | `port`              | Listener port that the gateway cannot bind.                                    |
-| `version`           | Package version of the worker, or version of a repository tool.                |
+| `version`           | Package version of the worker.                                                 |
 | `server_version`    | Package version that the server publishes.                                     |
+| `tool_version`      | Version of a repository tool.                                                  |
 | `minimum_version`   | Lowest repository tool version that the binary accepts.                        |
 | `variables`         | Directory variables of a worker thread that hold no absolute path.             |
 | `tool`              | Repository tool or pi tool that cannot run or install.                         |
@@ -119,7 +120,7 @@ A system diagnostic puts its values in rows:
 | `worker.version.mismatch`                        | `worker: the package version differs from the server version.` The rows are `version` and `server_version`.                                                   |
 | `worker.thread.directory_invalid`                | `worker: the directory variables must be absolute paths.` The row is `variables`.                                                                             |
 | `repository.connector.tool_missing`              | The row is `tool`. An exit with an error also prints the row `exit_status`.                                                                                   |
-| `repository.connector.tool_version`              | `tool version is below the minimum version`. The rows are `tool`, `version` and `minimum_version`.                                                            |
+| `repository.connector.tool_version`              | `tool version is below the minimum version`. The rows are `tool`, `tool_version` and `minimum_version`.                                                       |
 | `worker.start.tool_missing`                      | The row is `tool`. The rows `target`, `license`, `reason` and `exit_status` name the failed step when it has a value.                                         |
 
 An operational log record that holds a diagnostic as `reason` also holds its rows as `fields`, an object of row name to value. The record holds no `fields` when the diagnostic has no rows.
