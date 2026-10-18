@@ -58,21 +58,23 @@ The API returns HTTP `200`:
 }
 ```
 
-| Property     | Type                   | Purpose                                                      |
-| ------------ | ---------------------- | ------------------------------------------------------------ |
-| `session_id` | `login_session_<ulid>` | [Identity](../identities.md) of the login session.           |
-| `address`    | string                 | URL that the human opens.                                    |
-| `code`       | string or `null`       | User code to enter at the address; `null` in `browser` mode. |
-| `expires_at` | integer                | Session expiry in Unix milliseconds.                         |
+| Property     | Type                   | Purpose                                                                      |
+| ------------ | ---------------------- | ---------------------------------------------------------------------------- |
+| `session_id` | `login_session_<ulid>` | [Identity](../identities.md) of the login session.                           |
+| `address`    | string                 | URL that the human opens.                                                    |
+| `code`       | string or `null`       | User code to enter at the address; `null` in `browser` and `copy_code` mode. |
+| `expires_at` | integer                | Session expiry in Unix milliseconds.                                         |
 
-The CLI writes five lines to stdout, not JSON, and exits `0`: the session ID, the address, the code (an empty line when `null`), the expiry, and the idempotency key.
+The CLI writes `name: value` rows to stdout, not JSON, and exits `0`. The rows are `session_id`, `code`, `expires_at` and `idempotency_key`. The row `code` is absent when the code is `null`. The value of `expires_at` is an ISO 8601 UTC time. The rows align. After one empty line, the label row `address:` follows, and the next line holds the bare URL.
 
 ```text
-login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W
+session_id:      login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W
+code:            <user-code>
+expires_at:      2026-10-08T00:15:00.000Z
+idempotency_key: 01M34JC4BJ66JHP41M4MYY6PST
+
+address:
 <verification-url>
-<user-code>
-1791418500000
-01M34JC4BJ66JHP41M4MYY6PST
 ```
 
 ### login-code
@@ -115,29 +117,29 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line:
 
 API failures use the shared [error envelope](../errors.md#api-failures). The shared gateway failures of the [credential page](credential.md#failures) also apply: authentication, request validation, body limit, media type, timeout, and the idempotency failures of `login` and `login-code`.
 
-| HTTP status / code                       | Commands                     | Meaning                                                                    |
-| ---------------------------------------- | ---------------------------- | -------------------------------------------------------------------------- |
-| `400 credential.platform.unsupported`    | `login`                      | The platform is not an LLM platform.                                       |
-| `400 credential.entry.unsupported`       | `login`                      | The platform has the secret shape `api_key`; use `llm credential create`.  |
-| `400 credential.input.invalid`           | `login`                      | Invalid or reserved name, or a `mode` other than `browser` or `device`.    |
-| `409 credential.name.conflict`           | `login`                      | The name is taken. `details.id` holds the identity of its newest revision. |
-| `409 credential.login.pending`           | `login`                      | The human already has a `pending` session for this platform.               |
-| `503 credential.login.failed`            | `login`                      | The flow failed before an address.                                         |
-| `503 llm.lifecycle.stopped`              | `login`                      | The LLM component stopped and accepts no login.                            |
-| `504 gateway.invocation.timeout`         | `login`                      | The platform supplied no address within the 30-second timeout.             |
-| `404 credential.login.not_found`         | `login-code`, `login-status` | The session is unknown, or a restart lost it.                              |
-| `409 credential.login.value_not_awaited` | `login-code`                 | The session does not await a value, or the session is no longer `pending`. |
+| HTTP status / code                       | Commands                     | Meaning                                                                              |
+| ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `400 credential.platform.unsupported`    | `login`                      | The platform is not an LLM platform.                                                 |
+| `400 credential.entry.unsupported`       | `login`                      | The platform has the secret shape `api_key`; use `llm credential create`.            |
+| `400 credential.input.invalid`           | `login`                      | Invalid or reserved name, or a `mode` other than `browser`, `device` or `copy_code`. |
+| `409 credential.name.conflict`           | `login`                      | The name is taken. `details.id` holds the identity of its newest revision.           |
+| `409 credential.login.pending`           | `login`                      | The human already has a `pending` session for this platform.                         |
+| `503 credential.login.failed`            | `login`                      | The flow failed before an address.                                                   |
+| `503 llm.lifecycle.stopped`              | `login`                      | The LLM component stopped and accepts no login.                                      |
+| `504 gateway.invocation.timeout`         | `login`                      | The platform supplied no address within the 30-second timeout.                       |
+| `404 credential.login.not_found`         | `login-code`, `login-status` | The session is unknown, or a restart lost it.                                        |
+| `409 credential.login.value_not_awaited` | `login-code`                 | The session does not await a value, or the session is no longer `pending`.           |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. For `login` and `login-code`, the CLI prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead. A transport failure, timeout or malformed response exits `1` with `cli.llm.credential.login.indeterminate`, `cli.llm.credential.login_code.indeterminate` or `cli.llm.credential.login_status.indeterminate`.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. For `login` and `login-code`, the CLI prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. A transport failure, timeout or malformed response exits `1` with `cli.llm.credential.login.indeterminate`, `cli.llm.credential.login_code.indeterminate` or `cli.llm.credential.login_status.indeterminate`.
 
 Local CLI failures exit `1` before a request:
 
-| Code                                                                                                                                        | Meaning                                      |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `cli.llm.credential.login.invalid_mode`                                                                                                     | `--mode` is neither `browser` nor `device`.  |
-| `cli.llm.credential.login.token_required`, `cli.llm.credential.login_code.token_required`, `cli.llm.credential.login_status.token_required` | No nonblank token resolves.                  |
-| `cli.idempotency_key.invalid`                                                                                                               | `--idempotency-key` is not a canonical ULID. |
-| `cli.option.duplicate`                                                                                                                      | A single-use option appears twice.           |
+| Code                                                                                                                                        | Meaning                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `cli.llm.credential.login.invalid_mode`                                                                                                     | `--mode` is not `browser`, `device` or `copy_code`. |
+| `cli.llm.credential.login.token_required`, `cli.llm.credential.login_code.token_required`, `cli.llm.credential.login_status.token_required` | No nonblank token resolves.                         |
+| `cli.idempotency_key.invalid`                                                                                                               | `--idempotency-key` is not a canonical ULID.        |
+| `cli.option.duplicate`                                                                                                                      | A single-use option appears twice.                  |
 
 ## API shape
 
@@ -159,7 +161,7 @@ A retry with the same key, caller and request replays the recorded answer within
 
 ### login
 
-The body is `{ platform, name, mode? }`. `platform` and `name` are required strings. `mode` is `browser` or `device`.
+The body is `{ platform, name, mode? }`. `platform` and `name` are required strings. `mode` is `browser`, `device` or `copy_code`.
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential/login \
@@ -193,7 +195,7 @@ curl -i http://127.0.0.1:31415/api/llm/credential/login/login_session_01K6ZB3Q8X
 ## CLI shape
 
 ```text
-kanthord llm credential login <platform> --name <name> [--mode browser|device] [--idempotency-key <ulid>]
+kanthord llm credential login <platform> --name <name> [--mode browser|device|copy_code] [--idempotency-key <ulid>]
 kanthord llm credential login-code <session> <value> [--idempotency-key <ulid>]
 kanthord llm credential login-status <session>
 ```
@@ -217,7 +219,7 @@ kanthord llm credential login-code login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W '<re
 | `--token <jwt>`            | All                   | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                            |
 | `--endpoint <url>`         | All                   | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                    |
 | `--name <name>`            | `login`               | Required                                                                    | Name of the new credential.                                         |
-| `--mode <mode>`            | `login`               | Absent; the platform default applies                                        | `browser` or `device`.                                              |
+| `--mode <mode>`            | `login`               | Absent; the platform default applies                                        | `browser`, `device` or `copy_code`.                                 |
 | `--idempotency-key <ulid>` | `login`, `login-code` | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key for a retry. |
 
 Explicit options take precedence. See [client configuration](../README.md#client-configuration) for the private `cli.yaml` file. Each option is single-use. `login-status` rejects `--idempotency-key` as an unknown option. No command prompts for input or waits for completion; call `login-status` again to follow the session.

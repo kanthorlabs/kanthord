@@ -219,7 +219,7 @@ Command failures:
 
 The `credential.credential.in_use` details are `{ agent_providers: [{ agent_name, provider_name }], bindings: [{ binding_id, project_id }], inbounds: [{ inbound_id }] }`.
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A mutation command prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead. A transport failure, timeout or malformed response exits `1` with `cli.llm.credential.<command>.indeterminate`. For a mutation, the diagnostic names the key for a retry. There is no automatic retry.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A mutation command prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. A transport failure, timeout or malformed response exits `1` with `cli.llm.credential.<command>.indeterminate`. For a mutation, the diagnostic names the key for a retry. There is no automatic retry.
 
 Local CLI failures exit `1` before a request:
 

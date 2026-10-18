@@ -66,7 +66,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `422 repository.credential.ssh_config_unreadable` | The server cannot read `~/.ssh/config`.                        |
 | `504 gateway.invocation.timeout`                  | The 30-second operation timeout expired.                       |
 
-The CLI exits `1` for every failure and writes a diagnostic line `<code>: <message>` to stderr. A failure whose `details` are not null adds the line `details: <compact JSON>`, as [CLI diagnostics](../errors.md#cli-diagnostics) states. A declared API failure prints `<code>: request failed (HTTP <status>).` An absent or blank token gives `cli.repository.credential.ssh_discover.token_required`, and the CLI sends no request. A transport failure, timeout or malformed response gives `cli.repository.credential.ssh_discover.indeterminate: retry the command`.
+The CLI exits `1` for every failure and writes a diagnostic line `<code>: <message>` to stderr. A failure whose `details` are not null adds the row `details: <compact JSON>`, as [CLI diagnostics](../errors.md#cli-diagnostics) states. A declared API failure prints `<code>: request failed` and the row `status: <status>`. An absent or blank token gives `cli.repository.credential.ssh_discover.token_required`, and the CLI sends no request. A transport failure, timeout or malformed response gives `cli.repository.credential.ssh_discover.indeterminate: the result is unknown; retry the command`.
 
 ## API shape
 

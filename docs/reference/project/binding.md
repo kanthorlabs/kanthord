@@ -364,7 +364,7 @@ The CLI checks its input before it sends a request. Each local failure exits `1`
 
 For `revision list`, `<command>` is `revision.list`, for example `cli.project.binding.revision.list.token_required`. For `instruction-files`, `<command>` is `instruction_files`.
 
-A declared server failure exits `1`. The CLI writes the server code, then the error object as JSON. For `apply`, the JSON also holds `idempotency_key`. A transport failure, a timeout or a malformed response exits `1` with `cli.project.binding.<command>.indeterminate`. For `apply`, the message gives the key to retry with. There is no automatic retry.
+A declared server failure exits `1`. The CLI writes `<code>: request failed` and the row `status`. For `apply`, it also writes the row `idempotency_key`. A transport failure, a timeout or a malformed response exits `1` with `cli.project.binding.<command>.indeterminate`. For `apply`, the message is `the result is unknown; retry with the same idempotency key`, and the row `idempotency_key` holds the key. For a read, the message is `the result is unknown; retry the command`. There is no automatic retry.
 
 ## API shape
 

@@ -109,7 +109,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 gateway.idempotency.invalid_key`     | resume, deregister      | Missing or malformed idempotency key.                                                                                                             |
 | `409 gateway.idempotency.conflict`        | resume, deregister      | Conflicting reuse of an idempotency key.                                                                                                          |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. For resume and deregister, the CLI prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. For resume and deregister, the CLI prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead.
 
 A transport failure, timeout or malformed response exits `1` with an indeterminate code:
 

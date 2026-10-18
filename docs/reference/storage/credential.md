@@ -265,10 +265,10 @@ The gateway records each mutation answer, failures included, under the caller an
 
 #### CLI failures
 
-Each CLI failure writes a diagnostic line `<code>: <message>` to stderr and exits `1`. A failure whose `details` are not null adds the line `details: <compact JSON>`, as [CLI diagnostics](../errors.md#cli-diagnostics) states.
+Each CLI failure writes a diagnostic line `<code>: <message>` to stderr and exits `1`. A failure whose `details` are not null adds the row `details: <compact JSON>`, as [CLI diagnostics](../errors.md#cli-diagnostics) states.
 
-- A declared API failure of a read prints `<code>: request failed (HTTP <status>).` A declared API failure of a mutation prints `<code>: request failed (HTTP <status>); idempotency key <key>.`
-- A transport failure, a 31-second client timeout or a malformed answer gives `cli.storage.credential.<command>.indeterminate`. For a read, the message is `retry the command`. For a mutation, the message is `retry with --idempotency-key <key>`. The CLI does not retry automatically.
+- A declared API failure of a read prints `<code>: request failed` and the row `status: <status>`. A declared API failure of a mutation prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>`.
+- A transport failure, a 31-second client timeout or a malformed answer gives `cli.storage.credential.<command>.indeterminate`. For a read, the message is `the result is unknown; retry the command`. For a mutation, the message is `the result is unknown; retry with the same idempotency key`, followed by the row `idempotency_key: <key>`. The CLI does not retry automatically.
 - An absent or blank token gives `cli.storage.credential.<command>.token_required` before a request.
 
 `<command>` is the command name, with `update_metadata` for `update-metadata`.

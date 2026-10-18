@@ -33,24 +33,26 @@ The command runs these steps in this order:
 
 ## Expected response
 
-Success prints one line for each change to stdout and exits `0`:
+Success prints one `name: value` row for each change to stdout and exits `0`. The rows of one run align:
 
 ```text
-Backup: /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
-Backup: /home/user/.local/share/kanthord/kanthord.db.bak-20261010T080000
-Migrated scheduler from version 3 to version 4
-Renamed mission.consecutive_loss_limit to mission.consecutive_failure_limit
-Upgraded configuration version 1 to configuration version 2: /home/user/.config/kanthord/kanthord.yaml
+backup:         /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
+backup:         /home/user/.local/share/kanthord/kanthord.db.bak-20261010T080000
+migrated:       scheduler 3 -> 4
+renamed:        mission.consecutive_loss_limit -> mission.consecutive_failure_limit
+upgraded:       /home/user/.config/kanthord/kanthord.yaml
+config_version: 1 -> 2
 ```
 
-| Output / property            | Purpose                                                                                                                      |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `Backup: <path>`             | A private `0600` copy of the original configuration or of the database, written before any change. The command deletes none. |
-| `Migrated <service> ...`     | The migrations that the command applied to one service.                                                                      |
-| `Renamed <old> to <new>`     | A configuration key that a configuration step renamed. Values and comments stay.                                             |
-| `Upgraded configuration ...` | The configuration versions before and after the upgrade.                                                                     |
-| `Up to date: <path>`         | Nothing changed, and the command wrote nothing.                                                                              |
-| Exit code `0`                | The configuration and the database match the binary.                                                                         |
+| Output / property                    | Purpose                                                                                                                      |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `backup: <path>`                     | A private `0600` copy of the original configuration or of the database, written before any change. The command deletes none. |
+| `migrated: <service> <from> -> <to>` | The migrations that the command applied to one service, from one version to another.                                         |
+| `renamed: <old> -> <new>`            | A configuration key that a configuration step renamed. Values and comments stay.                                             |
+| `upgraded: <path>`                   | The configuration file that the command replaced.                                                                            |
+| `config_version: <from> -> <to>`     | The configuration versions before and after the upgrade.                                                                     |
+| `up_to_date: <path>`                 | Nothing changed, and the command wrote nothing.                                                                              |
+| Exit code `0`                        | The configuration and the database match the binary.                                                                         |
 
 Failures exit `1` with a [diagnostic](errors.md#cli-diagnostics). A configuration that holds an old key and its new key fails with `system.config.rename_conflict`. An existing backup path fails with `system.database.backup_failed`. A failure after the backups keeps each committed migration. Run `kanthord upgrade` again to complete the remaining part.
 

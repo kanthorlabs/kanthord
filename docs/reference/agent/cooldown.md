@@ -88,7 +88,7 @@ The CLI checks some input before it sends the request.
 | `cli.idempotency_key.invalid`                  | clear    | `--idempotency-key` is not a canonical ULID.                         |
 | `cli.agent.cooldown.<command>.indeterminate`   | All      | A transport failure, timeout or malformed response.                  |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A `clear` prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead. Retry an indeterminate `clear` with the same key.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A `clear` prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. Retry an indeterminate `clear` with the same key.
 
 ## API shape
 

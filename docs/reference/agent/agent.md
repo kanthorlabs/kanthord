@@ -137,7 +137,7 @@ The CLI checks some input before it sends the request:
 | `cli.agent.get.token_required`                | No option, environment variable or client file supplies a token.       |
 | `cli.agent.get.indeterminate`                 | A transport failure, timeout or malformed response. Retry the command. |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr.
 
 ## API shape
 

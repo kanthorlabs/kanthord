@@ -12,7 +12,7 @@ A machine presents its JWT to [worker registration](../worker/register.md), whic
 
 ## Expected response
 
-In human mode, `auth jwt generate` prints only the JWT and a newline to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the JWT and its client secret, one line each. With `--verbose` it prints the claim list after that output. The output is a token string, not a JSON response. Its decoded claims have these properties:
+In human mode, `auth jwt generate` prints the row `token: <jwt>` to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the rows `token` and `client_secret`, aligned. With `--verbose` it prints the claim list after that output. The output is a token string, not a JSON response. Its decoded claims have these properties:
 
 | Property            | Type                    | Purpose                                                                            |
 | ------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
@@ -71,7 +71,7 @@ kanthord auth jwt generate --output
 kanthord auth jwt generate ulrich --output ./ulrich.cli.yaml --endpoint https://tunnel.example
 ```
 
-`--output` writes the human JWT into a new private `cli.yaml` instead of stdout. Without a value it writes the default path; with a value it writes that path. The file holds `token`, and `endpoint` only when `--endpoint` is given. The command prints only `Created <absolute path>`, so stdout need not be a terminal.
+`--output` writes the human JWT into a new private `cli.yaml` instead of stdout. Without a value it writes the default path; with a value it writes that path. The file holds `token`, and `endpoint` only when `--endpoint` is given. The command prints only the row `created: <absolute path>`, so stdout need not be a terminal.
 
 The command creates an absent file only. An existing file fails with `system.files.publish_failed` and stays unchanged; delete it first to replace it. A file at another path is an export: commands read the default path only, so copy it there as a regular file with mode `0600` that the running user owns.
 

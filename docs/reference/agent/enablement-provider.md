@@ -105,7 +105,7 @@ The CLI checks some input before it sends the request. `<command>` is `add`, `re
 | `cli.file.schema_invalid`                                | add         | The object breaks the body schema; the message lists the issue paths and codes. |
 | `cli.agent.enablement.provider.<command>.indeterminate`  | All         | A transport failure, timeout or malformed response.                             |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. For `add` and `remove`, the CLI prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead. An indeterminate `add` or `remove` prints the retry key. Retry with the same key and the same input. The server replays the recorded answer, a failure included, for the same caller and key within `gateway.idempotency_ttl` (default 86400 seconds).
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. For `add` and `remove`, the CLI prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. An indeterminate `add` or `remove` prints the retry key. Retry with the same key and the same input. The server replays the recorded answer, a failure included, for the same caller and key within `gateway.idempotency_ttl` (default 86400 seconds).
 
 ## API shape
 
