@@ -131,14 +131,14 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 - A telemetry text belongs to exactly one trace. A span references it by identity and never embeds it.
 - An agent transcript is a telemetry text.
-- A telemetry text holds no retention of its own and no `expired_at`, and `content` is `NOT NULL`. The deletion of its trace deletes it, and a read of a deleted trace answers `404 tracking.trace.not_found`. A text identity that its trace does not hold answers `404 tracking.text.not_found`.
+- A telemetry text holds no retention of its own and no `expired_at`, and `content` is `NOT NULL`. The deletion of its trace deletes it, and a reference to a deleted trace resolves to expired. Today the store keeps no tombstone, and a read of a deleted trace answers `404 tracking.trace.not_found`. A text identity that its trace does not hold answers `404 tracking.text.not_found`.
 
 ### Retention and deletion
 
 - The trace is the only unit of retention. The deletion of a trace row deletes its spans, its records and its telemetry texts through `ON DELETE CASCADE`. The deletion of a span deletes no telemetry text.
 - The operator configures the retention of a trace once for the server, never per project. The value and the start of the retention are open. Today no sweep and no operation deletes a trace.
 - A deletion of a telemetry row changes no outcome, removes no evidence and changes no state of a node.
-- Telemetry is the one exception to the rule that an owner deletes no record that a peer can reference, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. `scheduler_execution.trace_id` and `root_span_id` keep their values after the deletion of their trace, and they answer `404 tracking.trace.not_found` when a read follows them.
+- Telemetry is the one exception to the rule that an owner deletes no record that a peer can reference, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. `scheduler_execution.trace_id` and `root_span_id` keep their values after the deletion of their trace, and they resolve to expired.
 
 ## Cross-store references
 

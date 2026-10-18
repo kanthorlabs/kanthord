@@ -120,7 +120,7 @@ flowchart TB
 - A JSON column holds the canonical JSON of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
 - A boolean is an `INTEGER` 0 or 1.
 - A revision and a version start at 1. The attempt of a node reads 0 before its first attempt opens, and no attempt row exists for 0. An opened attempt starts at 1.
-- An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a read through a peer value that names it answers `404 tracking.trace.not_found`.
+- An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a peer value that names it resolves to expired. Today the store keeps no tombstone, and a read answers `404 tracking.trace.not_found`.
 
 ## Diagram notation
 
