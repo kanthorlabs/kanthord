@@ -12,9 +12,9 @@ Its own harness provides the primary execution mechanism.
 
 ## WHAT
 
-Initiative, objective, and task each state a requirement, a criterion and the verifications that check it.
+A node and a task each state a requirement, a criterion and the verifications that check it.
 Both harnesses share this WHAT.
-The initiatives, the objectives and the tasks of one project form its mission.
+The nodes and the tasks of one project form its mission.
 
 Success has three separate parts:
 
@@ -26,9 +26,9 @@ Success has three separate parts:
 The verifications supply a machine-run result, and the criterion needs judgement.
 Completing an execution does not establish success, because evaluation assesses the evidence against the WHAT.
 
-Every initiative and every objective must have an outcome.
-A task has no outcome of its own, and the outcome of its objective covers it.
-For both harnesses, every ending at each initiative or objective produces an outcome.
+Every node must have an outcome.
+A task has no outcome of its own, and the outcome of its node covers it.
+For both harnesses, every ending at each node produces an outcome.
 An outcome can record that evidence establishes that the results do not meet the criterion or the default standard.
 It can also record that available evidence cannot establish whether the results meet the criterion.
 Neither assessment establishes success.
@@ -62,7 +62,8 @@ A specific agent or a human participant supplies the WHO and takes responsibilit
 
 A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
-A worker instance claims an initiative or an objective in a node state that its worker declares, and it executes that node.
+A worker instance claims a node in a node state that its worker declares, and it executes that node.
+The claim also needs a worker that declares the work of the node and a worker binding that holds every trait that the node requires.
 The instance produces an execution object each time it takes a node.
 The execution is the unit of work that the Scheduler Service records, and it represents the state of the work that the instance holds.
 The Worker Service hosts the executions of kanthord's own harness.
@@ -83,27 +84,27 @@ The repository strategy belongs to the project whichever harness executes the wo
 Whichever harness executes the work follows that strategy.
 An execution follows the project's repository strategy when it acts on a repository.
 Work on a repository requires a configured repository strategy, because configuration supplies the project's policy without an implicit default.
-The configured repository action of an objective follows a passing assessment and precedes a successful outcome of that objective.
+The configured repository action of an `implement` node follows a passing assessment and precedes a successful outcome of that node.
 
-Completing the configured repository action, completing all tasks, and achieving the objective are three different conditions.
+The configured repository action, the tasks and the criterion of the node are three different conditions.
 The shared outcome rules govern repository action failures.
 
 ### Worked example: `tdd@1`
 
 `tdd@1` is one example among several workers.
-For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
+For each task of an `implement` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
 
-For an objective, an execution of `tdd@1` creates a branch and makes a separate commit for each task on that branch.
+For an `implement` node, an execution of `tdd@1` creates a branch and makes a separate commit for each task on that branch.
 These branch and commit practices apply to `tdd@1`, not to every worker.
 
-Once all tasks of the objective are complete, an execution of `tdd@1` releases the objective for its evaluation.
+Once all tasks of the node are complete, an execution of `tdd@1` releases the node for its evaluation.
 The configured repository action follows the passing assessment.
 Under a repository strategy that requires a pull request for every change, that action opens a pull request on the git platform.
 Under a repository strategy that requires a merge and push, that action merges the branch and pushes to main.
 
 Opening a pull request does not merge it.
-Evaluation determines whether the results meet the objective's criterion.
-A successful push to main does not establish achievement of the objective.
+Evaluation determines whether the results meet the criterion of the node.
+A successful push to main does not establish that the results meet the criterion of the node.
 
 ## External harness
 
@@ -112,7 +113,7 @@ kanthord's own harness holds the first priority; an external harness holds the s
 An external harness supports ongoing integration and maintenance with an existing system.
 
 An external harness supplies its HOW through its own orchestration skill, usually named `/work`.
-It reaches kanthord's initiative, objective, and task model through the CLI or the API.
+It reaches the node and task model of kanthord through the CLI or the API.
 An external harness is a worker that the harness hosts: a human starts its program, and the kanthord extension of that program registers a worker instance of a worker binding of the project under its client identity.
 Its instances acquire work through the work pull, like every worker instance, and its worker declares `Available`, `Waiting` and `External.Requested`, so an instance of it can carry out the steps of a node, evaluate it and request its external actions, through separate claims.
 The node content is its only input, and kanthord configures no agent, no prompt and no tool of an external harness.

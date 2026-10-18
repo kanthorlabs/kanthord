@@ -83,14 +83,13 @@ It predicts no claim, because a work pull rechecks every admission condition at 
   - `claimable` is true exactly when no check holds `failed`.
 - `EligibilityCheck` holds `name`, `result` and `condition`.
   - `result` is `passed`, `failed` or `not-applicable`.
-  - `condition` is `initiative-steps`, `readiness`, `continuation` or `null`. Only the `mission-condition` check holds a value other than `null`.
+  - `condition` is `continuation` or `null`. Only the `mission-condition` check holds a value other than `null`.
 - `project-pause` passes when the project is not [paused](project-service.md#project-pause). The handler first resolves the project and the node, and it reads `projectPaused` only for a found node. An absent project therefore keeps 404 `scheduler.eligibility.node_not_found`.
 - `node-state` passes when the node is not retired and holds `Available`, `Waiting` or `External.Requested`.
 - `mission-condition` reads the Mission condition of that state.
-  - `Available` on an initiative reads the [initiative steps condition](mission-service.md#initiative-steps-condition) as `initiative-steps`.
-  - `Waiting` reads the [readiness condition](mission-service.md#readiness-condition) as `readiness`.
   - `External.Requested` reads the [continuation condition](mission-service.md#continuation-condition) as `continuation`.
-  - `Available` on an objective reads no condition, and the check holds `not-applicable` with `condition: null`.
+  - `Available` and `Waiting` read no condition, and the check holds `not-applicable` with `condition: null`.
+  - The [readiness condition](mission-service.md#readiness-condition) always holds at `Waiting` and at `External.Requested`. A dependency edit on a dependent in those states answers `mission.node.state_conflict`. A dependency addition on a `Paused` dependent that resumes into an external state, and a forced retirement that removes a dependency of such a dependent, answer the same code. `Completed` is terminal.
   - When `node-state` fails, the check holds `not-applicable` with `condition: null`.
 - `queue-job` passes when the work queue of the project holds a job of the node, and that job holds no `not_before` after the clock reading.
 - `no-live-claim` passes when no execution of the node holds the claim state `running`.
@@ -103,14 +102,13 @@ The report never answers a check that needs a selected claimant:
 - the declared node states of a worker;
 - the count of a claimant;
 - the instance healthcheck;
-- the compatibility match of the exact worker name and the required node format.
+- the [match](scheduler-service.md#match) of the declared works and the traits.
 
 The report takes no instance healthcheck and reads no registration.
 It names no worker binding, no instance and no claimant.
 The instance healthcheck stays out of every human inspection command under [worker-service.impl.md](worker-service.impl.md#inspection-operations).
 
 - An absent project, an absent node or a node of another project answers 404 `scheduler.eligibility.node_not_found`.
-- A task answers 400 `scheduler.eligibility.node_task` with `details: { node_id }`, because a task is never a unit of scheduling.
 - A path identity that is no canonical prefixed identity answers 400 `gateway.request.validation_failed`.
 
 ## Durable requests
@@ -147,6 +145,47 @@ The instance healthcheck stays out of every human inspection command under [work
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`.
 - The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
 - Custody and the execution setup of the Worker Service read the pinned selection and never the chain.
+
+## The match
+
+The Scheduler Service implements the [match](scheduler-service.md#match) in `match.ts`.
+
+```ts
+function admits(claimant: Claimant, facts: ClaimFacts): boolean {
+  return (
+    claimant.declared_works.includes(facts.work) &&
+    facts.requires.every((trait) => claimant.traits.includes(trait))
+  );
+}
+
+function covered(
+  claimants: readonly Claimant[],
+  facts: ClaimFacts,
+  state: NodeState,
+): boolean {
+  return claimants.some(
+    (claimant) =>
+      claimant.declared_node_states.includes(state) && admits(claimant, facts),
+  );
+}
+```
+
+- A `Claimant` holds `declared_node_states` and `declared_works` from the worker declaration, and `traits` from the worker binding row that the claim pins.
+- `ClaimFacts` holds `work` and `requires` at the node revision that the claim pins.
+- The claim walk calls `claimFacts` for each job, applies `admits`, then calls `transitions.claim` of the Mission Service. The on-demand path applies the same `admits`.
+- `declarationOf` answers `null` for a worker name with no declaration. The claim then has no claimant and answers `{ kind: "no-work" }`. It asserts nothing.
+- `unmatchedClaims` computes `covered` for each pair of a node and a claimable state. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores `instance_count`.
+- `claim` of a pair is its claimable state: `Available`, `Waiting` or `External.Requested`. `claims` of `claimFactsOf` lists the claimable states of the node.
+
+The collaborations of the match are below.
+
+| Owner     | Signature                                                                      | Invariant                                                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission   | `claimFacts(tx, nodeId): { work, requires } \| null`                           | It reads the node revision that the claim pins. It writes nothing.                                                                                                                                        |
+| Mission   | `claimFactsOf(tx, projectId): { node_id, revision, work, requires, claims }[]` | It answers each node that is not terminal and not retired, at its current revision and at the revision of its open attempt.                                                                               |
+| Project   | `workerBindingsOf(tx, projectId): { binding_id, worker_name, traits }[]`       | It answers the current worker bindings that are no tombstone. `workerBindingOf` also answers `traits`.                                                                                                    |
+| Worker    | `declarationOf(workerName)`                                                    | It answers `declared_node_states` and `declared_works`, or `null` for an unknown worker.                                                                                                                  |
+| Scheduler | `unmatchedClaims(tx, projectId): { node_id, revision, claim }[]`               | A node write or a binding-set write never adds an unmatched pair. The caller reads it before and after its write in one `BEGIN IMMEDIATE` transaction under [architecture.impl.md](architecture.impl.md). |
 
 ## Configuration
 
@@ -232,8 +271,12 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test pauses a project with a claimable node and a waiting pull. It asserts `{ kind: "no-work" }` at the end of the wait window, no execution, and an unchanged node and job. After the resume, it asserts the claim of the waiting pull before the end of its window.
 - A test pauses a project during a live execution. It asserts that the execution stays `running`, that its release routes the node, and that no pull claims the node before the resume.
 - Tests read the eligibility report of a node in each of the twelve states, under each Mission condition that holds and that fails, with and without a job, with an active and a paused project, and with a `running`, a `lost` and a `finished` execution. They assert each check result, `claimable` and no write.
-- Tests assert 404 `scheduler.eligibility.node_not_found` for an absent project, an absent node and a node of another project, and 400 `scheduler.eligibility.node_task` for a task.
+- Tests assert 404 `scheduler.eligibility.node_not_found` for an absent project, an absent node and a node of another project.
 - A test asserts that the eligibility report takes no instance healthcheck and holds no binding, instance or claimant field.
+- Tests admit a claimant only when its worker declares the work of the node and its binding traits hold every required trait, at the node revision and the binding row that the claim pins.
+- Tests skip a job that the claimant does not admit and claim the next admitted job, and they apply the same match to an on-demand request.
+- A test pulls with a worker name that has no declaration and asserts `{ kind: "no-work" }` and no assertion failure.
+- Tests answer the unmatched pairs of `Available`, `Waiting` and, for a node that requires an external action, `External.Requested`. They ignore `instance_count`.
 
 ## Execution CLI validation
 

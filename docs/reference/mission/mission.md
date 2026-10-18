@@ -6,21 +6,21 @@
 
 One project has exactly one mission. The Project service creates the mission with the project, empty and at mission version `1`. No operation creates or deletes a mission.
 
-A mission is a graph of nodes and edges. An initiative is a root node. An objective belongs to one initiative. A task belongs to one objective. Containment edges and dependency edges relate the nodes.
+A mission is a graph of nodes and dependency edges. Each node holds a `work`: `implement` or `examine`. A task is content of an `implement` node. Dependency is the only edge kind.
 
-The mission version increases by one on each accepted plan write. Plan writes include a node create, a content change, a move, a retirement, a rebind and a dependency edit. A write that changes nothing keeps the version. Plan writes require the current version as `expected_mission_version`.
+The mission version increases by one on each accepted plan write. Plan writes include a node create, a content change, a retirement, a rebind and a dependency edit. A write that changes nothing keeps the version. Plan writes require the current version as `expected_mission_version`.
 
 - `mission get` returns the mission of a project. Use it to find the mission ID from a project ID.
 - `mission export` returns the current plan as JSON entries or as Markdown plan files. The answer is a payload that `mission import` of the same format accepts. The export excludes retired nodes.
 
-Each Markdown plan file has a YAML front matter and a body:
+Each Markdown plan file is a node file or a task file. It has a YAML front matter and a body. A node file:
 
 ```markdown
 ---
 id: node_01M4C5J3SAMS4Z4KZD8DQ9GFTB
-kind: objective
-parent: platform.md
+work: implement
 depends_on: []
+requires: []
 bindings:
   - main-repository
 verifications:
@@ -38,7 +38,29 @@ The application shows a login form.
 A user with valid credentials reaches the dashboard.
 ```
 
-The front matter holds `id`, `kind`, `parent`, `depends_on`, `bindings` and `verifications`. An initiative has no `parent`. A task has no `depends_on`. `parent` and `depends_on` name plan files, and `bindings` holds binding names. `bindings` is optional: an omitted kind follows the [binding inheritance](import.md#binding-inheritance).
+A task file:
+
+```markdown
+---
+id: task_01M4C5J3SACNE2WP46QAMA4Q4F
+node: login.md
+bindings: []
+verifications:
+  - pnpm test
+---
+
+# Show the login form
+
+## Requirement
+
+The login page shows a form with a user name and a password field.
+
+## Criterion
+
+The form submits the user name and the password.
+```
+
+The front matter of a node file holds `id`, `work`, `depends_on`, `requires`, `bindings` and `verifications`. The front matter of a task file holds `id`, `node`, `bindings` and `verifications`. `node` and `depends_on` name plan files, and `bindings` holds binding names. A node file names every binding of the node under [bindings of a node](import.md#bindings-of-a-node). A task file holds `bindings: []`. The export writes `requires` on every node file, also `requires: []`. The [import](import.md#plan-files) page states the complete grammar.
 
 **Authority:** every authenticated human holds the same authority under the server-owner ruling. Any verified human token reads any mission.
 
@@ -76,14 +98,24 @@ The API returns HTTP `200`. With `format=json`, the answer holds plan entries:
     {
       "filename": "login.md",
       "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
-      "kind": "objective",
+      "work": "implement",
       "name": "Add the login page",
       "requirement": "The application shows a login form.",
       "criterion": "A user with valid credentials reaches the dashboard.",
       "verifications": ["pnpm test"],
       "bindings": ["main-repository"],
-      "parent": "platform.md",
+      "requires": [],
       "depends_on": []
+    },
+    {
+      "filename": "login-form.md",
+      "id": "task_01M4C5J3SACNE2WP46QAMA4Q4F",
+      "node": "login.md",
+      "name": "Show the login form",
+      "requirement": "The login page shows a form with a user name and a password field.",
+      "criterion": "The form submits the user name and the password.",
+      "verifications": ["pnpm test"],
+      "bindings": []
     }
   ]
 }
@@ -104,20 +136,21 @@ With `format=markdown`, the answer holds plan files:
 }
 ```
 
-| Property                                     | Type                              | Purpose                                                                  |
-| -------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------ |
-| `mission_id`                                 | `mission_<ulid>`                  | Exported mission.                                                        |
-| `mission_version`                            | positive integer                  | Mission version of the snapshot; use it as the import `mission_version`. |
-| `entries[]`                                  | array (JSON format)               | One entry for each current node, sorted by `filename`.                   |
-| `entries[].filename`                         | plan file name                    | Name that matches `^[a-z][a-z0-9_-]*\.md$`.                              |
-| `entries[].id`                               | `node_<ulid>`                     | Node ID.                                                                 |
-| `entries[].kind`                             | `initiative`, `objective`, `task` | Node kind.                                                               |
-| `entries[].name`, `requirement`, `criterion` | string                            | Node content text.                                                       |
-| `entries[].verifications`                    | array of strings                  | Verification commands; at least one.                                     |
-| `entries[].bindings`                         | array of strings                  | Binding names, not binding IDs.                                          |
-| `entries[].parent`                           | plan file name                    | Plan file of the parent. Absent for an initiative.                       |
-| `entries[].depends_on`                       | array of plan file names          | Sorted dependency targets. Absent for a task.                            |
-| `files[]`                                    | array (Markdown format)           | `{ filename, content }` for each current node, sorted by `filename`.     |
+| Property                                     | Type                           | Purpose                                                                       |
+| -------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------- |
+| `mission_id`                                 | `mission_<ulid>`               | Exported mission.                                                             |
+| `mission_version`                            | positive integer               | Mission version of the snapshot; use it as the import `mission_version`.      |
+| `entries[]`                                  | array (JSON format)            | One entry for each current node and task, sorted by `filename`.               |
+| `entries[].filename`                         | plan file name                 | Name that matches `^[a-z][a-z0-9_-]*\.md$`.                                   |
+| `entries[].id`                               | `node_<ulid>` or `task_<ulid>` | Node ID or task ID.                                                           |
+| `entries[].work`                             | `implement` or `examine`       | Work of the node. Absent for a task.                                          |
+| `entries[].node`                             | plan file name                 | Plan file of the `implement` node of a task. Absent for a node.               |
+| `entries[].name`, `requirement`, `criterion` | string                         | Node content text.                                                            |
+| `entries[].verifications`                    | array of strings               | Verification commands; at least one.                                          |
+| `entries[].bindings`                         | array of strings               | Binding names, not binding IDs. `[]` for a task.                              |
+| `entries[].requires`                         | array of trait keys            | Requires list of the node. Absent for a task.                                 |
+| `entries[].depends_on`                       | array of plan file names       | Sorted dependency targets. Absent for a task.                                 |
+| `files[]`                                    | array (Markdown format)        | `{ filename, content }` for each current node and task, sorted by `filename`. |
 
 The CLI writes the answer to `--out` and writes one JSON line to stdout:
 

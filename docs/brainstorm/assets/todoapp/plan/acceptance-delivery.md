@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: acceptance.md
+node: acceptance.md
 bindings: []
 verifications:
   - node --test test/acceptance-delivery.test.js
@@ -13,11 +12,11 @@ verifications:
 
 Provide a developer README, operations runbook and Node 24 CI workflow. Keep the application a single API process on one host with local durable SQLite storage. Document future scaling boundaries without adding distributed infrastructure to this fixture.
 
-Provide the `test:acceptance` script, which runs the acceptance-contract and acceptance-delivery suites, and the `verify` script. `verify` runs lint, format checks, all six objective suites and the end-to-end suite. It makes no recursive invocation and skips no suite silently.
+Provide the `test:acceptance` script, which runs the acceptance-contract and acceptance-delivery suites, and the `verify` script. `verify` runs lint, format checks, all six node suites and the end-to-end suite. It makes no recursive invocation and skips no suite silently.
 
 ## Criterion
 
-- One `npm run verify` from a clean installed Node 24 checkout runs lint, format checks, all six objective suites and the end-to-end suite. It fails on a failed check, makes no recursive invocation, skips no suite silently and leaves no open process or test database.
+- One `npm run verify` from a clean installed Node 24 checkout runs lint, format checks, all six node suites and the end-to-end suite. It fails on a failed check, makes no recursive invocation, skips no suite silently and leaves no open process or test database.
 - CI uses Node 24, installs the lockfile with `npm ci` and runs `npm run verify`. It emits test results without secrets and fails on test failures or missing acceptance tests. Tests inspect script/workflow wiring and prove that a deliberately failing fixture returns nonzero rather than being swallowed.
 - Startup instructions cover migrations, explicit production configuration, HTTPS termination, allowed origins, trusted proxies and operator-only initial administrator creation.
 - The runbook covers configuration, TLS/proxy trust, initial admin provisioning, migrations, start/stop, readiness and liveness, log inspection by request ID, backup/restore and SQLite capacity limits. It describes the ten-second shutdown deadline. Errors and example logs disclose no secrets.

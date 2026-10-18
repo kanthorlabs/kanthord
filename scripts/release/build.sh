@@ -62,9 +62,15 @@ pnpm exec esbuild "$ENGINE_DIR/src/apps/worker/thread.ts" \
 	--target=node24 \
 	--format=cjs \
 	--log-level=warning \
-	"--banner:js=const __kanthord_import_meta_url=require('node:url').pathToFileURL(__filename).href;" \
+	"--banner:js=const __kanthord_import_meta_url=require('node:url').pathToFileURL(process.execPath).href;" \
 	--define:import.meta.url=__kanthord_import_meta_url \
 	--outfile="$work/worker-thread.cjs" || die "worker thread bundle failed"
+thread_url=$(cd / && node -e '
+const banner = require("node:fs").readFileSync(process.argv[1], "utf8").split("\n", 1)[0];
+new (require("node:worker_threads").Worker)(`${banner}process.stdout.write(__kanthord_import_meta_url);`, { eval: true });
+' "$work/worker-thread.cjs")
+[ "$thread_url" = "$(node -p 'require("node:url").pathToFileURL(process.execPath).href')" ] ||
+	die "the worker thread resolves import.meta.url to $thread_url instead of the executable"
 
 log "preparing the single executable blob"
 node "$ROOT/scripts/release/sea-config.mjs" "$ENGINE_DIR" "$APP_DIR/dist" "$work/kanthord.cjs" \

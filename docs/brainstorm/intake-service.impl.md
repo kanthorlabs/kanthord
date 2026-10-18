@@ -227,6 +227,8 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - The create of a `github.pull_request` lists the open pull requests with the node branch of the claim as `head` and the base branch as `base`. GitHub keeps at most one. A match answers its `PlatformAddress`.
 - The reuse of a `github.pull_request` fetches the node branch of the claim and checks that the snapshot commit of the call is an ancestor of it. A match answers the `PlatformAddress` of the reused pull request. The open state of the pull request is no condition of the match. This rule serves a repeat that carries the reuse operands, and it defines no reconciliation after a merge.
 - `git.merge_push` fetches the base branch and checks that the snapshot commit of the key is an ancestor of it. A match answers the oldest first-parent commit of the base branch that contains the snapshot commit.
+- A `github.pull_request` whose snapshot commit the base branch already contains opens no pull request. The handler answers the `branch_push` address of the base branch with the oldest first-parent commit of the base branch that contains the snapshot commit, as `git.merge_push` does.
+- The check of that request folds the address to the expected end state `pull_request_merged`, with that commit as the landed commit.
 - The read-back of `github.pull_request_merge` calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`. A response where `merged` is true and `head.sha` equals the tested commit is a match and sets `succeeded`. A pending merge whose pull request merged at the tested head sets `succeeded` with no second `PUT`.
 - `s3.delete_object` reads the recorded object version, and a not-found answer is a match.
 - A pull request that a human merges before the repeat of its create leaves the request `failed`. The merge reaches the Mission Service through its inbound event.
@@ -306,4 +308,6 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A test covers a repeat of a `failed` request whose read-back finds nothing, and it asserts no second write and the recorded error.
 - A test covers an unmapped action, and it asserts the 422 and no request.
 - Tests cover a discard of a running request, a delete without `force`, and a delete list that names a pending request.
+- Tests answer a `github.pull_request` whose snapshot commit the base branch contains with the `branch_push` address of the oldest first-parent commit that contains it.
+- Tests open no pull request for that snapshot, and they fold the check to `pull_request_merged` with that landed commit.
 - A test covers a CLI child, and it asserts the fresh `HOME`, the environment allowlist, the removal of its directory and the kill of its process group at the deadline.

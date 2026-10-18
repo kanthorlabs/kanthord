@@ -8,11 +8,13 @@ Read the catalog of supplied workers. The catalog is fixed in the server binary.
 
 The catalog contains these workers:
 
-| Worker          | Host               | Method or harness     | Declared node states                         |
-| --------------- | ------------------ | --------------------- | -------------------------------------------- |
-| `claude-code@1` | `external-harness` | harness `claude-code` | `Available`, `Waiting`, `External.Requested` |
-| `coder@1`       | `kanthord`         | method `steps`        | `Available`                                  |
-| `reviewer@1`    | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              |
+| Worker          | Host               | Method or harness     | Declared node states                         | Declared works         |
+| --------------- | ------------------ | --------------------- | -------------------------------------------- | ---------------------- |
+| `claude-code@1` | `external-harness` | harness `claude-code` | `Available`, `Waiting`, `External.Requested` | `implement`, `examine` |
+| `coder@1`       | `kanthord`         | method `steps`        | `Available`                                  | `implement`, `examine` |
+| `reviewer@1`    | `kanthord`         | method `evaluation`   | `Waiting`, `External.Requested`              | `implement`, `examine` |
+
+The Scheduler Service admits a node for a worker only when two conditions hold. The declared node states hold the state of the node. The declared works hold the work of the node.
 
 `worker list` returns a page of summaries in ascending worker-name order. `worker get` returns the full declaration of one worker. Both operations are read-only.
 
@@ -29,13 +31,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
       "name": "claude-code@1",
       "host": "external-harness",
       "declared_node_states": ["Available", "Waiting", "External.Requested"],
-      "required_node_format": [
-        "name",
-        "requirement",
-        "criterion",
-        "verifications",
-        "bindings"
-      ]
+      "declared_works": ["implement", "examine"]
     }
   ],
   "next_cursor": "Y2xhdWRlQDE"
@@ -47,7 +43,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
 | `items[].name`                 | string         | Exact worker name, for example `coder@1`.                         |
 | `items[].host`                 | string         | `kanthord` for a native worker, `external-harness` for a harness. |
 | `items[].declared_node_states` | string array   | Node states that the worker accepts.                              |
-| `items[].required_node_format` | string array   | Node fields that the worker requires.                             |
+| `items[].declared_works`       | string array   | The works that the worker takes: `implement`, `examine`.          |
 | `next_cursor`                  | string or null | Opaque cursor for the next page; `null` on the last page.         |
 
 ### `worker get`
@@ -62,13 +58,7 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
   "agent_name": "swe@1",
   "resource_budget": { "turns": 200, "wall_time_ms": 7200000 },
   "declared_node_states": ["Available"],
-  "required_node_format": [
-    "name",
-    "requirement",
-    "criterion",
-    "verifications",
-    "bindings"
-  ]
+  "declared_works": ["implement", "examine"]
 }
 ```
 
@@ -81,27 +71,21 @@ An external harness has `harness` in place of `method` and `agent_name`, and its
   "harness": "claude-code",
   "resource_budget": { "wall_time_ms": 7200000 },
   "declared_node_states": ["Available", "Waiting", "External.Requested"],
-  "required_node_format": [
-    "name",
-    "requirement",
-    "criterion",
-    "verifications",
-    "bindings"
-  ]
+  "declared_works": ["implement", "examine"]
 }
 ```
 
-| Property                       | Type         | Surface            | Purpose                                             |
-| ------------------------------ | ------------ | ------------------ | --------------------------------------------------- |
-| `name`                         | string       | All workers        | Exact worker name.                                  |
-| `host`                         | string       | All workers        | `kanthord` or `external-harness`.                   |
-| `method`                       | string       | `kanthord` only    | `steps` or `evaluation`.                            |
-| `agent_name`                   | string       | `kanthord` only    | Agent that the native worker runs.                  |
-| `harness`                      | string       | `external-harness` | External harness name, for example `claude-code`.   |
-| `resource_budget.wall_time_ms` | integer      | All workers        | Wall-time budget of one execution, in milliseconds. |
-| `resource_budget.turns`        | integer      | `kanthord` only    | Turn budget of one execution.                       |
-| `declared_node_states`         | string array | All workers        | Node states that the worker accepts.                |
-| `required_node_format`         | string array | All workers        | Node fields that the worker requires.               |
+| Property                       | Type         | Surface            | Purpose                                                  |
+| ------------------------------ | ------------ | ------------------ | -------------------------------------------------------- |
+| `name`                         | string       | All workers        | Exact worker name.                                       |
+| `host`                         | string       | All workers        | `kanthord` or `external-harness`.                        |
+| `method`                       | string       | `kanthord` only    | `steps` or `evaluation`.                                 |
+| `agent_name`                   | string       | `kanthord` only    | Agent that the native worker runs.                       |
+| `harness`                      | string       | `external-harness` | External harness name, for example `claude-code`.        |
+| `resource_budget.wall_time_ms` | integer      | All workers        | Wall-time budget of one execution, in milliseconds.      |
+| `resource_budget.turns`        | integer      | `kanthord` only    | Turn budget of one execution.                            |
+| `declared_node_states`         | string array | All workers        | Node states that the worker accepts.                     |
+| `declared_works`               | string array | All workers        | The works that the worker takes: `implement`, `examine`. |
 
 ### Failures
 

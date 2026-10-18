@@ -4,72 +4,66 @@
 
 ## Function description
 
-An import replaces the whole plan of a mission in one transaction. The import set holds one entry for each node that the plan keeps:
+An import replaces the whole plan of a mission in one transaction. The import set holds one node file for each node and one task file for each task that the plan keeps:
 
-- An entry without `id` creates a node.
-- An entry with the `id` of a current node updates that node.
-- A current node that no entry names is retired.
+- An entry without `id` creates a node or a task.
+- An entry with the `id` of a current node or task updates it.
+- A current node that no entry names is retired. A current task that no entry names is retired from its node.
 
 `mission import preview` validates an import set and reports its effect. It writes nothing and stores no receipt. `mission import apply` validates the same set again, checks the preview digest and the confirmed retirements, and then writes all changes atomically.
+
+An entry with the `id` of a retired node, of a task of a retired node, or of a task that an earlier write removed fails with `mission.import.retired_id`.
 
 The import set has one of two formats:
 
 - `markdown`: plan files `{ filename, content }`. The Mission service parses each file. The [mission export](mission.md#function-description) page shows the plan file format.
-- `json`: plan entries with the fields of a JSON [mission export](mission.md#mission-export) entry. `id`, `parent` and `depends_on` are optional.
+- `json`: plan entries with the fields of a JSON [mission export](mission.md#mission-export) entry.
 
-`parent` and `depends_on` name plan files inside the import set, never node IDs or paths. `bindings` holds binding names of the project. The service resolves each name to the current binding revision.
+`node` and `depends_on` name plan files inside the import set, never node IDs or paths. `bindings` holds binding names of the project. The service resolves each name to the current binding revision.
 
-### Binding inheritance
+### Plan files
 
-A node names its bindings or inherits them. The service resolves each binding kind on its own, at write time. The first level that names a kind wins. Bindings of one kind never merge across levels.
+A plan file is a node file or a task file. It holds exactly one of `work` and `node`.
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
-flowchart LR
-    accTitle: Binding inheritance for one binding kind
-    accDescr: A new node uses the bindings of a kind that it names. Otherwise it uses those of the nearest ancestor that names the kind. Otherwise it uses the single project binding of the kind. Two or more project bindings refuse the write. An existing node keeps its stored bindings of an omitted kind.
-    start(["One binding kind<br/>of one node"]) --> existing{"Existing node<br/>omits the kind?"}
-    existing -- yes --> keep(["Keep the stored bindings"])
-    existing -- no --> own{"Node names<br/>the kind?"}
-    own -- yes --> use1(["Use the named bindings"])
-    own -- no --> ancestor{"An ancestor<br/>names the kind?"}
-    ancestor -- yes --> use2(["Use the nearest ancestor's"])
-    ancestor -- no --> project{"Project bindings<br/>of the kind"}
-    project -- "exactly 1" --> use3(["Use it"])
-    project -- "0" --> none(["None"])
-    project -- "2 or more" --> refuse(["Refuse:<br/>mission.node.bindings_invalid"])
-    classDef focal fill:#fbeae1,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
-    classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
-    class refuse focal;
-    class keep,use1,use2,use3,none outcome;
-```
+- A node file holds `work`: `implement` or `examine`. It takes the optional `id` (`node_<ulid>`), `depends_on`, `requires`, `bindings` and `verifications`.
+- A task file holds `node`: the plan file name of a node file of the import set with `work: implement`. It takes the optional `id` (`task_<ulid>`), `bindings: []` and `verifications`.
+- A task file refuses `depends_on`, `requires` and `work`. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
+- After the front matter, one H1 supplies `name`, one `## Requirement` section supplies `requirement`, and one `## Criterion` section supplies `criterion`.
+- An absent `requires` reads `[]`.
 
-After the resolution, each node kind holds these counts. A count outside the rule refuses the write with `mission.node.bindings_invalid`.
+An `implement` node with no task file is its own single work unit. An `implement` node with one or more task files covers its verifications with its tasks. Each verification of such a node equals a verification of one of its tasks in the import set. Another verification fails with `mission.import.verification_uncovered`.
 
-| Node kind  | Repository                                       | Storage | Worker |
-| ---------- | ------------------------------------------------ | ------- | ------ |
-| Initiative | 0–1, a default for its descendants only          | 0–1     | 0      |
-| Objective  | Exactly 1                                        | 0–1     | 0      |
-| Task       | 0; the task uses the repository of its objective | 0       | 0      |
+### Bindings of a node
 
-- An omitted `bindings` field and `bindings: []` both inherit.
-- A project with two repositories, for example `be-repo` and `fe-repo`, needs a name on each objective or on its initiative. Otherwise the write is refused.
-- The node revision stores the resolved binding revisions. A later change of the project or of an ancestor moves no existing node. A node update, a [rebind](node.md#node-rebind) or a move of the node keeps or changes them explicitly.
-- The repository binding of an initiative is a default only. It yields no external action, no workspace and no verification target. The initiative still derives its repositories from its objectives.
-- One objective works in one repository. Work in two repositories needs two objectives, joined with `depends_on`.
-- A [mission export](mission.md#mission-export) writes the resolved binding names, so an exported plan names every binding explicitly.
+A node names every binding that it uses. No node takes a binding from the project. The service resolves each binding name at write time and stores the resolved binding revision. A later change of the project moves no stored binding of a node. A node update or a [rebind](node.md#node-rebind) changes the stored bindings explicitly.
+
+The work of a node sets the count of each binding kind. A count outside the rule refuses the write with `mission.node.bindings_invalid`.
+
+| Work        | Repository | Storage             | Worker |
+| ----------- | ---------- | ------------------- | ------ |
+| `implement` | 1 or more  | 0 or more, in order | 0      |
+| `examine`   | 0 or more  | 0 or more, in order | 0      |
+
+- An `implement` node names one or more repository bindings, and the convention is one binding. An `implement` node with no repository binding fails with `mission.node.bindings_invalid`.
+- An `examine` node changes none of its repository bindings. Its execution checks out the base-branch head of each one read-only.
+- The storage bindings of a node form an ordered upload list. An upload uses the first storage binding of that list that accepts the grant, under [evidence](evidence.md#object-upload).
+- A task names no binding. A task acts on every repository that its node names.
+- A [mission export](mission.md#mission-export) writes the binding names of each node, so an exported plan names every binding explicitly.
+
+### Import condition
 
 The import condition is state `Pending` or `Available` with attempt `0`. The import applies it to these current nodes:
 
-- Each initiative or objective with changed content. For a task with changed content, the condition applies to its objective.
-- Each current parent whose child set changes by a create, a move or a retirement.
-- Each retired initiative or objective, and the objective of each retired task.
+- Each node with changed content. For a task with changed content, the condition applies to its node.
+- Each node that gains or loses a task.
+- Each retired node.
 
 These additional rules apply:
 
 - No terminal node (`Completed` or `Discarded`) changes. An entry that keeps a terminal node unchanged is a no-op and is allowed.
-- A change of only `depends_on` requires a nonterminal node, not the import condition.
-- A new dependency of a kept node requires no live claim on that node or on its descendants. Only apply checks this rule.
+- A change of only `depends_on` requires a nonterminal node, not the import condition. The dependency rules of [dependency](dependency.md#function-description) apply.
+- A new dependency of a kept node requires no live claim on that node. Only apply checks this rule.
+- An import that adds an unmatched pair of a node and a claimable state fails with `mission.node.requires_unmatched`. The preview lists one violation for each node file with an added pair.
 
 One failed check fails the whole import. A changed `depends_on` list counts as an update even if the content is unchanged. An apply that changes nothing keeps the mission version. An apply that changes the plan increases the mission version by one.
 
@@ -93,9 +87,8 @@ The API returns HTTP `200` with the preview. A plan violation does not fail the 
   "retirements": ["node_01M4C5J3SBEB4P8KDXAZ6GKB6R"],
   "removed_edges": [
     {
-      "kind": "containment",
-      "parent_id": "node_01M4C5J3SAYFD1BFNQB3BEBN6P",
-      "child_id": "node_01M4C5J3SBEB4P8KDXAZ6GKB6R"
+      "dependent_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+      "depends_on_id": "node_01M4C5J3SBEB4P8KDXAZ6GKB6R"
     }
   ],
   "no_ops": ["node_01M4C5J3SAYFD1BFNQB3BEBN6P"],
@@ -111,11 +104,13 @@ The API returns HTTP `200` with the preview. A plan violation does not fail the 
 | `creates`                  | array of file names     | Entries without `id`.                                                                                  |
 | `updates`                  | array of node IDs       | Kept nodes with changed content or changed dependencies.                                               |
 | `retirements`              | array of node IDs       | Current nodes that the import set omits. Send this set as `confirmed_retirements`.                     |
-| `removed_edges`            | array of edges          | Current containment and dependency edges that the import removes.                                      |
+| `removed_edges`            | array of edges          | Current dependency edges that the import removes.                                                      |
 | `no_ops`                   | array of node IDs       | Kept nodes without a change.                                                                           |
 | `violations`               | array                   | `{ code, message, filename, node_id, details }` for each failed check. Empty when the import is valid. |
 
-The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.kind_changed`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing` and `mission.node.bindings_invalid`.
+The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.verification_uncovered`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing`, `mission.node.bindings_invalid`, `mission.node.state_conflict` and `mission.node.requires_unmatched`.
+
+The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there. When the three stages pass, the preview runs the write steps of the apply and rolls them back. It then lists one `mission.node.requires_unmatched` violation for each node file with an added unmatched pair. That violation holds `details.claims`, and `node_id` is `null` for a created node, also in each claim.
 
 ### import apply
 
@@ -127,7 +122,10 @@ The API returns HTTP `200` with the import result:
   "mission_version": 8,
   "assigned_ids": [
     { "filename": "login.md", "node_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB" },
-    { "filename": "platform.md", "node_id": "node_01M4C5J3SAYFD1BFNQB3BEBN6P" },
+    {
+      "filename": "login-form.md",
+      "task_id": "task_01M4C5J3SAYFD1BFNQB3BEBN6P"
+    },
     { "filename": "signup.md", "node_id": "node_01M4C5J3SBKF4M6X325KZGRKHH" }
   ],
   "changes": {
@@ -143,14 +141,14 @@ The API returns HTTP `200` with the import result:
 }
 ```
 
-| Property          | Type             | Purpose                                                                                  |
-| ----------------- | ---------------- | ---------------------------------------------------------------------------------------- |
-| `mission_id`      | `mission_<ulid>` | Imported mission.                                                                        |
-| `mission_version` | positive integer | Mission version after the apply.                                                         |
-| `assigned_ids`    | array            | `{ filename, node_id }` for every entry, sorted by file name, with the IDs of new nodes. |
-| `changes`         | object           | The [node change result](node.md#node-change-result) of the import.                      |
-| `actor`           | object           | The human that submitted the import.                                                     |
-| `accepted_at`     | integer          | Acceptance time in Unix milliseconds.                                                    |
+| Property          | Type             | Purpose                                                                                                                                                |
+| ----------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mission_id`      | `mission_<ulid>` | Imported mission.                                                                                                                                      |
+| `mission_version` | positive integer | Mission version after the apply.                                                                                                                       |
+| `assigned_ids`    | array            | `{ filename, node_id }` for every node file and `{ filename, task_id }` for every task file, sorted by file name, with the IDs of new nodes and tasks. |
+| `changes`         | object           | The [node change result](node.md#node-change-result) of the import.                                                                                    |
+| `actor`           | object           | The human that submitted the import.                                                                                                                   |
+| `accepted_at`     | integer          | Acceptance time in Unix milliseconds.                                                                                                                  |
 
 The CLI writes the result plus `idempotency_key` as one JSON line to stdout and exits `0`. The CLI writes no assigned ID back to a plan file. Run `mission export` to get plan files with IDs.
 
@@ -158,22 +156,24 @@ The CLI writes the result plus `idempotency_key` as one JSON line to stdout and 
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                           | Operation | Meaning                                                                                                                                                                         |
-| -------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`    | Both      | Absent, invalid or expired token, or a machine token.                                                                                                                           |
-| `415 gateway.request.unsupported_media_type` | Both      | `Content-Type` is not `application/json`.                                                                                                                                       |
-| `400 gateway.request.invalid_json`           | Both      | The body is not valid JSON with unique object members.                                                                                                                          |
-| `400 gateway.request.validation_failed`      | Both      | The body fails the schema, for example an unknown field.                                                                                                                        |
-| `413 gateway.request.body_too_large`         | Both      | The body exceeds 10 MiB.                                                                                                                                                        |
-| `400 gateway.idempotency.invalid_key`        | Apply     | Absent or malformed `Idempotency-Key`.                                                                                                                                          |
-| `409 gateway.idempotency.conflict`           | Apply     | The key belongs to another request, or its first request is still in progress.                                                                                                  |
-| `404 mission.mission.not_found`              | Both      | The mission ID is unknown.                                                                                                                                                      |
-| `409 mission.version.conflict`               | Both      | `mission_version` is stale; `details.current` holds the current version.                                                                                                        |
-| `400 mission.node.content_invalid`           | Both      | `reason` is blank or exceeds the text limit.                                                                                                                                    |
-| `400` or `409` with a violation code         | Apply     | The first violation of the preview. `409` for `mission.import.condition_failed` and `mission.import.terminal_change`, otherwise `400`. `details` adds `filename` and `node_id`. |
-| `409 mission.import.retirement_mismatch`     | Apply     | `preview_digest` or `confirmed_retirements` does not match the current preview.                                                                                                 |
-| `409 mission.node.claim_live`                | Apply     | A new dependency names a node whose subtree has a live claim.                                                                                                                   |
-| `504 gateway.invocation.timeout`             | Both      | The operation exceeded 30 seconds. An apply can still complete.                                                                                                                 |
+| HTTP status / code                           | Operation | Meaning                                                                                                                                                                                                        |
+| -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`    | Both      | Absent, invalid or expired token, or a machine token.                                                                                                                                                          |
+| `415 gateway.request.unsupported_media_type` | Both      | `Content-Type` is not `application/json`.                                                                                                                                                                      |
+| `400 gateway.request.invalid_json`           | Both      | The body is not valid JSON with unique object members.                                                                                                                                                         |
+| `400 gateway.request.validation_failed`      | Both      | The body fails the schema, for example an unknown field.                                                                                                                                                       |
+| `413 gateway.request.body_too_large`         | Both      | The body exceeds 10 MiB.                                                                                                                                                                                       |
+| `400 gateway.idempotency.invalid_key`        | Apply     | Absent or malformed `Idempotency-Key`.                                                                                                                                                                         |
+| `409 gateway.idempotency.conflict`           | Apply     | The key belongs to another request, or its first request is still in progress.                                                                                                                                 |
+| `404 mission.mission.not_found`              | Both      | The mission ID is unknown.                                                                                                                                                                                     |
+| `409 mission.version.conflict`               | Both      | `mission_version` is stale; `details.current` holds the current version.                                                                                                                                       |
+| `400 mission.node.content_invalid`           | Both      | `reason` is blank or exceeds the text limit.                                                                                                                                                                   |
+| `400` or `409` with a violation code         | Apply     | The first violation of the preview. `409` for `mission.import.condition_failed`, `mission.import.terminal_change` and `mission.node.state_conflict`, otherwise `400`. `details` adds `filename` and `node_id`. |
+| `409 mission.node.requires_unmatched`        | Apply     | The import adds an unmatched pair; `details.claims` lists each pair as `{ node_id, revision, claim }`.                                                                                                         |
+| `409 mission.node.filename_conflict`         | Apply     | Another current node or task of the mission uses the file name; `details.filename` names it.                                                                                                                   |
+| `409 mission.import.retirement_mismatch`     | Apply     | `preview_digest` or `confirmed_retirements` does not match the current preview.                                                                                                                                |
+| `409 mission.node.claim_live`                | Apply     | A new dependency names a dependent with a live claim.                                                                                                                                                          |
+| `504 gateway.invocation.timeout`             | Both      | The operation exceeded 30 seconds. An apply can still complete.                                                                                                                                                |
 
 The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 
@@ -235,16 +235,17 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `preview_digest`        | 64 lower-case hex chars          | Apply only | Digest from the preview.                                                               |
 | `confirmed_retirements` | array of `node_<ulid>`           | Apply only | Exactly the `retirements` set of the preview.                                          |
 
-| Entry field                        | Type                              | Required | Purpose                                                                                                      |
-| ---------------------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `filename`                         | string                            | Yes      | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                                    |
-| `kind`                             | `initiative`, `objective`, `task` | Yes      | Node kind; it cannot change for a kept node.                                                                 |
-| `name`, `requirement`, `criterion` | nonblank string                   | Yes      | Node content.                                                                                                |
-| `verifications`                    | array of nonblank strings         | Yes      | At least one verification.                                                                                   |
-| `bindings`                         | array of binding names            | No       | Binding names. An omitted kind inherits; see [Binding inheritance](#binding-inheritance). A task names none. |
-| `id`                               | `node_<ulid>`                     | No       | Current node to keep.                                                                                        |
-| `parent`                           | plan file name                    | No       | Required for an objective or a task; forbidden for an initiative.                                            |
-| `depends_on`                       | array of plan file names          | No       | Dependency targets; forbidden for a task.                                                                    |
+| Entry field                        | Type                           | Required   | Purpose                                                                                         |
+| ---------------------------------- | ------------------------------ | ---------- | ----------------------------------------------------------------------------------------------- |
+| `filename`                         | string                         | Yes        | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                       |
+| `work`                             | `implement` or `examine`       | Node entry | Work of the node. A task entry forbids it.                                                      |
+| `node`                             | plan file name                 | Task entry | The `implement` node entry of the task. A node entry forbids it.                                |
+| `name`, `requirement`, `criterion` | nonblank string                | Yes        | Node content.                                                                                   |
+| `verifications`                    | array of nonblank strings      | Yes        | At least one verification.                                                                      |
+| `bindings`                         | array of binding names         | Yes        | Binding names; see [Bindings of a node](#bindings-of-a-node). A task entry holds `[]`.          |
+| `id`                               | `node_<ulid>` or `task_<ulid>` | No         | Current node or task to keep.                                                                   |
+| `requires`                         | array of trait keys            | No         | Traits that a worker binding needs to claim the node; `[]` by default. A task entry forbids it. |
+| `depends_on`                       | array of plan file names       | No         | Dependency targets. A task entry forbids it.                                                    |
 
 The body accepts no unknown field.
 

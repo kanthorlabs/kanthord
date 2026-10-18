@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: acceptance.md
+node: acceptance.md
 bindings: []
 verifications:
   - node --test test/acceptance-contract.test.js

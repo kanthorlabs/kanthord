@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: operations.md
+node: operations.md
 bindings: []
 verifications:
   - node --test test/operations-lifecycle.test.js
@@ -10,7 +9,7 @@ verifications:
 
 ## Requirement
 
-Own the HTTP listener and injected resources in the process entrypoint. Define injectable readiness and resource-close hooks. Test them with controlled adapters and do not require unfinished authentication or TODO modules. The acceptance objective wires these hooks to real SQLite.
+Own the HTTP listener and injected resources in the process entrypoint. Define injectable readiness and resource-close hooks. Test them with controlled adapters and do not require unfinished authentication or TODO modules. The acceptance node wires these hooks to real SQLite.
 
 Expose public `GET /health/ready` separately from public liveness. It returns 200 with `{ status: "ready" }` only when migrations finished, storage responds to a bounded probe and shutdown has not started. Otherwise it returns 503 with a safe error envelope. Configure request, header and keep-alive timeouts. Handle SIGTERM and SIGINT through one idempotent drain operation with a ten-second drain deadline.
 

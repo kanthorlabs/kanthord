@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: authentication.md
+node: authentication.md
 bindings: []
 verifications:
   - node --test test/authentication-accounts.test.js

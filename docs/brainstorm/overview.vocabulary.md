@@ -25,9 +25,9 @@ A project binds two repositories and one `tdd@1` worker.
 
 ## mission
 
-A mission is the whole work of one project: its initiatives, objectives and tasks and the relations between them.
+A mission is the whole work of one project: its nodes and tasks and the relations between them.
 The term names no closed set.
-One project has one mission. The mission includes the objective "Add password reset".
+One project has one mission. The mission includes the node "Add password reset".
 
 ## WHAT
 
@@ -58,37 +58,25 @@ One verification of "Add password reset" is `npm run test:reset`.
 
 ## node
 
-A node is a vertex of the mission graph. The set is closed and it holds three values.
-
-- **initiative**
-- **objective**
-- **task**
-
-Nothing else is a node. The word names a vertex of the graph, and it never names a tier or a degree.
-
-## initiative
-
-An initiative is a node of WHAT with its own criterion and outcome.
+A node is a vertex of the mission graph and a unit of scheduling, with its own criterion and outcome.
 The term names no closed set.
-An initiative contains the objective "Add password reset" and is a root of the graph.
-
-## objective
-
-An objective is a node of WHAT that contains tasks and has its own criterion and outcome.
-The term names no closed set.
-A `tdd@1` instance claims the objective "Add password reset". A `reviewer@1` instance later claims the objective.
+The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`.
+A `tdd@1` instance claims the `implement` node "Add password reset". A `reviewer@1` instance later claims the node.
+The `examine` node "Account recovery" reads `api-repo` and `web-repo` and the outcomes of "Add password reset" and "Add recovery codes", and it changes no repository.
+Nothing else is a node. The word names a vertex of the graph.
 
 ## task
 
-A task is a node of WHAT that belongs to an objective and has its own criterion, but no outcome of its own.
+A task is a part of the WHAT of an `implement` node with its own criterion, but no outcome of its own.
+A task is never a unit of scheduling.
 The term names no closed set.
-The import set holds `add-password-reset.md`, the objective, and `add-reset-token-expiry.md`, a task of that objective.
+The import set holds `add-password-reset.md`, an `implement` node, and `add-reset-token-expiry.md`, a task of that node.
 
 ## evidence
 
 Evidence is what execution records about the results, and what evaluation assesses against the criterion.
 The term names no closed set.
-The expected end state of the pull request of the objective "Add password reset" appends the landed commit identities to its evidence set.
+The expected end state of the pull request of the node "Add password reset" appends the landed commit identities to its evidence set.
 
 ## outcome
 
@@ -127,36 +115,36 @@ A passing assessment of "Add password reset" precedes the request of its pull re
 ## worker
 
 A worker is the HOW: a template that defines how executions happen.
-A worker declares the node states that its instances claim.
+A worker declares the node states that its instances claim and the works that its method takes.
 The term names no closed set.
 `tdd@1` is one example among several workers.
-For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
+For each task of an `implement` node, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
 `tdd@1` declares `Available`, and `reviewer@1` declares `Waiting` and `External.Requested`.
 `claude-code@1` is a worker that an external harness hosts, and it declares `Available`, `Waiting` and `External.Requested`.
 
 ## worker instance
 
-A worker instance is a background instance of one worker that claims an initiative or an objective in a node state that its worker declares.
+A worker instance is a background instance of one worker that claims a node in a node state that its worker declares.
 The term names no closed set.
-A `tdd@1` instance claims the objective "Add password reset". Execution 1 starts.
+A `tdd@1` instance claims the node "Add password reset". Execution 1 starts.
 
 ## execute
 
 The act of a worker instance carrying out work on a node of the Mission Service.
 The term names no closed set.
-A `tdd@1` instance executes the objective "Add password reset" using its RED-GREEN-REFACTOR method.
+A `tdd@1` instance executes the node "Add password reset" using its RED-GREEN-REFACTOR method.
 An instance of worker binding `claude-main`, which the external harness `claude-code` hosts, pulls "Add password reset" and executes its steps under its execution identity.
 
 ## execution
 
 The unit of work that the Scheduler Service records.
-An execution is an object that represents the state of work on one initiative or objective.
+An execution is an object that represents the state of work on one node.
 One worker instance holds that work while it executes the node.
 The Worker Service hosts the executions of kanthord's own harness.
 Two executions of the same worker share that worker's method.
 Each execution has its own execution identity.
 The term names no closed set.
-A `tdd@1` instance claims the objective "Add password reset" and produces Execution 1.
+A `tdd@1` instance claims the node "Add password reset" and produces Execution 1.
 The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
 Execution 1 represents the state of that work and has its own execution identity.
 An instance of `claude-main`, which the external harness `claude-code` hosts, pulls "Add password reset" and produces Execution 3.
@@ -187,7 +175,7 @@ The Mission Service receives that identity and names it in its authorization cal
 A binding is the record that allocates a resource to a project and permits an operation on that resource.
 The term names no closed set.
 The [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the three binding kinds and their values.
-A project holds a repository binding for the repository that the objective "Add password reset" belongs to.
+A project holds a repository binding for the repository that the node "Add password reset" belongs to.
 The binding permits three capabilities.
 The Project Service vocabulary holds the cardinality of each binding kind.
 

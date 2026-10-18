@@ -24,8 +24,6 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 
 The reference describes implemented behavior, not the full proposed product. The CLI and the API cover configuration, tokens, the Gateway, the LLM, repository and storage credentials, agents, projects, missions, the Scheduler and workers. The Tracking CLI group currently exposes help only. `serve server` runs the server; `serve worker` registers a worker instance, pulls work and executes it.
 
-One ruled change is documented before its implementation: a node inherits its bindings under the [binding inheritance](reference/mission/import.md#binding-inheritance) rule. Until the implementation lands, each objective names its repository binding.
-
 ## Documentation types
 
 Public documentation follows [Diátaxis](https://diataxis.fr/):

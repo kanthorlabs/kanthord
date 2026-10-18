@@ -11,9 +11,9 @@ This page is the entry point. Read it first. It explains the worker concept from
 
 ## The idea in five sentences
 
-1. A human imports a mission: a tree of **initiatives**, **objectives** and **tasks**. Each node holds a requirement, a criterion and verification commands.
-2. The **Scheduler** gives one objective at a time to one **worker instance**. That grant is a **claim**, and the work under it is an **execution**.
-3. The worker `coder@1` opens an LLM agent, `swe@1`, in a git checkout. The agent edits files. The worker code commits, runs the verification commands and asks the agent to judge each task.
+1. A human imports a mission: a graph of **nodes** with dependency edges. Each node holds a requirement, a criterion, verification commands and a **work**, `implement` or `examine`.
+2. The **Scheduler** gives one node at a time to one **worker instance**. That grant is a **claim**, and the work under it is an **execution**.
+3. The worker `coder@1` opens an LLM agent, `swe@1`, in a git checkout. The agent edits files. The worker code commits, runs the verification commands and asks the agent to judge each task of the node.
 4. When every task passes, the worker pushes a branch, records the head commit as **evidence** and **releases** the claim. The node now waits for review.
 5. The worker `reviewer@1` checks out that commit in a clean directory, runs every verification again, and asks a read-only agent, `re@1`, for an **assessment**. A passing assessment completes the node, or first opens a pull request when the project requires one.
 
@@ -23,32 +23,35 @@ The rest of this page explains each of these sentences.
 
 The terms below appear on every worker page. Each term has exactly one meaning.
 
-| Term                 | Meaning                                                                                                                                                          |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mission              | All the work of one project, as a graph of nodes.                                                                                                                |
-| Node                 | One vertex of the mission: an initiative, an objective or a task.                                                                                                |
-| Initiative           | A root node. It groups objectives. Its work is a report on the outcomes of its objectives.                                                                       |
-| Objective            | A node that holds tasks and works on one repository. Most worker activity is on an objective.                                                                    |
-| Task                 | One step of an objective. A task has a criterion and verifications, but no state. A worker never claims a task alone.                                            |
-| Requirement          | The text that states what the node must achieve.                                                                                                                 |
-| Criterion            | The text that states how to judge the result.                                                                                                                    |
-| Verification         | One bash command that checks the result, for example `npm test`. Exit code 0 is a pass.                                                                          |
-| Node revision        | One version of the content of a node. An execution reads the revision that its attempt pins, so a later edit does not change a running execution.                |
-| Attempt              | One try at a node. It holds one or more executions. The first claim opens attempt 1. A human unblock opens the next attempt.                                     |
-| Worker               | A template that defines how work happens: its method, its agents, the node states that it claims and its default budget. `coder@1` and `reviewer@1` are workers. |
-| Worker binding       | The project configuration that turns a worker on for one project. It sets the instance count, the model of each agent and an optional budget.                    |
-| Worker instance      | One running copy of a worker. It pulls work and holds at most one execution at a time.                                                                           |
-| Claim                | The grant of one node to one instance. It has a fixed deadline, `expired_at`.                                                                                    |
-| Execution            | The work under one claim, from the claim to the release. It has an identity, for example `execution_01JZ8R2B…`.                                                  |
-| Agent                | An LLM participant that the worker drives, for example `swe@1`. The agent edits and judges. It decides nothing about the node.                                   |
-| Node branch          | The git branch of an objective, `kanthord/<node_id>`. Every execution of the objective continues on it.                                                          |
-| Evidence             | A result that an execution records, for example the head commit of the node branch.                                                                              |
-| Assessment           | The judgement of the evidence against the criterion: `success`, `criterion-not-met` or `undetermined`.                                                           |
-| Outcome              | The final record of an attempt. A successful outcome completes the node.                                                                                         |
-| Release              | The end of an execution that returns the node to the Mission Service, with `further_work: true` or `false`.                                                      |
-| Budget               | The resource limit of one execution: 200 agent turns and 2 hours of wall time by default.                                                                        |
-| Stop                 | The reason in a release that the execution ended early, for example `{ "reason": "budget_end", "code": "turns" }`. A release with no stop has `stop: null`.      |
-| Revision instruction | A message from the worker to the agent that asks for more work on a task, for example after a failed verification. It is not a node revision.                    |
+| Term                 | Meaning                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission              | All the work of one project, as a graph of nodes.                                                                                                                                                                         |
+| Node                 | One vertex of the mission. It holds a work, a requires list, its bindings and, for an `implement` node, its tasks.                                                                                                        |
+| Work                 | The kind of work of a node: `implement` or `examine`. The work of the pinned revision selects the form of the method.                                                                                                     |
+| `implement` node     | A node that changes its repositories through its tasks. It names one or more repository bindings, and the convention is one binding. Most worker activity is on an `implement` node.                                      |
+| `examine` node       | A node that changes no repository. It checks out the base-branch head of each repository binding that it names, reads its direct dependencies and reports its findings.                                                   |
+| Task                 | One step of an `implement` node, with a `task_<ulid>` identity. A task has a criterion and verifications, but no state. A worker never claims a task alone. An `implement` node with no task is its own single work unit. |
+| Requires             | The list of trait keys that a worker binding needs to claim the node, for example `platform.macos`.                                                                                                                       |
+| Trait                | A fact of the host of a worker binding. The Scheduler admits a node only when the traits of the binding hold every key of the requires list of the node.                                                                  |
+| Requirement          | The text that states what the node must achieve.                                                                                                                                                                          |
+| Criterion            | The text that states how to judge the result.                                                                                                                                                                             |
+| Verification         | One bash command that checks the result, for example `npm test`. Exit code 0 is a pass.                                                                                                                                   |
+| Node revision        | One version of the content of a node. An execution reads the revision that its attempt pins, so a later edit does not change a running execution.                                                                         |
+| Attempt              | One try at a node. It holds one or more executions. The first claim opens attempt 1. A human unblock opens the next attempt.                                                                                              |
+| Worker               | A template that defines how work happens: its method, its agents, the node states that it claims, the works that it takes and its default budget. `coder@1` and `reviewer@1` are workers.                                 |
+| Worker binding       | The project configuration that turns a worker on for one project. It sets the instance count, the traits, the model of each agent and an optional budget.                                                                 |
+| Worker instance      | One running copy of a worker. It pulls work and holds at most one execution at a time.                                                                                                                                    |
+| Claim                | The grant of one node to one instance. It has a fixed deadline, `expired_at`.                                                                                                                                             |
+| Execution            | The work under one claim, from the claim to the release. It has an identity, for example `execution_01JZ8R2B…`.                                                                                                           |
+| Agent                | An LLM participant that the worker drives, for example `swe@1`. The agent edits and judges. It decides nothing about the node.                                                                                            |
+| Node branch          | The git branch of an `implement` node, `kanthord/<node_id>`. Every execution of the node continues on it.                                                                                                                 |
+| Evidence             | A result that an execution records, for example the head commit of the node branch.                                                                                                                                       |
+| Assessment           | The judgement of the evidence against the criterion: `success`, `criterion-not-met` or `undetermined`.                                                                                                                    |
+| Outcome              | The final record of an attempt. A successful outcome completes the node.                                                                                                                                                  |
+| Release              | The end of an execution that returns the node to the Mission Service, with `further_work: true` or `false`.                                                                                                               |
+| Budget               | The resource limit of one execution: 200 agent turns and 2 hours of wall time by default.                                                                                                                                 |
+| Stop                 | The reason in a release that the execution ended early, for example `{ "reason": "budget_end", "code": "turns" }`. A release with no stop has `stop: null`.                                                               |
+| Revision instruction | A message from the worker to the agent that asks for more work on a task, for example after a failed verification. It is not a node revision.                                                                             |
 
 ## Who does what
 
@@ -66,14 +69,14 @@ A worker is one of several actors. Each actor owns one concern, and no actor doe
 
 The most important line is the split between the worker and the agent. The agent can claim that its work is done. The worker does not trust that claim. The worker commits the work itself, runs the verification commands itself, and asks the agent for a judgement only after every command passes.
 
-## The life of an objective
+## The life of an `implement` node
 
-A node moves through states. Each worker claims only from the states that it declares: `coder@1` claims `Available`, and `reviewer@1` claims `Waiting` and `External.Requested`. No worker sets a state directly. A worker releases or submits an assessment, and the Mission Service picks the next state from it. The Mission Service makes every move of the diagram, also the moves that no worker causes, for example `Pending` to `Available` when the last dependency completes.
+A node moves through states. Each worker claims only from the states that it declares: `coder@1` claims `Available`, and `reviewer@1` claims `Waiting` and `External.Requested`. No worker sets a state directly. A worker releases or submits an assessment, and the Mission Service picks the next state from it. The Mission Service makes every move of the diagram, also the moves that no worker causes, for example `Pending` to `Available` when the last dependency completes. A claim also needs the match of the Scheduler. The worker declares the work of the node, and the traits of the binding hold the requires list of the node.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
 flowchart LR
-    accTitle: The life of an objective
+    accTitle: The life of an implement node
     accDescr: Pending becomes Available when its dependencies complete. coder@1 claims Available and the node is Executing. A release with further work returns it to Available. A release with no further work moves it to Waiting. reviewer@1 claims Waiting and the node is Evaluating. criterion-not-met below the rework limit returns it to Available. A success with no external action completes the node. A success with an external action opens a pull request and moves the node to External.Requested, then External.Success and Completed. A pull request that conflicts with the base returns the node to Available. reviewer@1 claims External.Requested again when a chained action becomes eligible. A criterion-not-met at the limit, an undetermined assessment or a failed external action moves the node to Blocked. A human unblock opens the next attempt.
     pending(["Pending"]) -- "dependencies Completed" --> available(["Available"])
     available -- "coder@1 claims" --> executing["Executing<br/>coder@1 works"]
@@ -95,10 +98,12 @@ flowchart LR
     class completed done;
 ```
 
-Three facts explain most of the diagram:
+An `examine` node moves through the same states. Its `coder@1` execution submits a report as produced evidence and pushes no branch. It requires no external action, so a passing assessment completes it.
+
+These facts explain most of the diagram:
 
 - **Two workers, two claims.** `coder@1` and `reviewer@1` never share a claim. The coder does the work and releases. The reviewer judges later in its own execution, from a clean checkout.
-- **Further work is normal.** One execution does not need to finish the objective. When the budget ends, the coder pushes a checkpoint and releases with `further_work: true`. The node returns to `Available`, and the next execution continues on the same node branch.
+- **Further work is normal.** One execution does not need to finish the node. When the budget ends, the coder pushes a checkpoint and releases with `further_work: true`. The node returns to `Available`, and the next execution continues on the same node branch.
 - **A conflict sends the work back.** A pull request that conflicts with the base branch returns the node to `Available` in the same attempt. `coder@1` merges the base at its next start and resolves the conflict.
 - **The merge comes from outside.** After the reviewer opens a pull request, no worker acts until the pull request ends. The Intake Service checks the pull request on the git host. A human starts that check with [`kanthord mission node check`](../reference/mission/node-control.md#check). An Intake inbound of the repository, when one is configured, starts it on an event of the git host. A merge moves the node to `External.Success`, and the Mission Service then completes it with the passing assessment of the attempt. A closed pull request, or a pull request with a change request, moves the node to `External.Failed` and then to `Blocked`.
 - **A human closes the loop.** A node in `Blocked` waits for a human. The human reads the reason, edits the node or not, and unblocks it. The unblock opens the next attempt.
@@ -140,10 +145,10 @@ sequenceDiagram
 The steps in plain words:
 
 1. **Register.** The process starts with a machine token. The token names the project and the worker binding. The process registers one instance with the Worker Service and sends a heartbeat every 60 seconds.
-2. **Pull.** The instance asks for work. The Scheduler answers when a node in a declared state is ready, or answers "no work" after 90 seconds.
+2. **Pull.** The instance asks for work. The Scheduler answers when a node in a declared state is ready and the match admits the node, or answers "no work" after 90 seconds.
 3. **Claim.** The Scheduler grants the node. The Mission Service opens attempt 1 when the node has no attempt, and pins the node revision. The claim holds a fixed deadline: `expired_at` is the start time, plus the wall-time budget of the binding, plus `scheduler.release_reserve`, 10 minutes by default, for the cleanup.
-4. **Setup.** The process receives the credentials of the execution through the credential handover of the Worker Service. It then reads the execution setup: the worker name, the model configuration, the composed prompt, the prompt templates, the repository and the budget. The process reads no configuration file of its own.
-5. **Method.** The process runs the method of its worker: `steps` for `coder@1`, `evaluation` for `reviewer@1`. The method opens one agent session and drives it.
+4. **Setup.** The process receives the credentials of the execution through the credential handover of the Worker Service. It then reads the execution setup: the worker name, the model configuration, the composed prompt, the prompt templates, the work, the repository bindings and the budget. The process reads no configuration file of its own.
+5. **Method.** The process runs the method of its worker: `steps` for `coder@1`, `evaluation` for `reviewer@1`. Each method holds one form for each work, and the work of the pinned revision selects the form. The method opens one agent session and drives it.
 6. **Claim check.** After each agent turn and before each task, the process reads its claim. A claim that is no longer running ends the execution at once as revoked. A revoked execution pushes nothing and releases nothing, because the node is no longer its own.
 7. **Report.** The method records evidence or an assessment in the Mission Service.
 8. **Release.** `coder@1` releases the claim with `further_work` and an optional `stop`, and the Mission Service picks the next node state. `reviewer@1` releases only after a success that requires an external action. Its other assessments move the node and end the claim at once, with no release. Either way, the instance is idle again and pulls the next node.
@@ -152,27 +157,29 @@ The steps in plain words:
 
 ## The three workers
 
-| Worker          | Host                           | Method        | Agent            | Claims from                                  | Job                                                                    |
-| --------------- | ------------------------------ | ------------- | ---------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
-| `coder@1`       | KanthorD (native)              | `steps`       | `swe@1`          | `Available`                                  | Does the tasks of an objective, or writes the report of an initiative. |
-| `reviewer@1`    | KanthorD (native)              | `evaluation`  | `re@1`           | `Waiting`, `External.Requested`              | Judges the result, then requests the pull request.                     |
-| `claude-code@1` | External harness (Claude Code) | Its own skill | None of KanthorD | `Available`, `Waiting`, `External.Requested` | Does the work in a third-party agent program.                          |
+| Worker          | Host                           | Method        | Agent            | Claims from                                  | Job                                                                               |
+| --------------- | ------------------------------ | ------------- | ---------------- | -------------------------------------------- | --------------------------------------------------------------------------------- |
+| `coder@1`       | KanthorD (native)              | `steps`       | `swe@1`          | `Available`                                  | Does the tasks of an `implement` node, or writes the report of an `examine` node. |
+| `reviewer@1`    | KanthorD (native)              | `evaluation`  | `re@1`           | `Waiting`, `External.Requested`              | Judges the result, then requests the pull request.                                |
+| `claude-code@1` | External harness (Claude Code) | Its own skill | None of KanthorD | `Available`, `Waiting`, `External.Requested` | Does the work in a third-party agent program.                                     |
 
-A **native** worker runs its agent inside KanthorD on the [pi runtime](native-agent.md). An **external harness** runs a third-party agent program, and KanthorD configures none of its agent, prompt or tools. Both kinds use the same claim, evidence and release operations. This page and the two pages below it cover the native workers.
+A **native** worker runs its agent inside KanthorD on the [pi runtime](native-agent.md). An **external harness** runs a third-party agent program, and KanthorD configures none of its agent, prompt or tools. Each of the three workers declares the works `implement` and `examine`. Both kinds use the same claim, evidence and release operations. This page and the two pages below it cover the native workers.
 
 ## How reviewer@1 judges
 
 `reviewer@1` has its own execution. It trusts nothing that `coder@1` judged.
 
-1. It reads the pinned revision and the evidence of the attempt. For an objective, the evidence names the head commit of the node branch.
-2. It makes a fresh directory and a clean checkout of that commit.
-3. Its code runs the verifications of the objective, then the verifications of each task, in order. The first failure stops the run. A failed command runs up to two more times, only to detect a flaky test. A pass on a rerun still counts as a failure, and the rationale names the test as flaky.
+1. It reads the pinned revision and the evidence of the attempt. For an `implement` node, the evidence names the head commit of each node branch. For an `examine` node, it also reads the outcome and the evidence of each direct dependency.
+2. It makes a fresh directory. For an `implement` node, it makes a clean checkout of each commit under `checkouts/<binding name>/`. For an `examine` node, it checks out the base-branch head of each repository binding of the node in the same way. It places the produced evidence in `evidence/`, beside `checkouts/` and outside the agent root.
+3. Its code runs the verifications of the node, then the verifications of each task, in order. The first failure stops the run. A failed command runs up to two more times, only to detect a flaky test. A pass on a rerun still counts as a failure, and the rationale names the test as flaky.
 4. It records the results as evidence.
 5. When a command failed, it writes a `criterion-not-met` assessment at once, with no agent. The rationale names the command and holds the last 4 KiB of its output.
-6. When every command passed, the agent `re@1` judges the evidence against the criterion of the objective, each task criterion and the default standard. `re@1` can read files but cannot write a file or run a command. It reads no `AGENTS.md` or `CLAUDE.md` of the workspace, because the candidate under review wrote those files.
+6. When every command passes, the agent `re@1` judges the evidence against the criterion of the node, each task criterion and the default standard. `re@1` can read files but cannot write a file or run a command. It reads no `AGENTS.md` or `CLAUDE.md` of the workspace, because the candidate under review wrote those files.
 7. It submits the assessment. The assessment itself moves the node: the reviewer does not release, except in one case. A `success` with no required external action completes the node. A `success` with a required action, for example a pull request, makes the reviewer request the action through the Intake Service and release. The node then waits in `External.Requested` until the action ends.
 
 A `criterion-not-met` assessment returns the node to `coder@1` as a **rework**, in the same attempt, while the attempt holds fewer reworks than the limit and no requested action. The next `coder@1` execution reads the rationale of that assessment. It revises the tasks whose ids the rationale names, and it judges the other tasks again with the rationale as context. An `undetermined` assessment, or a `criterion-not-met` at the limit, moves the node to `Blocked`.
+
+**A fix-node proposal.** An `undetermined` assessment of an `examine` node can hold up to 10 fix-node proposals. Each proposal names one defect of a direct `implement` dependency in `dependency_id`. A human approval creates an `implement` node with the one task of the proposal and records it in `created_node_id`. The `examine` node then depends on the new node, and the approval unblocks it into the next attempt.
 
 **A chained action.** A project can require two actions in order, for example a pull request and then a second action that follows its merge. When the first action reaches its expected end, the node is claimable again in `External.Requested`. `reviewer@1` claims it, requests the next eligible action and releases. This claim performs no evaluation, because a current passing assessment already stands. Today `reviewer@1` runs the full evaluation again at this claim. A `criterion-not-met` there blocks the node, because the attempt already holds a requested action.
 
@@ -228,7 +235,7 @@ The agent forgets everything at the end of an execution. The next execution read
 
 The start check of `coder@1` runs every task verification again on the head of the node branch. It therefore needs only the durable rows. The caches save agent turns, and their loss repeats no work.
 
-- **Tasks are not scheduled.** The Scheduler grants an objective or an initiative. The worker orders and runs the tasks inside its own execution.
+- **Tasks are not scheduled.** The Scheduler grants a node. The worker orders and runs the tasks of an `implement` node inside its own execution.
 - **Telemetry decides nothing.** The worker writes spans of its phases, tasks, turns and tool calls. No service reads them to move a node. Only the release and the records move a node.
 
 ## Where a worker runs
@@ -255,14 +262,18 @@ To run 3 instances of `coder@1` at the `worker` placement:
 
 An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
 
-| Path                                 | Content                                                                                                                                                                          |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaces/<node_id>/<binding_id>/` | The checkout of one objective. The next execution of the objective on this host reuses it. The instance removes it 7 days after its last use.                                    |
-| `workspaces/<execution_id>/`         | The fresh directory of one evaluation or initiative execution. The instance removes it at the end.                                                                               |
-| `transcripts/<execution_id>.jsonl`   | The agent conversation of one execution, mode `0600`. The instance keeps the newest 50.                                                                                          |
-| `pi/`                                | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here. |
+| Path                               | Content                                                                                                                                                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaces/<node_id>/`            | The workspace of one `implement` node: `checkouts/<binding name>/` for each repository binding and `judged-tasks.json`. The next execution of the node on this host reuses it. The instance removes it 7 days after its last use. |
+| `workspaces/<execution_id>/`       | The fresh directory of one evaluation execution or one `examine` execution. It holds `checkouts/<binding name>/` for each checkout and `evidence/` for the placed evidence. The instance removes it at the end.                   |
+| `transcripts/<execution_id>.jsonl` | The agent conversation of one execution, mode `0600`. The instance keeps the newest 50.                                                                                                                                           |
+| `pi/`                              | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here.                                                  |
 
-The workspace and the transcript are local conveniences, not records. Another host or another slot can take the next execution of the same objective. It then clones the repository and checks out the pushed node branch.
+The agent root is the directory that the agent works from. A node with no repository binding uses the workspace as the agent root. A node with one repository binding uses its checkout as the agent root. A node with two or more repository bindings uses `checkouts/` as the agent root.
+
+The task commit of an `implement` node with two or more repository bindings is the set of the heads of its node branches. Each required external action resolves on its own.
+
+The workspace and the transcript are local conveniences, not records. Another host or another slot can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
 
 The agent tools and the verification commands run with the rights of the worker process. At the `server` placement, those rights are the rights of the server user. A command can read the files of that user and can signal the server process. KanthorD has no sandbox. Run a worker on a host that you trust with the repository and its credentials.
 

@@ -1,6 +1,5 @@
 ---
-kind: task
-parent: todos.md
+node: todos.md
 bindings: []
 verifications:
   - node --test test/todos-isolation.test.js

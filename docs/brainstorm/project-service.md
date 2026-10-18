@@ -39,7 +39,8 @@ The kind determines the configuration that the binding holds, the cardinality th
 A project holds one binding for each repository that it uses.
 It holds any number of bindings of one worker and any number of [storage bindings](project-service.vocabulary.md#storage-binding).
 A storage binding names one S3-compatible bucket for object evidence.
-An initiative or an objective names at most one storage binding for its uploads, and a node without one accepts only inline evidence content.
+A node names zero or more storage bindings as an ordered list for its uploads, and a node without one accepts only inline evidence content.
+A node names every binding that it uses under the [rule table of the bindings of a node](mission-service.vocabulary.md#bindings-of-a-node), and the [Mission Service](mission-service.md#mission-structure-and-nodes) takes no binding from the project.
 A binding references no other binding.
 A project shares a resource with another project.
 A binding belongs to one project, and no project shares a binding.
@@ -57,7 +58,7 @@ A [policy](project-service.vocabulary.md#policy) on a binding configures an exte
 A policy states what its action follows: the passing assessment of the node, or the expected end state of another configured action of the same node.
 The repository strategy is the policy of the repository binding.
 A repository binding holds its connection, which is the address, the platform, the SSH credential reference and the credential reference, and its repository policy, which is the repository strategy and the project prompt.
-A node requires the action of a policy when the node names the binding that holds the policy.
+A node requires the action of a policy when the node is an `implement` node and names the binding that holds the policy.
 An external action states its expected end state on its platform.
 The repository [capabilities](project-service.vocabulary.md#capability) distinguish authenticated operations from local work.
 A repository address is an SSH address.
@@ -94,6 +95,18 @@ The worker that a worker binding names never changes. A project removes the bind
 - The Worker Service validates an entry during the binding write through the [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters).
 - The [agent enablement rules](agent.md#agent-configuration) govern that validation.
 - A project reaches an agent only through its worker binding and worker.
+- A worker binding holds its [traits](project-service.vocabulary.md#trait), a list of unique trait keys. The list is empty by default.
+
+A human writes the traits of a worker binding, and a trait states a fact of the host of its instances.
+A trait key matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes.
+The namespace prefix of a key is a convention, and no rule reads it.
+A trait holds no version, no range and no operator, so a version is part of the key, for example `toolchain.xcode_16`.
+A key that violates the form, or a repeated key, refuses the write with `project.bindings.worker.traits_invalid`.
+The current worker bindings of a project state the trait vocabulary of that project.
+The [Scheduler Service](scheduler-service.md#match) matches the traits of a worker binding against the requires list of each node.
+A binding-set write that adds an unmatched pair of a node and a claimable state refuses the write with `project.bindings.worker.node_unmatched`, and the error names the nodes.
+An unmatched pair that exists before the write refuses no write.
+A human configures the worker bindings of a project before the first import, because a node write also refuses an unmatched pair.
 
 Each worker binding of one worker holds its own configuration, and two bindings of one worker with equal values are valid.
 A binding identity is separate from a worker name.
