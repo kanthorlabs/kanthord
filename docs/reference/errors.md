@@ -77,6 +77,17 @@ The rows after line 1 align with each other. Line 1 takes no part in the alignme
 | `new_key`           | New configuration key of a rename conflict.                                    |
 | `config_version`    | Configuration version that the file holds.                                     |
 | `supported_version` | Configuration version of the binary.                                           |
+| `bind`              | Listener address that the gateway cannot bind.                                 |
+| `port`              | Listener port that the gateway cannot bind.                                    |
+| `version`           | Package version of the worker, or version of a repository tool.                |
+| `server_version`    | Package version that the server publishes.                                     |
+| `minimum_version`   | Lowest repository tool version that the binary accepts.                        |
+| `variables`         | Directory variables of a worker thread that hold no absolute path.             |
+| `tool`              | Repository tool or pi tool that cannot run or install.                         |
+| `target`            | Host target that the pi tool manifest does not hold.                           |
+| `license`           | License file of a pi tool that has no source.                                  |
+| `exit_status`       | Exit status of a tool that exits with an error.                                |
+| `reason`            | Reason that a pi tool cannot install or run.                                   |
 | `details`           | Compact JSON of the `details` of the error body. The row is absent for `null`. |
 
 A read prints `<code>: request failed` and the row `status`. A mutation prints `<code>: request failed` and the rows `status` and `idempotency_key`. `gateway verify`, `worker register` and `worker handover` put the command name before `request failed`.
@@ -104,6 +115,12 @@ A system diagnostic puts its values in rows:
 | `system.database.migration.pending`              | The rows are `path` and `command: kanthord upgrade`.                                                                                                          |
 | `system.database.migration.incompatible_history` | The row is `path`. `system.database.open_failed`, `system.database.initialization_failed` and `system.database.backup_failed` also print the row `path`.      |
 | `system.files.*`                                 | The row is `path`.                                                                                                                                            |
+| `gateway.listener.bind_failed`                   | `gateway: cannot bind the listener address.` The rows are `bind` and `port`.                                                                                  |
+| `worker.version.mismatch`                        | `worker: the package version differs from the server version.` The rows are `version` and `server_version`.                                                   |
+| `worker.thread.directory_invalid`                | `worker: the directory variables must be absolute paths.` The row is `variables`.                                                                             |
+| `repository.connector.tool_missing`              | The row is `tool`. An exit with an error also prints the row `exit_status`.                                                                                   |
+| `repository.connector.tool_version`              | `tool version is below the minimum version`. The rows are `tool`, `version` and `minimum_version`.                                                            |
+| `worker.start.tool_missing`                      | The row is `tool`. The rows `target`, `license`, `reason` and `exit_status` name the failed step when it has a value.                                         |
 
 An operational log record that holds a diagnostic as `reason` also holds its rows as `fields`, an object of row name to value. The record holds no `fields` when the diagnostic has no rows.
 
