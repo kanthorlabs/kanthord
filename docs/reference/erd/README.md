@@ -7,19 +7,19 @@ title: Database schema
 ## Status
 
 These pages are a design of the KanthorD database, not a description of implemented behavior.
-They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-17.
-An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema through a migration.
+They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-18.
+An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema. Before the first tag, the change edits the one migration of the service, and an existing database follows the [reset procedure](../upgrade.md#reset-a-pre-release-database).
 
 ## Views
 
 The schema has four functional views. Their order is the order of delivery.
 
-| View                                             | Scope                                                                                                                    | Tables of the owners                        |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, agent cooldown, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, upload failures, assessments, outcomes and proposals.          | Worker, Scheduler, Mission                  |
-| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                                          | Intake                                      |
-| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                                              | Tracking                                    |
+| View                                             | Scope                                                                                                    | Tables of the owners                        |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
+| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals.           | Worker, Scheduler, Mission                  |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                          | Intake                                      |
+| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                              | Tracking                                    |
 
 A view holds the canonical definition of each of its tables.
 Another view shows that table as a stub: its key only, the color of its owner and a dashed border.
@@ -35,14 +35,14 @@ flowchart TB
         subgraph v1["ERD 1: Environment and planning"]
             c1["Custody: credential"]
             p1["Project: project, binding, binding revision"]
-            a1["Agent: agent enablement, agent cooldown, prompt settings"]
+            a1["Agent: agent enablement, prompt settings"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job"]
         end
         subgraph v2["ERD 2: Execution"]
             w2["Worker: instance"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt, evidence, evidence asset, evidence upload failure, assessment, outcome, proposal"]
+            m2["Mission: attempt, evidence, evidence asset, assessment, outcome, proposal"]
         end
         subgraph v3["ERD 3: External integration"]
             i3["Intake: inbound, inbound event, outbound request"]
@@ -101,7 +101,7 @@ flowchart TB
 
 - `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody and the Agent component share that file, and one file gives a collaboration of two services one transaction.
 - `tracking.db` of the data directory holds every table of ERD 4. It appears with the working tracer.
-- Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody.
+- Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody. Before the first tag, it holds one row of version 1 for each service.
 - Custody owns the unprefixed `credential` table.
 
 ## Owners without a table
@@ -120,7 +120,7 @@ flowchart TB
 - A JSON column holds the canonical JSON of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
 - A boolean is an `INTEGER` 0 or 1.
 - A revision and a version start at 1. The attempt of a node reads 0 before its first attempt opens, and no attempt row exists for 0. An opened attempt starts at 1.
-- An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a peer value that names it resolves to expired.
+- An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a read through a peer value that names it answers `404 tracking.trace.not_found`.
 
 ## Diagram notation
 

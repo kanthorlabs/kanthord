@@ -42,6 +42,8 @@ erDiagram
         text metadata "canonical JSON, platform schema, or null"
         integer created_at "Unix ms"
         integer ended_at "Unix ms, null while live"
+        integer available_at "Unix ms, end of the cooldown of the name, revision 1 only, else null"
+        integer strikes "failures of the name in a row, revision 1 only, default 0"
     }
 
     project_project {
@@ -72,17 +74,6 @@ erDiagram
         text fallback_configurations "JSON list of agent_provider, model_identifier, reasoning_effort, default []"
         integer created_at "Unix ms"
         integer removed_at "Unix ms, set on a tombstone"
-    }
-
-    agent_cooldown {
-        text id PK "agent_cooldown_ + ULID"
-        text credential "credential name, unique with model_identifier"
-        text model_identifier "unique with credential"
-        text code "rate_limited | quota_exhausted | unavailable"
-        integer strikes "positive, starts at 1"
-        integer started_at "Unix ms, latest advance"
-        integer until_at "Unix ms, end of the cooldown"
-        text execution_id "execution of the latest advance"
     }
 
     agent_prompt {
@@ -142,14 +133,13 @@ erDiagram
         text project_id
         text node_id UK "node"
         integer priority "copy of the Mission priority"
-        integer not_before "end of the stop backoff, or null"
+        integer available_at "end of the stop backoff, or null"
     }
 
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
     project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
     agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
-    agent_cooldown }o..o| credential : "ref by name, no FK"
 
     project_project ||..|| mission_mission : "ref, no FK, createMission"
     mission_mission ||..o{ mission_node : "FK mission_id"
@@ -170,7 +160,7 @@ erDiagram
 
     class credential custody
     class project_project,project_binding project
-    class agent_enablement,agent_prompt,agent_cooldown agent
+    class agent_enablement,agent_prompt agent
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job scheduler
 ```
@@ -186,7 +176,6 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `credential`            | Custody           | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table).     |
 | `project_project`       | Project Service   | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
 | `project_binding`       | Project Service   | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
-| `agent_cooldown`        | Agent component   | Ruled: [the agent cooldown](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#the-agent-cooldown).                                                                                                                                                  |
 | `agent_prompt`          | Agent component   | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings).                                                                                                                                                        |
 | `agent_enablement`      | Agent component   | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
 | `mission_mission`       | Mission Service   | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas).                                                                                                                     |
@@ -216,6 +205,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
 - The `base_url` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
 - The additional authenticated data of the envelope is the row identity and the platform.
+- Revision 1 of a name holds the cooldown of the name in `available_at` and `strikes`. A rotation inserts the next revision with no hold and copies none. The Agent component reads and writes the hold through the Custody port `CredentialHolds`.
 - An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision and keeps the rows. A name with no live revision is archived, and an archive is final.
 - A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
 
@@ -257,14 +247,13 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The `config` JSON of a repository binding holds `working_layer` with the booleans `agents_md`, `agents_local_md`, `claude_md`, `claude_local_md` and `project_prompt`. A switch change inserts the next binding revision.
 - An enablement change validates every dependent worker binding through `entriesOfAgent` in the transaction of its commit, and a change that invalidates one is refused.
 - A disablement is always permitted, and it refuses every later resolution.
+- The Agent component owns no cooldown table. The cooldown of a credential is the hold on revision 1 of its name, and the hold covers every model of the credential.
+- `available_at` of a hold is the clock plus `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. A hold is live while `available_at` is later than the clock.
+- A hold stays after its `available_at`, with its `strikes`. A release with no `provider_failed` stop and an operator clear set `available_at` to null and `strikes` to 0.
+- The release transaction and the claim transaction call the Agent component. It writes the hold through the port.
 - A resolution reads the latest row of the enablement. A latest row with `state` `disabled` or with `removed_at` set refuses the resolution.
 - The credential dependents of an enablement are the items of `agent_providers` of its latest row, unless that row is a tombstone. An older row is no dependent, because no resolution reads it.
 - An `agent_provider` of a complete entry names an item of `agent_providers` of the latest row of the enablement of its own agent. A provider name is unique only inside one enablement, so the lookup reads the latest row of that `agent_name`.
-- `agent_cooldown` has a unique index on `(credential, model_identifier)`, and no other index. `credential` holds a credential name, and `execution_id` holds an execution identity. SQLite enforces neither reference.
-- A row holds the latest advance of its key. A repeated advance sets `code`, `started_at`, `until_at` and `execution_id`, and adds 1 to `strikes`.
-- `until_at` is `started_at` plus `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. A cooldown is live while `until_at` is later than the clock.
-- A row stays after its `until_at`, with its `strikes`. A release with no `provider_failed` stop and an operator clear delete it.
-- The Agent component writes this table. The release transaction and the claim transaction call it.
 - A removal of an enablement is refused while a worker binding of a worker that uses the agent exists. A write that omits a provider of the latest row is refused while an entry of a dependent worker binding names it. The write checks the new row, so a replacement that moves the default configuration to another provider and omits the old provider is valid.
 
 ### Mission Service
@@ -320,8 +309,6 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `project_binding.config`           | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                               |
 | `project_binding.config`           | `agent_enablement.agent_name`      | Reference through the catalog agents of the worker, no FK.                                                                                      |
 | `project_binding.config`           | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK.                                                                                           |
-| `agent_cooldown.credential`        | `credential.name`                  | Reference by name, no FK.                                                                                                                       |
-| `agent_cooldown.execution_id`      | `scheduler_execution.id`           | Reference, no FK. See [ERD 2](02-execution.md).                                                                                                 |
 | `agent_enablement.agent_providers` | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                               |
 | `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                               |
 | `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                               |
