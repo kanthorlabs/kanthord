@@ -110,21 +110,21 @@ API failures use the shared [error envelope](../errors.md#api-failures). The ser
 
 The CLI checks some input before it sends the request. `<command>` is the command name.
 
-| CLI code                                          | Commands                | Meaning                                                                         |
-| ------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------- |
-| `cli.pagination.limit_invalid`                    | list                    | `--limit` is not a positive safe integer.                                       |
-| `cli.pagination.limit_out_of_range`               | list                    | `--limit` is above 1000.                                                        |
-| `cli.agent.enablement.<command>.invalid_revision` | enable, disable, remove | `--expected-revision` is not a positive safe integer.                           |
-| `cli.agent.enablement.<command>.token_required`   | All                     | No option, environment variable or client file supplies a token.                |
-| `cli.idempotency_key.invalid`                     | Mutations               | `--idempotency-key` is not a canonical ULID.                                    |
-| `cli.file.invalid_path`                           | put                     | `--file` is `-`; the command does not read stdin.                               |
-| `cli.file.not_found`, `cli.file.not_regular`      | put                     | The `--file` path does not exist, or is not a regular file.                     |
-| `cli.file.encoding_invalid`, `cli.file.not_json`  | put                     | The file is not UTF-8, or is not one JSON document.                             |
-| `cli.file.duplicate_key`, `cli.file.not_object`   | put                     | The JSON repeats an object key, or is not an object.                            |
-| `cli.file.schema_invalid`                         | put                     | The object breaks the body schema; the message lists the issue paths and codes. |
-| `cli.agent.enablement.<command>.indeterminate`    | All                     | A transport failure, timeout or malformed response.                             |
+| CLI code                                          | Commands                | Meaning                                                                              |
+| ------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| `cli.pagination.limit_invalid`                    | list                    | `--limit` is not a positive safe integer.                                            |
+| `cli.pagination.limit_out_of_range`               | list                    | `--limit` is above 1000.                                                             |
+| `cli.agent.enablement.<command>.invalid_revision` | enable, disable, remove | `--expected-revision` is not a positive safe integer.                                |
+| `cli.agent.enablement.<command>.token_required`   | All                     | No option, environment variable or client file supplies a token.                     |
+| `cli.idempotency_key.invalid`                     | Mutations               | `--idempotency-key` is not a canonical ULID.                                         |
+| `cli.file.invalid_path`                           | put                     | `--file` is `-`; the command does not read stdin.                                    |
+| `cli.file.not_found`, `cli.file.not_regular`      | put                     | The `--file` path does not exist, or is not a regular file.                          |
+| `cli.file.encoding_invalid`, `cli.file.not_json`  | put                     | The file is not UTF-8, or is not one JSON document.                                  |
+| `cli.file.duplicate_key`, `cli.file.not_object`   | put                     | The JSON repeats an object key, or is not an object.                                 |
+| `cli.file.schema_invalid`                         | put                     | The object breaks the body schema; the `details` row lists each issue path and code. |
+| `cli.agent.enablement.<command>.indeterminate`    | All                     | A transport failure, timeout or malformed response.                                  |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A mutation prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead. An indeterminate mutation prints the retry key. Retry with the same key and the same input. The server replays the recorded answer, a failure included, for the same caller and key within `gateway.idempotency_ttl` (default 86400 seconds).
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A mutation prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. An indeterminate mutation prints the retry key. Retry with the same key and the same input. The server replays the recorded answer, a failure included, for the same caller and key within `gateway.idempotency_ttl` (default 86400 seconds).
 
 ## API shape
 

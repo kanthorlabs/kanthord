@@ -170,7 +170,7 @@ The CLI checks some input before it sends a request. Each local failure exits `1
 | `cli.pagination.limit_out_of_range`                                     | All `list` commands        | `--limit` is greater than 1000.                                                                                                                                                                                                                                                                           |
 | `cli.option.duplicate`                                                  | All `list` commands        | An option occurs more than once.                                                                                                                                                                                                                                                                          |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.mission.execution.<operation>.indeterminate`, with `<operation>` as above. These reads change nothing, so run the command again.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.mission.execution.<operation>.indeterminate`, with `<operation>` as above. These reads change nothing, so run the command again.
 
 ## API shape
 

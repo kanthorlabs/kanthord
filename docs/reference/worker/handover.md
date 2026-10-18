@@ -63,7 +63,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `404 credential.credential.not_found`           | The credential has no live revision to pin.                                                                                                          |
 | `400 credential.platform.mismatch`              | The credential platform does not match the agent provider.                                                                                           |
 
-A declared failure makes the CLI exit `1` and write `<code>: worker handover: request failed (HTTP <status>); idempotency key <key>.` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.worker.handover.indeterminate`. Retry an indeterminate result with a new `--idempotency-key`, because a repeated key always conflicts.
+A declared failure makes the CLI exit `1` and write `<code>: worker handover: request failed` and the rows `status: <status>` and `idempotency_key: <key>` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.worker.handover.indeterminate` and the message `worker handover: the result is unknown; retry with a new idempotency key`. It prints no `idempotency_key` row. Retry an indeterminate result with a new `--idempotency-key`, because a repeated key always conflicts.
 
 ## API shape
 

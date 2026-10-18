@@ -194,7 +194,7 @@ The CLI checks some input before it sends a request. Each local failure exits `1
 
 The CLI does not check `--attempt` without `--node`; the API rejects it with `400 gateway.request.validation_failed`.
 
-A declared API failure makes the CLI exit `1`. The diagnostic starts with the error code of the API; for `release` it also includes the retry key. A transport failure, timeout or malformed response exits `1` with `cli.scheduler.execution.get.indeterminate`, `cli.scheduler.execution.list.indeterminate` or `cli.scheduler.execution.release.indeterminate`. For a read, run the command again. For a release, the diagnostic tells you to run `kanthord scheduler execution get <execution-id>` before any retry. A retry after a committed release fails the execution proof, so read the execution first.
+A declared API failure makes the CLI exit `1`. The diagnostic starts with the error code of the API and holds the row `status`; for `release` it also holds the row `idempotency_key`. A transport failure, timeout or malformed response exits `1` with `cli.scheduler.execution.get.indeterminate`, `cli.scheduler.execution.list.indeterminate` or `cli.scheduler.execution.release.indeterminate`. For a read, run the command again. For a release, the diagnostic is `<code>: the result is unknown; read the execution before any retry`. Its row `command: kanthord scheduler execution get <execution-id>` names the command to run before any retry. A retry after a committed release fails the execution proof, so read the execution first.
 
 ## API shape
 

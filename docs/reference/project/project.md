@@ -138,7 +138,7 @@ The CLI checks its input before it sends a request. Each local failure exits `1`
 | `cli.option.duplicate`                  | All                                   | An option occurs more than once.                  |
 | `cli.project.<command>.token_required`  | All                                   | No nonblank token resolves.                       |
 
-A declared server failure exits `1`. The CLI writes the server code, then the error object as JSON. For `create`, `rename`, `pause` and `resume`, the JSON also holds `idempotency_key`. A transport failure, a timeout or a malformed response exits `1` with `cli.project.<command>.indeterminate`. For `create`, `rename`, `pause` and `resume`, the message gives the key to retry with. There is no automatic retry.
+A declared server failure exits `1`. The CLI writes `<code>: request failed` and the row `status`. For `create`, `rename`, `pause` and `resume`, it also writes the row `idempotency_key`. A transport failure, a timeout or a malformed response exits `1` with `cli.project.<command>.indeterminate`. For `create`, `rename`, `pause` and `resume`, the message is `the result is unknown; retry with the same idempotency key`, and the row `idempotency_key` holds the key. For a read, the message is `the result is unknown; retry the command`. There is no automatic retry.
 
 ## API shape
 

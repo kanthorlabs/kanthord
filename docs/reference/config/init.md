@@ -11,12 +11,12 @@ Create a validated server configuration with a fresh 32-byte base64 master key a
 Success prints a confirmation to stdout and exits `0`:
 
 ```text
-Created <path>
+created: <path>
 ```
 
 | Output / property  | Purpose                                                                                                                                                          |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Created <path>`   | Confirms creation and identifies the resolved configuration file path.                                                                                           |
+| `created: <path>`  | Confirms creation and identifies the resolved configuration file path.                                                                                           |
 | Configuration file | Contains the generated `master_key` and defaults; see [configuration properties](show.md#expected-response). Unlike `config show`, the stored key is not masked. |
 | Exit code `0`      | Configuration was created successfully.                                                                                                                          |
 

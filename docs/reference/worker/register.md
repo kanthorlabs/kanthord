@@ -56,7 +56,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `409 gateway.registration.stale`          | The recorded registration has ended; replay does not recreate the instance.                                                                                                                          |
 | `409 worker.instance.slot_unavailable`    | The binding is absent or removed, or every instance slot of the binding is in use.                                                                                                                   |
 
-A declared failure makes the CLI exit `1` and report the originating error code, HTTP status, and retry key without credentials. A transport failure, timeout, or malformed response exits `1` with an indeterminate-result diagnostic and the retry key. Reuse the same key and machine token after an indeterminate result; there is no automatic retry.
+A declared failure makes the CLI exit `1` and print `<code>: worker register: request failed` and the rows `status` and `idempotency_key`, without credentials. A transport failure, timeout, or malformed response exits `1` with `cli.worker.register.indeterminate`, the message `worker register: the result is unknown; retry with the same idempotency key` and the row `idempotency_key`. Reuse the same key and machine token after an indeterminate result; there is no automatic retry.
 
 ## API shape
 

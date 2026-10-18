@@ -50,15 +50,15 @@ components:
 
 ### CLI output
 
-Success prints the absolute root YAML path and exits `0`:
+Success prints the row `openapi: <absolute root YAML path>` and exits `0`:
 
 ```text
-<package-directory>/static/openapi.yaml
+openapi: <package-directory>/static/openapi.yaml
 ```
 
 | Output                                  | Purpose                                                         |
 | --------------------------------------- | --------------------------------------------------------------- |
-| stdout path                             | Location of the generated root document, `static/openapi.yaml`. |
+| `openapi` row                           | Location of the generated root document, `static/openapi.yaml`. |
 | `static/openapi/<service>/*.yaml`       | Generated service-scoped path-item files.                       |
 | `static/openapi/shared/components.yaml` | Generated shared components.                                    |
 

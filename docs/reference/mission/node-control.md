@@ -197,7 +197,7 @@ Command-specific failures:
 
 `node check` checks the mission version again before it records each result. A stale version then fails the call with `409 mission.version.conflict`, and the results that committed before stay committed. The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 
-The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A declared remote failure prints `<code>: request failed (HTTP <status>); idempotency key <key>.`
+The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A declared remote failure prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>`.
 
 | CLI code                                     | Meaning                                                                                                                                                  |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
