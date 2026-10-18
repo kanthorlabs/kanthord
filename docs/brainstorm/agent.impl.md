@@ -179,7 +179,7 @@ The Agent component owns these keys of the section `agent`.
 - The claim stores one pin for each selection in `scheduler_execution.agent_selections`: `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the selection read. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
 - The component rebuilds a selection from a pin with the pinned worker binding row and the pinned enablement revision. A later hold, enablement revision or worker binding revision changes no pin.
 - The claim logs `agent.fallback.selected` for each selection. Today the Agent component writes no such log.
-- The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection.
+- The span of a native model inference call carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level` of the pinned selection. Today no span carries them.
 - Tests cover the selection of the first entry with a free credential, the return of an earlier entry after its hold expires, the skip of every model of a cooling credential and the no-work answer.
 - Tests cover the rebuild of a selection from a pin after a later enablement revision.
 

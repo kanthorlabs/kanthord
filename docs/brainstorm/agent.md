@@ -117,7 +117,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - When the credential of every entry of one agent is cooling, the claim answers no work.
 - That answer creates no block, no pause and no failed execution.
 - The claim pins each selection in the execution record as the agent name, the enablement revision and the chain position. The component rebuilds the [agent selection](agent.vocabulary.md#agent-selection) from the pin, the pinned worker binding revision and the pinned enablement revision.
-- The model inference authorization of custody and the execution setup of the Worker Service read the rebuilt selection, and never the head.
+- The model inference authorization of custody and the execution setup of the Worker Service read the rebuilt selection, and never the head. Today they resolve the credential of the pinned agent provider through the newest enablement revision, so an enablement edit of that credential reaches a live execution.
 - A switch of the selection happens only at the next execution.
 - The pin of a credential revision stays unchanged.
 
