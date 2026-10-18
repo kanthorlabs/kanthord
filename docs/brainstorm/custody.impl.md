@@ -151,6 +151,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The columns `available_at` and `strikes` of the row of revision 1 hold the cooldown of the name. The hold is a runtime value of the name, as an OAuth refresh is a runtime value of a revision.
 - `available_at` is the Unix millisecond end of the hold, null while no hold exists. `strikes` is `NOT NULL` with the default 0.
 - Revision 1 exists for the whole life of a name, so the hold has one home. A rotation inserts the next revision with no hold and copies none. An archive keeps the rows and the hold.
+- A drain of revision 1 sets its `ended_at` and leaves the hold unchanged. `holdOf`, `hold`, `release` and `listHolds` ignore `ended_at`, so the hold stays readable and writable on an ended revision 1.
 - Custody offers the Agent component the port `CredentialHolds`. Custody writes no hold by itself.
   - `holdOf(tx, name)` answers `{ available_at, strikes }`, or null when no row exists or `available_at` is null.
   - `hold(tx, name, availableAt, strikes)` sets both columns of the row of revision 1 and asserts that exactly one row changes.
