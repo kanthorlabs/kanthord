@@ -250,7 +250,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The Agent component owns no cooldown table. The cooldown of a credential is the hold on revision 1 of its name, and the hold covers every model of the credential.
 - `available_at` of a hold is the clock plus `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. A hold is live while `available_at` is later than the clock.
 - A hold stays after its `available_at`, with its `strikes`. A release with no `provider_failed` stop and an operator clear set `available_at` to null and `strikes` to 0.
-- The release transaction and the claim transaction call the Agent component. It writes the hold through the port.
+- The release transaction writes the hold through the port, and the claim transaction reads it. An operator clear releases it.
 - A resolution reads the latest row of the enablement. A latest row with `state` `disabled` or with `removed_at` set refuses the resolution.
 - The credential dependents of an enablement are the items of `agent_providers` of its latest row, unless that row is a tombstone. An older row is no dependent, because no resolution reads it.
 - An `agent_provider` of a complete entry names an item of `agent_providers` of the latest row of the enablement of its own agent. A provider name is unique only inside one enablement, so the lookup reads the latest row of that `agent_name`.

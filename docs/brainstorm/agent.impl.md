@@ -176,7 +176,7 @@ The Agent component owns these keys of the section `agent`.
 - The component builds the chain of each agent and reads the hold of the credential of each chain entry.
 - It returns the first chain entry whose credential is not cooling.
 - A credential is cooling when its `available_at` is later than the clock reading. Every model of a cooling credential is skipped.
-- When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold.
+- When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold. No reader uses it today. A parked work pull waits for its wake or for the earliest job `available_at`, and not for the end of a hold.
 - The claim stores one pin for each selection in `scheduler_execution.agent_selections`: `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the selection read. The [execution record](scheduler-service.impl.md#operation-contracts) defines the column.
 - The component rebuilds a selection from a pin with the pinned worker binding row and the pinned enablement revision. A later hold, enablement revision or worker binding revision changes no pin.
 - The claim logs `agent.fallback.selected` for each selection. Today the Agent component writes no such log.

@@ -152,8 +152,8 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `available_at` is the Unix millisecond end of the hold, null while no hold exists. `strikes` is `NOT NULL` with the default 0.
 - Revision 1 exists for the whole life of a name, so the hold has one home. A rotation inserts the next revision with no hold and copies none. An archive keeps the rows and the hold.
 - Custody offers the Agent component the port `CredentialHolds`. Custody writes no hold by itself.
-  - `holdOf(tx, name)` answers `{ available_at, strikes }`, or null when `available_at` is null.
-  - `hold(tx, name, availableAt, strikes)` sets both columns of the row of revision 1.
+  - `holdOf(tx, name)` answers `{ available_at, strikes }`, or null when no row exists or `available_at` is null.
+  - `hold(tx, name, availableAt, strikes)` sets both columns of the row of revision 1 and asserts that exactly one row changes.
   - `release(tx, name)` sets `available_at` to null and `strikes` to 0 when `strikes` is above 0, and it answers whether it changed the row.
   - `listHolds(tx)` answers `{ credential, strikes, available_at }` for each name with `strikes` above 0, ordered by name.
 - The table also holds the credentials of the Repository and Storage components. Only the agent chain reads a hold, and `credential.get` and `credential.list` answer none.
