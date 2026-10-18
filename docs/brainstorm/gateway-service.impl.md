@@ -206,6 +206,7 @@ From a client secret, no party derives `master_key`, the signing key, the Custod
 
 One `zod` schema at 4.4.3 covers the path parameters, the query and the body of each route.
 A `validate()` middleware parses each part before the handler runs and returns 400 with the issue list.
+An unrecognized key gives one issue with the key at the end of `path`.
 A route with a body requires the `application/json` content type.
 
 ## Delivery bytes and body limits
