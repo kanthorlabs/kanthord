@@ -400,6 +400,8 @@ The file path is local input, not an evidence address.
    A human delete of the failed asset, or of its evidence, removes that mark, and its binding is grantable again.
    The server then writes one Mission span through the Tracking Service. The operation is `mission.evidence.asset.complete`, the producer is `mission`, the status is `Error`, and the parent is the root span of the execution.
    The attributes are `kanthord.evidence_asset.id`, `kanthord.storage_binding.id` and `error.type`, which holds the code of the check.
+   The Tracking Service adds `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id` and `kanthord.attempt`, as [the server spans](tracking-service.impl.md#server-spans) state.
+   An unknown execution writes no span.
    A refused or failed span write drops the span and leaves `failed_at` in place. No service reads the span to decide.
    The server sets `published_at` of the asset only after those checks pass.
    The asset holds the object location, version when the store returns one, size, media type and optional SHA-256.
