@@ -169,8 +169,8 @@ The refusal compares the effective placements, where an absent field reads as `w
 - Worker binding validation calls [Agent configuration validation](agent.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
 - The `instance_count` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
-- The `traits` field is a list of unique strings, and an absent field reads as `[]`. Each item matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. A nonlist value, a repeated item or an item that violates the form refuses the write with 400 `project.bindings.worker.traits_invalid` and `details: { binding, trait }`.
-- Every worker binding holds `traits`, the binding of an external harness included.
+- The `tags` field is a list of unique strings, and an absent field reads as `[]`. Each item matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. A nonlist value, a repeated item or an item that violates the form refuses the write with 400 `project.bindings.worker.tags_invalid` and `details: { binding, tag }`.
+- Every worker binding holds `tags`, the binding of an external harness included.
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
 - A `project_prompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
@@ -217,15 +217,15 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 ## Worker binding configuration
 
-- A worker binding holds `instance_count`, optional `placement`, optional `traits`, optional `resource_budget` and optional per-agent entries.
+- A worker binding holds `instance_count`, optional `placement`, optional `tags`, optional `resource_budget` and optional per-agent entries.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
 - It returns entries of every worker binding whose worker references that agent, including bindings with no explicit entry.
 - The write calls `validateEntry(tx, workerName, entry)` of the Worker Service for every agent of the worker.
 - The [co-location contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) holds both calls inside the write transaction.
-- The Project Service offers `workerBindingsOf(tx, projectId)` to the Scheduler Service through its `contract.ts`. It answers `{ binding_id, worker_name, traits }` for each current worker binding that is no tombstone. `workerBindingOf` answers `traits` with the pinned row.
-- A change of `traits` creates the next revision of the binding. A live execution keeps the traits of the row that its claim pins.
+- The Project Service offers `workerBindingsOf(tx, projectId)` to the Scheduler Service through its `contract.ts`. It answers `{ binding_id, worker_name, tags }` for each current worker binding that is no tombstone. `workerBindingOf` answers `tags` with the pinned row.
+- A change of `tags` creates the next revision of the binding. A live execution keeps the tags of the row that its claim pins.
 
 ## The credential dependents of a binding
 
@@ -328,8 +328,8 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The header holds `Pause` for an active project and `Resume` for a paused project. Each calls its route with no confirmation dialog and reloads the project.
 - A list row of a paused project shows the badge `Paused`.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
-- The form of a worker binding holds a `Traits` field with one trait key per line. The row of a worker binding shows one badge for each trait.
-- The "no taker" view of the dashboard applies the match of [The match](scheduler-service.impl.md#the-match): the work, the traits and the declared node states.
+- The form of a worker binding holds a `Tags` field with one tag per line. The row of a worker binding shows one badge for each tag.
+- The "no taker" view of the dashboard applies the match of [The match](scheduler-service.impl.md#the-match): the intent, the tags and the declared node states.
 - The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Repository instructions` holds the instruction files and the project prompt.
 - `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`.
 - While the read runs, the section shows a spinner with `Reading the instruction files from <base branch>.` and a line that names the four files and the binding.
@@ -371,7 +371,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers an SSH alias that resolves to `ssh.github.com`, an alias that resolves to a host outside the GitHub SSH host set, an alias that resolves to `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The alias address and the `github.com` address of one repository derive the same identity.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
-- Tests accept `traits` at 64 bytes and an absent field as `[]`. They refuse a longer key, an upper-case key, an empty segment, a repeated key and a nonlist value with `project.bindings.worker.traits_invalid`.
+- Tests accept `tags` at 64 bytes and an absent field as `[]`. They refuse a longer key, an upper-case key, an empty segment, a repeated key and a nonlist value with `project.bindings.worker.tags_invalid`.
 - Tests refuse a binding-set write that adds an unmatched pair with `project.bindings.worker.node_unmatched` and the node identities. They accept a write that keeps an earlier unmatched pair and adds none.
 - A test covers the project prompt bound in UTF-8 bytes and its error code.
 - A test covers both GitHub actions, their capabilities and their implied expected end states. It refuses more than one action.

@@ -23,13 +23,13 @@ The import set has one of two formats:
 
 ### Plan files
 
-A plan file is a node file or a task file. It holds exactly one of `work` and `node`.
+A plan file is a node file or a task file. It holds exactly one of `intent` and `node`.
 
-- A node file holds `work`: `implement` or `examine`. It takes the optional `id` (`node_<ulid>`), `depends_on`, `requires`, `bindings` and `verifications`.
-- A task file holds `node`: the plan file name of a node file of the import set with `work: implement`. It takes the optional `id` (`task_<ulid>`), `bindings: []` and `verifications`.
-- A task file refuses `depends_on`, `requires` and `work`. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
+- A node file holds `intent`: `implement` or `examine`. It takes the optional `id` (`node_<ulid>`), `depends_on`, `tags`, `bindings` and `verifications`.
+- A task file holds `node`: the plan file name of a node file of the import set with `intent: implement`. It takes the optional `id` (`task_<ulid>`), `bindings: []` and `verifications`.
+- A task file refuses `depends_on`, `tags` and `intent`. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
 - After the front matter, one H1 supplies `name`, one `## Requirement` section supplies `requirement`, and one `## Criterion` section supplies `criterion`.
-- An absent `requires` reads `[]`.
+- An absent `tags` reads `[]`.
 
 An `implement` node with no task file is its own single work unit. An `implement` node with one or more task files covers its verifications with its tasks. Each verification of such a node equals a verification of one of its tasks in the import set. Another verification fails with `mission.import.verification_uncovered`.
 
@@ -37,9 +37,9 @@ An `implement` node with no task file is its own single work unit. An `implement
 
 A node names every binding that it uses. No node takes a binding from the project. The service resolves each binding name at write time and stores the resolved binding revision. A later change of the project moves no stored binding of a node. A node update or a [rebind](node.md#node-rebind) changes the stored bindings explicitly.
 
-The work of a node sets the count of each binding kind. A count outside the rule refuses the write with `mission.node.bindings_invalid`.
+The intent of a node sets the count of each binding kind. A count outside the rule refuses the write with `mission.node.bindings_invalid`.
 
-| Work        | Repository | Storage             | Worker |
+| Intent      | Repository | Storage             | Worker |
 | ----------- | ---------- | ------------------- | ------ |
 | `implement` | 1 or more  | 0 or more, in order | 0      |
 | `examine`   | 0 or more  | 0 or more, in order | 0      |
@@ -63,7 +63,7 @@ These additional rules apply:
 - No terminal node (`Completed` or `Discarded`) changes. An entry that keeps a terminal node unchanged is a no-op and is allowed.
 - A change of only `depends_on` requires a nonterminal node, not the import condition. The dependency rules of [dependency](dependency.md#function-description) apply.
 - A new dependency of a kept node requires no live claim on that node. Only apply checks this rule.
-- An import that adds an unmatched pair of a node and a claimable state fails with `mission.node.requires_unmatched`. The preview lists one violation for each node file with an added pair.
+- An import that adds an unmatched pair of a node and a claimable state fails with `mission.node.tags_unmatched`. The preview lists one violation for each node file with an added pair.
 
 One failed check fails the whole import. A changed `depends_on` list counts as an update even if the content is unchanged. An apply that changes nothing keeps the mission version. An apply that changes the plan increases the mission version by one.
 
@@ -108,9 +108,9 @@ The API returns HTTP `200` with the preview. A plan violation does not fail the 
 | `no_ops`                   | array of node IDs       | Kept nodes without a change.                                                                           |
 | `violations`               | array                   | `{ code, message, filename, node_id, details }` for each failed check. Empty when the import is valid. |
 
-The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.verification_uncovered`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing`, `mission.node.bindings_invalid`, `mission.node.state_conflict` and `mission.node.requires_unmatched`.
+The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.verification_uncovered`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing`, `mission.node.bindings_invalid`, `mission.node.state_conflict` and `mission.node.tags_unmatched`.
 
-The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there. When the three stages pass, the preview runs the write steps of the apply and rolls them back. It then lists one `mission.node.requires_unmatched` violation for each node file with an added unmatched pair. That violation holds `details.claims`, and `node_id` is `null` for a created node, also in each claim.
+The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there. When the three stages pass, the preview runs the write steps of the apply and rolls them back. It then lists one `mission.node.tags_unmatched` violation for each node file with an added unmatched pair. That violation holds `details.claims`, and `node_id` is `null` for a created node, also in each claim.
 
 ### import apply
 
@@ -169,7 +169,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `409 mission.version.conflict`               | Both      | `mission_version` is stale; `details.current` holds the current version.                                                                                                                                       |
 | `400 mission.node.content_invalid`           | Both      | `reason` is blank or exceeds the text limit.                                                                                                                                                                   |
 | `400` or `409` with a violation code         | Apply     | The first violation of the preview. `409` for `mission.import.condition_failed`, `mission.import.terminal_change` and `mission.node.state_conflict`, otherwise `400`. `details` adds `filename` and `node_id`. |
-| `409 mission.node.requires_unmatched`        | Apply     | The import adds an unmatched pair; `details.claims` lists each pair as `{ node_id, revision, claim }`.                                                                                                         |
+| `409 mission.node.tags_unmatched`            | Apply     | The import adds an unmatched pair; `details.claims` lists each pair as `{ node_id, revision, claim }`.                                                                                                         |
 | `409 mission.node.filename_conflict`         | Apply     | Another current node or task of the mission uses the file name; `details.filename` names it.                                                                                                                   |
 | `409 mission.import.retirement_mismatch`     | Apply     | `preview_digest` or `confirmed_retirements` does not match the current preview.                                                                                                                                |
 | `409 mission.node.claim_live`                | Apply     | A new dependency names a dependent with a live claim.                                                                                                                                                          |
@@ -235,17 +235,17 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `preview_digest`        | 64 lower-case hex chars          | Apply only | Digest from the preview.                                                               |
 | `confirmed_retirements` | array of `node_<ulid>`           | Apply only | Exactly the `retirements` set of the preview.                                          |
 
-| Entry field                        | Type                           | Required   | Purpose                                                                                         |
-| ---------------------------------- | ------------------------------ | ---------- | ----------------------------------------------------------------------------------------------- |
-| `filename`                         | string                         | Yes        | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                       |
-| `work`                             | `implement` or `examine`       | Node entry | Work of the node. A task entry forbids it.                                                      |
-| `node`                             | plan file name                 | Task entry | The `implement` node entry of the task. A node entry forbids it.                                |
-| `name`, `requirement`, `criterion` | nonblank string                | Yes        | Node content.                                                                                   |
-| `verifications`                    | array of nonblank strings      | Yes        | At least one verification.                                                                      |
-| `bindings`                         | array of binding names         | Yes        | Binding names; see [Bindings of a node](#bindings-of-a-node). A task entry holds `[]`.          |
-| `id`                               | `node_<ulid>` or `task_<ulid>` | No         | Current node or task to keep.                                                                   |
-| `requires`                         | array of trait keys            | No         | Traits that a worker binding needs to claim the node; `[]` by default. A task entry forbids it. |
-| `depends_on`                       | array of plan file names       | No         | Dependency targets. A task entry forbids it.                                                    |
+| Entry field                        | Type                           | Required   | Purpose                                                                                       |
+| ---------------------------------- | ------------------------------ | ---------- | --------------------------------------------------------------------------------------------- |
+| `filename`                         | string                         | Yes        | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                     |
+| `intent`                           | `implement` or `examine`       | Node entry | Intent of the node. A task entry forbids it.                                                  |
+| `node`                             | plan file name                 | Task entry | The `implement` node entry of the task. A node entry forbids it.                              |
+| `name`, `requirement`, `criterion` | nonblank string                | Yes        | Node content.                                                                                 |
+| `verifications`                    | array of nonblank strings      | Yes        | At least one verification.                                                                    |
+| `bindings`                         | array of binding names         | Yes        | Binding names; see [Bindings of a node](#bindings-of-a-node). A task entry holds `[]`.        |
+| `id`                               | `node_<ulid>` or `task_<ulid>` | No         | Current node or task to keep.                                                                 |
+| `tags`                             | array of tags                  | No         | Tags that a worker binding needs to claim the node; `[]` by default. A task entry forbids it. |
+| `depends_on`                       | array of plan file names       | No         | Dependency targets. A task entry forbids it.                                                  |
 
 The body accepts no unknown field.
 

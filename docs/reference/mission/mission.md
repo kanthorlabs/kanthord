@@ -6,7 +6,7 @@
 
 One project has exactly one mission. The Project service creates the mission with the project, empty and at mission version `1`. No operation creates or deletes a mission.
 
-A mission is a graph of nodes and dependency edges. Each node holds a `work`: `implement` or `examine`. A task is content of an `implement` node. Dependency is the only edge kind.
+A mission is a graph of nodes and dependency edges. Each node holds an `intent`: `implement` or `examine`. A task is content of an `implement` node. Dependency is the only edge kind.
 
 The mission version increases by one on each accepted plan write. Plan writes include a node create, a content change, a retirement, a rebind and a dependency edit. A write that changes nothing keeps the version. Plan writes require the current version as `expected_mission_version`.
 
@@ -18,9 +18,9 @@ Each Markdown plan file is a node file or a task file. It has a YAML front matte
 ```markdown
 ---
 id: node_01M4C5J3SAMS4Z4KZD8DQ9GFTB
-work: implement
+intent: implement
 depends_on: []
-requires: []
+tags: []
 bindings:
   - main-repository
 verifications:
@@ -60,7 +60,7 @@ The login page shows a form with a user name and a password field.
 The form submits the user name and the password.
 ```
 
-The front matter of a node file holds `id`, `work`, `depends_on`, `requires`, `bindings` and `verifications`. The front matter of a task file holds `id`, `node`, `bindings` and `verifications`. `node` and `depends_on` name plan files, and `bindings` holds binding names. A node file names every binding of the node under [bindings of a node](import.md#bindings-of-a-node). A task file holds `bindings: []`. The export writes `requires` on every node file, also `requires: []`. The [import](import.md#plan-files) page states the complete grammar.
+The front matter of a node file holds `id`, `intent`, `depends_on`, `tags`, `bindings` and `verifications`. The front matter of a task file holds `id`, `node`, `bindings` and `verifications`. `node` and `depends_on` name plan files, and `bindings` holds binding names. A node file names every binding of the node under [bindings of a node](import.md#bindings-of-a-node). A task file holds `bindings: []`. The export writes `tags` on every node file, also `tags: []`. The [import](import.md#plan-files) page states the complete grammar.
 
 **Authority:** every authenticated human holds the same authority under the server-owner ruling. Any verified human token reads any mission.
 
@@ -98,13 +98,13 @@ The API returns HTTP `200`. With `format=json`, the answer holds plan entries:
     {
       "filename": "login.md",
       "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
-      "work": "implement",
+      "intent": "implement",
       "name": "Add the login page",
       "requirement": "The application shows a login form.",
       "criterion": "A user with valid credentials reaches the dashboard.",
       "verifications": ["pnpm test"],
       "bindings": ["main-repository"],
-      "requires": [],
+      "tags": [],
       "depends_on": []
     },
     {
@@ -143,12 +143,12 @@ With `format=markdown`, the answer holds plan files:
 | `entries[]`                                  | array (JSON format)            | One entry for each current node and task, sorted by `filename`.               |
 | `entries[].filename`                         | plan file name                 | Name that matches `^[a-z][a-z0-9_-]*\.md$`.                                   |
 | `entries[].id`                               | `node_<ulid>` or `task_<ulid>` | Node ID or task ID.                                                           |
-| `entries[].work`                             | `implement` or `examine`       | Work of the node. Absent for a task.                                          |
+| `entries[].intent`                           | `implement` or `examine`       | Intent of the node. Absent for a task.                                        |
 | `entries[].node`                             | plan file name                 | Plan file of the `implement` node of a task. Absent for a node.               |
 | `entries[].name`, `requirement`, `criterion` | string                         | Node content text.                                                            |
 | `entries[].verifications`                    | array of strings               | Verification commands; at least one.                                          |
 | `entries[].bindings`                         | array of strings               | Binding names, not binding IDs. `[]` for a task.                              |
-| `entries[].requires`                         | array of trait keys            | Requires list of the node. Absent for a task.                                 |
+| `entries[].tags`                             | array of tags                  | Tags of the node. Absent for a task.                                          |
 | `entries[].depends_on`                       | array of plan file names       | Sorted dependency targets. Absent for a task.                                 |
 | `files[]`                                    | array (Markdown format)        | `{ filename, content }` for each current node and task, sorted by `filename`. |
 

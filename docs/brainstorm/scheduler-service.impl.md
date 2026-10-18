@@ -102,7 +102,7 @@ The report never answers a check that needs a selected claimant:
 - the declared node states of a worker;
 - the count of a claimant;
 - the instance healthcheck;
-- the [match](scheduler-service.md#match) of the declared works and the traits.
+- the [match](scheduler-service.md#match) of the declared intents and the tags.
 
 The report takes no instance healthcheck and reads no registration.
 It names no worker binding, no instance and no claimant.
@@ -153,8 +153,8 @@ The Scheduler Service implements the [match](scheduler-service.md#match) in `mat
 ```ts
 function admits(claimant: Claimant, facts: ClaimFacts): boolean {
   return (
-    claimant.declared_works.includes(facts.work) &&
-    facts.requires.every((trait) => claimant.traits.includes(trait))
+    claimant.declared_intents.includes(facts.intent) &&
+    facts.tags.every((tag) => claimant.tags.includes(tag))
   );
 }
 
@@ -170,8 +170,8 @@ function covered(
 }
 ```
 
-- A `Claimant` holds `declared_node_states` and `declared_works` from the worker declaration, and `traits` from the worker binding row that the claim pins.
-- `ClaimFacts` holds `work` and `requires` at the node revision that the claim pins.
+- A `Claimant` holds `declared_node_states` and `declared_intents` from the worker declaration, and `tags` from the worker binding row that the claim pins.
+- `ClaimFacts` holds `intent` and `tags` at the node revision that the claim pins.
 - The claim walk calls `claimFacts` for each job, applies `admits`, then calls `transitions.claim` of the Mission Service. The on-demand path applies the same `admits`.
 - `declarationOf` answers `null` for a worker name with no declaration. The claim then has no claimant and answers `{ kind: "no-work" }`. It asserts nothing.
 - `unmatchedClaims` computes `covered` for each pair of a node and a claimable state. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores `instance_count`.
@@ -179,13 +179,13 @@ function covered(
 
 The collaborations of the match are below.
 
-| Owner     | Signature                                                                      | Invariant                                                                                                                                                                                                 |
-| --------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mission   | `claimFacts(tx, nodeId): { work, requires } \| null`                           | It reads the node revision that the claim pins. It writes nothing.                                                                                                                                        |
-| Mission   | `claimFactsOf(tx, projectId): { node_id, revision, work, requires, claims }[]` | It answers each node that is not terminal and not retired, at its current revision and at the revision of its open attempt.                                                                               |
-| Project   | `workerBindingsOf(tx, projectId): { binding_id, worker_name, traits }[]`       | It answers the current worker bindings that are no tombstone. `workerBindingOf` also answers `traits`.                                                                                                    |
-| Worker    | `declarationOf(workerName)`                                                    | It answers `declared_node_states` and `declared_works`, or `null` for an unknown worker.                                                                                                                  |
-| Scheduler | `unmatchedClaims(tx, projectId): { node_id, revision, claim }[]`               | A node write or a binding-set write never adds an unmatched pair. The caller reads it before and after its write in one `BEGIN IMMEDIATE` transaction under [architecture.impl.md](architecture.impl.md). |
+| Owner     | Signature                                                                    | Invariant                                                                                                                                                                                                 |
+| --------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission   | `claimFacts(tx, nodeId): { intent, tags } \| null`                           | It reads the node revision that the claim pins. It writes nothing.                                                                                                                                        |
+| Mission   | `claimFactsOf(tx, projectId): { node_id, revision, intent, tags, claims }[]` | It answers each node that is not terminal and not retired, at its current revision and at the revision of its open attempt.                                                                               |
+| Project   | `workerBindingsOf(tx, projectId): { binding_id, worker_name, tags }[]`       | It answers the current worker bindings that are no tombstone. `workerBindingOf` also answers `tags`.                                                                                                      |
+| Worker    | `declarationOf(workerName)`                                                  | It answers `declared_node_states` and `declared_intents`, or `null` for an unknown worker.                                                                                                                |
+| Scheduler | `unmatchedClaims(tx, projectId): { node_id, revision, claim }[]`             | A node write or a binding-set write never adds an unmatched pair. The caller reads it before and after its write in one `BEGIN IMMEDIATE` transaction under [architecture.impl.md](architecture.impl.md). |
 
 ## Configuration
 
@@ -273,7 +273,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - Tests read the eligibility report of a node in each of the twelve states, under each Mission condition that holds and that fails, with and without a job, with an active and a paused project, and with a `running`, a `lost` and a `finished` execution. They assert each check result, `claimable` and no write.
 - Tests assert 404 `scheduler.eligibility.node_not_found` for an absent project, an absent node and a node of another project.
 - A test asserts that the eligibility report takes no instance healthcheck and holds no binding, instance or claimant field.
-- Tests admit a claimant only when its worker declares the work of the node and its binding traits hold every required trait, at the node revision and the binding row that the claim pins.
+- Tests admit a claimant only when its worker declares the intent of the node and its binding tags include every tag of the node, at the node revision and the binding row that the claim pins.
 - Tests skip a job that the claimant does not admit and claim the next admitted job, and they apply the same match to an on-demand request.
 - A test pulls with a worker name that has no declaration and asserts `{ kind: "no-work" }` and no assertion failure.
 - Tests answer the unmatched pairs of `Available`, `Waiting` and, for a node that requires an external action, `External.Requested`. They ignore `instance_count`.

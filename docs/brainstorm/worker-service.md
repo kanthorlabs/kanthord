@@ -19,29 +19,29 @@ It describes no mechanism of another service.
 
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
-A worker declares its name, its host, the node states that its instances claim and the works that its method takes.
+A worker declares its name, its host, the node states that its instances claim and the intents that its method takes.
 A worker that kanthord hosts also declares its method and its agents, at least one.
 It references the [catalog declaration](agent.md#agent-catalog) of each agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
-The [match rule](scheduler-service.md#match) of the Scheduler Service admits a node when the worker declares its work and the [traits](project-service.vocabulary.md#trait) of the worker binding hold every trait of its [requires list](mission-service.vocabulary.md#requires).
+The [match rule](scheduler-service.md#match) of the Scheduler Service admits a node when the worker declares its intent and the [tags](project-service.vocabulary.md#tag) of the worker binding include every [tag](mission-service.vocabulary.md#tags) of the node.
 Every agent of a kanthord-hosted worker is [in the catalog](agent.vocabulary.md#in-the-catalog) of the [Agent component](agent.md#agent-catalog).
 A worker reads no other project configuration.
-The declared works name the values of [work](mission-service.vocabulary.md#work) that the method takes.
+The declared intents name the values of [intent](mission-service.vocabulary.md#intent) that the method takes.
 The match rule reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
-Every worker of this page declares the works `implement` and `examine`.
+Every worker of this page declares the intents `implement` and `examine`.
 
 A method is the worker's own.
 Two methods of kanthord exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
 The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
-Each method of kanthord holds one form for each work.
-The execution selects the form from the work of the pinned revision alone.
+Each method of kanthord holds one form for each intent.
+The execution selects the form from the intent of the pinned revision alone.
 
 Each agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
 The Worker Service publishes the contract of `claude-code@1`.
-It holds the name, host, declared node states, declared works and resource budget.
+It holds the name, host, declared node states, declared intents and resource budget.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
 A worker that kanthord hosts declares the agent prompt of each of its agents.
@@ -204,7 +204,7 @@ A draining instance therefore resumes its execution and claims no new work.
 
 The healthcheck of an instance that an external harness hosts passes when its registration is live.
 The Worker Service computes the healthcheck of every placement from the state of the server alone.
-The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the declared works.
+The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the declared intents.
 
 - An execution at every placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
 - It performs its network git read, network git write and model inference calls in its own worker unit.

@@ -30,28 +30,28 @@ The set of a worker is a subset of the closed set of states that admit a claim, 
 `reviewer@1` declares `Waiting` and `External.Requested`.
 `claude-code@1` declares `Available`, `Waiting` and `External.Requested`, so one instance of `claude-main` obtains a steps claim on "Add password reset" and later an evaluation claim on the same node.
 
-## declared works
+## declared intents
 
-The [Worker Service Vocabulary](worker-service.vocabulary.md#declared-works) owns the term.
-The [match](#match) reads the declared works of the worker of a claimant.
+The [Worker Service Vocabulary](worker-service.vocabulary.md#declared-intents) owns the term.
+The [match](#match) reads the declared intents of the worker of a claimant.
 
 ## match
 
-The fact that a claimant admits a node: the worker declares the work of the node, and the binding traits hold every trait that the node requires.
+The fact that a claimant admits a node: the worker declares the intent of the node, and the tags of the binding include every tag of the node.
 The term names no closed set.
 
 Project `atlas` holds four worker bindings.
 
-| Binding        | Worker       | traits                              | Node with `requires: []` | Node with `requires: [platform.macos]` |
-| -------------- | ------------ | ----------------------------------- | ------------------------ | -------------------------------------- |
-| linux-coder    | `coder@1`    | `[]`                                | steps                    | no                                     |
-| macos-coder    | `coder@1`    | `[platform.macos, toolchain.xcode]` | steps                    | steps                                  |
-| linux-reviewer | `reviewer@1` | `[]`                                | evaluation               | no                                     |
-| macos-reviewer | `reviewer@1` | `[platform.macos]`                  | evaluation               | evaluation                             |
+| Binding        | Worker       | tags                                | Node with `tags: []` | Node with `tags: [platform.macos]` |
+| -------------- | ------------ | ----------------------------------- | -------------------- | ---------------------------------- |
+| linux-coder    | `coder@1`    | `[]`                                | steps                | no                                 |
+| macos-coder    | `coder@1`    | `[platform.macos, toolchain.xcode]` | steps                | steps                              |
+| linux-reviewer | `reviewer@1` | `[]`                                | evaluation           | no                                 |
+| macos-reviewer | `reviewer@1` | `[platform.macos]`                  | evaluation           | evaluation                         |
 
-The node "Add password reset to the iOS app" holds `work: implement` and `requires: [platform.macos]`.
+The node "Add password reset to the iOS app" holds `intent: implement` and `tags: [platform.macos]`.
 Only an instance of `macos-coder` obtains its steps claim, and only an instance of `macos-reviewer` obtains its evaluation claim.
-The node "Add password reset" holds `requires: []`, so every binding of the table admits it in its declared states.
+The node "Add password reset" holds `tags: []`, so every binding of the table admits it in its declared states.
 
 ## unmatched pair
 
@@ -59,9 +59,9 @@ A pair of a node and a claimable state that no current worker binding of the pro
 The term names no closed set.
 
 Project `atlas` holds `linux-coder` and `linux-reviewer` alone.
-A human imports the node "Add password reset to the iOS app" with `requires: [platform.macos]`.
+A human imports the node "Add password reset to the iOS app" with `tags: [platform.macos]`.
 No binding holds `platform.macos`, so the pairs of `Available` and `Waiting` are unmatched.
-The apply answers `mission.node.requires_unmatched` and writes nothing.
+The apply answers `mission.node.tags_unmatched` and writes nothing.
 The human adds `macos-coder` and `macos-reviewer` to the binding set and imports again.
 Later the human submits a binding set without `macos-reviewer`.
 That write answers `project.bindings.worker.node_unmatched` with the identity of the node.

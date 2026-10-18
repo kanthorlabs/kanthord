@@ -47,7 +47,7 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 
 - `blocked_attempt` must equal the current attempt, and `expected_revision` must equal the current revision.
 - `change` holds new `content`, a `reason` and `tasks`, the complete task list of the node. `tasks` follows the task list rules of [`node update`](node.md#node-update). A task in the list has no bindings. An `examine` node sends `tasks: []`.
-- A change of `work` while the attempt reads `1` or more fails with `mission.node.work_locked`. A change that adds an unmatched pair fails with `mission.node.requires_unmatched`.
+- A change of `intent` while the attempt reads `1` or more fails with `mission.node.intent_locked`. A change that adds an unmatched pair fails with `mission.node.tags_unmatched`.
 - A content change writes a revision with `change.write` `unblock` and increases the mission version.
 - With attempt `0`, `unblock` opens no attempt. Otherwise it opens the next attempt, pinned to the current revision, with the human as `opened_by`.
 - `start_point` names where the next attempt starts. `node_branch`, the default, continues the node branch of the cleared attempt. `base_branch` starts a new node branch `kanthord/<node id>-a<attempt>` from the base branch. Another value answers 400 `gateway.request.validation_failed`, and nothing is written.
@@ -78,7 +78,7 @@ All operations return HTTP `200`. The CLI writes the API answer plus `idempotenc
 {
   "node": {
     "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
-    "work": "implement",
+    "intent": "implement",
     "state": "Paused",
     "attempt": 1,
     "...": "..."
@@ -188,8 +188,8 @@ Command-specific failures:
 | `400 mission.node.content_invalid`       | `unblock`             | The change content is invalid, or a task `id` in `tasks` is unknown, repeated or names a task of another node.                             |
 | `400 mission.node.bindings_invalid`      | `unblock`             | A change binding does not resolve or breaks the binding rule.                                                                              |
 | `409 mission.node.filename_conflict`     | `unblock`             | A task file name is in use by another current node or task.                                                                                |
-| `409 mission.node.work_locked`           | `unblock`             | The change changes `work` while the attempt reads `1` or more; `details` holds `node_id` and `attempt`.                                    |
-| `409 mission.node.requires_unmatched`    | `unblock`             | The change adds an unmatched pair; `details.claims` lists each pair.                                                                       |
+| `409 mission.node.intent_locked`         | `unblock`             | The change changes `intent` while the attempt reads `1` or more; `details` holds `node_id` and `attempt`.                                  |
+| `409 mission.node.tags_unmatched`        | `unblock`             | The change adds an unmatched pair; `details.claims` lists each pair.                                                                       |
 | `409 mission.node.no_unresolved_request` | `check`               | The open attempt has no unresolved request.                                                                                                |
 | `409 mission.node.retired`               | `priority set`        | The node is retired.                                                                                                                       |
 | `409 mission.node.terminal`              | `priority set`        | The node is `Completed` or `Discarded`.                                                                                                    |
@@ -241,7 +241,7 @@ All operations use `POST`, access `human` (human bearer JWT), a 30-second timeou
 | `start_point`              | `base_branch` or `node_branch` | `unblock`, optional  | Start point of the next attempt. The default is `node_branch`.                                     |
 | `value`                    | signed safe integer            | `priority set`       | New priority.                                                                                      |
 
-The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications`, `bindings` (binding IDs), `work` and the optional `requires`, as in [node create](node.md#request-bodies). Bodies accept no unknown field.
+The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications`, `bindings` (binding IDs), `intent` and the optional `tags`, as in [node create](node.md#request-bodies). Bodies accept no unknown field.
 
 | Header            | Required | Purpose                                              |
 | ----------------- | -------- | ---------------------------------------------------- |

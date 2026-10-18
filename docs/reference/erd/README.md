@@ -36,7 +36,7 @@ flowchart TB
             c1["Custody: credential"]
             p1["Project: project, binding, binding revision"]
             a1["Agent: agent enablement, agent cooldown, prompt settings"]
-            m1["Mission: mission, node, node revision with work, requires and tasks, dependency"]
+            m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job"]
         end
         subgraph v2["ERD 2: Execution"]

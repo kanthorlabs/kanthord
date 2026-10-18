@@ -18,7 +18,7 @@ The [overview](overview.vocabulary.md) defines a mission, a node, a task, an exe
 A mission comes into existence with its project, empty and at mission version 1. No operation creates or deletes a mission.
 The mission is a directed graph, and it is the only container of its nodes.
 A node of that graph is a unit of scheduling.
-Every node holds a name, a requirement, a criterion, its verifications, its bindings, its work, its requires list and its tasks.
+Every node holds a name, a requirement, a criterion, its verifications, its bindings, its intent, its tags and its tasks.
 A node holds a [plan file name](mission-service.vocabulary.md#plan-file-name) that is unique among the nodes of its mission that are not retired.
 A retired node keeps its plan file name as a record, and a node that is not retired can take that name.
 An export writes that name.
@@ -26,15 +26,15 @@ The name is a title and no identity.
 A node revision covers that whole content.
 Dependency is the only edge kind.
 
-The [work](mission-service.vocabulary.md#work) of a node is `implement` or `examine`, and it selects the method of the execution.
+The [intent](mission-service.vocabulary.md#intent) of a node is `implement` or `examine`, and it selects the method of the execution.
 An `implement` node changes one or more repositories, and its tasks state the final-state requirements of that change.
 An `examine` node reads zero or more repositories and the outcomes of its direct dependencies, and it changes no repository.
 An `examine` node holds no task, and its execution submits its findings as produced evidence.
-A human changes the work of a node only while the attempt of the node reads 0.
-A later change of the work answers `mission.node.work_locked`.
-The [requires](mission-service.vocabulary.md#requires) list of a node names the traits that a worker binding needs to claim the node.
-The [Scheduler Service](scheduler-service.md#match) matches the work and the requires list of a node against each worker binding of the project.
-A node write that adds an unmatched pair of a node and a claimable state answers `mission.node.requires_unmatched`.
+A human changes the intent of a node only while the attempt of the node reads 0.
+A later change of the intent answers `mission.node.intent_locked`.
+The [tags](mission-service.vocabulary.md#tags) of a node name the tags that a worker binding needs to claim the node.
+The [Scheduler Service](scheduler-service.md#match) matches the intent and the tags of a node against each worker binding of the project.
+A node write that adds an unmatched pair of a node and a claimable state answers `mission.node.tags_unmatched`.
 A node write that keeps an existing unmatched pair succeeds.
 
 A task is content of an `implement` node.
@@ -45,7 +45,7 @@ A task is never a unit of scheduling.
 An `implement` node holds zero or more tasks on every write path.
 An `implement` node with no task is its own single work unit.
 
-A dependency relates two nodes of the same mission, whatever their work.
+A dependency relates two nodes of the same mission, whatever their intent.
 A dependency makes its dependent unavailable until the node that it names is `Completed`.
 A human override that asserts success satisfies a dependency, because it makes the named node `Completed`.
 A dependency establishes only what the criterion of the node that it names establishes.
@@ -70,7 +70,7 @@ An addition on a node whose execution ended changes no routing of that node, bec
 
 The check of a landing is a platform operation of the Intake Service, and it uses the credential of a repository binding.
 
-A node names every binding that it uses, and each binding kind states how many bindings a node of each work names.
+A node names every binding that it uses, and each binding kind states how many bindings a node of each intent names.
 No node takes a binding from the project.
 The Mission Service resolves each binding name at write time.
 The node revision stores the resolved bindings, so a later change of the project moves no existing node.
@@ -109,7 +109,7 @@ An import carries no priority.
 Planning occurs outside kanthord.
 A human writes the nodes and the tasks in markdown.
 A human decides what the system tests, and which verifications check it.
-A human writes the work and the requires list of each node.
+A human writes the intent and the tags of each node.
 A human imports that plan into the Mission Service.
 An execution creates no node, and an execution writes no criterion.
 The import and the node API are the two write paths for a node and for a criterion.
@@ -201,7 +201,7 @@ The import decides a modification on the resolved graph and never on the text of
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one immutable snapshot of the whole content of a node.
-It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the work, the requires list and the tasks.
+It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the intent, the tags and the tasks.
 A node starts at node revision 1.
 A node revision changes no attempt.
 The attempt is independent of the revision number.
@@ -315,7 +315,7 @@ Another set of repository assets answers `mission.evidence.binding_mismatch`.
 With one repository binding, the tested input of an `implement` node is one address.
 With two or more, the tested input is a list with one address for each repository binding, in binding order.
 
-Evidence durability differs by work.
+Evidence durability differs by intent.
 A task commit is an internal step of the execution of its node, and no record names it.
 The outcome of an `implement` node represents its tasks.
 An `examine` node reads the outcome of each direct dependency and the evidence set that the outcome carries.
@@ -385,7 +385,7 @@ A task holds no assessment and no outcome.
 The reviewer of an `implement` node judges each current task of the pinned revision against its criterion.
 The independent review sits at the node whose outcome persists.
 
-The scope of an evaluation differs by work.
+The scope of an evaluation differs by intent.
 The evaluation of an `implement` node weighs the tested input and the criterion of each current task.
 The evaluation of an `examine` node weighs the dependency outcomes and the tested input.
 A model judgement transcript is evidence of its invocation, and it is not an assessment.
