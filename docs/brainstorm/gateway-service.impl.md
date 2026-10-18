@@ -164,7 +164,7 @@ With `--project` and `--binding` it generates a machine JWT with a fresh client 
 The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` fails with `cli.auth.jwt.binding_without_project`. `--project` without `--binding` fails with `cli.auth.jwt.project_without_binding`. A `--project` value that is not a canonical `project_<ulid>` identity fails with `gateway.authentication.invalid_project`.
 Mint one machine token for each concurrent instance. An instance reuses its token across restarts while the token is valid.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
-It prints only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
+It prints only when standard output is a terminal. A failed terminal check stops issuance with `cli.output.terminal_required` and displays no token.
 For a human it prints the row `token: <jwt>`.
 For a machine it prints the `cli.yaml` fragment `token: <jwt>` and `client_secret: <client secret>`, one row each, aligned.
 With `--verbose` it prints the claim list after that output.
@@ -281,8 +281,9 @@ A build of a client copies the directory instead of calling a running server.
 
 ## Host and origin
 
-A middleware rejects a request whose `Host` header sits outside the configured allowlist before authentication.
+A middleware rejects a request whose `Host` header sits outside the configured allowlist before authentication. The middleware also rejects a request with no `Host` header.
 It does so because a browser page resolves a hostname to the loopback address.
+The rejection answers 403 `gateway.http.host_not_allowed`.
 The Gateway passes the accepted `Host` header to the handler as `host` of the caller context. A direct invocation carries no `host`.
 `hono/cors` permits the configured origins, and it uses no credentialed mode.
 The server adds no CSRF middleware, because no cookie authenticates a request.
