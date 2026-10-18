@@ -10,18 +10,18 @@ The binary is the reference of every version:
 
 - The configuration version is the root field `version` of `kanthord.yaml`. A file without the field is version 1. [`config init`](config/init.md) writes the version of the binary.
 - The database version is the migration history of each service in `kanthord.db` and `tracking.db`.
-- Before the first tag, each service holds exactly one migration, version 1. A schema change edits that migration, and the command offers no upgrade path for a database of an earlier text.
+- Before the first tag, each service that owns tables holds exactly one migration, version 1. `gateway` and `workbench` hold no migration and record no row. A schema change edits that migration, and the command offers no upgrade path for a database of an earlier text.
 
 The server refuses to start when one of them differs from the binary:
 
-| Condition                                                         | Diagnostic                                       | Action                                                    |
-| ----------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
-| The configuration version is older than the binary.               | `system.config.version_behind`                   | Run `kanthord upgrade`.                                   |
-| The configuration version is newer than the binary.               | `system.config.version_ahead`                    | Install the newer binary, or restore the backups.         |
-| The database has a pending migration.                             | `system.database.migration.pending`              | Run `kanthord upgrade`.                                   |
-| The database history is newer than the binary or is unknown.      | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups.      |
-| The schema of a recorded service differs from its migration text. | `system.database.migration.schema_mismatch`      | Run the [reset procedure](#reset-a-pre-release-database). |
-| `master_key` does not match the database.                         | `system.config.master_key_mismatch`              | Restore the matching configuration file or backup.        |
+| Condition                                                                          | Diagnostic                                       | Action                                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| The configuration version is older than the binary.                                | `system.config.version_behind`                   | Run `kanthord upgrade`.                                   |
+| The configuration version is newer than the binary.                                | `system.config.version_ahead`                    | Install the newer binary, or restore the backups.         |
+| The database has a pending migration.                                              | `system.database.migration.pending`              | Run `kanthord upgrade`.                                   |
+| The database records a service that the binary does not know, or a forged version. | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups.      |
+| The schema of a recorded service differs from its migration text.                  | `system.database.migration.schema_mismatch`      | Run the [reset procedure](#reset-a-pre-release-database). |
+| `master_key` does not match the database.                                          | `system.config.master_key_mismatch`              | Restore the matching configuration file or backup.        |
 
 `config validate`, `config show` and `auth jwt generate` refuse a configuration version other than the version of the binary with the same diagnostics. A new installation needs no upgrade: the first start creates both databases and applies every migration.
 
@@ -29,13 +29,13 @@ The command runs these steps in this order:
 
 1. Read the configuration and apply each configuration step from its version in memory, then validate the result.
 2. Open `kanthord.db` of the data directory with its exclusive lock, if the file exists. Check its schema against its migration text, then validate its migration history. Do the same for `tracking.db`, if the file exists. A missing `tracking.db` stays missing. A running server holds the lock, so the command fails with `system.database.initialization_failed` (`database is locked`) before it writes anything. A schema that differs fails with `system.database.migration.schema_mismatch` before it writes anything. Then check that `master_key` matches `kanthord.db`. A mismatch fails with `system.config.master_key_mismatch` before it writes anything.
-3. Write the backups: the configuration when a configuration step applies, and each database with a pending migration.
-4. Apply the pending migrations of `kanthord.db`, then of `tracking.db`.
+3. Write the configuration backup, when a configuration step applies.
+4. Take `kanthord.db`, then `tracking.db`. For each file with a pending migration, write its backup, then apply its pending migrations.
 5. Replace the configuration file atomically.
 
 ## Expected response
 
-Success prints one `name: value` row for each change to stdout and exits `0`. Each row prints when its step happens, so the backup rows print before a later failure. The rows of one run align, and every value starts in column 17, after the longest row name `config_version:` and one space:
+Success prints one `name: value` row for each change to stdout and exits `0`. Each row prints when its step happens, so the backup rows print before a later failure. The backup row of a database prints before the migrated rows of that database. The rows of one run align, and every value starts in column 17, after the longest row name `config_version:` and one space:
 
 ```text
 backup:         /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
@@ -52,7 +52,7 @@ config_version: 1 -> 2
 | `upgraded: <path>`                   | The configuration file that the command replaced.                                                                                   |
 | `config_version: <from> -> <to>`     | The configuration versions before and after the upgrade.                                                                            |
 | `up_to_date: <path>`                 | Nothing changed, and the command wrote nothing.                                                                                     |
-| Exit code `0`                        | The configuration and the database match the binary.                                                                                |
+| Exit code `0`                        | The configuration and the databases match the binary.                                                                               |
 
 Failures exit `1` with a [diagnostic](errors.md#cli-diagnostics). A later failure keeps the earlier rows on stdout, for example the backup paths. A configuration that holds an old key and its new key fails with `system.config.rename_conflict` and the rows `old_key` and `new_key`. An existing backup path fails with `system.database.backup_failed` and the row `path`. A failure after the backups keeps each committed migration. Run `kanthord upgrade` again to complete the remaining part.
 
@@ -64,13 +64,15 @@ Before the first tag, a schema change edits the one migration of a service. The 
 2. Delete `kanthord.db` and `tracking.db` of the data directory, with their `-wal` and `-shm` files.
 3. Start the server. The first start creates both files.
 
+The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of its `master_key` in the new database, so the same `master_key` stays valid.
+
 ### Restore the backups
 
 To go back to the previous binary:
 
 1. Stop the server.
 2. Delete `kanthord.db-wal`, `kanthord.db-shm`, `tracking.db-wal` and `tracking.db-shm` in the data directory, if they exist.
-3. Copy each database backup to its database file and the configuration backup to the configuration file. Keep mode `0600` on both, for example with `cp -p`.
+3. Copy each database backup to its database file and the configuration backup to the configuration file. Keep mode `0600` on every copied file, for example with `cp -p`.
 4. Install the previous binary and start the server.
 
 ### Other state
