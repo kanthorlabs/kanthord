@@ -14,14 +14,14 @@ The binary is the reference of every version:
 
 The server refuses to start when one of them differs from the binary:
 
-| Condition                                                                          | Diagnostic                                       | Action                                                    |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
-| The configuration version is older than the binary.                                | `system.config.version_behind`                   | Run `kanthord upgrade`.                                   |
-| The configuration version is newer than the binary.                                | `system.config.version_ahead`                    | Install the newer binary, or restore the backups.         |
-| The database has a pending migration.                                              | `system.database.migration.pending`              | Run `kanthord upgrade`.                                   |
-| The database records a service that the binary does not know, or a forged version. | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups.      |
-| The schema of a recorded service differs from its migration text.                  | `system.database.migration.schema_mismatch`      | Run the [reset procedure](#reset-a-pre-release-database). |
-| `master_key` does not match the database.                                          | `system.config.master_key_mismatch`              | Restore the matching configuration file or backup.        |
+| Condition                                                                                                                                                               | Diagnostic                                       | Action                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| The configuration version is older than the binary.                                                                                                                     | `system.config.version_behind`                   | Run `kanthord upgrade`.                                   |
+| The configuration version is newer than the binary.                                                                                                                     | `system.config.version_ahead`                    | Install the newer binary, or restore the backups.         |
+| The database has a pending migration.                                                                                                                                   | `system.database.migration.pending`              | Run `kanthord upgrade`.                                   |
+| The database records a service that the binary does not know, or a forged version.                                                                                      | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups.      |
+| The schema of a recorded service differs from its migration text. The `object` row names the first differing schema object, in the order of the type and then the name. | `system.database.migration.schema_mismatch`      | Run the [reset procedure](#reset-a-pre-release-database). |
+| `master_key` does not match the database.                                                                                                                               | `system.config.master_key_mismatch`              | Restore the matching configuration file or backup.        |
 
 `config validate`, `config show` and `auth jwt generate` refuse a configuration version other than the version of the binary with the same diagnostics. A new installation needs no upgrade: the first start creates both databases and applies every migration.
 
