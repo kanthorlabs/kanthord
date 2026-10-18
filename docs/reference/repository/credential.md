@@ -239,20 +239,20 @@ The `credential.credential.in_use` details list the dependents:
 
 The CLI exits `1` for every failure and writes a diagnostic line `<code>: <message>` to stderr. A failure whose `details` are not null adds the row `details: <compact JSON>`, as [CLI diagnostics](../errors.md#cli-diagnostics) states. A declared API failure of a read prints `<code>: request failed` and the row `status: <status>`. A declared API failure of a mutation prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>`. A transport failure, timeout or malformed response gives `cli.repository.credential.<command>.indeterminate`. A read diagnostic says `the result is unknown; retry the command`. A mutation diagnostic says `the result is unknown; retry with the same idempotency key` and adds the row `idempotency_key: <key>`. For `update-metadata`, `<command>` is `update_metadata`.
 
-| CLI code                                                             | Commands                               | Meaning                                                                            |
-| -------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
-| `cli.repository.credential.<command>.token_required`                 | All                                    | The resolved token is absent or blank. The CLI sends no request.                   |
-| `cli.repository.credential.revoke.invalid_revision`                  | revoke                                 | `<revision>` is not a positive safe integer in decimal digits.                     |
-| `cli.pagination.limit_invalid`                                       | list                                   | `--limit` is not a positive safe integer in decimal digits.                        |
-| `cli.pagination.limit_out_of_range`                                  | list                                   | `--limit` is above 1000.                                                           |
-| `cli.idempotency_key.invalid`                                        | Mutations                              | `--idempotency-key` is not a canonical ULID.                                       |
-| `cli.option.duplicate`                                               | All                                    | An option occurs more than once.                                                   |
-| `cli.file.invalid_path`                                              | create, rotate, update-metadata, check | `--file -`; the CLI does not read stdin.                                           |
-| `cli.file.not_found`, `cli.file.not_regular`                         | create, rotate, update-metadata, check | The file is absent or is not a regular file.                                       |
-| `system.files.invalid_permissions`                                   | create, rotate, check                  | The secret file is a symlink, has a mode other than `0600`, or has another owner.  |
-| `cli.file.encoding_invalid`                                          | update-metadata                        | The metadata file is not valid UTF-8.                                              |
-| `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | create, rotate, update-metadata, check | The file is not one JSON object with unique keys.                                  |
-| `cli.file.schema_invalid`                                            | create, rotate, update-metadata, check | The JSON object fails the body schema; the message lists each path and issue code. |
+| CLI code                                                             | Commands                               | Meaning                                                                                  |
+| -------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `cli.repository.credential.<command>.token_required`                 | All                                    | The resolved token is absent or blank. The CLI sends no request.                         |
+| `cli.repository.credential.revoke.invalid_revision`                  | revoke                                 | `<revision>` is not a positive safe integer in decimal digits.                           |
+| `cli.pagination.limit_invalid`                                       | list                                   | `--limit` is not a positive safe integer in decimal digits.                              |
+| `cli.pagination.limit_out_of_range`                                  | list                                   | `--limit` is above 1000.                                                                 |
+| `cli.idempotency_key.invalid`                                        | Mutations                              | `--idempotency-key` is not a canonical ULID.                                             |
+| `cli.option.duplicate`                                               | All                                    | An option occurs more than once.                                                         |
+| `cli.file.invalid_path`                                              | create, rotate, update-metadata, check | `--file -`; the CLI does not read stdin.                                                 |
+| `cli.file.not_found`, `cli.file.not_regular`                         | create, rotate, update-metadata, check | The file is absent or is not a regular file.                                             |
+| `system.files.invalid_permissions`                                   | create, rotate, check                  | The secret file is a symlink, has a mode other than `0600`, or has another owner.        |
+| `cli.file.encoding_invalid`                                          | update-metadata                        | The metadata file is not valid UTF-8.                                                    |
+| `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | create, rotate, update-metadata, check | The file is not one JSON object with unique keys.                                        |
+| `cli.file.schema_invalid`                                            | create, rotate, update-metadata, check | The JSON object fails the body schema; the `details` row lists each issue path and code. |
 
 ## API shape
 

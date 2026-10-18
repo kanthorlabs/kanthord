@@ -67,8 +67,10 @@ The rows after line 1 align with each other. Line 1 takes no part in the alignme
 | `status`          | HTTP status of a declared remote failure.                                      |
 | `idempotency_key` | Idempotency key of a mutation. The operator uses it to retry.                  |
 | `command`         | Command that the operator runs next.                                           |
-| `config`          | Configuration path of an absent configuration.                                 |
-| `path`            | File path of a `cli.file.*` failure.                                           |
+| `config`          | Configuration path of a configuration failure.                                 |
+| `path`            | File path of a file or client configuration failure.                           |
+| `key`             | JSON key that the file repeats.                                                |
+| `option`          | Option that the command receives more than once.                               |
 | `details`         | Compact JSON of the `details` of the error body. The row is absent for `null`. |
 
 A read prints `<code>: request failed` and the row `status`. A mutation prints `<code>: request failed` and the rows `status` and `idempotency_key`. `gateway verify`, `worker register` and `worker handover` put the command name before `request failed`.
@@ -80,8 +82,8 @@ idempotency_key: 01M34JC4BJ66JHP41M4MYY6PST
 details:         {"id":"credential_01K6ZB3Q8X2M4N5P6R7S8T9V0W"}
 ```
 
-A transport failure, a timeout or a malformed answer is indeterminate. A mutation prints `<code>: the result is unknown; retry with the same idempotency key` and the row `idempotency_key`. A read prints `<code>: the result is unknown; retry the command`. A scheduler release prints `<code>: the result is unknown; read the execution before any retry` and the row `command`.
+A transport failure, a timeout or a malformed answer is indeterminate. A mutation prints `<code>: the result is unknown; retry with the same idempotency key` and the row `idempotency_key`. A read prints `<code>: the result is unknown; retry the command`. A scheduler release prints `<code>: the result is unknown; read the execution before any retry` and the row `command`. The three commands `gateway verify`, `worker register` and `worker handover` also put the command name before the indeterminate message. `worker handover` says `retry with a new idempotency key`, because a repeated handover key conflicts. The handover indeterminate message prints no `idempotency_key` row.
 
-An absent configuration prints `<code>: configuration is absent` and the rows `config` and `command`. A `cli.file.*` failure prints its message without the path, then the row `path`. Unexpected exceptions use `system.operation.unknown: Operation failed.` without disclosing their message or cause.
+An absent configuration prints `<code>: configuration is absent` and the rows `config` and `command`. A `cli.file.*` failure that names a path prints the row `path`. `cli.file.duplicate_key` prints the row `key`. `cli.file.schema_invalid` prints `the file does not match the schema` and a `details` row of `{path, code}` issues. `cli.file.not_json` and `cli.file.invalid_path` print no row. Unexpected exceptions use `system.operation.unknown: Operation failed.` without disclosing their message or cause.
 
 Native and dependency codes, such as `ENOENT`, Commander's parser codes and Zod issue codes inside validation details, keep their upstream representation. They are not engine-defined error codes. HTTP statuses, process exit codes and integer health statuses are also separate from this naming rule.

@@ -33,7 +33,7 @@ The command runs these steps in this order:
 
 ## Expected response
 
-Success prints one `name: value` row for each change to stdout and exits `0`. The rows of one run align:
+Success prints one `name: value` row for each change to stdout and exits `0`. Each row prints when its step happens, so the backup rows print before a later failure. The rows of one run align:
 
 ```text
 backup:         /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000

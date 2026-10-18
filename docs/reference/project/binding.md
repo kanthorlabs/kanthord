@@ -342,25 +342,25 @@ Within the replay TTL, a repeated apply key with the same request and caller ret
 
 The CLI checks its input before it sends a request. Each local failure exits `1` and writes `<code>: <message>` to stderr.
 
-| Code                                               | Commands                                              | Meaning                                                                       |
-| -------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `cli.project.binding.<command>.invalid_project_id` | All                                                   | The project argument is not a valid project ID.                               |
-| `cli.project.binding.<command>.invalid_binding_id` | `get`, `verify`, `instruction-files`, `revision list` | The binding argument is not a valid binding ID.                               |
-| `cli.project.binding.list.invalid_kind`            | `list`                                                | A `--kind` value is not a binding kind.                                       |
-| `cli.project.binding.list.invalid_state`           | `list`                                                | `--state` is not `current`, `removed` or `all`.                               |
-| `cli.pagination.limit_invalid`                     | `list`, `revision list`                               | `--limit` is not a positive decimal integer.                                  |
-| `cli.pagination.limit_out_of_range`                | `list`, `revision list`                               | `--limit` is more than `1000`.                                                |
-| `cli.idempotency_key.invalid`                      | `apply`                                               | `--idempotency-key` is not a canonical ULID.                                  |
-| `cli.file.invalid_path`                            | `apply`, `check`                                      | `--file` is `-`. The CLI does not read stdin.                                 |
-| `cli.file.not_found`                               | `apply`, `check`                                      | The file does not exist.                                                      |
-| `cli.file.not_regular`                             | `apply`, `check`                                      | The path is not a regular file.                                               |
-| `cli.file.encoding_invalid`                        | `apply`, `check`                                      | The file is not valid UTF-8.                                                  |
-| `cli.file.not_json`                                | `apply`, `check`                                      | The file is not a JSON document.                                              |
-| `cli.file.duplicate_key`                           | `apply`, `check`                                      | A JSON object in the file repeats a key.                                      |
-| `cli.file.not_object`                              | `apply`, `check`                                      | The JSON document is not an object.                                           |
-| `cli.file.schema_invalid`                          | `apply`, `check`                                      | The object fails the request schema. The message lists issue paths and codes. |
-| `cli.option.duplicate`                             | All                                                   | A single-value option occurs more than once.                                  |
-| `cli.project.binding.<command>.token_required`     | All                                                   | No nonblank token resolves.                                                   |
+| Code                                               | Commands                                              | Meaning                                                                                |
+| -------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `cli.project.binding.<command>.invalid_project_id` | All                                                   | The project argument is not a valid project ID.                                        |
+| `cli.project.binding.<command>.invalid_binding_id` | `get`, `verify`, `instruction-files`, `revision list` | The binding argument is not a valid binding ID.                                        |
+| `cli.project.binding.list.invalid_kind`            | `list`                                                | A `--kind` value is not a binding kind.                                                |
+| `cli.project.binding.list.invalid_state`           | `list`                                                | `--state` is not `current`, `removed` or `all`.                                        |
+| `cli.pagination.limit_invalid`                     | `list`, `revision list`                               | `--limit` is not a positive decimal integer.                                           |
+| `cli.pagination.limit_out_of_range`                | `list`, `revision list`                               | `--limit` is more than `1000`.                                                         |
+| `cli.idempotency_key.invalid`                      | `apply`                                               | `--idempotency-key` is not a canonical ULID.                                           |
+| `cli.file.invalid_path`                            | `apply`, `check`                                      | `--file` is `-`. The CLI does not read stdin.                                          |
+| `cli.file.not_found`                               | `apply`, `check`                                      | The file does not exist.                                                               |
+| `cli.file.not_regular`                             | `apply`, `check`                                      | The path is not a regular file.                                                        |
+| `cli.file.encoding_invalid`                        | `apply`, `check`                                      | The file is not valid UTF-8.                                                           |
+| `cli.file.not_json`                                | `apply`, `check`                                      | The file is not a JSON document.                                                       |
+| `cli.file.duplicate_key`                           | `apply`, `check`                                      | A JSON object in the file repeats a key.                                               |
+| `cli.file.not_object`                              | `apply`, `check`                                      | The JSON document is not an object.                                                    |
+| `cli.file.schema_invalid`                          | `apply`, `check`                                      | The object fails the request schema. The `details` row lists each issue path and code. |
+| `cli.option.duplicate`                             | All                                                   | A single-value option occurs more than once.                                           |
+| `cli.project.binding.<command>.token_required`     | All                                                   | No nonblank token resolves.                                                            |
 
 For `revision list`, `<command>` is `revision.list`, for example `cli.project.binding.revision.list.token_required`. For `instruction-files`, `<command>` is `instruction_files`.
 

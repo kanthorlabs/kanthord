@@ -12,7 +12,7 @@ A machine presents its JWT to [worker registration](../worker/register.md), whic
 
 ## Expected response
 
-In human mode, `auth jwt generate` prints the row `token: <jwt>` to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the rows `token` and `client_secret`, aligned. With `--verbose` it prints the claim list after that output. The output is a token string, not a JSON response. Its decoded claims have these properties:
+In human mode, `auth jwt generate` prints the row `token: <jwt>` to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the rows `token` and `client_secret`, aligned. With `--verbose` it prints the claim list after that output. The output is a row, not a JSON response. Its decoded claims have these properties:
 
 | Property            | Type                    | Purpose                                                                            |
 | ------------------- | ----------------------- | ---------------------------------------------------------------------------------- |

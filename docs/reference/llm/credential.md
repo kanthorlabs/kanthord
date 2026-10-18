@@ -223,21 +223,21 @@ A declared failure makes the CLI exit `1` and print `<code>: request failed` and
 
 Local CLI failures exit `1` before a request:
 
-| Code                                                                 | Commands                                       | Meaning                                                                                             |
-| -------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `cli.llm.credential.<command>.token_required`                        | All                                            | No nonblank token resolves.                                                                         |
-| `cli.pagination.limit_invalid`                                       | `list`                                         | `--limit` is not a positive integer.                                                                |
-| `cli.pagination.limit_out_of_range`                                  | `list`                                         | `--limit` is greater than `1000`.                                                                   |
-| `cli.llm.credential.revoke.invalid_revision`                         | `revoke`                                       | `<revision>` is not a positive safe integer.                                                        |
-| `cli.idempotency_key.invalid`                                        | Mutation commands                              | `--idempotency-key` is not a canonical ULID.                                                        |
-| `cli.option.duplicate`                                               | All                                            | A single-use option appears twice.                                                                  |
-| `cli.file.invalid_path`                                              | `create`, `rotate`, `update-metadata`, `check` | The path is `-`; stdin is not accepted.                                                             |
-| `cli.file.not_found`, `cli.file.not_regular`                         | `create`, `rotate`, `update-metadata`, `check` | The file is absent or is not a regular file.                                                        |
-| `system.files.invalid_permissions`                                   | `create`, `rotate`, `check`                    | The secret file is not owned by the user or its mode is not `0600`.                                 |
-| `system.files.open_failed`                                           | `create`, `rotate`, `check`                    | The secret file cannot be opened, for example a symbolic link.                                      |
-| `cli.file.encoding_invalid`                                          | `update-metadata`                              | The file is not valid UTF-8.                                                                        |
-| `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | `create`, `rotate`, `update-metadata`, `check` | The file is not one JSON object with unique keys.                                                   |
-| `cli.file.schema_invalid`                                            | `create`, `rotate`, `update-metadata`, `check` | The object does not match the request body schema. The diagnostic lists issue paths and codes only. |
+| Code                                                                 | Commands                                       | Meaning                                                                                                   |
+| -------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `cli.llm.credential.<command>.token_required`                        | All                                            | No nonblank token resolves.                                                                               |
+| `cli.pagination.limit_invalid`                                       | `list`                                         | `--limit` is not a positive integer.                                                                      |
+| `cli.pagination.limit_out_of_range`                                  | `list`                                         | `--limit` is greater than `1000`.                                                                         |
+| `cli.llm.credential.revoke.invalid_revision`                         | `revoke`                                       | `<revision>` is not a positive safe integer.                                                              |
+| `cli.idempotency_key.invalid`                                        | Mutation commands                              | `--idempotency-key` is not a canonical ULID.                                                              |
+| `cli.option.duplicate`                                               | All                                            | A single-use option appears twice.                                                                        |
+| `cli.file.invalid_path`                                              | `create`, `rotate`, `update-metadata`, `check` | The path is `-`; stdin is not accepted.                                                                   |
+| `cli.file.not_found`, `cli.file.not_regular`                         | `create`, `rotate`, `update-metadata`, `check` | The file is absent or is not a regular file.                                                              |
+| `system.files.invalid_permissions`                                   | `create`, `rotate`, `check`                    | The secret file is not owned by the user or its mode is not `0600`.                                       |
+| `system.files.open_failed`                                           | `create`, `rotate`, `check`                    | The secret file cannot be opened, for example a symbolic link.                                            |
+| `cli.file.encoding_invalid`                                          | `update-metadata`                              | The file is not valid UTF-8.                                                                              |
+| `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | `create`, `rotate`, `update-metadata`, `check` | The file is not one JSON object with unique keys.                                                         |
+| `cli.file.schema_invalid`                                            | `create`, `rotate`, `update-metadata`, `check` | The object does not match the request body schema. The `details` row lists each issue path and code only. |
 
 ## API shape
 

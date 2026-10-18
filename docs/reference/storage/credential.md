@@ -291,7 +291,7 @@ Local failures before a request:
 | `cli.file.not_json`                              | `create`, `rotate`, `update-metadata`, `check`                            | The file is not valid JSON.                                                                            |
 | `cli.file.duplicate_key`                         | `create`, `rotate`, `update-metadata`, `check`                            | A JSON object repeats a key.                                                                           |
 | `cli.file.not_object`                            | `create`, `rotate`, `update-metadata`, `check`                            | The JSON value is not an object.                                                                       |
-| `cli.file.schema_invalid`                        | `create`, `rotate`, `update-metadata`, `check`                            | The object fails the body schema. The message lists each issue path and code.                          |
+| `cli.file.schema_invalid`                        | `create`, `rotate`, `update-metadata`, `check`                            | The object fails the body schema. The `details` row lists each issue path and code.                    |
 | `gateway.request.validation_failed`              | `get`, `verify`, `rotate`, `update-metadata`, `revoke`, `archive`, `list` | The client-side input check fails, for example an empty name or an empty `--cursor`.                   |
 
 Unknown options, extra arguments and an absent required option fail through the command parser and exit `1`.
