@@ -228,7 +228,7 @@ The agent forgets everything at the end of an execution. The next execution read
 | The node state, the attempt and the pinned revision    | The Mission Service                            | Yes                     |
 | The evidence, the assessments and their rationales     | The Mission Service                            | Yes                     |
 | The claim, its deadline and the selected model         | The Scheduler execution record                 | Yes                     |
-| The cooldown of a busy model                           | The Agent component on the server              | Yes                     |
+| The cooldown of a busy credential                      | The Agent component on the server, in Custody  | Yes                     |
 | The task judgements of the last execution on this host | `judged-tasks.json` in the workspace           | No, a cache of one host |
 | The checkout itself                                    | `workspaces/` on the worker host               | No, a cache of one host |
 | The agent conversation                                 | Memory, then `transcripts/` on the worker host | No, never read again    |

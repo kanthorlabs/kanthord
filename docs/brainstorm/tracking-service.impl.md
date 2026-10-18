@@ -15,21 +15,30 @@ The trace model reuses the [OpenTelemetry specification](https://opentelemetry.i
 The implementation installs `@opentelemetry/api`, `@opentelemetry/resources` and `@opentelemetry/semantic-conventions`.
 It installs no OpenTelemetry SDK.
 kanthord implements the tracer, the span processor and the exporter itself.
-The first phase ships a no-op implementation of the interface that the Tracking Service defines.
+The Tracking Service defines the interface of the tracer.
 Every other service plugs that interface into its implementation.
-A working implementation follows in a later phase.
+The server stores spans in `tracking.db` at every start.
 The implementation reuses attribute names that the semantic conventions define.
 A kanthord identity takes the `kanthord.` prefix.
 A trace identity is 16 random bytes and a span identity is 8 random bytes, each written as lower-case hexadecimal under the W3C Trace Context representation, and the all-zero value is invalid.
+
+## Server spans
+
+A server component writes its span of an execution through `TrackingService.serverSpan(trace, producer, contribution)`.
+The call admits the root span, or a span whose parent is the root span. A span elsewhere in the trace fails an assertion.
+The call merges the identity attributes of the trace under the attributes of the contribution: `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id` and `kanthord.attempt`.
+A refused or failed write counts as a drop and raises no error.
+The Scheduler Service writes the root span with the producer `scheduler`.
+The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) with the producer `mission`.
 
 ## Primary store
 
 The primary store is a SQLite database.
 It uses its own database file, `tracking.db` of the data directory that [architecture.impl.md](architecture.impl.md) rules, and it never reuses the operational database.
 `node:sqlite` `DatabaseSync` opens that file in WAL mode, and the file holds its own migration record.
-The file appears with the working implementation of the tracer, so the no-op phase creates no file and runs no migration.
+The server opens that file at every start and runs `trackingMigrations` on it.
 Its migration record follows the runner contract of [architecture.impl.md](architecture.impl.md).
-The no-op phase opens no telemetry file, so it validates no history, and a telemetry file that a working-tracer release left stays untouched.
+`kanthord upgrade` also plans and migrates `tracking.db`, as [upgrade.md](../reference/upgrade.md) states.
 The schema holds the span and the telemetry text.
 A bulk import runs in bounded transactions, so a concurrent write of the server never waits for a whole import.
 The retention sweep deletes in bounded batches for the same reason.
@@ -82,9 +91,13 @@ No reader waits for the root span.
 
 ## Expiry
 
-The store keeps the identity of an expired telemetry text after it removes the content.
-A reference to that identity resolves to expired, and an unknown identity resolves to unknown.
-The start of the retention of a telemetry text is an epic decision.
+The trace is the only unit of retention.
+A delete of a trace row deletes its spans, its records and its telemetry texts through `ON DELETE CASCADE`.
+The table `tracking_telemetry_text` holds no `expired_at`, and its `content` is `NOT NULL`.
+The design answers a reference to a deleted trace as expired. Today the store keeps no tombstone of a deleted trace, so the read answers `404 tracking.trace.not_found`, the same answer as for an unknown trace.
+`tracking.text.get` answers `{ trace_id, text_id, content, created_at }`.
+`tracking.text.get` checks the trace first. A text of a deleted or unknown trace answers 404 `tracking.trace.not_found`. A text that a held trace does not hold answers 404 `tracking.text.not_found`.
+Today no sweep and no operation deletes a trace. The retention value and its start are an epic decision.
 
 ## Capture and packaging
 

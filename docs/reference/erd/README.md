@@ -7,19 +7,19 @@ title: Database schema
 ## Status
 
 These pages are a design of the KanthorD database, not a description of implemented behavior.
-They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-17.
-An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema through a migration.
+They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-18.
+An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema. Before the first tag, the change edits the one migration of the service, and an existing database follows the [reset procedure](../upgrade.md#reset-a-pre-release-database).
 
 ## Views
 
 The schema has four functional views. Their order is the order of delivery.
 
-| View                                             | Scope                                                                                                                    | Tables of the owners                        |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, agent cooldown, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, upload failures, assessments, outcomes and proposals.          | Worker, Scheduler, Mission                  |
-| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                                          | Intake                                      |
-| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                                              | Tracking                                    |
+| View                                             | Scope                                                                                                    | Tables of the owners                        |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
+| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals.           | Worker, Scheduler, Mission                  |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                          | Intake                                      |
+| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                              | Tracking                                    |
 
 A view holds the canonical definition of each of its tables.
 Another view shows that table as a stub: its key only, the color of its owner and a dashed border.
@@ -35,14 +35,14 @@ flowchart TB
         subgraph v1["ERD 1: Environment and planning"]
             c1["Custody: credential"]
             p1["Project: project, binding, binding revision"]
-            a1["Agent: agent enablement, agent cooldown, prompt settings"]
+            a1["Agent: agent enablement, prompt settings"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job"]
         end
         subgraph v2["ERD 2: Execution"]
             w2["Worker: instance"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt, evidence, evidence asset, evidence upload failure, assessment, outcome, proposal"]
+            m2["Mission: attempt, evidence, evidence asset, assessment, outcome, proposal"]
         end
         subgraph v3["ERD 3: External integration"]
             i3["Intake: inbound, inbound event, outbound request"]
@@ -90,18 +90,18 @@ flowchart TB
 
 ## Dependencies between views
 
-| View  | Needs                                                                                             | Adds                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ERD 1 | Nothing.                                                                                          | An environment and a plan. The work queue is here because the Mission Service writes it in its own transaction, and no later migration of the Scheduler Service can read Mission rows. Agent enablement is here because a native worker binding write validates it.                                                                                                                                                           |
-| ERD 2 | ERD 1.                                                                                            | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because the check of the Intake Service sets the end state of its request evidence. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
-| ERD 3 | ERD 1 and ERD 2.                                                                                  | The inbounds, their inbound events and the outbound requests. Delivery admission writes the end state of a request evidence, so a node in `External.Requested` reaches its end state. Only GitHub and the storage delete are ruled.                                                                                                                                                                                           |
-| ERD 4 | Nothing in its store. Every service calls the no-op interface of the Tracking Service from ERD 1. | The stored telemetry.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| View  | Needs                                                                                       | Adds                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ERD 1 | Nothing.                                                                                    | An environment and a plan. The work queue is here because the Mission Service writes it in its own transaction, and no later migration of the Scheduler Service can read Mission rows. Agent enablement is here because a native worker binding write validates it.                                                                                                                                                           |
+| ERD 2 | ERD 1.                                                                                      | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because the check of the Intake Service sets the end state of its request evidence. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
+| ERD 3 | ERD 1 and ERD 2.                                                                            | The inbounds, their inbound events and the outbound requests. Delivery admission writes the end state of a request evidence, so a node in `External.Requested` reaches its end state. Only GitHub and the storage delete are ruled.                                                                                                                                                                                           |
+| ERD 4 | Nothing in its store. Every service calls the interface of the Tracking Service from ERD 1. | The stored telemetry.                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Stores
 
 - `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody and the Agent component share that file, and one file gives a collaboration of two services one transaction.
-- `tracking.db` of the data directory holds every table of ERD 4. It appears with the working tracer.
-- Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody.
+- `tracking.db` of the data directory holds every table of ERD 4. The server opens it at every start.
+- Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody. Before the first tag, it holds one row of version 1 for each service that owns tables.
 - Custody owns the unprefixed `credential` table.
 
 ## Owners without a table
@@ -120,7 +120,7 @@ flowchart TB
 - A JSON column holds the canonical JSON of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
 - A boolean is an `INTEGER` 0 or 1.
 - A revision and a version start at 1. The attempt of a node reads 0 before its first attempt opens, and no attempt row exists for 0. An opened attempt starts at 1.
-- An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a peer value that names it resolves to expired.
+- An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a peer value that names it resolves to expired. Today the store keeps no tombstone, and a read answers `404 tracking.trace.not_found`.
 
 ## Diagram notation
 

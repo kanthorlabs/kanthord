@@ -11,7 +11,7 @@ A mechanism here never overrides a rule there.
 ## The credential store record
 
 - Custody owns the shared `credential` table and the [credential envelope](architecture.impl.md#the-credential-table).
-- A row holds `id`, `name`, `platform`, `revision`, `secret`, `metadata`, `created_at` and `ended_at`, and one row is one revision of a credential.
+- A row holds `id`, `name`, `platform`, `revision`, `secret`, `metadata`, `created_at`, `ended_at`, `available_at` and `strikes`, and one row is one revision of a credential.
 - The encrypted columns represent `secret`; no plaintext secret persists.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
@@ -145,6 +145,20 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The refresh-token rotation behaviour of concurrent holders remains a provider constraint.
 - Custody logs the execution identity and record identity of each handover and report, never material.
 - `pino` redacts the payload paths.
+
+## The credential hold
+
+- The columns `available_at` and `strikes` of the row of revision 1 hold the cooldown of the name. The hold is a runtime value of the name, as an OAuth refresh is a runtime value of a revision.
+- `available_at` is the Unix millisecond end of the hold, null while no hold exists. `strikes` is `NOT NULL` with the default 0.
+- Revision 1 exists for the whole life of a name, so the hold has one home. A rotation inserts the next revision with no hold and copies none. An archive keeps the rows and the hold.
+- A drain of revision 1 sets its `ended_at` and leaves the hold unchanged. `holdOf`, `hold`, `release` and `listHolds` ignore `ended_at`, so the hold stays readable and writable on an ended revision 1.
+- Custody offers the Agent component the port `CredentialHolds`. Custody writes no hold by itself.
+  - `holdOf(tx, name)` answers `{ available_at, strikes }`, or null when no row exists or `available_at` is null.
+  - `hold(tx, name, availableAt, strikes)` sets both columns of the row of revision 1 and asserts that exactly one row changes.
+  - `release(tx, name)` sets `available_at` to null and `strikes` to 0 when `strikes` is above 0, and it answers whether it changed the row.
+  - `listHolds(tx)` answers `{ credential, strikes, available_at }` for each name with `strikes` above 0, ordered by name.
+- The table also holds the credentials of the Repository and Storage components. Only the agent chain reads a hold, and `credential.get` and `credential.list` answer none.
+- Tests assert that a hold survives a rotation and that `release` of a name with no strike changes nothing.
 
 ## The pin of an execution
 

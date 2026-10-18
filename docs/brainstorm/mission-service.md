@@ -304,7 +304,9 @@ An address resolves while its repository holds the content.
 The server selects the storage binding of an upload, and the execution never selects one.
 The grant takes the first storage binding of the pinned revision whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check in the open attempt of the node.
 An upload check fails when it finds a mismatch, finds no object or fails at the store.
-A failed upload check records the binding as failed for the open attempt of the node.
+A failed upload check records the binding as failed for the open attempt of the node, as a mark on the checked asset.
+A human delete of that asset or of its evidence removes the mark, and the binding is grantable again.
+The failed check also writes a Mission span that carries the diagnosis, and no service reads that span to decide.
 A new attempt tries every storage binding again.
 A node with no remaining storage binding refuses the upload with `mission.evidence.storage_exhausted`.
 A read and a delete of an asset use the storage binding that the asset pins, and no read moves to another binding.

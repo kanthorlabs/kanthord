@@ -123,7 +123,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 - The server holds one operational database, the file `kanthord.db` of the data directory.
 - The Gateway Service, the Project Service, the Mission Service and the Scheduler Service use that database.
-- The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file, its migration record and the phase in which it appears.
+- The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file and its migration record.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
 - A start that cannot initialize the operational database fails with `system.database.initialization_failed`. The message names the path and the SQLite reason, for example `database is locked`.
 - A service owns its own tables, and it reads no table of another service.
@@ -131,7 +131,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
 - The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record). The LLM, Repository and Storage components each own the rows of their platforms.
 - [The credential table](#the-credential-table) defines its envelope.
-- The table `migration(service, version, applied_at)` records each migration that ran.
+- The table `migration(service, version, applied_at)` records each migration that ran. Before the first tag, it holds one row of version 1 for each service that owns tables.
 - The start applies the migrations only to a database that records no migration. [The upgrade](#the-upgrade) applies them to every other database.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
 - A delete removes the row, and a deleted row is gone and not recoverable.
@@ -157,8 +157,18 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 ## The migration
 
 - Each service holds an ordered list of migrations, numbered from 1 with no gap. A migration is a function that receives the open connection and runs its statements.
-- A published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
+- From the first tag, a published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
 - RULED 2026-10-07 by Ulrich. The snake_case rename resets the migration history once. Each table has one `CREATE TABLE` with its current columns, and no migration copies or alters data of an earlier schema. A data directory from before the reset is not supported: wipe it.
+- RULED 2026-10-18 by Ulrich. Before the first tag, no migration is published. Each service that owns tables holds exactly one migration, version 1, that creates its final schema. `gateway` and `workbench` hold no migration and record no row. A schema change edits that migration in place. No upgrade path exists for the data of a pre-release build: the reset below replaces it.
+- The runner checks the live schema before it checks the history. For each recorded service that the binary knows, it runs the migrations in an empty in-memory database. It stops at the lower of the recorded version and the list length. It compares the `type`, `name`, `tbl_name` and `CREATE` text of each `sqlite_master` object of the service with the live database. A difference stops the runner with `system.database.migration.schema_mismatch` and the fields `path`, `service` and `object`. The field `object` names the first differing object in the order of type, then name.
+- A recorded version above the list length compares against the whole list. The objects of the newer migrations then stop the runner with `system.database.migration.schema_mismatch` before the history check. The design page requires `incompatible_history` for a version above the highest version that the binary holds. Today the compare reports `schema_mismatch` first.
+- The objects of a service are the objects that its migrations create and the indexes and triggers of its tables. Each object with the name prefix `<service>_` also belongs to the service. The compare skips `sqlite_` objects and tables of no service. It skips a service with no recorded row.
+- The compare reads the `CREATE` text as stored. A change of whitespace in a migration text therefore also stops the runner.
+- The reset procedure for a database that stops with `system.database.migration.schema_mismatch`:
+  1. Stop the server.
+  2. Delete `kanthord.db` and `tracking.db` of the data directory, with their `-wal` and `-shm` files.
+  3. Start the server. The first start creates both files.
+- The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of the `master_key` of that file in the new database, so the same `master_key` stays valid.
 - The runner validates the whole recorded history of every participating database before it applies any migration. It rejects a service that the binary does not know, a duplicate version, a gap in the recorded versions, and a recorded version above the highest version that the binary holds.
 - Each store owns its runner and its own `migration` history table, keyed by service and version.
 - The operational store holds the history of the services that share it.
@@ -190,20 +200,20 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A published step is immutable. A correction appends a step.
 - The data version is the migration history of each service, as [the migration](#the-migration) defines.
 - Every reader of the configuration file refuses a version other than `CONFIG_VERSION`. An older version fails with `system.config.version_behind`, and its message names `kanthord upgrade`. A newer version fails with `system.config.version_ahead`. A value that is not a positive safe integer fails with `system.config.invalid_field`. Each message says "configuration version", never "version" alone.
-- The start of the server validates the migration history. A database that records a migration and has a pending migration stops the start with `system.database.migration.pending`, and its message names `kanthord upgrade`. A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`.
+- The start of the server validates the migration history. A database that records a migration and has a pending migration stops the start with `system.database.migration.pending`, and its message names `kanthord upgrade`. A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`. A database of another migration text stops the start with `system.database.migration.schema_mismatch`.
 - `kanthord upgrade [--config <path>]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
   1. Read the configuration file and apply the steps from its version in memory. Validate the result. A newer version stops with `system.config.version_ahead`.
-  2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
+  2. If `kanthord.db` exists, open it with its exclusive lock, then check its schema and validate its history. Do the same for `tracking.db` when it exists. A missing `tracking.db` stays missing. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
   3. If no step and no migration is pending, print `up_to_date: <path>` and write nothing.
-  4. Write the backups with one UTC timestamp, while the lock is held. The original configuration goes to `<path>.bak-<timestamp>` with mode `0600`. The database goes to `kanthord.db.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. An existing backup path stops the command.
-  5. Apply the pending migrations with the runner of [the migration](#the-migration).
+  4. Write the configuration backup `<path>.bak-<timestamp>` with mode `0600` and one UTC timestamp, while the lock is held. Write it only when a configuration step applies.
+  5. Take `kanthord.db`, then `tracking.db`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command.
   6. Replace the configuration file atomically.
-- Steps 1 to 4 change neither the configuration file nor the database. `Store.plan` runs reads only.
-- The command prints each backup path before step 5, each migrated service, each rename and the configuration versions.
+- Steps 1 to 3 write nothing. `Store.plan` runs reads only.
+- The command prints the backup path of a database before the migrated rows of that database. It then prints each rename and the configuration versions.
 - A rerun after a success prints `up_to_date: <path>`.
 - A failure in step 5 keeps the committed migrations, and the next start stops with `system.database.migration.pending`. A failure in step 6 keeps the old configuration, and the next start stops with `system.config.version_behind`. A rerun of `kanthord upgrade` completes the remaining part.
 - The command deletes no backup.
-- A restore stops the server, deletes `kanthord.db-wal` and `kanthord.db-shm`, copies the database backup to `kanthord.db` and the configuration backup to the configuration file, and keeps mode `0600` on both.
+- A restore stops the server, deletes the `-wal` and `-shm` files of `kanthord.db` and `tracking.db`, copies each database backup to its database file and the configuration backup to the configuration file, and keeps mode `0600` on each.
 - The state directory holds no version. A breaking change of its layout states a wipe of the state directory in the release note.
 - `cli.yaml` holds no version. A breaking change of that file states a new `kanthord auth jwt generate` in the release note.
 - An upgrade step never changes `master_key` or `gateway.auth.version`. A change of the JWT format, of a key label or of the authentication version invalidates every JWT and every client secret, and the release note states the reissue.
@@ -837,7 +847,7 @@ Cross-service references tolerate a deleted target.
 - A peer holds the identity of a record of another service as a correlation value, which resolves to not found after a delete.
 - An owner that exposes no delete operation keeps its records, and no sweep deletes one.
 - A referencing service tolerates a disabled target.
-- The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion.
+- The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion. Today the store keeps no tombstone, and a read answers `404 tracking.trace.not_found`.
 - No existence operation exists.
 
 The applications compare package versions.
@@ -944,7 +954,8 @@ A process split retains these boundaries.
 - An integration test covers a binding submission that changes no configuration and a completed replay within the TTL of the idempotency component.
 - A test enforces the migration naming check for table prefixes and their unique service owners.
 - A test enforces the migration isolation check by applying each service's migrations alone on an empty store.
-- A test upgrades a preserved fixture of an earlier release that holds rows.
+- From the first tag, a test upgrades a preserved fixture of an earlier release that holds rows.
+- A test changes the migration text of a recorded service. A second test edits the schema of a service by hand. Each test asserts the refusal `system.database.migration.schema_mismatch` with no write. A test asserts that the compare skips a table of no service and every `sqlite_` object.
 - A test restarts after a migration sequence that committed two services and failed on the third.
 - A test covers a migration that fails in its second statement, and it asserts no row of its own and no partial schema.
 - A test starts the server on an older configuration and on an older database, asserts each refusal, runs `kanthord upgrade`, and asserts both backups, the migrated history and an `up_to_date` rerun.

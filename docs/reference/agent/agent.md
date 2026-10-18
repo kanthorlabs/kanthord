@@ -78,31 +78,33 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
 }
 ```
 
-| Property               | Type            | Purpose                                                                                                                                                                        |
-| ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agent_name`           | string          | Catalog key of the agent.                                                                                                                                                      |
-| `configuration_schema` | object          | JSON Schema draft 2020-12 of the effective configuration. JSON Schema does not check that the model belongs to the provider or that the model supports the reasoning effort.   |
-| `overridable_fields`   | string array    | Fields that a binding entry can override. For `swe@1` and `re@1` the value is `agent_provider`, `model_identifier`, `reasoning_effort` and `fallback_configurations`.          |
-| `prompt.layers`        | array           | The system, agent and working layers, in composition order. Absent with `view=final`.                                                                                          |
-| `prompt.final`         | string          | The composed prompt: the `present` texts of the system and agent layers, a framing paragraph, then each `present` working text as `Instructions of <source label>:`.           |
-| `tools`                | array           | Permitted tools. Each item holds `name`, `source` (`host`, `builtin` or `kanthord-mcp`) and `input_schema`.                                                                    |
-| `enablement`           | object or null  | The live [enablement record](enablement.md#expected-response), or `null` when no live record exists.                                                                           |
-| `chain`                | array           | The fallback chain of the enablement: the default configuration, then its `fallback_configurations`. `[]` when the enablement is absent or invalid. See the chain table below. |
-| `active_position`      | integer or null | The `position` that the next claim selects. `null` when every chain entry has a live cooldown, and when `chain` is empty.                                                      |
-| `cooling`              | object or null  | `{ code, until_at }` with `code` `agent.configuration.chain_cooling` and the earliest `until_at` of the chain, when every chain entry has a live cooldown. Otherwise `null`.   |
+| Property               | Type            | Purpose                                                                                                                                                                              |
+| ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent_name`           | string          | Catalog key of the agent.                                                                                                                                                            |
+| `configuration_schema` | object          | JSON Schema draft 2020-12 of the effective configuration. JSON Schema does not check that the model belongs to the provider or that the model supports the reasoning effort.         |
+| `overridable_fields`   | string array    | Fields that a binding entry can override. For `swe@1` and `re@1` the value is `agent_provider`, `model_identifier`, `reasoning_effort` and `fallback_configurations`.                |
+| `prompt.layers`        | array           | The system, agent and working layers, in composition order. Absent with `view=final`.                                                                                                |
+| `prompt.final`         | string          | The composed prompt: the `present` texts of the system and agent layers, a framing paragraph, then each `present` working text as `Instructions of <source label>:`.                 |
+| `tools`                | array           | Permitted tools. Each item holds `name`, `source` (`host`, `builtin` or `kanthord-mcp`) and `input_schema`.                                                                          |
+| `enablement`           | object or null  | The live [enablement record](enablement.md#expected-response), or `null` when no live record exists.                                                                                 |
+| `chain`                | array           | The fallback chain of the enablement: the default configuration, then its `fallback_configurations`. `[]` when the enablement is absent or invalid. See the chain table below.       |
+| `active_position`      | integer or null | The `position` that the next claim selects. `null` when every chain entry has a live cooldown, and when `chain` is empty.                                                            |
+| `cooling`              | object or null  | `{ code, available_at }` with `code` `agent.configuration.chain_cooling` and the earliest `available_at` of the chain, when every chain entry has a live cooldown. Otherwise `null`. |
 
 Each `chain` item holds these fields:
 
-| Property           | Type           | Purpose                                                                                                           |
-| ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `position`         | integer        | Position in the chain. `0` is the head.                                                                           |
-| `level`            | string         | `enablement` or `binding`. This view holds only `enablement`.                                                     |
-| `agent_provider`   | string         | Name of the agent provider.                                                                                       |
-| `provider`         | string         | Provider kind of the agent provider.                                                                              |
-| `credential`       | string         | Credential name of the agent provider.                                                                            |
-| `model_identifier` | string         | Model of the chain entry.                                                                                         |
-| `reasoning_effort` | string         | Reasoning effort of the chain entry.                                                                              |
-| `cooldown`         | object or null | `null`, or `{ cooldown_id, code, strikes, until_at }` of the [cooldown](cooldown.md) of the credential and model. |
+| Property           | Type           | Purpose                                                                                                                                    |
+| ------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `position`         | integer        | Position in the chain. `0` is the head.                                                                                                    |
+| `level`            | string         | `enablement` or `binding`. This view holds only `enablement`.                                                                              |
+| `agent_provider`   | string         | Name of the agent provider.                                                                                                                |
+| `provider`         | string         | Provider kind of the agent provider.                                                                                                       |
+| `credential`       | string         | Credential name of the agent provider.                                                                                                     |
+| `model_identifier` | string         | Model of the chain entry.                                                                                                                  |
+| `reasoning_effort` | string         | Reasoning effort of the chain entry.                                                                                                       |
+| `cooldown`         | object or null | `null`, or `{ strikes, available_at }` of the [cooldown](cooldown.md) of the credential. Every model of a credential shows the same value. |
+
+A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats an expired hold as free.
 
 Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `sources`. A disabled layer resolves every source as `off`. Each source holds these fields:
 
@@ -115,6 +117,13 @@ Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `source
 | `state`   | string         | `present`, `absent`, `invalid`, `off` or `deferred`. `invalid` marks a text that is too large, is not UTF-8, holds a control character, or that the server cannot read. |
 | `digest`  | string or null | SHA-256 hex digest of the text when `state` is `present`, else `null`.                                                                                                  |
 | `text`    | string or null | Text of the source when `state` is `present`, else `null`.                                                                                                              |
+
+### Selection
+
+- The claim selects the first chain entry whose credential is not cooling. It records each selection as the agent name, the enablement revision and the chain position.
+- The execution record and the release rebuild the selection from these pins.
+- Today the worker setup (`workerAgentView`) and the authorization of custody (`authorization.ts`) resolve the credential through the newest enablement revision.
+- An enablement edit during a live execution therefore reaches the credential of the setup and of the authorization, and it does not change the recorded selection.
 
 ### Failures
 

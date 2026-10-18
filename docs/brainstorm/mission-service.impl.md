@@ -90,9 +90,11 @@ An import carries no priority.
 - `StartPoint` is an enum in code with the values `base_branch` and `node_branch`. The column `mission_attempt.start_point` holds it with no `CHECK` constraint.
 - Attempt 1 records `base_branch`, whatever act opens it. An unblock records the value of its optional body field `start_point`, and `node_branch` when the field is absent. The request schema refuses another value with 400 `gateway.request.validation_failed`, and the act writes nothing.
 - The `Attempt` read answers `start_point`.
-- The claim admission answers `node_branch` next to `attempt` and `node_revision`. The node branch of attempt N is the branch of the latest attempt k <= N that records `base_branch`. `nodeBranchOf(node_id, k)` of the Repository component builds `kanthord/<node id>` for k = 1 and `kanthord/<node id>-a<k>` for a later k.
-- The lookup of k reads `mission_attempt` through its primary key `(node_id, attempt)`. No other index exists for it.
-- The migration sets `start_point` to `base_branch` for attempt 1 and to `node_branch` for every later attempt.
+- The claim admission answers `kind`, `project_id`, `attempt` and `node_revision`. It answers no node branch.
+- The Scheduler asks for the node branch of an execution through the `MissionBranches` port. `nodeBranchesOf(tx, keys)` answers one branch for each `{ node_id, attempt }` key, in key order.
+- The node branch of attempt N is the branch of the latest attempt k <= N that records `base_branch`. `nodeBranchOf(node_id, k)` of the Repository component builds `kanthord/<node id>` for k = 1 and `kanthord/<node id>-a<k>` for a later k.
+- The lookup of k is one read of `mission_attempt` for all keys. It selects the attempts that record `base_branch` of the named nodes through the primary key `(node_id, attempt)`. No other index exists for it.
+- The column `start_point` is `NOT NULL` with the default `node_branch`, and each insert sets it.
 
 `FrozenAction` is the read shape of a required external action.
 The service derives one `FrozenAction` for each configured action of each repository binding row that the pinned revision of the attempt names.
@@ -380,6 +382,7 @@ The file path is local input, not an evidence address.
    The server checks the live claim, the storage bindings of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
    The server selects the binding, and the component never selects one. The grant takes the first storage binding of the pinned revision, in list order, whose latest revision holds `available: true` and that no tombstone removed, that the signing call accepts, and that holds no failed upload check in the open attempt of the node.
+   The third step states the failed upload checks: they are the assets of that node and attempt whose `failed_at` is set.
    The grant moves to the next binding when the signing call answers `binding_disabled`, `binding_removed` or a `storage.platform.s3.*` failure. Every other refusal of the signing call stops the upload.
    A node whose storage bindings all fail that rule refuses the upload with 409 `mission.evidence.storage_exhausted`. `details` holds `{ node_id, attempt, bindings }`, and `bindings` lists the storage bindings that hold a failed upload check in the open attempt, in list order.
    503 `mission.evidence.storage_unavailable` answers only when no object storage is wired.
@@ -392,6 +395,14 @@ The file path is local input, not an evidence address.
 3. The component calls `mission.evidence.asset.complete` under execution access with the asset identity and execution context.
    The server checks the live claim, and the Intake Service checks the object size and, when given, the checksum through `intake.storage.check`.
    A check that finds a mismatch, finds no object or fails at the store prevents publication, and it records that binding as failed for the open attempt of the node.
+   The record is `failed_at` of the asset, which the server sets once in its own transaction. No table of the Mission Service holds a failure apart from the asset.
+   The failed bindings of an attempt are the `storage_binding_id` values of the assets of that node and attempt that hold `failed_at`.
+   A human delete of the failed asset, or of its evidence, removes that mark, and its binding is grantable again.
+   The server then writes one Mission span through the Tracking Service. The operation is `mission.evidence.asset.complete`, the producer is `mission`, the status is `Error`, and the parent is the root span of the execution.
+   The attributes are `kanthord.evidence_asset.id`, `kanthord.storage_binding.id` and `error.type`, which holds the code of the check.
+   The Tracking Service adds `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id` and `kanthord.attempt`, as [the server spans](tracking-service.impl.md#server-spans) state.
+   An unknown execution writes no span.
+   A refused or failed span write drops the span and leaves `failed_at` in place. No service reads the span to decide.
    The server sets `published_at` of the asset only after those checks pass.
    The asset holds the object location, version when the store returns one, size, media type and optional SHA-256.
    The answer holds the asset identity and the `s3://` URI.
@@ -804,6 +815,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests skip a disabled storage binding, a removed storage binding, a binding that the signing call refuses and a binding with a failed upload check in the open attempt. Tests try every binding again in the next attempt.
 - Tests record a failed upload check for a mismatch, for a missing object and for a store failure.
 - Tests answer 409 `mission.evidence.storage_exhausted` when no binding is left in the attempt.
+- Tests assert that a failed check sets `failed_at` once and writes one Mission span with the three attributes.
+- Tests assert that a human delete of the failed asset, or of its evidence, makes the binding grantable again.
 - Tests keep 503 `mission.evidence.storage_unavailable` when no object storage is wired.
 - Tests read and delete each asset through the binding that it pins.
 - Tests admit a `branch_push` address on the base branch of the binding on a `pull_request` request. They fold it to `pull_request_merged` with that landed commit.
@@ -817,8 +830,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that an unblock with `start_point: base_branch` opens an attempt that records it, that an unblock without the field records `node_branch`, and that another value answers 400 and writes nothing.
 - Tests assert that attempt 1 records `base_branch` when a claim, a ready act or a resume to `Waiting` opens it, and that a proposal approval records `node_branch`.
-- Tests assert that the claim admission answers `kanthord/<node id>` before the first restart, and `kanthord/<node id>-a<k>` for restart attempt k and for each later attempt that continues it. A steps claim and an evaluation claim of one attempt answer the same value.
-- Tests assert that `attempt get` and `attempt list` answer `start_point`, and that the migration sets the ruled values.
+- Tests assert that `nodeBranchesOf` answers `kanthord/<node id>` before the first restart, and `kanthord/<node id>-a<k>` for restart attempt k and for each later attempt that continues it. A steps claim and an evaluation claim of one attempt answer the same value.
+- Tests assert that `attempt get` and `attempt list` answer `start_point`.
 - Tests assert that, after a restart, an event for the pull request of the earlier node branch answers `duplicate` or `unmatched` and changes no state.
 - Tests assert that a current `criterion-not-met` execution assessment below `mission.rework_limit` moves the node to `Available` with a job, ends the claim, keeps the attempt open and writes no outcome. They assert `Blocked` with an outcome at the limit, at once for `undetermined` and below the limit when the attempt holds a request evidence, that the next attempt counts from zero, and that `execution rework-assessment get` answers the latest `criterion-not-met` assessment of the claimed attempt or 404.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a dependency terminal transition, a dependency edit and a retirement.

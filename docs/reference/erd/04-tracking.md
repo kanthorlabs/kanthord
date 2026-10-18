@@ -14,8 +14,8 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Capability limits
 
-- The first phase of the Tracking Service ships a no-op implementation of its interface. Every other service plugs that interface in from ERD 1 onwards, so a trace identity and a root span identity exist in `scheduler_execution` before this group.
-- The no-op phase creates no `tracking.db`, runs no migration and validates no history. The file and its own `migration(service, version, applied_at)` table appear with the working tracer. The [README](README.md#stores) defines that table. In `tracking.db` it holds the history of the Tracking Service alone.
+- Every other service plugs the interface of the Tracking Service in from ERD 1 onwards, so a trace identity and a root span identity exist in `scheduler_execution` before this group.
+- The server opens `tracking.db` at every start and runs the migrations of the Tracking Service on it. The file holds its own `migration(service, version, applied_at)` table. The [README](README.md#stores) defines that table. In `tracking.db` it holds the history of the Tracking Service alone.
 - No service reads telemetry to make a decision, and no outcome depends on a row of this group.
 - A foreign key cannot reach `kanthord.db`. Every project, execution and node value of this group is a correlation value.
 
@@ -65,8 +65,7 @@ erDiagram
     tracking_telemetry_text {
         text trace_id PK, FK
         text text_id PK "identity contract open"
-        text content "authored prose, null after expiry"
-        integer expired_at "Unix ms or null"
+        text content "authored prose, never null"
         integer created_at "Unix ms"
     }
 
@@ -88,7 +87,7 @@ erDiagram
 | `tracking_trace`          | Tracking Service | Derived: a trace belongs to exactly one project or to no project, it is the unit of deletion, and an ingestion resolves the project through the records of the Tracking Service, under [the trace and the project](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-and-the-project) and [ingestion](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#ingestion).         |
 | `tracking_span`           | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the span. The columns are derived from [the trace model](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-model) and the span record of the [Tracking CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/tracking.md#span-record-fields-kind-span). |
 | `tracking_record`         | Tracking Service | Derived: the Tracking Service deduplicates by the record identity that its producer mints, within the retention of the trace. The identity contract is open in HANDOFF.                                                                                                                                                                                                                                                                                       |
-| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [expiry](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#expiry) keeps its identity. The columns are derived, and the identity contract of a text is open in HANDOFF.                                                                                   |
+| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [expiry](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#expiry) deletes it with its trace. The columns are derived, and the identity contract of a text is open in HANDOFF.                                                                            |
 
 ## Constraints
 
@@ -109,7 +108,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 - A trace has exactly one root span, and `root_span_id` names it. A lost write of the root span leaves no root row. The trace then stays readable through its other spans, and a reader meets an unresolved parent. The representation of a missing root is open.
 - An ingestion carries no project. It names an existing trace, and it assigns no trace and reassigns no trace. The Tracking Service resolves the project from `tracking_trace`.
 - An imported record names an execution and a trace that agree with `tracking_trace`. A record that names another trace is refused.
-- A record that arrives after its trace expires is refused.
+- A record that arrives after its trace expires is refused. Today no deletion of a trace exists, so no record meets that case.
 
 ### Spans
 
@@ -124,7 +123,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 - `attributes` maps a name to a value of one kind: a string, a boolean, an integer, a floating-point number or an array of one primitive kind. An event holds attributes of the same kinds.
 - A span carries the identity of every kanthord object that its operation concerns, as an identity attribute with the `kanthord.` prefix. One object has one attribute name in every span. An identity attribute holds an identity and never the content that it names. That rule is a producer obligation, and the registry of the attribute names is open.
 - A span attribute holds no authored prose. That rule is a producer obligation.
-- The record of the prompt composer of the Worker Service is a set of span attributes: the selected source of each prompt layer, the digest of its text, and every source that the composer read and rejected. It follows the retention and the access of a span. The text of a prompt reaches telemetry only through an agent transcript.
+- The record of the prompt composer of the Worker Service is a set of span attributes: the selected source of each prompt layer, the digest of its text, and every source that the composer read and rejected. It follows the trace and the access of its span. The text of a prompt reaches telemetry only through an agent transcript.
 - A span of `links` names a span of another trace. A link names no project.
 - `text_ids` names telemetry texts of the same trace.
 
@@ -132,12 +131,12 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 - A telemetry text belongs to exactly one trace. A span references it by identity and never embeds it.
 - An agent transcript is a telemetry text.
-- An expiry of a telemetry text sets `content` to null and `expired_at`, and the row stays, so a reference resolves to expired and never to missing. An unknown identity resolves to unknown.
+- A telemetry text holds no retention of its own and no `expired_at`, and `content` is `NOT NULL`. The deletion of its trace deletes it, and a reference to a deleted trace resolves to expired. Today the store keeps no tombstone, and a read of a deleted trace answers `404 tracking.trace.not_found`. The text read checks the trace first. A text of a deleted or unknown trace answers `404 tracking.trace.not_found`. A text that a held trace does not hold answers `404 tracking.text.not_found`.
 
 ### Retention and deletion
 
-- The retention of a telemetry text is never longer than the retention of a span. The operator configures both once for the server, never per project. The values and the start of the retention of a text are open.
-- The trace is the unit of deletion. The deletion of a trace deletes its spans, its records and its telemetry texts. The deletion of a span deletes no telemetry text.
+- The trace is the only unit of retention. The deletion of a trace row deletes its spans, its records and its telemetry texts through `ON DELETE CASCADE`. The deletion of a span deletes no telemetry text.
+- The operator configures the retention of a trace once for the server, never per project. The value and the start of the retention are open. Today no sweep and no operation deletes a trace.
 - A deletion of a telemetry row changes no outcome, removes no evidence and changes no state of a node.
 - Telemetry is the one exception to the rule that an owner deletes no record that a peer can reference, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. `scheduler_execution.trace_id` and `root_span_id` keep their values after the deletion of their trace, and they resolve to expired.
 
