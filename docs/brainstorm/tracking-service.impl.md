@@ -95,7 +95,8 @@ The trace is the only unit of retention.
 A delete of a trace row deletes its spans, its records and its telemetry texts through `ON DELETE CASCADE`.
 The table `tracking_telemetry_text` holds no `expired_at`, and its `content` is `NOT NULL`.
 The design answers a reference to a deleted trace as expired. Today the store keeps no tombstone of a deleted trace, so the read answers `404 tracking.trace.not_found`, the same answer as for an unknown trace.
-`tracking.text.get` answers `{ trace_id, text_id, content, created_at }`. A text identity that its trace does not hold answers `404 tracking.text.not_found`.
+`tracking.text.get` answers `{ trace_id, text_id, content, created_at }`.
+`tracking.text.get` checks the trace first. A text of a deleted or unknown trace answers 404 `tracking.trace.not_found`. A text that a held trace does not hold answers 404 `tracking.text.not_found`.
 Today no sweep and no operation deletes a trace. The retention value and its start are an epic decision.
 
 ## Capture and packaging
