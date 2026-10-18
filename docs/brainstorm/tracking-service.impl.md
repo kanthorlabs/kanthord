@@ -15,9 +15,9 @@ The trace model reuses the [OpenTelemetry specification](https://opentelemetry.i
 The implementation installs `@opentelemetry/api`, `@opentelemetry/resources` and `@opentelemetry/semantic-conventions`.
 It installs no OpenTelemetry SDK.
 kanthord implements the tracer, the span processor and the exporter itself.
-The first phase ships a no-op implementation of the interface that the Tracking Service defines.
+The Tracking Service defines the interface of the tracer.
 Every other service plugs that interface into its implementation.
-A working implementation follows in a later phase.
+The server stores spans in `tracking.db` at every start.
 The implementation reuses attribute names that the semantic conventions define.
 A kanthord identity takes the `kanthord.` prefix.
 A trace identity is 16 random bytes and a span identity is 8 random bytes, each written as lower-case hexadecimal under the W3C Trace Context representation, and the all-zero value is invalid.
@@ -36,9 +36,9 @@ The Mission Service writes the span of a [failed upload check](mission-service.i
 The primary store is a SQLite database.
 It uses its own database file, `tracking.db` of the data directory that [architecture.impl.md](architecture.impl.md) rules, and it never reuses the operational database.
 `node:sqlite` `DatabaseSync` opens that file in WAL mode, and the file holds its own migration record.
-The file appears with the working implementation of the tracer, so the no-op phase creates no file and runs no migration.
+The server opens that file at every start and runs `trackingMigrations` on it.
 Its migration record follows the runner contract of [architecture.impl.md](architecture.impl.md).
-The no-op phase opens no telemetry file, so it validates no history, and a telemetry file that a working-tracer release left stays untouched.
+`kanthord upgrade` also plans and migrates `tracking.db`, as [upgrade.md](../reference/upgrade.md) states.
 The schema holds the span and the telemetry text.
 A bulk import runs in bounded transactions, so a concurrent write of the server never waits for a whole import.
 The retention sweep deletes in bounded batches for the same reason.

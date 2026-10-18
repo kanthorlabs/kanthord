@@ -123,7 +123,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 - The server holds one operational database, the file `kanthord.db` of the data directory.
 - The Gateway Service, the Project Service, the Mission Service and the Scheduler Service use that database.
-- The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file, its migration record and the phase in which it appears.
+- The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file and its migration record.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
 - A start that cannot initialize the operational database fails with `system.database.initialization_failed`. The message names the path and the SQLite reason, for example `database is locked`.
 - A service owns its own tables, and it reads no table of another service.

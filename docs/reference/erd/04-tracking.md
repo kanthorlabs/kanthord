@@ -14,8 +14,8 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Capability limits
 
-- The first phase of the Tracking Service ships a no-op implementation of its interface. Every other service plugs that interface in from ERD 1 onwards, so a trace identity and a root span identity exist in `scheduler_execution` before this group.
-- The no-op phase creates no `tracking.db`, runs no migration and validates no history. The file and its own `migration(service, version, applied_at)` table appear with the working tracer. The [README](README.md#stores) defines that table. In `tracking.db` it holds the history of the Tracking Service alone.
+- Every other service plugs the interface of the Tracking Service in from ERD 1 onwards, so a trace identity and a root span identity exist in `scheduler_execution` before this group.
+- The server opens `tracking.db` at every start and runs the migrations of the Tracking Service on it. The file holds its own `migration(service, version, applied_at)` table. The [README](README.md#stores) defines that table. In `tracking.db` it holds the history of the Tracking Service alone.
 - No service reads telemetry to make a decision, and no outcome depends on a row of this group.
 - A foreign key cannot reach `kanthord.db`. Every project, execution and node value of this group is a correlation value.
 
