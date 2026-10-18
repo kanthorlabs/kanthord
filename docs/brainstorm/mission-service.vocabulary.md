@@ -92,7 +92,7 @@ After the first claim opens attempt 1, a change of its `intent` answers `mission
 ## tags
 
 The list of tags that a worker binding needs to claim a node.
-The current worker bindings of a project supply its tags, so the term names no closed set.
+The current worker bindings of a project state its tag vocabulary, so the term names no closed set.
 
 - Each tag follows the form of a [tag](project-service.vocabulary.md#tag) of the Project Service.
 - A list holds each tag once, and an absent list reads `[]`.

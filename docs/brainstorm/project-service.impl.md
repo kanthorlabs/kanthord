@@ -371,7 +371,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers an SSH alias that resolves to `ssh.github.com`, an alias that resolves to a host outside the GitHub SSH host set, an alias that resolves to `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The alias address and the `github.com` address of one repository derive the same identity.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
-- Tests accept `tags` at 64 bytes and an absent field as `[]`. They refuse a longer key, an upper-case key, an empty segment, a repeated key and a nonlist value with `project.bindings.worker.tags_invalid`.
+- Tests accept `tags` at 64 bytes and an absent field as `[]`. They refuse a longer tag, an upper-case tag, an empty segment, a repeated tag and a nonlist value with `project.bindings.worker.tags_invalid`.
 - Tests refuse a binding-set write that adds an unmatched pair with `project.bindings.worker.node_unmatched` and the node identities. They accept a write that keeps an earlier unmatched pair and adds none.
 - A test covers the project prompt bound in UTF-8 bytes and its error code.
 - A test covers both GitHub actions, their capabilities and their implied expected end states. It refuses more than one action.

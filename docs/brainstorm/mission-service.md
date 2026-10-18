@@ -32,7 +32,7 @@ An `examine` node reads zero or more repositories and the outcomes of its direct
 An `examine` node holds no task, and its execution submits its findings as produced evidence.
 A human changes the intent of a node only while the attempt of the node reads 0.
 A later change of the intent answers `mission.node.intent_locked`.
-The [tags](mission-service.vocabulary.md#tags) of a node name the tags that a worker binding needs to claim the node.
+The [tags](mission-service.vocabulary.md#tags) of a node state the facts of a host that a worker binding needs to claim the node.
 The [Scheduler Service](scheduler-service.md#match) matches the intent and the tags of a node against each worker binding of the project.
 A node write that adds an unmatched pair of a node and a claimable state answers `mission.node.tags_unmatched`.
 A node write that keeps an existing unmatched pair succeeds.

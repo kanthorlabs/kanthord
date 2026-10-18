@@ -72,7 +72,7 @@ tags:
 The node "Add password reset to the iOS app" holds `tags: [platform.macos]`.
 `macos-coder` and `macos-reviewer` hold that tag, so only their instances claim the node.
 A Linux binding with `tags: []` claims only a node with `tags: []`.
-The key `platform.macOS` holds an upper-case letter, so the write answers `project.bindings.worker.tags_invalid`.
+The tag `platform.macOS` holds an upper-case letter, so the write answers `project.bindings.worker.tags_invalid`.
 
 ## binding name
 

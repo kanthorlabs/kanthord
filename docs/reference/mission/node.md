@@ -8,7 +8,7 @@ A mission node is the unit that the Scheduler Service schedules. Every node hold
 
 The `intent` of a node is `implement` or `examine`. An `implement` node changes one or more repositories, and its tasks state the final-state requirements of that change. An `examine` node reads zero or more repositories and the outcomes of its direct dependencies, changes no repository and holds no task. A human changes the intent of a node only while the attempt of the node reads `0`.
 
-The `tags` list names the tags that a worker binding needs to claim the node. The Scheduler Service matches the intent and the tags of a node against each worker binding of the project.
+The tags of a node state the facts of a host that a worker binding needs to claim the node. The Scheduler Service matches the intent and the tags of a node against each worker binding of the project.
 
 Node content has `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent` and `tags`. In the node API, `bindings` holds binding IDs of the project. A node names every binding that it uses, and no node takes a binding from the project. The service stores the latest revision of each named binding. The [bindings of a node](import.md#bindings-of-a-node) rule states the count of each binding kind. An `implement` node names one or more repository bindings, and the convention is one binding. No node names a worker binding.
 
