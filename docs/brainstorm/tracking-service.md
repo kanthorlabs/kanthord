@@ -98,7 +98,7 @@ A telemetry text belongs to exactly one trace.
 Any number of spans of that trace reference it.
 The [Worker Service boundary](worker-service.md#boundary) owns the rule for transcripts submitted as evidence.
 The record that the prompt composer of the [Worker Service](worker-service.md#prompt-composition) writes holds span attributes.
-That record follows the retention and the access of a span.
+That record follows the trace and the access of its span.
 The text of a prompt reaches telemetry through an agent transcript alone.
 
 ## Writing telemetry
@@ -144,7 +144,7 @@ A record states its execution identity and its trace identity, and the two agree
 An ingestion assigns no trace and reassigns no trace.
 Every record carries an identity that its producer mints.
 The Tracking Service deduplicates by that identity within the retention of the trace.
-It refuses a record that arrives after its trace expires.
+It refuses a record that arrives after its trace expires. Today no deletion of a trace exists, so no record meets that case.
 The Tracking Service holds no state of the progress of an ingestion between two ingestions.
 The Tracking Service accepts records in any order.
 The delivery promise holds after a human issues an ingestion.
@@ -174,13 +174,13 @@ The [Project Service](project-service.md#authorization-and-credential-custody) o
 
 ## Retention and deletion
 
-A span and a telemetry text expire on separate retentions.
-The retention of a telemetry text is never longer than the retention of a span.
-A reference to an expired telemetry text resolves to expired and never to missing.
-The trace is the unit of deletion.
-A deletion of a trace deletes every span and every telemetry text of that trace.
+The trace is the only unit of retention.
+A span and a telemetry text hold no retention of their own.
+A deletion of a trace deletes every span, every record and every telemetry text of that trace.
 A deletion of a span deletes no telemetry text.
-The operator configures retention once for the server, and never per project.
+A reference to a deleted trace answers `404 tracking.trace.not_found`, because a deleted trace leaves no tombstone.
+The operator configures the retention of a trace once for the server, and never per project.
+Today the server holds no retention value, no sweep and no delete operation of a trace, so it deletes no trace.
 The [architecture](architecture.md#tracking-service) owns the difference between telemetry retention and evidence retention.
 A deletion of a telemetry record changes no outcome, removes no evidence and changes no state of a node.
 
@@ -207,4 +207,4 @@ The [Project Service](project-service.md#authorization-and-credential-custody) o
 The [Mission Service](mission-service.md#outcome-and-completion) owns evidence, assessment and outcome.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) owns the execution record, the claim and the lease.
 The [Worker Service](worker-service.md#boundary) owns the hosting and lifecycle of an execution.
-The Tracking Service owns the trace, span, telemetry text, record disposition, retention of both record forms and the drop.
+The Tracking Service owns the trace, span, telemetry text, record disposition, the retention of a trace and the drop.

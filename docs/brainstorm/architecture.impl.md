@@ -845,7 +845,7 @@ Cross-service references tolerate a deleted target.
 - A peer holds the identity of a record of another service as a correlation value, which resolves to not found after a delete.
 - An owner that exposes no delete operation keeps its records, and no sweep deletes one.
 - A referencing service tolerates a disabled target.
-- The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion.
+- The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which answers `404 tracking.trace.not_found` after that deletion.
 - No existence operation exists.
 
 The applications compare package versions.

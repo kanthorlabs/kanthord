@@ -83,7 +83,11 @@ The set has these values.
 - **agent enablement**
 - **client identity**
 - **evidence**
+- **evidence asset**
 - **repository**
+- **storage binding**
+
+The span of a failed upload check carries the evidence asset and the storage binding.
 
 ## producer
 
@@ -105,8 +109,9 @@ The set is closed and it holds two values.
 
 ## retention
 
-Retention is the period for which the Tracking Service holds a record form.
-The server holds a span of project `Billing` for ninety days and a telemetry text of the same trace for seven days.
+Retention is the period for which the Tracking Service holds a trace.
+The trace is the only unit of retention.
+The server deletes the trace of an execution of project `Billing` when its retention ends, and the deletion removes every span, record and telemetry text of that trace.
 
 ## acknowledgement
 

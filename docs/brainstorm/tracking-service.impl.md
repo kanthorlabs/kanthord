@@ -22,6 +22,15 @@ The implementation reuses attribute names that the semantic conventions define.
 A kanthord identity takes the `kanthord.` prefix.
 A trace identity is 16 random bytes and a span identity is 8 random bytes, each written as lower-case hexadecimal under the W3C Trace Context representation, and the all-zero value is invalid.
 
+## Server spans
+
+A server component writes its span of an execution through `TrackingService.serverSpan(trace, producer, contribution)`.
+The call admits the root span, or a span whose parent is the root span. A span elsewhere in the trace fails an assertion.
+The call merges the identity attributes of the trace under the attributes of the contribution: `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id` and `kanthord.attempt`.
+A refused or failed write counts as a drop and raises no error.
+The Scheduler Service writes the root span with the producer `scheduler`.
+The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) with the producer `mission`.
+
 ## Primary store
 
 The primary store is a SQLite database.
@@ -82,9 +91,12 @@ No reader waits for the root span.
 
 ## Expiry
 
-The store keeps the identity of an expired telemetry text after it removes the content.
-A reference to that identity resolves to expired, and an unknown identity resolves to unknown.
-The start of the retention of a telemetry text is an epic decision.
+The trace is the only unit of retention.
+A delete of a trace row deletes its spans, its records and its telemetry texts through `ON DELETE CASCADE`.
+The table `tracking_telemetry_text` holds no `expired_at`, and its `content` is `NOT NULL`.
+A read of a deleted trace answers `404 tracking.trace.not_found`, and the store keeps no tombstone.
+`tracking.text.get` answers `{ trace_id, text_id, content, created_at }`. A text identity that its trace does not hold answers `404 tracking.text.not_found`.
+Today no sweep and no operation deletes a trace. The retention value and its start are an epic decision.
 
 ## Capture and packaging
 
