@@ -162,6 +162,13 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - A node write that takes a used node or task plan file name answers 409 `mission.node.filename_conflict`. A proposal approval follows the same rule.
 - A taken name answers 409 `mission.node.filename_conflict`.
 
+## The lookup indexes
+
+- `mission_node_mission` is a unique index on `mission_node (mission_id, id)`. The node reads of one mission use it.
+- `mission_evidence_node` is a unique index on `mission_evidence (node_id, attempt, id)`. The evidence reads of a node and of an attempt use it.
+- `mission_evidence_asset_evidence` is a unique index on `mission_evidence_asset (evidence_id, id)`. The asset reads and the asset delete of an evidence record use it.
+- Each lookup index ends with the primary key of its table, so each one is unique.
+
 ## Export and the two formats
 
 - `mission.export` uses `GET /api/mission/:mission_id/export?format=markdown|json` with `human` access.
