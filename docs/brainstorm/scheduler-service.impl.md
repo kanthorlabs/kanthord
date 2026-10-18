@@ -41,10 +41,12 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service.
   - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinned_revision` are positive safe integers.
-  - `node_branch` is the node branch that the claim admission of the Mission Service answers. The claim copies it as it copies `pinned_revision`, into `scheduler_execution`, the execution record, the claim answer and `ExecutionClaim`. The migration sets `kanthord/<node id>` on every earlier row.
+  - `node_branch` is the node branch of the attempt. The Scheduler stores no node branch. It derives the value from the attempts of the Mission Service through the `MissionBranches` port, as [the attempt](mission-service.impl.md#the-attempt) states. `nodeBranchesOf(tx, keys)` answers one branch for each `{ node_id, attempt }` key, in key order. The execution record, the claim answer and `ExecutionClaim` carry the derived value, and a list derives the branches of one page with one call.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
-  - `agent_selections` is the list of the selections that the claim pins, one for each native agent of the worker. It is `[]` for a worker with no native agent. A null column of a row that predates it reads as `[]`.
+  - `agent_selections` is the list of the selections of the execution, one for each native agent of the worker. It is `[]` for a worker with no native agent. A null column reads as `[]`.
+  - The column stores pins, `{ agent_name, enablement_id, position }`. `enablement_id` is the identity of the enablement revision that the claim selected, and `position` is the chain position.
+  - The Scheduler rebuilds each selection from two immutable rows: the worker binding row that `worker_binding_id` pins and the enablement revision that the pin names. The `AgentChains` port does the rebuild. Every read of the execution answers the same selections.
   - A selection holds `agent_name`, `position`, `level`, `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`. `level` is `enablement | binding`.
   - `claim_state` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
   - `expired_at` is the fixed deadline under [Configuration](#configuration).
@@ -91,7 +93,7 @@ It predicts no claim, because a work pull rechecks every admission condition at 
   - `Available` and `Waiting` read no condition, and the check holds `not-applicable` with `condition: null`.
   - The [readiness condition](mission-service.md#readiness-condition) always holds at `Waiting` and at `External.Requested`. A dependency edit on a dependent in those states answers `mission.node.state_conflict`. A dependency addition on a `Paused` dependent that resumes into an external state, and a forced retirement that removes a dependency of such a dependent, answer the same code. `Completed` is terminal.
   - When `node-state` fails, the check holds `not-applicable` with `condition: null`.
-- `queue-job` passes when the work queue of the project holds a job of the node, and that job holds no `not_before` after the clock reading.
+- `queue-job` passes when the work queue of the project holds a job of the node, and that job holds no `available_at` after the clock reading.
 - `no-live-claim` passes when no execution of the node holds the claim state `running`.
 - The handler reads the project pause through the `projectPaused` collaboration, the node state and the Mission condition through the Mission collaboration, and the job and the executions of the node from its own tables, in one read transaction.
   It writes nothing, and it moves no job.
@@ -136,15 +138,15 @@ The instance healthcheck stays out of every human inspection command under [work
 ## The claim selection
 
 - The claim transaction asks the Agent component for the [selection](agent.impl.md#the-claim-selection) of each native agent of the worker.
-- The column `scheduler_execution.agent_selections` is `TEXT`. It holds the JSON list of the selections, which the claim writes once.
-- The execution row inserts the selections with the row. Nothing updates them later.
+- The column `scheduler_execution.agent_selections` is `TEXT`. It holds the JSON list of the pins, which the claim writes once.
+- The execution row inserts the pins with the row. Nothing updates them later.
 - A pull that finds a `running` execution of its runtime identity returns that row and selects nothing.
 - The Scheduler Service declares the collaboration `projectPaused(tx, projectId)` in its `contract.ts` as the dependency `projects`. The Project Service implements it, and `apps/server/index.ts` wires it.
 - After that read, the claim reads `projectPaused`. A paused project answers `{ kind: "no-work" }` before the instance healthcheck, and the claim inserts no execution and changes no node.
-- When one agent has no chain entry without a live cooldown, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
-- `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`.
-- The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
-- Custody and the execution setup of the Worker Service read the pinned selection and never the chain.
+- When one agent has no chain entry whose credential is free, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
+- `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, rebuilt from the pins.
+- The release transaction calls the Agent component with the rebuilt selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
+- Custody and the execution setup of the Worker Service read the rebuilt selection and never the live chain.
 
 ## The match
 
@@ -213,10 +215,10 @@ The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
 At the limit, it moves the node to `Paused`, and no job exists.
-After the Mission Service consumes the failure, the transaction sets `not_before` of the job of the node to `now + 1000 × scheduler.stop_backoff × 2^(n − 1)`, where `n` is the count. A count of 0 sets no `not_before`.
-A job that the Mission Service inserts later holds `not_before = null`.
-The claim selects only jobs with `not_before` null or at most the clock reading. It skips a node whose loss it settles in its own walk.
-A parked work pull waits at most until the earliest `not_before` of its project that lies after the clock reading.
+After the Mission Service consumes the failure, the transaction sets `available_at` of the job of the node to `now + 1000 × scheduler.stop_backoff × 2^(n − 1)`, where `n` is the count. A count of 0 sets no `available_at`.
+A job that the Mission Service inserts later holds `available_at = null`.
+The claim selects only jobs with `available_at` null or at most the clock reading. It skips a node whose loss it settles in its own walk.
+A parked work pull waits at most until the earliest `available_at` of its project that lies after the clock reading.
 The attempt stays open.
 The operations that [Liveness](scheduler-service.md#liveness) names apply this same settlement before their own precondition checks in the same transaction.
 
@@ -231,7 +233,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that a claim exposes no identity of its own.
 - Tests assert that a release with a stop and a loss declaration hold the job for `scheduler.stop_backoff` seconds, that the hold doubles with the count, and that a count of 0 holds nothing.
-- Tests assert that the claim skips a held job until `not_before`, that a claim does not claim a node whose loss it settles, and that a parked work pull claims a held job when its hold ends.
+- Tests assert that the claim skips a held job until `available_at`, that a claim does not claim a node whose loss it settles, and that a parked work pull claims a held job when its hold ends.
 - A test parses every input and output of the Scheduler operations through the direct adapter and the HTTP adapter and rejects an unknown field, a `null` outside its permitted fields and a bare ULID.
 - A test loses an accepted pull answer and repeats the pull from the same runtime identity, once with the same key and once with a new key, and asserts the same execution and no second execution or count.
 - A test pulls from another runtime identity of the same binding while an execution is live and asserts that it never receives that execution.
@@ -250,8 +252,8 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   A registration resume meets the same row and asserts settlement before its precondition check.
   A human act also checks its precondition against the settled state.
 - Tests sweep expired steps and evaluation claims below and at `mission.consecutive_failure_limit`.
-- Tests assert that a claim pins the first chain entry without a live cooldown.
-- Tests assert that a later cooldown leaves the pin unchanged, and that a pull answers no work when every entry cools down.
+- Tests assert that a claim pins the first chain entry whose credential is free.
+- Tests assert that a later cooldown leaves the pin unchanged, that the record rebuilds the selection from the pinned worker binding row and enablement revision, and that a pull answers no work when every entry cools down.
 - Tests assert that an advancing `provider_failed` stop neither counts nor ends the count, and that `bad_request` and `unauthorized` count.
 - Tests release steps and evaluation claims with a `stop` below and at `mission.consecutive_failure_limit`, mix lost and stopped rows in one count, and assert that `execution get` answers the `stop`. A test refuses a `stop` with `further_work: false`.
   They assert one loss increment, the specified node state and a job only when claimable.

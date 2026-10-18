@@ -141,8 +141,8 @@ Selection and claim form one acquisition operation without an unprotected gap.
 The operation rechecks the Mission state, the readiness condition, the [project pause](project-service.md#project-pause), the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
 A paused project returns the pull empty, and the claim selects no job.
 The claim reads the [fallback chain](agent.md#fallback-chain) of each native agent of the worker.
-It selects the first chain entry with no live cooldown and pins that selection in the execution record.
-When every chain entry of an agent has a live cooldown, the claim returns no work and creates no block, no node pause and no execution.
+It selects the first chain entry whose credential is not cooling and pins the chain position and the enablement revision of that entry in the execution record.
+When the credential of every chain entry of an agent is cooling, the claim returns no work and creates no block, no node pause and no execution.
 The claim validates no effective configuration of an agent.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
@@ -161,9 +161,9 @@ The execution record holds these fields.
 - For a registered instance, the client identity and the display name of its credential. The execution record reads both from the registration of its runtime identity through the Worker Service, also after deregistration. Every instance registers, so the record holds both at every placement. Both are attribution and no authority.
 - The node and its attempt.
 - The pinned node revision.
-- The node branch of the attempt, which the claim admission of the Mission Service answers.
+- The node branch of the attempt. The Scheduler derives it from the attempts of the Mission Service and stores no copy.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
-- The agent selections that the claim pins: one chain entry for each native agent of the worker. A later cooldown changes no pinned selection.
+- The agent pins of the claim: the chain position and the enablement revision of one chain entry for each native agent of the worker. The record rebuilds the selection from its pins. A later cooldown changes no pin.
 - The fixed deadline.
 - The trace identity of the execution.
 - The root span identity of the execution.
@@ -203,7 +203,7 @@ The Scheduler introduces no project-wide cap.
 A release ends the execution.
 The [Mission Service](mission-service.md#state-transitions) routes a release by `further_work` and `stop`, and it leaves the attempt open.
 A release with a `stop` names the reason that ended the execution, and the execution row keeps it.
-A release writes or deletes the cooldown of the pinned selection through the [Agent component](agent.md#advance) in its transaction.
+A release holds or frees the credential of the pinned selection through the [Agent component](agent.md#advance) in its transaction.
 A release names no wait.
 No job exists while a node waits.
 The Mission Service inserts the job in the transaction that makes the node claimable, and it deletes the job in the transaction that makes the node unclaimable.
