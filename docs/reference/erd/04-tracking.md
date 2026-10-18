@@ -131,7 +131,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 - A telemetry text belongs to exactly one trace. A span references it by identity and never embeds it.
 - An agent transcript is a telemetry text.
-- A telemetry text holds no retention of its own and no `expired_at`, and `content` is `NOT NULL`. The deletion of its trace deletes it, and a reference to a deleted trace resolves to expired. Today the store keeps no tombstone, and a read of a deleted trace answers `404 tracking.trace.not_found`. A text identity that its trace does not hold answers `404 tracking.text.not_found`.
+- A telemetry text holds no retention of its own and no `expired_at`, and `content` is `NOT NULL`. The deletion of its trace deletes it, and a reference to a deleted trace resolves to expired. Today the store keeps no tombstone, and a read of a deleted trace answers `404 tracking.trace.not_found`. The text read checks the trace first. A text of a deleted or unknown trace answers `404 tracking.trace.not_found`. A text that a held trace does not hold answers `404 tracking.text.not_found`.
 
 ### Retention and deletion
 
