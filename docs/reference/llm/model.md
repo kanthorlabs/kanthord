@@ -64,7 +64,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 
 A provider failure is not an API failure; it appears in `result`.
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.llm.model.check.indeterminate`. Without a nonblank token, the CLI exits `1` with `cli.llm.model.check.token_required` before a request. A repeated option exits `1` with `cli.option.duplicate`.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.llm.model.check.indeterminate`. Without a nonblank token, the CLI exits `1` with `cli.llm.model.check.token_required` before a request. A repeated option exits `1` with `cli.option.duplicate`.
 
 ## API shape
 

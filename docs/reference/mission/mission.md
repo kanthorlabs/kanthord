@@ -173,7 +173,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `413 mission.export.too_large`            | Export    | The serialized answer exceeds 10 MiB.                                   |
 | `504 gateway.invocation.timeout`          | Both      | The operation exceeded 30 seconds.                                      |
 
-The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A declared remote failure prints `<code>: request failed (HTTP <status>).`
+The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A declared remote failure prints `<code>: request failed` and the row `status: <status>`.
 
 | CLI code                                                              | Meaning                                                                                |
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |

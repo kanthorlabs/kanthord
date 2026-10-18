@@ -104,7 +104,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 
 The text limit is the server configuration value `mission.text_max_bytes`, 32768 UTF-8 bytes by default.
 
-The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A declared remote failure of a dependency command prints `<code>: request failed (HTTP <status>); idempotency key <key>.`
+The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A declared remote failure of a dependency command prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>`.
 
 | CLI code                                                                                 | Meaning                                                                                                                                                  |
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

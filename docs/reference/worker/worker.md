@@ -98,7 +98,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 system.pagination.cursor_invalid`    | `list`   | The cursor is not a cursor that this operation issued.          |
 | `404 worker.catalog.not_found`            | `get`    | No supplied worker has this exact name.                         |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.worker.list.indeterminate` or `cli.worker.get.indeterminate`. Run the command again after an indeterminate result.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.worker.list.indeterminate` or `cli.worker.get.indeterminate`. Run the command again after an indeterminate result.
 
 ## API shape
 

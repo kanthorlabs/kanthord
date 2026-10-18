@@ -125,7 +125,7 @@ The CLI checks the file and the key before it sends a request. Each local failur
 | `cli.scheduler.work.pull.token_required` | No nonblank token resolves.                                  |
 | `cli.option.duplicate`                   | An option occurs more than once.                             |
 
-A declared API failure makes the CLI exit `1`. The diagnostic starts with the error code of the API and includes the retry key. A transport failure, timeout or malformed response exits `1` with `cli.scheduler.work.pull.indeterminate` and the retry key. After an indeterminate result, send the same file with the same key and machine token. There is no automatic retry.
+A declared API failure makes the CLI exit `1`. The diagnostic starts with the error code of the API and holds the rows `status` and `idempotency_key`. A transport failure, timeout or malformed response exits `1` with `cli.scheduler.work.pull.indeterminate`, the message `the result is unknown; retry with the same idempotency key` and the row `idempotency_key`. After an indeterminate result, send the same file with the same key and machine token. There is no automatic retry.
 
 ## API shape
 

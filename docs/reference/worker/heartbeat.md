@@ -37,7 +37,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `403 gateway.registration.required`       | The client identity of the token has no live registration. Register again with `worker register`.     |
 | `400 gateway.request.unexpected_body`     | The request has a body.                                                                               |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.worker.heartbeat.indeterminate`. Run the command again after an indeterminate result.
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A transport failure, timeout or malformed response exits `1` with `cli.worker.heartbeat.indeterminate`. Run the command again after an indeterminate result.
 
 ## API shape
 

@@ -194,13 +194,13 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `kanthord upgrade [--config <path>]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
   1. Read the configuration file and apply the steps from its version in memory. Validate the result. A newer version stops with `system.config.version_ahead`.
   2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
-  3. If no step and no migration is pending, print `Up to date: <path>` and write nothing.
+  3. If no step and no migration is pending, print `up_to_date: <path>` and write nothing.
   4. Write the backups with one UTC timestamp, while the lock is held. The original configuration goes to `<path>.bak-<timestamp>` with mode `0600`. The database goes to `kanthord.db.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. An existing backup path stops the command.
   5. Apply the pending migrations with the runner of [the migration](#the-migration).
   6. Replace the configuration file atomically.
 - Steps 1 to 4 change neither the configuration file nor the database. `Store.plan` runs reads only.
 - The command prints each backup path before step 5, each migrated service, each rename and the configuration versions.
-- A rerun after a success prints `Up to date: <path>`.
+- A rerun after a success prints `up_to_date: <path>`.
 - A failure in step 5 keeps the committed migrations, and the next start stops with `system.database.migration.pending`. A failure in step 6 keeps the old configuration, and the next start stops with `system.config.version_behind`. A rerun of `kanthord upgrade` completes the remaining part.
 - The command deletes no backup.
 - A restore stops the server, deletes `kanthord.db-wal` and `kanthord.db-shm`, copies the database backup to `kanthord.db` and the configuration backup to the configuration file, and keeps mode `0600` on both.
@@ -946,7 +946,7 @@ A process split retains these boundaries.
 - A test upgrades a preserved fixture of an earlier release that holds rows.
 - A test restarts after a migration sequence that committed two services and failed on the third.
 - A test covers a migration that fails in its second statement, and it asserts no row of its own and no partial schema.
-- A test starts the server on an older configuration and on an older database, asserts each refusal, runs `kanthord upgrade`, and asserts both backups, the migrated history and an `Up to date` rerun.
+- A test starts the server on an older configuration and on an older database, asserts each refusal, runs `kanthord upgrade`, and asserts both backups, the migrated history and an `up_to_date` rerun.
 - A test runs `kanthord upgrade` while another process holds the database, and it asserts no change.
 - A test starts the server with another `master_key` against an existing database, and it asserts the refusal `system.config.master_key_mismatch`, an unchanged master_key record and migration history, and a start under the recorded key. A test runs `kanthord upgrade` with another `master_key` on a database with a pending migration, and it asserts the refusal, no backup and no migration.
 - A test covers a recorded history that holds a gap, and one that holds a version above the binary.

@@ -214,7 +214,7 @@ The CLI checks some input before it sends a request. Each local failure exits `1
 | `cli.pagination.limit_out_of_range`                                                                                                                                      | `list`           | `--limit` is greater than 1000.                                                                                   |
 | `cli.option.duplicate`                                                                                                                                                   | All with options | An option occurs more than once.                                                                                  |
 
-A declared failure makes the CLI exit `1` and print `<code>: request failed (HTTP <status>).` to stderr. For `submit`, the CLI prints `<code>: request failed (HTTP <status>); idempotency key <key>.` instead. A transport failure, timeout or malformed response exits `1`:
+A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. For `submit`, the CLI prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. A transport failure, timeout or malformed response exits `1`:
 
 - `list` and `get` report `cli.mission.assessment.list.indeterminate` or `cli.mission.assessment.get.indeterminate`. Run the command again.
 - `submit` reports `cli.mission.assessment.submit.indeterminate` with the retry key. Reuse the same key and machine token. There is no automatic retry.
