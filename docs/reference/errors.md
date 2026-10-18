@@ -16,26 +16,27 @@ Engine-defined error codes use at least three nonempty, dot-separated parts:
 
 Examples used by the implementation:
 
-| Code                                             | Meaning                                                                     |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| `system.config.not_found`                        | The server configuration file is absent.                                    |
-| `system.config.version_behind`                   | The configuration version is older than the binary. Run `kanthord upgrade`. |
-| `system.config.version_ahead`                    | The configuration version is newer than the binary.                         |
-| `system.database.migration.pending`              | The database has a pending migration. Run `kanthord upgrade`.               |
-| `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary.            |
-| `system.config.master_key_mismatch`              | `master_key` does not match the database. Restore the backups.              |
-| `system.context.deadline_exceeded`               | A context's deadline expired.                                               |
-| `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                                          |
-| `cli.config.invalid_allowed_host`                | An `--gateway-allowed-host` value is not a host with an optional port.      |
-| `cli.worker.register.indeterminate`              | The CLI cannot determine the registration result.                           |
-| `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                               |
-| `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.                 |
-| `gateway.request.validation_failed`              | Operation input validation failed.                                          |
-| `gateway.client.answer_invalid`                  | An answer with the expected status fails the operation output schema.       |
-| `gateway.idempotency.conflict`                   | The key cannot be replayed for this request.                                |
-| `gateway.routing.not_found`                      | No route matches the request.                                               |
-| `gateway.openapi.not_found`                      | The requested OpenAPI fragment is not allowlisted.                          |
-| `gateway.healthcheck.unhealthy`                  | At least one registered service is unavailable.                             |
+| Code                                             | Meaning                                                                                                                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system.config.not_found`                        | The server configuration file is absent.                                                                                                                        |
+| `system.config.version_behind`                   | The configuration version is older than the binary. Run `kanthord upgrade`.                                                                                     |
+| `system.config.version_ahead`                    | The configuration version is newer than the binary.                                                                                                             |
+| `system.database.migration.pending`              | The database has a pending migration. Run `kanthord upgrade`.                                                                                                   |
+| `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary.                                                                                                |
+| `system.database.migration.schema_mismatch`      | The schema of a recorded service differs from its migration text. Delete `kanthord.db`, `tracking.db` and their `-wal` and `-shm` files, then start the server. |
+| `system.config.master_key_mismatch`              | `master_key` does not match the database. Restore the backups.                                                                                                  |
+| `system.context.deadline_exceeded`               | A context's deadline expired.                                                                                                                                   |
+| `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                                                                                                                              |
+| `cli.config.invalid_allowed_host`                | An `--gateway-allowed-host` value is not a host with an optional port.                                                                                          |
+| `cli.worker.register.indeterminate`              | The CLI cannot determine the registration result.                                                                                                               |
+| `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                                                                                                                   |
+| `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.                                                                                                     |
+| `gateway.request.validation_failed`              | Operation input validation failed.                                                                                                                              |
+| `gateway.client.answer_invalid`                  | An answer with the expected status fails the operation output schema.                                                                                           |
+| `gateway.idempotency.conflict`                   | The key cannot be replayed for this request.                                                                                                                    |
+| `gateway.routing.not_found`                      | No route matches the request.                                                                                                                                   |
+| `gateway.openapi.not_found`                      | The requested OpenAPI fragment is not allowlisted.                                                                                                              |
+| `gateway.healthcheck.unhealthy`                  | At least one registered service is unavailable.                                                                                                                 |
 
 ## API failures
 
@@ -114,6 +115,7 @@ A system diagnostic puts its values in rows:
 | `system.config.rename_conflict`                  | The rows are `old_key` and `new_key`.                                                                                                                         |
 | `system.config.master_key_mismatch`              | The rows are `database` and `config`.                                                                                                                         |
 | `system.database.migration.pending`              | The rows are `path` and `command: kanthord upgrade`.                                                                                                          |
+| `system.database.migration.schema_mismatch`      | The message says that the schema of this service differs from its migration text and names the reset. The rows are `path`, `service` and `object`.            |
 | `system.database.migration.incompatible_history` | The row is `path`. `system.database.open_failed`, `system.database.initialization_failed` and `system.database.backup_failed` also print the row `path`.      |
 | `system.files.*`                                 | The row is `path`.                                                                                                                                            |
 | `gateway.listener.bind_failed`                   | `gateway: cannot bind the listener address.` The rows are `bind` and `port`.                                                                                  |
