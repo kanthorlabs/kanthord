@@ -9,6 +9,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import {
+  mergedProviders,
   requireEnablementCredentials,
   unsuitableEnablementCredentials,
 } from "./enablement.mjs";
@@ -128,7 +129,7 @@ for (const credential of config.repository_credentials) {
 }
 
 requireEnablementCredentials(
-  await unsuitableEnablementCredentials(api, config.enablements),
+  await unsuitableEnablementCredentials(api, config.enablements, configPath),
 );
 
 const sshKey = await createSshKey(api, sshCredentialName);
@@ -164,13 +165,9 @@ log("deploy key added", {
 
 for (const [agent, enablement] of Object.entries(config.enablements)) {
   const current = await api.get(`/api/agent/enablement/${agent}`);
-  const providers = [...(current?.agent_providers ?? [])];
-  for (const provider of enablement.providers)
-    if (!providers.some((item) => item.name === provider.name))
-      providers.push(provider);
   await api.put(`/api/agent/enablement/${agent}`, {
     ...(current ? { expected_revision: current.revision } : {}),
-    agent_providers: providers,
+    agent_providers: mergedProviders(current, enablement),
     default_configuration: enablement.default,
     fallback_configurations: enablement.fallback_configurations,
   });
