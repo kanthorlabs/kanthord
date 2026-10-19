@@ -9,7 +9,7 @@ Run the published kanthord container image with Podman or Docker. The image cont
 - Podman or Docker on the host.
 - A browser on the same host.
 - A free host port for the dashboard, for example `8080`.
-- Host port `1455` free, for the OpenAI Codex sign-in of step 6.
+- Host port `1455` free, only for the **Browser** mode of the OpenAI Codex sign-in of step 6. Without that mode, remove `-p 127.0.0.1:1455:1455` from the command of step 3.
 - A GitHub repository that you can administer, for the deploy key of step 5.
 
 Run every command of this guide in a terminal on the host. `podman run` and `podman exec` run the `kanthord`, `sed`, `ls`, `rm` and `chmod` parts inside a container. Inside the container, `~` is `/var/lib/kanthord`, the volume.
