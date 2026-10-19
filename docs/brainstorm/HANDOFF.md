@@ -156,7 +156,6 @@ After the first native-agent worker runs the acceptance path.
     - P1, P2 and P3 move the submodule pointers after layer 1, layer 2 and layer 3 of the plan of 2026-10-19.
   - Replaced by the plan of 2026-10-19:
     - Old B3, the first-start configuration in the image: by Q3.
-    - Old B4, the reason of an unhealthy repository address: by Q2.
     - Old S2, the details of `gateway.http.host_not_allowed`: by Q4a.
     - Old S3, the `warn` start record for a loopback `gateway.bind`: by Q4c.
     - Old S4, a configuration edit command: by Q11.
