@@ -3,8 +3,8 @@
 #
 # It checks the prerequisites, initializes all submodules, puts them on main,
 # copies the root commit identity down, installs every dependency, and
-# generates the daemon configuration and database. It is idempotent, so it is
-# also the repair command when a checkout drifts.
+# generates the daemon configuration when it is absent. It is idempotent, so it
+# is also the repair command when a checkout drifts.
 SCRIPT_NAME=repo-bootstrap
 . "$(dirname "$0")/../lib/common.sh"
 
