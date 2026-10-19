@@ -13,12 +13,12 @@ if [ -z "$engine" ]; then
 fi
 [ -n "$engine" ] || die "neither podman nor docker is installed. CONTAINER_ENGINE=path selects one"
 require_command "$engine"
-require_command node
 
-[ -f "$ENGINE_DIR/package.json" ] || die "the engine submodule is missing. Run make bootstrap"
-[ -f "$APP_DIR/package.json" ] || die "the apps submodule is missing. Run make bootstrap"
+[ -f "$ENGINE_DIR/package.json" ] || die "the engine submodule is missing. Run git submodule update --init -- engine apps"
+[ -f "$APP_DIR/package.json" ] || die "the apps submodule is missing. Run git submodule update --init -- engine apps"
 
-version=$(node -p "require('$ENGINE_DIR/package.json').version")
+version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$ENGINE_DIR/package.json")
+[ -n "$version" ] || die "$ENGINE_DIR/package.json has no version"
 node_version=$(tr -d '[:space:]v' <"$ENGINE_DIR/.nvmrc")
 image=${IMAGE:-kanthord}
 load=
