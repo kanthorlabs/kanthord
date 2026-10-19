@@ -1137,6 +1137,19 @@ The import boundaries follow the public files.
 
 ### The credential sections of the dashboard
 
+These sections hold the dashboard rules of this page:
+
+- [The credential sections of the dashboard](#the-credential-sections-of-the-dashboard)
+- [The dashboard navigation](#the-dashboard-navigation)
+- [The dashboard onboarding](#the-dashboard-onboarding)
+- [The onboarding steps](#the-onboarding-steps)
+- [The return after a save](#the-return-after-a-save)
+- [The skip of the onboarding](#the-skip-of-the-onboarding)
+- [The project readiness panel](#the-project-readiness-panel)
+- [The dashboard toasts](#the-dashboard-toasts)
+
+The rules of the credential sections follow.
+
 - The dashboard holds one section for each component under the group Credentials: LLM, Git and Storage.
 - The sidebar item `Git` under the group Credentials opens `/repositories`. The breadcrumb of `/repositories` reads `Git`. The Git section holds the credentials of the `repository` component.
 - Each section screen shows one description line above its list. The line states what a credential of the section holds and what uses it.
