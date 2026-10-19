@@ -110,7 +110,7 @@ The sheet gives each agent an agent provider for the credential and a default co
 
 When the credential check answers `unhealthy`, **Enable agents** asks "Enable re@1 and swe@1 with an unhealthy credential?". Select **Keep editing** and close the sheet. Select **Rotate secret** on the credential page, then select **Enable agents** again.
 
-Step 2 can show **Enable re@1** or **Enable swe@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. Before the worker bindings exist, the button names `re@1`, the first agent in name order. It opens the page of the agent, not the sheet. Add a credential of one of those platforms, see [What you need](#what-you-need).
+Step 2 can show **Enable re@1** or **Enable swe@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. Before the worker bindings exist, the button names `re@1`, the first agent in name order. It opens the page of the agent, not the sheet. Add a credential of one of those platforms. The other credential can stay. See [What you need](#what-you-need).
 
 ## 5. Create the SSH key
 
