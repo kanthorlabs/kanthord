@@ -162,13 +162,13 @@ The CLI fetches no further page.
 }
 ```
 
-| Property                  | Type             | Purpose                                                           |
-| ------------------------- | ---------------- | ----------------------------------------------------------------- |
-| `items[].platform`        | string           | Platform name.                                                    |
-| `items[].secret_shape`    | string           | `api_key` or `oauth`.                                             |
-| `items[].login_modes`     | array of strings | Login modes: `browser`, `device`; `[]` for an `api_key` platform. |
-| `items[].metadata_fields` | array of strings | Names of the string fields of the metadata schema.                |
-| `items[].verifiable`      | boolean          | `true` when the platform has an LLM provider.                     |
+| Property                  | Type             | Purpose                                                                        |
+| ------------------------- | ---------------- | ------------------------------------------------------------------------------ |
+| `items[].platform`        | string           | Platform name.                                                                 |
+| `items[].secret_shape`    | string           | `api_key` or `oauth`.                                                          |
+| `items[].login_modes`     | array of strings | Login modes: `browser`, `device`, `copy_code`; `[]` for an `api_key` platform. |
+| `items[].metadata_fields` | array of strings | Names of the string fields of the metadata schema.                             |
+| `items[].verifiable`      | boolean          | `true` when the platform has an LLM provider.                                  |
 
 ### Check and verify answer
 
