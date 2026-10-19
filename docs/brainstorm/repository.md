@@ -29,7 +29,13 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 ## Repository connector
 
 - The repository connector performs a network git read and a network git write.
-- A credential record of platform `ssh` pins the SSH identity of each network git operation.
+- Each network git operation uses the [SSH identity](repository.vocabulary.md#ssh-identity) of a credential record of platform `ssh`.
+- Custody stores the private key of that identity. The server generates the key, and no human enters a private key.
+- An operation loads the key into a private SSH agent that lives only for that operation.
+- The component reads and writes no SSH file of the host user.
+- The component pins one [host key](repository.vocabulary.md#host-key-pin) for each SSH host. It refuses an operation on a host with no pin.
+- Only a human confirms a host key. The GitHub key source over TLS stands in for that confirmation.
+- The [credential handover](custody.md#secret-use-and-handover) carries the SSH identity to a worker application, so a worker host holds no key copy.
 - It performs no platform action.
 - Its writes follow the [write operations](#write-operations) below.
 
@@ -63,6 +69,9 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - It stores each record through [custody](custody.md#credential-records), which holds the revisions, the pin, the drain, the revoke and the archive.
 - Each [platform validator](architecture.vocabulary.md#platform-validator) of the component declares the secret shape, the metadata schema and the validation of its platform.
 - The component refuses a record of a platform that it does not own.
+- An `ssh` record enters only through `Create SSH key` and changes only through `Rotate key`.
+- A rotation of an `ssh` record takes effect at once under the custody revision rule. Every new operation uses the new key.
+- The verify of an `ssh` record is a local check of the stored key. The binding check owns the reachability of a repository.
 - A credential answer of the component lists the bindings that name the credential. The [Project Service](project-service.md#resource-and-binding-model) answers that read.
 
 ## Write operations

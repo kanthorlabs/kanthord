@@ -44,7 +44,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - Then it runs `<tool> --version` from `pi/bin/`. A missing source, a host target outside the manifest, a digest mismatch or a failed run stops the start of the worker or of the server with `worker.start.tool_missing`.
 - `pnpm run pi-tools:update <tool> <version>` of the engine rewrites the entry of one tool for the three targets with fresh digests. The root target `make pi-tools-update TOOL=<tool> VERSION=<version>` runs it. It refuses a release younger than the `minimumReleaseAge` of `pnpm-workspace.yaml`, 4320 minutes.
 - A test compares the tool set of the pi tool manager with the tools of the manifest. A pi version bump that adds or removes a tool fails it.
-- `bash`, `git` and `ssh` are host requirements of the [Repository component](repository.impl.md). A program that the agent runs through `bash`, for example `node` or `npm`, belongs to the environment of the project on the worker host.
+- `bash`, `git`, `ssh`, `ssh-agent` and `ssh-add` are host requirements of the [Repository component](repository.impl.md#repository-connector). A worker host needs no SSH key. A program that the agent runs through `bash`, for example `node` or `npm`, belongs to the environment of the project on the worker host.
 
 ## The worker template registry
 
@@ -148,6 +148,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
 - The startup order is: the wrapper resolves the client configuration and checks `client_secret`. Then the worker unit installs and checks the [pi tool binaries](#pi-tool-binaries), checks the server package version and registers the instance.
 - The wrapper does not install the pi tools.
+- The worker unit checks `ssh-agent` and `ssh-add` for presence at its start. A spawn that answers `ENOENT` refuses the start with `repository.connector.tool_missing`.
 - The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
 - When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`.
 - The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of the state directory with mode `0600`, and it keeps the newest 50 transcripts.
@@ -300,9 +301,10 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The thread refuses a start with `worker.thread.directory_invalid` when any of `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` is absent or not absolute.
 - The pool host sets `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` to `config/`, `state/`, `data/` and `cache/` of the slot root.
 - The `env` is an allowlist of these server variables, when they are set: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR`.
-- The allowlist also holds `SSH_AUTH_SOCK`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
-- The `env` holds no other variable, so it holds no `KANTHORD_*` variable and no `NODE_OPTIONS`.
-- `HOME` and `SSH_AUTH_SOCK` are the values of the server user. The [HANDOFF](HANDOFF.md#worker-service) item of OS containment owns their containment.
+- The allowlist also holds `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
+- The `env` holds no other variable, so it holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
+- `HOME` is the value of the server user. The [HANDOFF](HANDOFF.md#worker-service) item of OS containment owns its containment.
+- `childEnvironment` of `src/agent/environment.ts` removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID`, so an agent tool process at either placement holds no agent of the host user.
 - The worker unit keeps its workspaces, its transcripts, its `pi/` directory and its log under `state/kanthord/` of the slot root. Two slots share no workspace.
 - Each thread holds its own `process.env` and its own module instance of pi.
 - `loadPi` therefore sets `PI_OFFLINE` and `PI_CODING_AGENT_DIR` for its thread only. pi of that thread finds `rg` and `fd` in `pi/bin/` of the slot.
@@ -389,8 +391,12 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credential_id` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ binding_id, name, address, ssh_identity, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
-- `ssh_identity` is the metadata `{ host, hostname, port, identity_file }` of the `ssh` record of the binding. The worker application runs the [`ssh` validation](repository.impl.md#platform-validators) with it before each clone, fetch and push.
+- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
+- `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The answer holds no key.
+- The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
+- The worker matches each entry of `repositories` to its `ssh_identities` entry of the handover by `binding_id`. It derives the public key from the private key and builds `SshAccess` in memory.
+- The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
+- Each method of `RepositoryTransport` takes `ssh: SshAccess`. It holds no SSH proof step.
 - `repositories` holds one row for each repository binding that the pinned node revision names, in binding order, for an `implement` node and for an `examine` node.
 - `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
@@ -459,6 +465,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - While its idempotency record remains in memory within the TTL, a repeat of the key answers 409 without the envelope. The application recovers a lost answer with a new key, which reads the pinned revision again.
 - The worker unit calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
 - It decrypts the envelope with the handover key that it derives from its own `client_secret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
+- The payload also carries `ssh_identities`, the SSH key of each repository binding of the execution, under [custody.impl.md](custody.impl.md#the-credential-handover). The worker takes the handover before the execution setup.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204. The application calls it after each refresh that pi-ai performs and once at the release.
 - The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `execution_id` names.
@@ -765,12 +772,19 @@ The host of every `worker` application sits inside it because that host holds it
 The host of a `server` application that runs a pool slot sits inside it for the same reason. A worker thread is no containment boundary for the code that the repository supplies.
 Its child processes run with the rights of the server process.
 
+During a network git operation, a process of the same host user can sign through the SSH agent socket of that operation.
+A checkout that an LLM agent writes can run code during a git operation through `.git/hooks`, `core.hooksPath`, `core.fsmonitor`, `url.<base>.insteadOf` or `protocol.<name>.allow`.
+A hook process sees `GIT_SSH_COMMAND` with the socket path.
+The trust boundary covers these paths, and the SSH agent exports no private key.
+The worker application holds the SSH private key of each binding in its memory for the execution.
+A process of the same host user can read that memory through `ptrace` or a core dump.
+
 ## Traces
 
 The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The finish of the steps method on an `implement` node writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `ssh_proof`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The finish of the steps method on an `implement` node writes one `worker.git` span for each git step. `kanthord.git.step` is `commit`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 

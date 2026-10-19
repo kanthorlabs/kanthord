@@ -7,19 +7,19 @@ title: Database schema
 ## Status
 
 These pages are a design of the KanthorD database, not a description of implemented behavior.
-They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-18.
+They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-19.
 An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema. Before the first tag, the change edits the one migration of the service, and an existing database follows the [reset procedure](../upgrade.md#reset-a-pre-release-database).
 
 ## Views
 
 The schema has four functional views. Their order is the order of delivery.
 
-| View                                             | Scope                                                                                                    | Tables of the owners                        |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals.           | Worker, Scheduler, Mission                  |
-| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                          | Intake                                      |
-| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                              | Tracking                                    |
+| View                                             | Scope                                                                                                    | Tables of the owners                                    |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Repository, Project, Agent, Mission, Scheduler |
+| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals.           | Worker, Scheduler, Mission                              |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                          | Intake                                                  |
+| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                              | Tracking                                                |
 
 A view holds the canonical definition of each of its tables.
 Another view shows that table as a stub: its key only, the color of its owner and a dashed border.
@@ -34,6 +34,7 @@ flowchart TB
     subgraph db1["kanthord.db"]
         subgraph v1["ERD 1: Environment and planning"]
             c1["Custody: credential"]
+            r1["Repository: host key"]
             p1["Project: project, binding, binding revision"]
             a1["Agent: agent enablement, prompt settings"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
@@ -70,6 +71,7 @@ flowchart TB
     t4 -.->|trace of project| p1
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
+    classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
     classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
@@ -79,6 +81,7 @@ flowchart TB
     classDef tracking fill:#d1f2eb,stroke:#117a65,color:#212529
 
     class c1 custody
+    class r1 repository
     class p1 project
     class w2 worker
     class a1 agent
@@ -99,7 +102,7 @@ flowchart TB
 
 ## Stores
 
-- `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody and the Agent component share that file, and one file gives a collaboration of two services one transaction.
+- `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody, the Repository component and the Agent component share that file. One file gives a collaboration of two services one transaction.
 - `tracking.db` of the data directory holds every table of ERD 4. The server opens it at every start.
 - Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody. Before the first tag, it holds one row of version 1 for each service that owns tables.
 - Custody owns the unprefixed `credential` table.
@@ -107,7 +110,6 @@ flowchart TB
 ## Owners without a table
 
 - The Gateway Service holds idempotency records in memory. It stores no human account, no password and no client identity.
-- The Repository component is stateless transport.
 - The worker catalog and the agent catalog are static server modules.
 - The `worker` application and an external harness hold no table of the server. A `worker` application runs on the host of the server or on another host.
 
@@ -132,6 +134,7 @@ flowchart TB
 | Owner             | Color  |
 | ----------------- | ------ |
 | Custody           | grey   |
+| Repository        | brown  |
 | Project Service   | yellow |
 | Worker Service    | red    |
 | Mission Service   | green  |

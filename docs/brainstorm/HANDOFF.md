@@ -25,7 +25,13 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Repository component
 
-- [ ] Added 2026-09-26 from the responsibility audit of Project, Worker and Intake. The `ls-remote` of a binding write and of the repository healthcheck runs with the SSH configuration of the server host. It proves no reachability from the host of a `worker` application. Decide whether a check covers the worker host.
+- [ ] Added 2026-09-26 from the responsibility audit of Project, Worker and Intake. The `ls-remote` of a binding write and of the repository healthcheck runs on the server host. It proves no network path from the host of a `worker` application. Decide whether a check covers the worker host. Since 2026-10-19 the handover carries the SSH key, so the item covers only the network path.
+- [x] Added 2026-10-19 from the SSH identity epic. Ruled 2026-10-19 by Ulrich (Q1): KanthorD owns its SSH identities. Custody stores the private key encrypted. Each git operation loads the key into a private short-lived ssh-agent from stdin. It runs ssh with `-F none`, `IdentitiesOnly=yes`, a pinned known-hosts file and `StrictHostKeyChecking=yes`. GitHub host keys come from `api.github.com/meta` over TLS. Other hosts need a human fingerprint confirmation. KanthorD reads and writes no user SSH file. `ssh_discover` and the import from `~/.ssh/config` go away. The worker handover carries the identity.
+  - Ruled 2026-10-19 by Ulrich (D1): `ResourceFailureReason` gains `host_key_changed` and `identity_unavailable`.
+  - Ruled 2026-10-19 by Ulrich (D2): an SSH key rotation takes effect at once under the custody revision rule. The rotate dialog shows the new public key and the bindings that name the credential.
+  - Ruled 2026-10-19 by Ulrich (D3): the repository address stays `git@<host>:<owner>/<repository>.git` on port 22 only. `altssh.bitbucket.org` stays in the host set.
+  - Ruled 2026-10-19 by Ulrich (D5): the `ssh` credential verify stays a local check with the capability `ssh identity`, and a refusal answers `identity_unavailable`.
+  - Closed 2026-10-19: [repository.impl.md](repository.impl.md#the-ssh-identity), [custody.impl.md](custody.impl.md#the-release-of-an-ssh-key) and [project-service.impl.md](project-service.impl.md#the-network-git-operations) state the rules. The alias model goes away: `ssh -G`, `repository.credential.ssh_discover`, the metadata `{ host, hostname, port, identity_file }` and the import from `~/.ssh/config`. The codes `repository.credential.ssh_identity_ambiguous`, `ssh_drift`, `ssh_config_unreadable`, `repository.connector.ssh_resolve_failed` and `project.bindings.repository.ssh_host_mismatch` go away, and no other code takes their place. The removal of `ssh_host_mismatch` closes Q4b of the first-day plan. It closes old B5, old S25 (by D5) and old C-S11.
 
 ### Project Service
 
@@ -129,6 +135,8 @@ After the first native-agent worker runs the acceptance path.
 
 ### Root repository
 
+- [ ] RULED 2026-10-19 by Ulrich (D4). `make e2e-start` creates the SSH key through the API and adds it as a write deploy key on `kanthorlabs/kanthord-verify` through `gh api`. `make e2e-stop STOP=daemon` deletes it. `E2E_GH_TOKEN` is a fine-grained token limited to `kanthorlabs/kanthord-verify` with "Administration: write". Package SR1 of the SSH identity epic builds it and records the token rule in `AGENTS.md`. Operator action: Ulrich updates the token. Remove this item when SR1 merges and Ulrich confirms the new token.
+
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
 - [x] Added 2026-10-12 from the harness-1 run. `make sync` pushes the root `main` directly in phase 8, and the `main` ruleset accepts a change only through a pull request. Decide whether `make sync` keeps a parent push.
@@ -136,15 +144,14 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Added 2026-10-19 from the first-day plan. The first-day plan of 2026-10-19 replaces six open rulings of the plan of 2026-10-18. The READY workstreams of the plan of 2026-10-18 are merged, and root `#113` moved the pointers. "Old" names an item of the plan of 2026-10-18. Remove this item when each listed old ruling is ruled or moved to the HANDOFF section of its owning component.
   - Sources, not versioned: `.dev/first-day-experiment/fix-plan.md` holds the plan of 2026-10-18. `.dev/first-day-2026-10-19/` holds `first-day-plan.md`, `first-day-findings.md` and `first-day-plan-review.md`.
   - Labels of the plan of 2026-10-19:
-    - Q1 proposes an operation that creates an SSH key, its `config` alias and its `known_hosts` line on the server. It waits on Ulrich.
-    - Q2 proposes a nullable `failure_reason` enum on the shared health entry. It waits on Ulrich.
+    - Q2 proposes a nullable `failure_reason` enum on the shared health entry. Ruled 2026-10-19 by Ulrich: the closed enum `ResourceFailureReason` in `engine/src/kernel/health.ts`. The health report, the binding check and the credential check carry it.
     - Q4, first-start diagnostics, proposes the refused host in `gateway.http.host_not_allowed` and a `warn` start record for a loopback `gateway.bind`. It waits on Ulrich.
     - Q5 proposes a setup checklist on Overview with no project, and a readiness panel on the project page. It waits on Ulrich.
     - Q6 raises the first public release now and proposes the release after P3. It waits on Ulrich.
     - Q14 proposes a `kanthord gateway liveness` command and a `HEALTHCHECK` in the image. It waits on Ulrich.
     - Q3 and Q11 are confirmations of ruled pages. Q3 confirms the one-off `config init --gateway-bind ::` of [architecture.impl.md](architecture.impl.md#container-image).
     - Q11 confirms that no command edits an existing configuration file: [the command surface](architecture.impl.md#the-command-surface) and [the CLI configuration commands](architecture.impl.md#the-cli-configuration-commands).
-    - D1a, the container how-to guide with the SSH shell steps, is READY. D1b moves the guide to the dashboard SSH key flow after P1.
+    - D1a, the container how-to guide with the SSH shell steps, is READY. SD2 of the SSH identity epic moves the guide to the dashboard SSH key flow.
     - D3, the first-task tutorial, starts after P2.
     - A3 builds the Q5 checklist and the readiness panel in `apps`. It waits on Q5.
     - P1, P2 and P3 move the submodule pointers after layer 1, layer 2 and layer 3 of the plan of 2026-10-19.
@@ -161,11 +168,8 @@ After the first native-agent worker runs the acceptance path.
       - Before the release, create the public Docker Hub repository `kanthorlabs/kanthord`. The version goes from `28.0.1` to `26.10.1` once.
     - Old D2, the container how-to guide, and old D3, the first-node tutorial: by D1a, D1b and D3. The `jq` filter of old C-S1 and the polling loop of old C-S2 stay with those rulings.
   - Open old rulings that the plan of 2026-10-19 depends on:
-    - Old B5, the code `repository.credential.ssh_host_unresolved` for an SSH alias that is absent on a worker host. Q1 proposes a server-created SSH key, and that key does not reach a remote worker host. Old B5 and the Repository component item on worker host reachability own that gap.
-    - Old S25, the depth of the `ssh` credential verify. [The platform list](architecture.impl.md#the-platform-list) and [the credential healthcheck](architecture.impl.md#the-credential-healthcheck) conflict with [the platform validators](repository.impl.md#platform-validators). Until old S25 is ruled, Q2 keeps the `ssh` check at its current depth and maps an `ssh -G` refusal to `unclassified`.
     - Old C-B1, the code `gateway.client.unreachable` for a refused connect. Q14 proposes a `gateway liveness` command that follows the `gateway verify` pattern. A ruling of old C-B1 changes both commands together.
     - Old C-S8, the remote message in the CLI. Until old C-S8 is ruled, the CLI shows the Q4 `details.host` and `details.field` but not the hint in the message.
-    - Old C-S11, the command `repository credential create --from-ssh-alias`. Q1 proposes a `repository credential ssh-key-create` command that answers the metadata only. A ruling of old C-S11 chains the record create.
   - Open old rulings with no effect on the plan of 2026-10-19. Old E2b, the engine CLI docs of C-B2, C-S10, C-S12, C-S14 and C-S15, stays with those rulings.
     - Old S3, the fields `version`, `base_path` and `url` of the Gateway start record.
     - Old B6, the details of `gateway.client.version_unavailable`.
@@ -229,6 +233,7 @@ Ruled 2026-10-16 by Ulrich: one engine pull request fixes the findings below, br
   - Done 2026-10-16: [worker-service.impl.md](worker-service.impl.md#traces) records the `worker.git` spans.
 - [x] Added 2026-10-16. Worker Service. The SSH proof of the finish runs `ssh -G`, which reads only the configuration. It passes when the SSH agent holds no key.
   - Ruled 2026-10-16 by Ulrich: the proof stays a local pin check. The push is the connection proof, and the git error text item makes its failure readable.
+  - Ended 2026-10-19 by the SSH identity epic: the local pin check and the git step `ssh_proof` go away. The push stays the connection proof.
 - [x] Added 2026-10-16. Worker Service (S25 gap). A finish that fails before the push leaves the agent commits only in the workspace. The next prepare finds no remote node branch and no evidence, and it resets the branch to the base branch. `persistence.md` held three unpushed commits at `c768be36`. Keep unpushed workspace commits of the same attempt, or push them before the finish fails.
   - Ruled 2026-10-16 by Ulrich: when the remote node branch is missing and no record shows a push, the prepare keeps the local node branch. Every other prepare resets the local node branch to the remote. [worker-service.impl.md](worker-service.impl.md#workspace) records the rule.
 - [x] Added 2026-10-16. Scheduler Service (S16 gap). After a `git_failed` stop, the claims of two nodes repeated five times in 700 ms, and the failure limit paused both nodes. Add a backoff before the next claim of a node after an `operation_failed` stop.

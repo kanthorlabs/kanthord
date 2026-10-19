@@ -29,6 +29,7 @@ Custody grants no authority through possession of a credential reference.
 - The component refuses a platform that it does not own.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
 - An OAuth credential enters only through a [login session](llm.vocabulary.md#login-session) of the LLM component on the server.
+- An SSH key enters only through `Create SSH key` of the [Repository component](repository.md#credential-records). The server generates the key, and no human enters a private key.
 - Creation and rotation make no remote call.
 - A rotation adds the next revision under the same name and, in the same transaction, drains every older live revision that no live execution pins. A pinned older revision stays live until custody drains it or a human revokes it.
 - A reference names the credential by its name and never a revision.
@@ -75,6 +76,7 @@ Custody grants no authority through possession of a credential reference.
 - A refusal reaches no secret material.
 - Custody releases the material of an authorized grant inside the server process, and the holder performs its own operation.
 - A credential leaves the server only through a [credential handover](custody.vocabulary.md#credential-handover) to a kanthord worker application.
+- The handover also carries the SSH identity of each repository binding of the execution. A worker host therefore holds no SSH key of its own.
 - The handover lasts for the execution.
 - The worker application reports a refreshed credential to custody.
 - Custody refreshes no revision while a handover of that revision remains outstanding.

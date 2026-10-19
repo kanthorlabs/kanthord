@@ -387,9 +387,11 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - `global` maps a resource name to an entry.
 - `projects` maps a project name to a resource map.
 - Each resource map maps a resource name to an entry.
-- Each entry holds exactly `status` and `capability`.
+- Each entry holds exactly `status`, `capability` and `failure_reason`.
 - `status` takes a [resource status](architecture.vocabulary.md#resource-status): `healthy`, `unhealthy` or `unknown`.
 - `capability` is a nonempty string that names the capability of the check, not a claim about other capabilities.
+- `failure_reason` is null or a value of the closed enum `ResourceFailureReason` in `src/kernel/health.ts`. No remote text reaches the client.
+- The git values of `ResourceFailureReason` are `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid`, `identity_unavailable` and `unclassified`. [The failure reason of a git operation](repository.impl.md#the-failure-reason-of-a-git-operation) maps each git failure to a value.
 - A resource name of the LLM, Repository or Storage component is its credential name.
 - A project-scoped resource name of the Project Service is its binding name.
 - An Intake Service resource name is its inbound identity.

@@ -157,8 +157,8 @@ The binding of `beacon` keeps `credential_A` until its own edit.
 
 One of the two checks that validate a credential reference.
 
-- The repository binding of `git@kanthorlabs.github.com:kanthorlabs/kanthord.git` requires one API key of GitHub for every platform action.
-- Git uses the SSH configuration of the host, pinned by the `ssh` record `kanthorlabs-github`.
+- The repository binding of `git@github.com:kanthorlabs/kanthord.git` requires one API key of GitHub for every platform action.
+- Git uses the SSH identity of the `ssh` record `kanthorlabs-github`.
 - The submission names the action `pull_request` and no credential reference, so coverage fails.
 
 ## system authorization

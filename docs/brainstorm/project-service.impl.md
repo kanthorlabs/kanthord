@@ -99,7 +99,7 @@ A binding identity and a project identity follow the identity convention of [arc
 A per-kind function derives it from the binding configuration on every write, so a human enters it never and it disagrees with that configuration never.
 The values of the first version are below.
 
-- `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`, and for the address `git@kanthorlabs.github.com:kanthorlabs/kanthord.git` of an SSH alias.
+- `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`, and for the address `git@ssh.github.com:kanthorlabs/kanthord.git`.
 - `worker:kanthord:coder-main` for the worker binding with the binding name `coder-main`.
 - `storage:s3:s3.eu-central-1.amazonaws.com/atlas-evidence` for the storage binding of the bucket `atlas-evidence` at that endpoint.
 
@@ -176,7 +176,8 @@ The refusal compares the effective placements, where an absent field reads as `w
 - A `project_prompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
 - An empty `project_prompt` is an absent source. The switch of the project prompt on the binding turns the source off, and the value `-` holds no meaning.
 - Every repository binding names exactly one `ssh_credential` of platform `ssh`. An absent SSH credential refuses the write.
-- The host of the address equals the `host` of the `ssh_credential`. A different host refuses the write with 400 `project.bindings.repository.ssh_host_mismatch`.
+- The host of the address must be a member of the SSH host set of the binding platform. Another host refuses the write with 400 `project.bindings.repository.address_invalid`.
+- The host of the address must hold a [pin](repository.impl.md#host-keys). An unpinned host refuses the write with 409 `repository.host_key.unpinned`.
 - A repository binding of a git-only platform with a `credential` or with the action `pull_request` refuses the write with 400 `project.bindings.repository.action_unsupported`.
 - A repository binding names at most one `credential` of its platform. The action `pull_request` without a `credential` refuses the write with 400 `project.bindings.repository.credential_required`.
 - An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
@@ -255,27 +256,35 @@ The Project resolution checks the disablement and the removal of a binding revis
 
 ## The network git operations
 
-- A repository address has the form `git@<host>:<owner>/<repository>.git`. The host starts with a letter or a digit and holds only letters, digits, `.` and `-`.
-- The dashboard checks only that form, and it derives the identity without the host. The server runs the host resolution.
-- At every repository binding write, the repository connector first runs the [`ssh` validation](repository.impl.md#platform-validators) of the `ssh_credential`. It resolves the host of the address through `ssh -G -- <host>`.
-- A resolved `hostname` outside the SSH host set of the binding platform refuses the write with 400 `project.bindings.repository.address_invalid`. A failed resolution refuses it with the same code.
-- After the resolution, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
-- The resolution and the read precede the `BEGIN IMMEDIATE` transaction.
-- A deadline of 30 s bounds the resolution and the read together.
-- A failed or timed-out read refuses the write with 422 `project.bindings.repository.ssh_unreachable`.
-- The [Repository implementation](repository.impl.md#the-ssh-environment) defines the SSH environment.
+- A repository address has the form `git@<host>:<owner>/<repository>.git`, on port 22 only. The host starts with a letter or a digit and holds only letters, digits, `.` and `-`.
+- The dashboard checks the form and the host set, and it derives the identity without the host.
+- The server reads no SSH configuration for the host. The host of the address must be a member of the SSH host set of the binding platform, and it must hold a pin.
+- At every repository binding write, the Project Service releases the key of the `ssh_credential` through the `ssh_identity` grant. It performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector), inside one private SSH agent.
+- The read precedes the `BEGIN IMMEDIATE` transaction.
+- A deadline of 30 s bounds the read.
+- A failed or timed-out read refuses the write with 422 `project.bindings.repository.ssh_unreachable`. Its `details.failure_reason` holds the value of [the failure reason](repository.impl.md#the-failure-reason-of-a-git-operation).
+- The [Repository implementation](repository.impl.md#the-ssh-identity) defines the SSH identity of an operation.
+- The Project Service supplies the authorization function of the `ssh_identity` grant in `src/project/ssh-authorization.ts`, under [the release of an SSH key](custody.impl.md#the-release-of-an-ssh-key).
+
+### Bindings that the address rule refuses
+
+- An address host outside the SSH host set of the platform answers `unhealthy` with `failure_reason: address_invalid`. The binding check and the verify answer it.
+- An address host in the set with no pin answers `unhealthy` with `failure_reason: host_key_unknown`. The binding check and the verify answer it.
+- The execution setup, the instruction files read and every Intake git operation refuse such a binding before any child process starts. The code is `project.bindings.repository.address_invalid` or `repository.host_key.unpinned`. The resource healthcheck answers `unhealthy`.
+- The repair is three steps: edit the address to the real host, pin the host, and rotate the `ssh` credential.
+- The release note of the first release with the SSH identity states these three repair steps.
 
 ## The resource healthcheck
 
 The [resource healthcheck rule](architecture.md#resource-healthcheck) governs the checks that the Project Service owns.
 The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) bounds the checks and groups their entries.
 
-- A repository binding runs the host resolution and the SSH read of [the network git operations](project-service.impl.md#the-network-git-operations).
-- A failed resolution answers `project.bindings.repository.address_invalid`.
+- A repository binding runs the SSH read of [the network git operations](project-service.impl.md#the-network-git-operations) under the service identity of the Project Service.
+- An address host outside the SSH host set answers `project.bindings.repository.address_invalid`.
 - That read answers `project.bindings.repository.ssh_unreachable` on failure and reports the capability `network git read`.
 - The resource healthcheck deadline replaces the binding-write deadline for this read.
 - The target rule permits one read per repository address in a request.
-- The network git operation follows the [Repository attribution rule](repository.impl.md#the-ssh-environment).
+- The network git operation follows the [Repository attribution rule](repository.impl.md#the-ssh-identity).
 - The call record holds no check result.
 - `projectNameOf(tx, projectId)` answers the name of a project in the collection transaction of the health report. The Intake inventory callback of the composition root is its only consumer. It opens no transaction, and an absent project throws.
 
@@ -286,8 +295,8 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 
 - `project.binding.verify` checks one repository binding at `POST /api/project/:project_id/binding/:binding_id/verify`. It is a read under `human` access. It takes no body and no mutation key.
 - It checks the configuration of the revision that `binding_id` names.
-- It runs the host resolution and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `ssh_credential` and of the `credential` of the binding.
-- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability }`. The `address` entry has the capability `network git read`. A failed resolution or a failed read answers `unhealthy`, and a check that exceeds its deadline answers `unknown`.
+- It runs the host set check, the pin check and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `ssh_credential` and of the `credential` of the binding.
+- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check that exceeds its deadline answers `unknown`.
 - A refusal of the record verify refuses the request with the code of the record verify.
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores no result.
@@ -295,7 +304,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 ## The binding check
 
 - `project.binding.check` checks an unsaved repository configuration at `POST /api/project/:project_id/binding/check`. It is a read under `human` access. It takes the body `{ kind: "repository", config }` and no mutation key.
-- It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, `ssh_host_mismatch`, and the custody suitability of `ssh_credential` and `credential`.
+- It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, and the custody suitability of `ssh_credential` and `credential`.
 - Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, ssh_credential, credential }`.
 - It stores nothing. An absent project answers 404 `project.project.not_found`.
 
@@ -340,8 +349,16 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The binding draft carries `working_layer` unchanged from the read to the write.
 - A refused read shows an inline alert with its code, `Retry` and a link to the SSH credential. It hides the rows.
 - A new binding, or a draft that changes the address, the SSH credential or the base branch, shows `Save the binding to read its instruction files.` and makes no read.
-- The row of a repository binding shows only the connection: the address, the platform, the identity file of the SSH credential and the credential.
-- The SSH credential field is a searchable list of the live `ssh` records. It shows the `host` and the `identity_file` of each record. It holds `New SSH credential`.
+- The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
+- The SSH credential field is a searchable list of the live `ssh` records. It shows each record as `<name> (v<revision>)` with its fingerprint.
+- The SSH credential field holds `New SSH credential`. It opens the `Create SSH key` sheet and selects the new record.
+- An empty SSH credential list shows "No credential exists. Use New credential." A filter miss shows "No credential matches."
+- The binding sheet prefills `git@github.com:` for the platform `github`.
+- When the address host holds no pin and the host is `github.com` or `ssh.github.com`, the sheet calls `repository.host_key.scan` and `repository.host_key.pin`. It shows "Host key pinned from api.github.com" with the fingerprint.
+- When another address host holds no pin, the sheet shows the scanned fingerprint and a link to the published fingerprints of the provider. It holds `Confirm host key`. Save stays disabled until the pin exists.
+- The hint of `host_key_changed` is "The host presented another key. Compare the fingerprint with the published one, then pin again."
+- The hint of `identity_unavailable` is "The server cannot load the SSH key. Rotate the key. If the fault stays, read the server log."
+- The hint of `key_refused` shows the public key of the selected SSH credential.
 - The credential field is optional. The form marks a blank credential only when the action is `pull_request`.
 - The `Repository` section holds a platform select with `GitHub`, `GitLab` and `Bitbucket`. For a git-only platform, the form hides the credential field and offers no `Open a pull request`.
 - The credential field of a repository binding is a searchable list of the live Repository credential records of the binding platform. It reads `repository.credential.list` and hides an archived record. A name outside the list cannot be entered.
@@ -368,7 +385,8 @@ The `kanthord` bin of `package.json` releases it.
 - Tests assert `validateEntry` inside the write transaction and refusal when an agent lacks enabled enablement.
 - Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.
 - A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
-- A test covers an SSH alias that resolves to `ssh.github.com`, an alias that resolves to a host outside the GitHub SSH host set, an alias that resolves to `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The alias address and the `github.com` address of one repository derive the same identity.
+- A test covers four address hosts: `ssh.github.com`, a host outside the GitHub SSH host set, `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The `ssh.github.com` address and the `github.com` address of one repository derive the same identity.
+- A test covers a binding write with a pinned host, and an unpinned host that refuses with 409. A host outside the host set answers `address_invalid` on the check and on the instruction files read.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
 - Tests accept `tags` at 64 bytes and an absent field as `[]`. They refuse a longer tag, an upper-case tag, an empty segment, a repeated tag and a nonlist value with `project.bindings.worker.tags_invalid`.
