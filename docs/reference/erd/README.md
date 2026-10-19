@@ -7,7 +7,7 @@ title: Database schema
 ## Status
 
 These pages are a design of the KanthorD database, not a description of implemented behavior.
-They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-18.
+They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-10-19.
 An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema. Before the first tag, the change edits the one migration of the service, and an existing database follows the [reset procedure](../upgrade.md#reset-a-pre-release-database).
 
 ## Views
@@ -102,7 +102,7 @@ flowchart TB
 
 ## Stores
 
-- `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody, the Repository component and the Agent component share that file, and one file gives a collaboration of two services one transaction.
+- `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody, the Repository component and the Agent component share that file. One file gives a collaboration of two services one transaction.
 - `tracking.db` of the data directory holds every table of ERD 4. The server opens it at every start.
 - Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody. Before the first tag, it holds one row of version 1 for each service that owns tables.
 - Custody owns the unprefixed `credential` table.

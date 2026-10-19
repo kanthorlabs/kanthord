@@ -7,7 +7,8 @@ title: "ERD 1: Environment and planning"
 ## Scope
 
 This view holds the tables that set up an environment and write a plan.
-After this group, a human creates a project, stores credentials, binds repositories, a storage bucket and workers, enables agents, and imports the mission plan.
+After this group, a human creates a project, stores credentials and pins SSH host keys.
+The human also binds repositories, a storage bucket and workers, enables agents and imports the mission plan.
 No execution runs yet.
 
 The [README](README.md) holds the conventions, the colors and the map of every group.
