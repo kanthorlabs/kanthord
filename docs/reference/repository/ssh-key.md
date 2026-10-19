@@ -36,7 +36,7 @@ To connect a new repository, do these steps in order:
 2. Add its public key as a deploy key with write access, as above.
 3. Pin the host key of the address host with [`host-key pin`](host-key.md#pin). The dashboard binding sheet pins `github.com` and `ssh.github.com` itself.
 4. Optional: run [`project binding check`](../project/binding.md#project-binding-check). Its `address` entry answers `healthy` when the host, the pin and the deploy key are correct.
-5. Save the repository binding with [`project binding apply`](../project/binding.md#project-binding-apply), with the address `git@<host>:<owner>/<repository>.git` and the credential name in `ssh_credential`.
+5. Save the repository binding: [export](../project/binding.md#project-binding-export) the binding set, add the binding with the address `git@<host>:<owner>/<repository>.git` and the credential name in `ssh_credential`, then [apply](../project/binding.md#project-binding-apply) it with the exported version. The dashboard binding sheet does the same with Save.
 
 In the dashboard, open Credentials > Git and select Create SSH key. The sheet asks for the name only. It then shows the public key with Copy, the fingerprint and the deploy key steps.
 
@@ -44,7 +44,7 @@ In the dashboard, open Credentials > Git and select Create SSH key. The sheet as
 
 `ssh-key-rotate` generates a new key and inserts the next revision in one transaction. The same transaction drains each older live revision that no live execution pins. A drained revision gets `ended_at` at once. An execution that pins an older revision keeps that key until the execution ends.
 
-Every new operation uses the new key at once. Until the repository holds the new public key as a deploy key, the remote refuses the key: the binding check answers `failure_reason` `key_refused`. Rotate in this order:
+Every new operation uses the new key at once. Until the repository holds the new public key as a deploy key, the remote refuses the key. Between steps 1 and 2 below, every network git operation of those bindings fails, and the binding check answers `failure_reason` `key_refused`. Keep that window short. Rotate in this order:
 
 1. Rotate the key and copy the new public key.
 2. Add the new public key as a deploy key of each repository that a binding of the credential names. `get` lists the bindings.
@@ -73,7 +73,7 @@ Each network git operation runs its own SSH agent. Steps 2 to 8 run on the serve
 7. Run git with `GIT_SSH_COMMAND`. The command starts `ssh -F none` with `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `BatchMode=yes`, `GlobalKnownHostsFile=/dev/null` and the three files of the directory.
 8. Remove the key from the agent, end the agent and delete the directory.
 
-`-F none` stops the read of `~/.ssh/config` and `/etc/ssh/ssh_config`. ssh therefore reads no SSH configuration, no `~/.ssh/known_hosts` and no default key file of the host user. Every git child of KanthorD also runs without `SSH_AUTH_SOCK`, `SSH_AGENT_PID`, `GIT_SSH` and `GIT_SSH_COMMAND` of the host. KanthorD reads and writes no file under `~/.ssh`.
+`-F none` stops the read of `~/.ssh/config` and `/etc/ssh/ssh_config`. ssh therefore reads no SSH configuration, no `~/.ssh/known_hosts` and no default key file of the host user. Every git child of KanthorD also runs without `SSH_AUTH_SOCK`, `SSH_AGENT_PID`, `GIT_SSH` and `GIT_SSH_COMMAND` of the host. KanthorD reads and writes no file under `~/.ssh`. These rules cover the git children of KanthorD only. A `bash` command of an LLM agent keeps the SSH configuration of the host user; see [the agent can use git](../../explanation/coder-worker.md#limits).
 
 A failure of steps 3 to 6 fails the operation with `repository.connector.ssh_agent_failed`. Its `step` field names the step, and its cause holds the text of the tool, never the key. A worker execution fails with this diagnostic. A binding operation reports only a `failure_reason`; see below.
 
@@ -89,7 +89,7 @@ A binding apply reports this failure as `422 project.bindings.repository.ssh_unr
 
 ### The temporary directory limit
 
-The socket path is the temporary directory, then `/kd-ssh-<8 characters>-<6 characters>/a`: 25 bytes more. `ssh-agent` fails without a message on a socket path above the `sun_path` limit of the host, 104 bytes on macOS. KanthorD therefore refuses a socket path above 100 bytes. A temporary directory path above 75 bytes makes every SSH operation fail with `repository.connector.ssh_agent_failed`, step `socket_path`.
+The socket path is the temporary directory, then `/kd-ssh-<8 characters>-<6 characters>/a`: 25 bytes more. `ssh-agent` fails without a message on a socket path above the `sun_path` limit of the host, 104 bytes on macOS. KanthorD therefore refuses a socket path above 100 bytes. A temporary directory path above 75 bytes makes every SSH operation fail with `repository.connector.ssh_agent_failed`, step `socket_path`. A binding check or verify then reports `failure_reason` `identity_unavailable` in the `address` entry, while the `ssh_credential` entry stays `healthy`. Today the answer and the server log name no step for a binding operation.
 
 Node.js takes the temporary directory from `TMPDIR`, then `TMP`, then `TEMP`, else `/tmp`. It drops a trailing `/`. To repair a long path, set `TMPDIR` to a short path such as `/tmp` for the server or worker process, then restart it. The limit applies to the server host and to each worker host.
 
