@@ -10,6 +10,7 @@ import {
   deployKeyTitle,
   pinHostKey,
   runGh,
+  sshCredentialNameOf,
   sshHostOf,
 } from "./ssh-identity.mjs";
 
@@ -233,4 +234,13 @@ test("passes the token to gh only in its environment", () => {
     process.env.PATH = path;
     rmSync(directory, { recursive: true });
   }
+});
+
+test("names the SSH key of a run and refuses a name above 63 characters", () => {
+  assert.equal(sshCredentialNameOf("github-com", "ssh-1"), "github-com-ssh-1");
+  assert.equal(sshCredentialNameOf("github-com", "r".repeat(52)).length, 63);
+  assert.throws(
+    () => sshCredentialNameOf("github-com", "r".repeat(53)),
+    /github-com-r+ holds 64 characters; the limit is 63\. Choose a shorter RUN/,
+  );
 });

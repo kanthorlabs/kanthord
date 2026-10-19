@@ -12,6 +12,7 @@ import {
   addDeployKey,
   createSshKey,
   pinHostKey,
+  sshCredentialNameOf,
   sshHostOf,
 } from "./ssh-identity.mjs";
 import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
@@ -34,6 +35,17 @@ const runDir = join(MAIN, ".dev/e2e", run);
 const baseBranch = `e2e/${run}`;
 const log = (msg, fields = {}) =>
   console.log(`e2e-start: ${msg}`, Object.keys(fields).length ? fields : "");
+
+const sshCredential = config.repository_credentials.find(
+  (credential) =>
+    credential.platform === "ssh" &&
+    credential.name === config.repository.config.ssh_credential,
+);
+if (!sshCredential)
+  throw new Error(
+    `repository_credentials holds no ssh entry ${config.repository.config.ssh_credential}`,
+  );
+const sshCredentialName = sshCredentialNameOf(sshCredential.name, run);
 
 if (existsSync(runDir)) throw new Error(`${runDir} exists. Choose another RUN`);
 mkdirSync(runDir, { recursive: true, mode: PRIVATE_DIRECTORY });
@@ -95,16 +107,6 @@ for (const credential of config.credentials) {
 const githubTokenEnv = config.repository_credentials.find(
   (credential) => credential.name === config.repository.config.credential,
 ).secret_env;
-const sshCredential = config.repository_credentials.find(
-  (credential) =>
-    credential.platform === "ssh" &&
-    credential.name === config.repository.config.ssh_credential,
-);
-if (!sshCredential)
-  throw new Error(
-    `repository_credentials holds no ssh entry ${config.repository.config.ssh_credential}`,
-  );
-const sshCredentialName = `${sshCredential.name}-${run}`;
 
 for (const credential of config.repository_credentials) {
   if (credential.platform === "ssh") continue;

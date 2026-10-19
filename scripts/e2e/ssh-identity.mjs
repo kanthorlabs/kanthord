@@ -2,9 +2,19 @@ import { execFileSync } from "node:child_process";
 
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SSH_ADDRESS_PATTERN = /^git@([A-Za-z0-9.-]+):/;
+const CREDENTIAL_NAME_MAX_LENGTH = 63;
 
 export function deployKeyTitle(run) {
   return `kanthord-e2e ${run}`;
+}
+
+export function sshCredentialNameOf(name, run) {
+  const credentialName = `${name}-${run}`;
+  if (credentialName.length > CREDENTIAL_NAME_MAX_LENGTH)
+    throw new Error(
+      `${credentialName} holds ${credentialName.length} characters; the limit is ${CREDENTIAL_NAME_MAX_LENGTH}. Choose a shorter RUN`,
+    );
+  return credentialName;
 }
 
 export function sshHostOf(address) {
