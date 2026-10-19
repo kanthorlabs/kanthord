@@ -18,7 +18,8 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 - Podman or Docker on the host, and a browser on the same host.
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
 - An account at an LLM provider of one of these platforms: `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`. The dashboard enables an agent only with a credential of these six platforms.
-- Host port `1455` free, if you sign in with `openai-codex` in the **Browser** mode.
+- A free host port for the dashboard, for example `8080`.
+- Host port `1455` free: the `podman run` command of step 1 publishes it. If you do not use `openai-codex`, remove `-p 127.0.0.1:1455:1455` from that command.
 
 ## The path at a glance
 
@@ -44,6 +45,8 @@ Do steps 1 to 4 of [Run kanthord in a container](../how-to-guides/run-in-a-conta
 2. [Create the configuration](../how-to-guides/run-in-a-container.md#2-create-the-configuration) with `config init`.
 3. [Start the server](../how-to-guides/run-in-a-container.md#3-start-the-server) with `podman run`. Set the `GIT_*` values to the author of the agent commits.
 4. [Sign in](../how-to-guides/run-in-a-container.md#4-sign-in) with a token from `auth jwt generate`.
+
+To check the start, run `podman logs kanthord`. The record "Gateway Service started" has the level `info` and the fields `bind` and `port`. In a container, `bind` is `::`.
 
 Do not do steps 5 and 6 of the guide now. The Onboarding page leads you through the same work, in the order that the steps need.
 
@@ -77,7 +80,7 @@ The agents call a model with this credential.
 1. On step 1, select **New LLM credential**. The **New credential** form opens.
 2. Enter a **Name**, for example `claude`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens.
 3. Choose the **Platform**. The list has three groups:
-   - **Checked before save**: an API key platform, for example `anthropic` or `openrouter`. The form can check the key before the create.
+   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` does not.
    - **Sign in with an account**: `openai-codex`, `anthropic-subscription` and `github-copilot`. The server stores the credential when the sign-in completes.
    - **Not checked before save**: the other platforms. An agent cannot use them.
 
@@ -91,21 +94,23 @@ When the badge shows `Unhealthy`, the form shows a hint below it. For a refused 
 
 For `openai-codex`, select **Start sign-in** and follow [Sign in to OpenAI Codex](../how-to-guides/run-in-a-container.md#6-sign-in-to-openai-codex). When the sign-in completes, the dashboard shows "Signed in. Custody stored <name>." and returns to Onboarding.
 
+For `anthropic-subscription` and `github-copilot`, select **Start sign-in** and follow the steps of the sign-in panel. When the sign-in completes, the dashboard shows "Signed in. Custody stored <name>." and returns to Onboarding.
+
 ## 4. Enable the agents
 
 `coder@1` uses the agent `swe@1`, and `reviewer@1` uses the agent `re@1`. The server refuses a worker binding whose agent is not enabled, so enable both agents now.
 
 1. On step 2, select **Enable agents**. The page of the LLM credential opens with the sheet **Enable agents with claude**.
 2. The sheet lists each agent that is not enabled: `re@1` and `swe@1`. Keep both switches on.
-3. **Model identifier** shows the first model of the credential. Choose another model if you want.
+3. **Model identifier** shows the first model of the credential. To use another model, choose it.
 4. **Reasoning effort** shows `medium` when the model supports it. Otherwise choose a value.
 5. Select **Enable agents**. The dashboard shows "Enabled re@1 at revision 1. Enabled swe@1 at revision 1." and returns to Onboarding.
 
 The sheet gives each agent an agent provider for the credential and a default configuration with that model and effort. A worker binding uses this default configuration.
 
-When the credential check answers `unhealthy`, **Enable agents** asks "Enable re@1 and swe@1 with an unhealthy credential?". Select **Keep editing**, then correct the credential.
+When the credential check answers `unhealthy`, **Enable agents** asks "Enable re@1 and swe@1 with an unhealthy credential?". Select **Keep editing** and close the sheet. Select **Rotate secret** on the credential page, then select **Enable agents** again.
 
-When step 2 shows **Enable swe@1** or **Enable re@1** in place of **Enable agents**, no live LLM credential has one of the six agent platforms. Add a credential of one of those platforms, see [What you need](#what-you-need).
+Step 2 can show **Enable swe@1** or **Enable re@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. Add a credential of one of those platforms, see [What you need](#what-you-need).
 
 ## 5. Create the SSH key
 
@@ -219,7 +224,7 @@ GET /health answers 200 with a JSON body that holds the status.
 
 The verification `npm test` needs Node.js. The image holds `bash`, `git` and the OpenSSH client, but no Node.js. At the `server` placement, the worker runs each verification inside the container. `npm test` therefore fails on every run, and the node cannot pass.
 
-Edit the file in a text editor. Keep the front matter, and replace the verification, the name, the requirement and the criterion:
+Edit the file in a text editor. Keep `intent`, `depends_on`, `tags` and `bindings`. Replace the verification, the name, the requirement and the criterion:
 
 ```markdown
 ---
@@ -229,7 +234,7 @@ tags: []
 bindings:
   - app
 verifications:
-  - head -n 1 HEALTH.md | grep -qx 'status: ok'
+  - "head -n 1 HEALTH.md | grep -qx 'status: ok'"
 ---
 
 # Add a health note
@@ -243,7 +248,7 @@ Add the file HEALTH.md at the root of the repository. Its first line is `status:
 HEALTH.md exists at the root of the repository, and its first line is exactly `status: ok`.
 ```
 
-Write your binding name in place of `app`. The verification exits `0` only when the first line of `HEALTH.md` is `status: ok`.
+Write your binding name in place of `app`. The verification exits `0` only when the first line of `HEALTH.md` is `status: ok`. Keep the double quotes. Without them, the text `: ` makes the line a YAML map, and the import refuses the file with `field_invalid`.
 
 Import the file:
 
@@ -253,7 +258,7 @@ Import the file:
 4. Select **Preview**. **Creates** lists `sample-plan.md`, and no violation shows.
 5. Select **Apply import**.
 
-The mission graph shows the node **Add a health note** with the intent `implement`. The **Plan import** item of the readiness panel shows "The mission holds 1 node."
+The mission graph shows the node **Add a health note** with the intent `implement`. The readiness panel does not refresh after the import. Reload the page. The **Plan import** item then shows "The mission holds 1 node."
 
 ## 11. Watch the first task
 
@@ -285,10 +290,10 @@ A node can also stop in two other states:
 | Step 2 of Onboarding shows **Enable swe@1** or **Enable re@1**, not **Enable agents**                  | No live LLM credential has an agent platform. Create a credential of `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`.                                            |
 | The credential page shows "An agent cannot use a credential of platform <platform>."                   | The same cause. An agent uses only a credential of the six agent platforms.                                                                                                                                                   |
 | **Verify** of the repository binding shows "The repository host refused the SSH key."                  | The repository does not hold the public key. Add it as a deploy key with write access, as step 5 shows. The [container guide troubleshooting](../how-to-guides/run-in-a-container.md#troubleshooting) lists every other hint. |
-| The worker binding sheet shows `swe@1` or `re@1` with the badge `Not enabled`                          | Do step 4, or select **Enable swe@1** or **Enable re@1** in the sheet. The server refuses a worker binding with an agent that is not enabled.                                                                                 |
+| The worker binding sheet shows `swe@1` or `re@1` with the badge `Not enabled` or `Disabled`            | Do step 4, or select **Enable swe@1** or **Enable re@1** in the sheet. The server refuses a worker binding with an agent that is not enabled.                                                                                 |
 | The preview shows "The node write adds a node and claimable state pair that no worker binding covers." | A state of the node has no worker binding that can claim it. Add the `coder` and the `reviewer` bindings of step 8, then select **Preview** again.                                                                            |
 | The preview shows "No binding named <name>. Current bindings: …"                                       | The plan names a binding that the project does not hold. Write the name of your repository binding under `bindings`.                                                                                                          |
-| The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                   | A verification fails on every run, for example `npm test` in the container. Use a verification that the server host can run, as step 10 shows.                                                                                |
+| The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                   | A verification fails on every run, for example `npm test` in the container. Use a verification that the container can run, as step 10 shows.                                                                                  |
 | **Live instances** stays `Open`                                                                        | Select **Open workers** on the item. The Workers page shows the instances of the project.                                                                                                                                     |
 
 ## Read next
