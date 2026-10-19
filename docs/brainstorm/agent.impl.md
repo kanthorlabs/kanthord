@@ -170,7 +170,7 @@ The Agent component owns these keys of the section `agent`.
 - A release of a credential sets `available_at` to null and `strikes` to 0. It changes a row only when `strikes` is above 0, also for a hold whose `available_at` is in the past.
 - An advancing `stop` is neutral for the failure count, as [the failure count](scheduler-service.impl.md#loss-settlement) states.
 - The write logs `agent.fallback.cooldown_started` at level `info` with `execution_id`, `credential_name`, `code`, `strikes` and `available_at`, once for each held credential. `strikes` and `available_at` are the new values of the hold.
-- A release that changes a row logs `agent.fallback.cooldown_cleared` at level `info` with `execution_id` and `credential_name`. A release of a credential with `strikes` 0 logs nothing.
+- A release that changes a row logs `agent.fallback.cooldown_cleared` at level `info` with `execution_id` and `credential_name`, once for each credential. A release of a credential with `strikes` 0 logs nothing.
 - A human clear of a cooldown logs `agent.fallback.cooldown_cleared` at level `info` with `credential_name` and no `execution_id`.
 - The release and the clear write the cooldown logs after their commit, so a rolled-back write leaves no log line. Today they write the logs inside their transaction, so a rolled-back write still leaves its log line, and no hold row.
 

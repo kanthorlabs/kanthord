@@ -106,7 +106,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - `swe@1`, `re@1` and every project share that credential.
 - The duration is the base of the code, doubled for each strike after the first, up to the maximum.
 - A repeated advance on the same credential adds one strike.
-- A cooldown is live while its end time is later than the clock. An expired cooldown keeps its strikes until a success.
+- A cooldown is live while its end time is later than the clock. An expired cooldown keeps its strikes until a release with no `provider_failed` stop.
 - A release with no `provider_failed` stop releases the credential of its pinned selection. A success on any model of the credential releases every model.
 - A human clears a cooldown on the agent page or with the CLI. A clear releases the credential.
 
