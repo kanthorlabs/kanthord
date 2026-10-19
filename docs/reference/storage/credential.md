@@ -191,6 +191,19 @@ The `s3` probe maps the `HeadBucket` result to a status and a `failure_reason`. 
 
 A key that can only write can get `unknown` from a forbidden probe and still work. The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`, without key material.
 
+The dashboard shows a hint under a check result that carries a `failure_reason`. The hint texts of this component:
+
+| `failure_reason`   | Hint                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unauthorized`     | The remote service refused the token or the access key. Correct the token or the key. Then verify again.                                                                       |
+| `forbidden`        | The remote service accepted the token or the key but refused the access. Check the permissions of the token or the key.                                                        |
+| `rate_limited`     | The remote service limited the requests. Wait some minutes, or check the quota of the account. Then verify again.                                                              |
+| `unreachable`      | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
+| `invalid_response` | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
+| `unclassified`     | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                   |
+
+A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
+
 #### platforms
 
 ```json

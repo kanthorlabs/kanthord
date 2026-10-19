@@ -201,6 +201,19 @@ The CLI fetches no further page.
 
 The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`.
 
+The dashboard shows a hint under a check result that carries a `failure_reason`. The hint texts of this component:
+
+| `failure_reason`   | Hint                                                                                                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unauthorized`     | The provider refused the API key or the access token. Correct the key, or sign in again for a new token. Then verify again.                                                                                 |
+| `forbidden`        | The provider accepted the key or the token but refused the access. Check the permissions and the plan of the account.                                                                                       |
+| `rate_limited`     | The provider limited the requests. Wait some minutes, or check the quota of the plan. Then verify again.                                                                                                    |
+| `unreachable`      | The server cannot reach the provider. Check the network of the server and the base URL of an openai-compatible credential. For an OAuth platform, sign in again.                                            |
+| `invalid_response` | The provider sent an answer that the check does not expect, for example a server error. Verify again later. For an openai-compatible credential, check that the base URL points to the API of the provider. |
+| `unclassified`     | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                                                |
+
+A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
+
 ### Failures
 
 API failures use the shared [error envelope](../errors.md#api-failures). Every command can answer these shared failures:
