@@ -380,7 +380,7 @@ Each service and shared component registers one map under its name: `server`, `g
 - Its map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation`.
 - The `gateway` component of `server` summarizes that map.
 - The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
-- A domain map reads in-process state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings`, `mission` holds `operations`, `intake` holds `events` and `tracking` holds `store`. The `events` probe reports the dispatcher of the running Intake Service.
+- A domain map reads local state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings`, `mission` holds `operations`, `intake` holds `events` and `tracking` holds `store`. The `events` probe reports the dispatcher of the running Intake Service.
 - The `repository` map holds `toolchain`, which runs the version commands of the required tools without blocking the event loop.
 
 The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200},"intake":{"events":200},"tracking":{"store":200}}}`.
