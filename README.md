@@ -13,9 +13,13 @@
 | `webhook` | `platforms/webhook` | Standalone webhook log; currently documentation and deployment planning only. |
 | `homelab` | `platforms/homelab` | Public homelab setup: the nginx site and the kanthord container. |
 
+## Run KanthorD
+
 Run in a container: follow [Run kanthord in a container](docs/how-to-guides/run-in-a-container.md).
 
 First task: follow [From a fresh install to the first task](docs/tutorials/first-task.md).
+
+## Contribute
 
 Run `make bootstrap` in a fresh clone. It initializes all submodules, attaches them to `main`, and propagates the root Git identity. Runtime setup remains limited to engine and apps.
 
