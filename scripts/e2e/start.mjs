@@ -9,6 +9,10 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import {
+  requireEnablementCredentials,
+  unsuitableEnablementCredentials,
+} from "./enablement.mjs";
+import {
   addDeployKey,
   createSshKey,
   pinHostKey,
@@ -122,6 +126,10 @@ for (const credential of config.repository_credentials) {
   });
   log("credential created", { name: credential.name });
 }
+
+requireEnablementCredentials(
+  await unsuitableEnablementCredentials(api, config.enablements),
+);
 
 const sshKey = await createSshKey(api, sshCredentialName);
 log("SSH key created", {
