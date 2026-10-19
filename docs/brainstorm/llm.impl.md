@@ -62,6 +62,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `LLM_PROVIDERS` maps a platform to its `LlmProvider`. The map holds exactly the platforms with a check in the [platform table](#platform-validators), and a platform outside the map has no implementation.
 - `verifiable` of the [platform list](architecture.impl.md#the-platform-list) is true exactly for a platform in `LLM_PROVIDERS`.
 - `check` maps a reply to `ok`, 401 or 403 to `unauthorized`, a network failure or the deadline to `unreachable`, and every other answer to `invalid_response`.
+- The `connection` value is not a failure reason. For a 403, `connection` is `unauthorized` and the health entry carries `failure_reason: forbidden`.
 - A model call through pi-ai calls no `onResponse` on a refused request. The check of a model call reads the HTTP status from the `<status>:` or `<status> ` prefix of the `errorMessage` of the pi-ai reply. A failed model call without a status maps to `unreachable`.
 - The `opencode-go` check passes a session id, so that pi-ai sends the header `x-opencode-session`. OpenCode Go refuses a call without it with 400 `MissingSessionID`.
 - Each model that a check calls is a named constant in `src/llm/`, for example the constants of `gpt-5.6-luna` for `openai-codex`, `claude-haiku-5-5` for `anthropic-subscription` and `deepseek-v4-flash` for `opencode-go`. No code compares or sends a model name as a raw string.
@@ -182,7 +183,9 @@ Each platform validator declares its secret shape, metadata schema and validatio
 
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
 - The [LLM providers](#the-llm-provider) supply the checks.
-- No check refreshes an OAuth record; an expired access token answers `unreachable` without a remote call, and the healthcheck reports `unknown`.
+- No check refreshes an OAuth record. An expired access token of an `openai-codex` or `anthropic-subscription` record answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
+- The `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides the result of an expired record.
+- Each failure carries a value of [the failure reason of an HTTP check](gateway-service.impl.md#the-failure-reason-of-an-http-check). A check that exceeds its deadline reports `unknown` with `failure_reason: unclassified`.
 - Credential and agent provider healthchecks share an implementation where appropriate, not ownership.
 - The `openai-codex` check, the `anthropic-subscription` check and the `opencode-go` check make a model call.
 - The `anthropic-subscription` check builds its call as the `openai-codex` check does, under the pi provider `anthropic`.

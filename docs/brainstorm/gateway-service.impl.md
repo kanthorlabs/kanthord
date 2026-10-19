@@ -419,7 +419,12 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - `status` takes a [resource status](architecture.vocabulary.md#resource-status): `healthy`, `unhealthy` or `unknown`.
 - `capability` is a nonempty string that names the capability of the check, not a claim about other capabilities.
 - `failure_reason` is null or a value of the closed enum `ResourceFailureReason` in `src/kernel/health.ts`. No remote text reaches the client.
-- The git values of `ResourceFailureReason` are `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid`, `identity_unavailable` and `unclassified`. [The failure reason of a git operation](repository.impl.md#the-failure-reason-of-a-git-operation) maps each git failure to a value.
+- `failure_reason` is null if and only if `status` is `healthy`. An entry that is not healthy and has no reported value carries `unclassified`.
+- The git values of `ResourceFailureReason` are `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid` and `identity_unavailable`. [The failure reason of a git operation](repository.impl.md#the-failure-reason-of-a-git-operation) maps each git failure to a value.
+- The HTTP values of `ResourceFailureReason` are `unauthorized`, `forbidden`, `rate_limited`, `unreachable` and `invalid_response`. The credential checks of the LLM, Repository and Storage components report them. The [failure reason of an HTTP check](#the-failure-reason-of-an-http-check) maps each failure to a value.
+- `unclassified` belongs to the git checks and the HTTP checks. It names a failure with no reported cause, a check that exceeds its deadline included.
+- A repository binding entry carries a git value. A credential entry and an agent provider entry carry the value of the credential check. The value is an HTTP value or `unclassified`, or `identity_unavailable` for an `ssh` record. An Intake Service entry and a Worker Service entry that is not healthy carry `unclassified`.
+- The value of a failure is the same in every component. The check of each component maps it to a status. For example, `rate_limited` is `unknown` for an LLM credential and `unhealthy` for a `github` credential. `forbidden` is `unhealthy` for an LLM credential and `unknown` for a `github` or `s3` credential.
 - A resource name of the LLM, Repository or Storage component is its credential name.
 - A project-scoped resource name of the Project Service is its binding name.
 - An Intake Service resource name is its inbound identity.
@@ -439,10 +444,10 @@ Its `error.details` holds `{"missing_inventories":["<owner>"]}`, with each owner
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
 - The request runs at most 32 checks concurrently across all owners.
 - Each check receives a child `Context` with a deadline of 10 s from its start.
-- A check that exceeds its deadline reports `unknown`.
+- A check that exceeds its deadline reports `unknown` with `failure_reason: unclassified`.
 - The [route timeout](gateway-service.impl.md#cancellation) bounds the whole request.
 - The report deadline is the handler start plus the route timeout minus a margin of 5 s (`REPORT_MARGIN_MS`), because the route deadline does not reach the caller context.
-- At the report deadline, the report includes `unknown` for every entry whose check has no result, including a check without a start.
+- At the report deadline, the report includes `unknown` with `failure_reason: unclassified` for every entry whose check has no result, a check without a start included.
 - The handler calls `caller.commit` once, at the end, with the report.
 - The Gateway Service cancels the checks that have no result before it answers.
 - Caller cancellation cancels all checks and produces no success answer.
@@ -450,6 +455,32 @@ Its `error.details` holds `{"missing_inventories":["<owner>"]}`, with each owner
 
 The [Project Service](project-service.impl.md#the-resource-healthcheck), the [LLM](llm.impl.md#the-resource-healthcheck), [Repository](repository.impl.md#platform-validators) and [Storage](storage.impl.md#platform-validators) components, [Intake Service](intake-service.impl.md#the-resource-healthcheck) and the [Agent component](agent.impl.md#agent-provider-healthcheck) own their check methods.
 [Registration heartbeat](worker-service.impl.md#registration-heartbeat) defines the registered-instance check.
+
+### The failure reason of an HTTP check
+
+`failureReasonOfStatus` and `thrownFailureReason` of `src/kernel/probe.ts` map an HTTP status and a thrown failure to a value. `src/llm/probes.ts` sets the rows of the expired token, the model list and the model call. The table applies to every LLM provider check, the `github` check and the `s3` `HeadBucket` check. The first row that matches decides.
+
+| Condition                                                                              | Value              |
+| -------------------------------------------------------------------------------------- | ------------------ |
+| The check exceeds its deadline                                                         | `unclassified`     |
+| The access token of an `openai-codex` or `anthropic-subscription` record is expired    | `unauthorized`     |
+| The remote answers HTTP 401                                                            | `unauthorized`     |
+| The remote answers HTTP 403                                                            | `forbidden`        |
+| The remote answers HTTP 429                                                            | `rate_limited`     |
+| The remote answers a status other than success, a redirect or an S3 `404` included     | `invalid_response` |
+| The body of a model list does not parse                                                | `invalid_response` |
+| The request fails before an HTTP answer, or a failed model call carries no HTTP status | `unreachable`      |
+| Any other failure, for example a check model that pi does not list                     | `unclassified`     |
+
+- `unauthorized` means that the remote refused the secret, or that the stored access token is expired.
+- An expired access token answers `unauthorized` without a remote call. No check refreshes an OAuth record.
+- A `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides.
+- `forbidden` means that the remote answered HTTP 403. An LLM provider answers 403 for a secret that it accepts. GitHub and S3 can also answer 403 for a rate limit or a wrong key, so their checks report `unknown`.
+- `rate_limited` means that the remote refused the request for its rate limit.
+- `invalid_response` means an HTTP answer that the check cannot use. An LLM HTTP check accepts every 2xx status. The `github` and `s3` checks accept only 200.
+- `unreachable` means no HTTP answer. A model call that fails with "Failed to extract accountId from token" carries no status and answers `unreachable`.
+- A model call check reads the status from the response, or from the first 3 digits of the error message of pi.
+- The health report logs the record `resource.health.check`. The record verify logs `credential verify failed`, and the pre-save check logs `credential check failed`. Each record keeps the redacted remote text in its field `reason`. The text holds at most 300 characters.
 
 ## Idempotency of a mutation
 

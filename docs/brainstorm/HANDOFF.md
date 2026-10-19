@@ -144,7 +144,6 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Added 2026-10-19 from the first-day plan. The first-day plan of 2026-10-19 replaces six open rulings of the plan of 2026-10-18. The READY workstreams of the plan of 2026-10-18 are merged, and root `#113` moved the pointers. "Old" names an item of the plan of 2026-10-18. Remove this item when each listed old ruling is ruled or moved to the HANDOFF section of its owning component.
   - Sources, not versioned: `.dev/first-day-experiment/fix-plan.md` holds the plan of 2026-10-18. `.dev/first-day-2026-10-19/` holds `first-day-plan.md`, `first-day-findings.md` and `first-day-plan-review.md`.
   - Labels of the plan of 2026-10-19:
-    - Q2 proposes a nullable `failure_reason` enum on the shared health entry. Ruled 2026-10-19 by Ulrich: the closed enum `ResourceFailureReason` in `engine/src/kernel/health.ts`. The health report, the binding check and the credential check carry it.
     - Q4, first-start diagnostics, proposes the refused host in `gateway.http.host_not_allowed` and a `warn` start record for a loopback `gateway.bind`. Ruled 2026-10-19 by Ulrich (Q4a, Q4c). The refusal carries `details: { host, field }`. The `info` start record carries `bind`, `port` and the loopback sentence, with no `warn`. Engine `#124` builds it. [gateway-service.impl.md](gateway-service.impl.md#host-and-origin) and [the start record](gateway-service.impl.md#the-start-record) state it.
     - Q5 proposes a setup checklist on Overview with no project, and a readiness panel on the project page. It waits on Ulrich.
     - Q6 raises the first public release now and proposes the release after P3. It waits on Ulrich.
@@ -157,7 +156,6 @@ After the first native-agent worker runs the acceptance path.
     - P1, P2 and P3 move the submodule pointers after layer 1, layer 2 and layer 3 of the plan of 2026-10-19.
   - Replaced by the plan of 2026-10-19:
     - Old B3, the first-start configuration in the image: by Q3.
-    - Old B4, the reason of an unhealthy repository address: by Q2.
     - Old S2, the details of `gateway.http.host_not_allowed`: by Q4a.
     - Old S3, the `warn` start record for a loopback `gateway.bind`: by Q4c.
     - Old S4, a configuration edit command: by Q11.

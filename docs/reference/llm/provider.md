@@ -8,17 +8,18 @@ Check a stored LLM credential through the LLM provider of its platform. The chec
 
 The check uses the current revision of the credential. It stores no result, caches nothing, and creates no idempotency record. It has no project or binding. Use the model IDs to select the approved models of an `openai-compatible` credential, then save them with [`llm credential update-metadata`](credential.md). To check a model call, use [`llm model check`](model.md).
 
-| Platform            | Remote call                                                | Model list |
-| ------------------- | ---------------------------------------------------------- | ---------- |
-| `github-copilot`    | `GET https://api.github.com/copilot_internal/v2/token`     | No         |
-| `openai-codex`      | One model call to `gpt-5.6-luna` with reasoning `low`      | No         |
-| `anthropic`         | `GET https://api.anthropic.com/v1/models`                  | No         |
-| `openai-compatible` | `GET <base_url>/models`                                    | Yes        |
-| `openrouter`        | `GET https://openrouter.ai/api/v1/key`                     | No         |
-| `openai`            | `GET https://api.openai.com/v1/models`                     | Yes        |
-| `opencode-go`       | One model call to `deepseek-v4-flash` with a 1-token limit | No         |
+| Platform                 | Remote call                                                | Model list |
+| ------------------------ | ---------------------------------------------------------- | ---------- |
+| `github-copilot`         | `GET https://api.github.com/copilot_internal/v2/token`     | No         |
+| `openai-codex`           | One model call to `gpt-5.6-luna` with reasoning `low`      | No         |
+| `anthropic-subscription` | One model call to `claude-haiku-5-5` with a 1-token limit  | No         |
+| `anthropic`              | `GET https://api.anthropic.com/v1/models`                  | No         |
+| `openai-compatible`      | `GET <base_url>/models`                                    | Yes        |
+| `openrouter`             | `GET https://openrouter.ai/api/v1/key`                     | No         |
+| `openai`                 | `GET https://api.openai.com/v1/models`                     | Yes        |
+| `opencode-go`            | One model call to `deepseek-v4-flash` with a 1-token limit | No         |
 
-Other platforms have no LLM provider. These platforms are the `verifiable` platforms of [`llm credential platforms`](credential.md#platforms). The check has a 10-second deadline. An HTTP check does not follow a redirect; a redirect answers `invalid_response`. It does not refresh OAuth: an expired access token of `github-copilot` or `openai-codex` reports `unreachable` without a remote call.
+Other platforms have no LLM provider. These platforms are the `verifiable` platforms of [`llm credential platforms`](credential.md#platforms). The check has a 10-second deadline. An HTTP check does not follow a redirect; a redirect answers `invalid_response`. It does not refresh OAuth. An expired access token of `openai-codex` or `anthropic-subscription` answers `unauthorized` without a remote call. The `github-copilot` check sends the stored GitHub token and ignores the stored expiry, so the remote decides.
 
 ## Expected response
 
@@ -42,14 +43,14 @@ The API returns HTTP `200` with JSON. The CLI writes the same object as one JSON
 | `models[].owned_by` | string or `null`  | Owner that the remote reports; `null` when absent.                      |
 | `models[].created`  | integer or `null` | Creation time that the remote reports; `null` when absent.              |
 
-| `connection`       | Meaning                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `ok`               | The remote answered with success.                                                                               |
-| `unauthorized`     | The remote answered `401` or `403`.                                                                             |
-| `unreachable`      | A network failure, the deadline, an expired OAuth access token, or a model call failure without an HTTP status. |
-| `invalid_response` | Every other answer, for example another status or a malformed model list.                                       |
+| `connection`       | Meaning                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `ok`               | The remote answered with success.                                                                              |
+| `unauthorized`     | The remote answered `401` or `403`, or the `openai-codex` or `anthropic-subscription` access token is expired. |
+| `unreachable`      | A network failure, the deadline, or a model call failure without an HTTP status.                               |
+| `invalid_response` | Every other answer, for example another status or a malformed model list.                                      |
 
-`models` is `null` for every result other than `ok`. The answer contains no key, base URL, or token limit.
+`connection` is not the `failure_reason` of a [credential verify](credential.md#check-and-verify-answer). For a `403`, `connection` is `unauthorized`, and the verify answers `failure_reason: forbidden`. `models` is `null` for every result other than `ok`. The answer contains no key, base URL, or token limit.
 
 ### Failures
 

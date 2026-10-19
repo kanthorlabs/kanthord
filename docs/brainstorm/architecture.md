@@ -156,6 +156,7 @@ The store, the log and the host toolchain are internal components, not external 
 - The inventory comes from the owning service, not from the checks.
 - A resource whose check exceeds its deadline reports the [resource status](architecture.vocabulary.md#resource-status) for an incomplete check.
 - Each entry names the capability that its check tests.
+- An entry that is not healthy names its [failure reason](architecture.vocabulary.md#failure-reason). A healthy entry names none.
 
 ## Revision and pin
 

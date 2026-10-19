@@ -1100,7 +1100,7 @@ The import boundaries follow the public files.
 ### The record verify
 
 - `<component>.credential.verify` checks one stored record. It takes no body and no mutation key.
-- It runs the check of the platform on the newest live revision of the record, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
+- It runs the check of the platform on the newest live revision of the record, with a 10 s deadline. A check that exceeds its deadline answers `unknown` with `failure_reason: unclassified`.
 - It answers the health entry `{ status, capability, failure_reason }`, the same type as an entry of the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
 - It runs the same check code as the health report and stores no result.
 - An archived record answers 409 `credential.credential.archived`. A platform with `verifiable: false` answers 400 `credential.check.unsupported`. A name of another component answers 404 `credential.credential.not_found`.
@@ -1111,7 +1111,7 @@ The import boundaries follow the public files.
 - `<component>.credential.check` checks a typed secret before a create. It stores nothing.
 - Its body is `{ platform, secret, metadata }`, the create body without `name`, and the component validates it with the schema of the create.
 - It answers the health entry `{ status, capability, failure_reason }`, the same type that Verify reads from the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
-- The component runs the check of the platform on the typed secret, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
+- The component runs the check of the platform on the typed secret, with a 10 s deadline. A check that exceeds its deadline answers `unknown` with `failure_reason: unclassified`.
 - A platform with `verifiable: false` or with the secret shape `oauth` or `ssh_key` answers 400 `credential.check.unsupported`.
 - It takes no mutation key. It logs no material and drops the secret after the call.
 - The static segment `check` takes precedence over `/:credential_name`, so custody refuses the name `check`.
@@ -1131,9 +1131,9 @@ The import boundaries follow the public files.
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline and concurrency bounds.
 - The platform validators of each component supply the probes.
 - A supported platform with no remote call and no local validation of the stored secret reports `unknown`.
-- A forbidden probe proves no invalid credential.
+- A forbidden probe proves no invalid credential. The `github` and `s3` probes report HTTP 403 as `unknown`. An [LLM provider check](llm.impl.md#the-llm-provider) reports HTTP 403 as `unhealthy`.
 - The component records each probe against the credential store record and stores no check result.
-- A probe that reports `unknown` or `unhealthy` logs the failure reason without material.
+- A probe that reports `unknown` or `unhealthy` logs the redacted remote text in the field `reason`, without material. The answer carries the closed `failure_reason` value.
 
 ### The credential sections of the dashboard
 

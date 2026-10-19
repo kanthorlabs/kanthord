@@ -296,7 +296,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `project.binding.verify` checks one repository binding at `POST /api/project/:project_id/binding/:binding_id/verify`. It is a read under `human` access. It takes no body and no mutation key.
 - It checks the configuration of the revision that `binding_id` names.
 - It runs the host set check, the pin check and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `ssh_credential` and of the `credential` of the binding.
-- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check that exceeds its deadline answers `unknown`.
+- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check that exceeds its deadline answers `unknown` with `failure_reason: unclassified`.
 - A refusal of the record verify refuses the request with the code of the record verify.
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores no result.
@@ -359,6 +359,13 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The hint of `host_key_changed` is "The host presented another key. Compare the fingerprint with the published one, then pin again."
 - The hint of `identity_unavailable` is "The server cannot load the SSH key. Rotate the key. If the fault stays, read the server log."
 - The hint of `key_refused` shows the public key of the selected SSH credential.
+- The hint of `host_key_unknown` is "The server does not know the host key of the repository host. Confirm the host key on the server. Then verify again."
+- The hint of `repository_not_found` is "The repository host does not find the repository. Check the owner and the name in the address. A deploy key of another repository also gives this result."
+- The hint of `host_unreachable` is "The server cannot reach the repository host. Check the host in the address and the network of the server."
+- The hint of `address_invalid` is "The address is not valid, or its host is not a host of the platform. Use the form git@<host>:<owner>/<repository>.git."
+- The hint of `unclassified` is "The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log."
+- A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
+- On a verify or a binding check, the hint shows under the `address` entry only. The `ssh_credential` and `credential` entries and the credential Verify show the status badge only.
 - The credential field is optional. The form marks a blank credential only when the action is `pull_request`.
 - The `Repository` section holds a platform select with `GitHub`, `GitLab` and `Bitbucket`. For a git-only platform, the form hides the credential field and offers no `Open a pull request`.
 - The credential field of a repository binding is a searchable list of the live Repository credential records of the binding platform. It reads `repository.credential.list` and hides an archived record. A name outside the list cannot be entered.
