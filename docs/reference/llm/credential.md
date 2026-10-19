@@ -68,7 +68,7 @@ A rotation and a revoke end every older live revision that no live execution pin
 - `check` tests a typed secret against its platform before a `create`. It stores nothing. It accepts only `verifiable` platforms with the secret shape `api_key`.
 - `verify` tests the current revision of a stored credential. It stores no result. It accepts every `verifiable` platform.
 
-`check` and `verify` run the provider check of the platform with a 10-second deadline. The connection result maps to a status: `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` or `invalid_response` to `unknown`. A deadline overrun answers `unknown`. An expired OAuth access token answers `unknown`; no check refreshes OAuth.
+`check` and `verify` run the provider check of the platform with a 10-second deadline. The connection result maps to a status: `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` or `invalid_response` to `unknown`. A check that exceeds its deadline answers `unknown` with the failure reason `unclassified`. No check refreshes OAuth. An expired access token of `openai-codex` or `anthropic-subscription` answers `unhealthy` with the failure reason `unauthorized`, without a remote call. The `github-copilot` check sends the stored GitHub token and ignores the stored expiry, so the remote decides.
 
 ## Expected response
 
@@ -173,13 +173,33 @@ The CLI fetches no further page.
 ### Check and verify answer
 
 ```json
-{ "status": "healthy", "capability": "model-list read" }
+{ "status": "healthy", "capability": "model-list read", "failure_reason": null }
 ```
 
-| Property     | Type   | Purpose                                                    |
-| ------------ | ------ | ---------------------------------------------------------- |
-| `status`     | string | `healthy`, `unhealthy` or `unknown`.                       |
-| `capability` | string | Capability of the platform check, as in the health report. |
+```json
+{
+  "status": "unhealthy",
+  "capability": "model-list read",
+  "failure_reason": "unauthorized"
+}
+```
+
+| Property         | Type             | Purpose                                                                                    |
+| ---------------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| `status`         | string           | `healthy`, `unhealthy` or `unknown`.                                                       |
+| `capability`     | string           | Capability of the platform check, as in the health report.                                 |
+| `failure_reason` | string or `null` | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
+
+| `failure_reason`   | Cause                                                                                                   | Status      |
+| ------------------ | ------------------------------------------------------------------------------------------------------- | ----------- |
+| `unauthorized`     | The provider answered `401`, or the `openai-codex` or `anthropic-subscription` access token is expired. | `unhealthy` |
+| `forbidden`        | The provider answered `403`.                                                                            | `unhealthy` |
+| `rate_limited`     | The provider answered `429`.                                                                            | `unknown`   |
+| `invalid_response` | The provider answered another status or a redirect, or a model list that the check cannot read.         | `unknown`   |
+| `unreachable`      | The request failed before an HTTP answer, or a failed model call carries no HTTP status.                | `unknown`   |
+| `unclassified`     | Any other failure, a check that exceeds its deadline included.                                          | `unknown`   |
+
+The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`.
 
 ### Failures
 

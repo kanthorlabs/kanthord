@@ -54,6 +54,17 @@ The result that a resource healthcheck reports. The set is closed and holds thre
 - **unhealthy**: the check confirms a failure of the capability.
 - **unknown**: the check is incomplete or cannot establish the capability.
 
+## failure reason
+
+The cause of a resource status other than healthy. The set is closed and holds 13 values.
+
+- **git values**: `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid` and `identity_unavailable`.
+- **HTTP values**: `unauthorized`, `forbidden`, `rate_limited`, `unreachable` and `invalid_response`.
+- **unclassified**: a failure with no reported cause, a check that exceeds its deadline included. Git checks and HTTP checks both report it.
+
+The check of LLM credential `team-openai` gets HTTP 401 and reports `unhealthy` with the failure reason `unauthorized`.
+The check of the repository binding `app` exceeds its deadline and reports `unknown` with the failure reason `unclassified`.
+
 ## health scope
 
 The grouping of a resource inside its owning service in the health report. The set is closed and holds two values.
