@@ -355,7 +355,7 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - An empty SSH credential list shows "No credential exists. Use New credential." A filter miss shows "No credential matches."
 - The binding sheet prefills `git@github.com:` for the platform `github`.
 - When the address host holds no pin and the host is `github.com` or `ssh.github.com`, the sheet calls `repository.host_key.scan` and `repository.host_key.pin`. It shows "Host key pinned from api.github.com" with the fingerprint.
-- When another address host holds no pin, the sheet shows the scanned fingerprint and a link to the published fingerprints of the provider. It holds `Confirm host key`. Save stays disabled until the pin exists.
+- When another host of the SSH host set of the binding platform holds no pin, for example `gitlab.com`, the sheet shows the scanned fingerprint and a link to the published fingerprints of the provider. It holds `Confirm host key`. Save stays disabled until the pin exists.
 - The hint of `host_key_changed` is "The host presented another key. Compare the fingerprint with the published one, then pin again."
 - The hint of `identity_unavailable` is "The server cannot load the SSH key. Rotate the key. If the fault stays, read the server log."
 - The hint of `key_refused` shows the public key of the selected SSH credential.
