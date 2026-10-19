@@ -62,7 +62,8 @@ A node requires the action of a policy when the node is an `implement` node and 
 An external action states its expected end state on its platform.
 The repository [capabilities](project-service.vocabulary.md#capability) distinguish authenticated operations from local work.
 A repository address is an SSH address.
-The host of the address is a member of the SSH host set of the binding platform, and the [Repository component](repository.md#repository-connector) holds a pinned host key for it.
+The host of the address is a member of the SSH host set of the binding platform.
+The [Repository component](repository.md#repository-connector) holds a pinned host key for that host.
 A network git read and a network git write use the SSH identity of the binding, and no SSH configuration of the hosting application.
 Every repository binding holds one SSH credential reference. That record holds the one SSH identity that git uses.
 A platform action requires an API key of the platform.

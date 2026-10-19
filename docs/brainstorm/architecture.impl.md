@@ -103,7 +103,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The state directory holds the log file under the `file` destination.
 - The server writes no file in the cache directory today.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
-- The agent directory of a network git operation is the one exception. It lives in the system temporary directory, because the agent socket path holds at most 100 bytes.
+- The SSH agent directory of a network git operation lives in the system temporary directory. The reason: its socket path holds at most 100 bytes.
 
 ## The file index
 
@@ -118,7 +118,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
 - `workspaces/<node identity>/` of the state directory, with one checkout `checkouts/<binding name>/` for each repository binding, the workspace of a steps execution on an `implement` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution or of a steps execution on an `examine` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
-- `kd-ssh-<deadline>-<random>/` of the system temporary directory, the private agent directory of one network git operation, a path template that [repository.impl.md](repository.impl.md#the-ssh-identity) declares.
+- `kd-ssh-<deadline>-<random>/` of the system temporary directory, the private SSH agent directory of one network git operation, a path template that [repository.impl.md](repository.impl.md#the-ssh-identity) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 
 ## The operational database
@@ -1087,7 +1087,7 @@ The import boundaries follow the public files.
 
 - `<component>.credential.verify` checks one stored record. It takes no body and no mutation key.
 - It runs the check of the platform on the newest live revision of the record, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
-- It answers the health entry `{ status, capability }`, the same type as an entry of the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
+- It answers the health entry `{ status, capability, failure_reason }`, the same type as an entry of the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
 - It runs the same check code as the health report and stores no result.
 - An archived record answers 409 `credential.credential.archived`. A platform with `verifiable: false` answers 400 `credential.check.unsupported`. A name of another component answers 404 `credential.credential.not_found`.
 - Custody decrypts the newest live revision for the check, as the health report does, and the check drops the material after the call. The verify takes no grant, writes no pin and drains no revision.
@@ -1096,7 +1096,7 @@ The import boundaries follow the public files.
 
 - `<component>.credential.check` checks a typed secret before a create. It stores nothing.
 - Its body is `{ platform, secret, metadata }`, the create body without `name`, and the component validates it with the schema of the create.
-- It answers the health entry `{ status, capability }`, the same type that Verify reads from the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
+- It answers the health entry `{ status, capability, failure_reason }`, the same type that Verify reads from the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
 - The component runs the check of the platform on the typed secret, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
 - A platform with `verifiable: false` or with the secret shape `oauth` or `ssh_key` answers 400 `credential.check.unsupported`.
 - It takes no mutation key. It logs no material and drops the secret after the call.

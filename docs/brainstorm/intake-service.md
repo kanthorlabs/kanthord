@@ -131,7 +131,8 @@ The [admission contract](mission-service.md#delivery-admission-and-check) assign
 ## Outbound operations and checks
 
 The Intake Service performs a configured action for the action performer of the Worker Service: it opens a pull request, or it merges the node branch into the base branch and pushes.
-For a network git write, it creates a fresh clone through the repository connector with the SSH identity of the binding, performs the write and removes the clone after the call.
+For a network git write, it creates a fresh clone through the repository connector with the SSH identity of the binding.
+It performs the write and removes the clone after the call.
 It checks the state of the external object of a request evidence for the Mission Service, and it answers the end state that the platform implementation folds.
 It reads a pull request and its review comments for an execution.
 It signs a presigned PUT or GET, checks an uploaded object and deletes an object of a storage binding for the Mission Service.

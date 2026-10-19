@@ -45,8 +45,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `api_key`: `{ key }`.
 - `oauth`: `{ refresh, access, expires }`; only a login session supplies initial material.
 - `s3_access_key`: `{ access_key_id, secret_access_key }`; a session token is invalid.
-- `none`: `{}`; the record holds no secret material, and a release answers no material.
-- `ssh_key`: `{ private_key }`; only the generated create and the generated rotation of the owning component supply material. The schema checks the armor lines of the `openssh-key-v1` text and a size bound.
+- `ssh_key`: `{ private_key }`; only the generated create and the generated rotation of the owning component supply material. A generic create, rotation or metadata edit of a platform with `ssh_key` answers 400 `credential.entry.unsupported`. The schema checks the armor lines of the `openssh-key-v1` text and a size bound.
 
 ## Suitability
 
@@ -81,7 +80,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 ## The protected facility
 
 - The facility consumes the authorization result of the service that owns the entity of the release.
-- Its authorization function accepts requester identity, entity and requested operation, and returns a grant or refusal.
+- Its authorization function accepts requester identity, entity and requested operation, and returns a grant or refusal. The requested operation names the kind of release, for example `poll`, `workbench` or `ssh_identity`.
 - A module-private `WeakSet` records each frozen grant, so a caller cannot fabricate one.
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
@@ -98,7 +97,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The live claim names that binding and instance, and its node is the node of the operation.
 - A break in that chain refuses the operation before ciphertext access.
 - A model inference call resolves through the worker binding and selected agent provider, never a credential relationship with a project.
-- The grant kind `ssh_identity` releases the key of an `ssh` record under [the release of an SSH key](#the-release-of-an-ssh-key).
+- The requested operation `ssh_identity` releases the key of an `ssh` record under [the release of an SSH key](#the-release-of-an-ssh-key).
 
 ## The release of a secret
 
@@ -118,12 +117,12 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 ## The release of an SSH key
 
-- Custody releases the key of an `ssh` record through the protected facility with the grant kind `ssh_identity`. The Project Service owns the binding, so it supplies the authorization function.
-- A human identity passes for a binding of a project, and for the draft configuration of a binding write, a binding check or a binding verify.
+- Custody releases the key of an `ssh` record through the protected facility with the requested operation `ssh_identity`. The Project Service owns the binding, so it supplies the authorization function.
+- A human identity passes for a binding of a project. It also passes for the draft configuration of a binding write, a binding check or a binding verify.
 - The service identity of the Project Service passes for a live binding: the resource healthcheck and the instruction files read.
 - A machine identity with a proven execution claim passes only for a repository binding of the pinned node revision of that claim. The Gateway proves the claim of `execution_id` in `src/gateway/invocation.ts`, as it does for `worker.handover` and `intake.action.perform`.
 - The service identity of the Mission Service passes for `intake.action.check`, through the pinned `FrozenAction`, under the Intake rule of that operation.
-- A release under a machine identity with a proven execution claim pins the revision to the execution at first use, through `pinCredential` in the same transaction. Every other release reads the newest live revision.
+- A release under a machine identity with a proven execution claim pins the revision to the execution at first use. It calls `pinCredential` in the same transaction. Every other release reads the newest live revision.
 - A release of a legacy `ssh` record answers 409 `repository.credential.ssh_key_legacy` under [the Repository rule](repository.impl.md#legacy-ssh-records).
 - The holder builds `SshAccess` through `RepositoryComponent.sshAccessOf` and drops the material in `finally`.
 
@@ -144,7 +143,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 ## The credential handover
 
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
-- The payload is canonical JSON containing the credential of the pinned agent selection of the execution and the SSH identities of the execution.
+- The payload is canonical JSON. It holds the credential of the pinned agent selection of the execution and the SSH identities of the execution.
 - Its sole item holds the record identity, the pi adapter id and the pi-ai credential.
 - The payload holds `ssh_identities: [{ binding_id, credential_id, private_key }]` beside `items`, one entry for each repository binding of the pinned node revision. An execution with no repository binding holds `[]`.
 - `ssh_identities` stays out of `CredentialStore`. The execution store keeps its one pi-ai credential.
@@ -212,7 +211,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, and the metadata copy and replacement at rotation.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover a handover with an SSH entry, an execution with no repository binding, and a report with the credential type `ssh_key`.
-- Tests assert that a generic create, rotate, metadata edit and check of `ssh` refuse, that a generated create logs no key, and that the database file holds no key text.
+- Tests assert that a generic create, rotate, metadata edit and check of `ssh` refuse. Tests assert that a generated create logs no key, and that the database file holds no key text.
 - Tests cover each requester kind of `ssh_identity`, a fabricated grant and a consumed grant.
 - Tests assert that `release` refuses a consumed grant, a fabricated grant and an inbound operation under another service identity, and that `drop()` clears the buffer after a success and after a failure.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.

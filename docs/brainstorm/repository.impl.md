@@ -27,7 +27,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 - `private_key` of the secret is the `openssh-key-v1` text. The `ssh` validator parses it: cipher `none`, one key, type `ssh-ed25519` and equal check integers.
 - `public_key` is `ssh-ed25519 <base64> kanthord-<credential name>`. `fingerprint` is `SHA256:<unpadded base64 of the SHA-256 of the key blob>`, the form of `ssh-keygen -l`. The server derives both fields.
 - `login_modes` of `ssh` is `[]`.
-- The private key exists in plaintext only in process memory, in the stdin pipe of `ssh-add` and inside the agent. Process memory reaches a disk only through a core dump. [Core dumps](#core-dumps) covers that path.
+- The private key exists in plaintext only in process memory, in the stdin pipe of `ssh-add` and inside the SSH agent. Process memory reaches a disk through a core dump, swap or hibernation. [Core dumps](#core-dumps) covers the core dump. The operator of the host controls swap and hibernation.
 - The `ssh` validation is a local check. It decrypts the newest live revision, parses the key, derives the public key and compares it with the stored `public_key`. It makes no remote call.
 - The record verify and the resource healthcheck of an `ssh` record run the `ssh` validation and report the capability `ssh identity`. A refusal answers `unhealthy` with `failure_reason: identity_unavailable`.
 - An `ssh` record names no host, so it has no remote target. The [binding check](project-service.impl.md#the-binding-check) owns the reachability of each binding. It answers `key_refused` when the remote refuses the key.
@@ -72,19 +72,19 @@ The component declares five operations beside its credential route group. Every 
 - `ssh-key-create` and `ssh-key-rotate` print the record JSON with `public_key` and `fingerprint`.
 - Each new command follows the `token_required` and `indeterminate` codes of the group.
 
-| HTTP  | Code                                              | Condition                                                                                 | Operations                                                  |
-| ----- | ------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 400   | `credential.entry.unsupported`                    | A generic `create`, `rotate` or `update_metadata` names the platform `ssh`.               | `repository.credential.create`, `rotate`, `update_metadata` |
-| 400   | `credential.check.unsupported`                    | The pre-save check names the platform `ssh`.                                              | `repository.credential.check`                               |
-| 409   | `credential.name.conflict`                        | The name exists.                                                                          | `ssh_key_create`                                            |
-| 409   | `credential.revision.conflict`                    | `expected_revision` is stale.                                                             | `ssh_key_rotate`                                            |
-| 409   | `repository.credential.ssh_key_legacy`            | The newest live revision holds no generated key.                                          | Every release of an `ssh` record                            |
-| 400   | `repository.host_key.host_unsupported`            | The host is in no SSH host set.                                                           | `scan`, `pin`                                               |
-| 422   | `repository.host_key.scan_failed`                 | The GitHub meta read or `ssh-keyscan` fails or reaches its deadline. `details: { host }`. | `scan`, `pin`                                               |
-| 409   | `repository.host_key.changed`                     | The second read answers another fingerprint. `details: { host, fingerprint }`.            | `pin`                                                       |
-| 409   | `repository.host_key.unpinned`                    | The address host holds no pin. `details: { host }`.                                       | Binding write, setup read, every network git operation      |
-| none  | `repository.connector.ssh_agent_failed`           | The agent does not start, or `ssh-add` refuses the key. A `Diagnostic` like `git_failed`. | Every network git operation                                 |
-| local | `cli.repository.host_key.pin.fingerprint_invalid` | The `--fingerprint` value is not `SHA256:` and 43 base64 characters.                      | `repository host-key pin`                                   |
+| HTTP  | Code                                              | Condition                                                                                     | Operations                                                  |
+| ----- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 400   | `credential.entry.unsupported`                    | A generic `create`, `rotate` or `update_metadata` names the platform `ssh`.                   | `repository.credential.create`, `rotate`, `update_metadata` |
+| 400   | `credential.check.unsupported`                    | The pre-save check names the platform `ssh`.                                                  | `repository.credential.check`                               |
+| 409   | `credential.name.conflict`                        | The name exists.                                                                              | `ssh_key_create`                                            |
+| 409   | `credential.revision.conflict`                    | `expected_revision` is stale.                                                                 | `ssh_key_rotate`                                            |
+| 409   | `repository.credential.ssh_key_legacy`            | The newest live revision holds no generated key.                                              | Every release of an `ssh` record                            |
+| 400   | `repository.host_key.host_unsupported`            | The host is in no SSH host set.                                                               | `scan`, `pin`                                               |
+| 422   | `repository.host_key.scan_failed`                 | The GitHub meta read or `ssh-keyscan` fails or reaches its deadline. `details: { host }`.     | `scan`, `pin`                                               |
+| 409   | `repository.host_key.changed`                     | The second read answers another fingerprint. `details: { host, fingerprint }`.                | `pin`                                                       |
+| 409   | `repository.host_key.unpinned`                    | The address host holds no pin. `details: { host }`.                                           | Binding write, setup read, every network git operation      |
+| none  | `repository.connector.ssh_agent_failed`           | The SSH agent does not start, or `ssh-add` refuses the key. A `Diagnostic` like `git_failed`. | Every network git operation                                 |
+| local | `cli.repository.host_key.pin.fingerprint_invalid` | The `--fingerprint` value is not `SHA256:` and 43 base64 characters.                          | `repository host-key pin`                                   |
 
 ### The dashboard of the SSH identity
 
@@ -94,7 +94,7 @@ The component declares five operations beside its credential route group. Every 
 - The row of an `ssh` record holds Verify and `Rotate key`, and no `Edit metadata`.
 - The detail of an `ssh` record shows the public key and the fingerprint of each revision, with Copy on the newest live revision. Revoke stays on the revision list.
 - The rotate dialog shows the new public key and the bindings of the credential from `repository.credential.get`.
-- The rotate dialog states the order: add the new deploy key, verify each binding, wait until the older revision shows `ended_at`, then delete the old deploy key at GitHub.
+- The rotate dialog states four steps in order. Add the new deploy key. Verify each binding. Wait until the older revision shows `ended_at`. Delete the old deploy key at GitHub.
 - The revoke confirmation of an `ssh` revision states the GitHub step: delete the deploy key of that revision.
 - The generic create form keeps `ssh` out of its platform list. Its pointer names `Create SSH key`.
 - The section holds a `Host keys` panel with one row for each pin: its host, fingerprint, source and `Pin again`.
@@ -155,7 +155,6 @@ A git-only platform has an SSH host set and no platform implementation.
 - A repository binding of a git-only platform names no `credential`, because no credential platform exists for it.
 - Its binding permits the action `merge_push` and no action. The action `pull_request` refuses the write with 400 `project.bindings.repository.action_unsupported`.
 - A platform implementation of a git-only platform makes it a full platform. Its credential platform, its validator and its `pull_request` support arrive together.
-- The connector reaches every host of an SSH host set on port 22. `altssh.bitbucket.org` stays in the set, and it answers on port 443 only.
 
 - Pull request read calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`.
 - Review comment list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
@@ -192,12 +191,14 @@ The server also requires `ssh-keyscan`.
 It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 A spawn of `ssh-agent` or `ssh-add` that answers `ENOENT` is a missing tool. `ssh -V` keeps its version check.
 
+- The connector reaches every host of an SSH host set on port 22. `altssh.bitbucket.org` stays in the set, and it answers on port 443 only, so the connector cannot reach it.
+
 - Each network git function of the connector takes `ssh: SshAccess` and runs inside one `withSshAgent` call of [the SSH identity](#the-ssh-identity).
 - A network git operation whose address host holds no [pin](#host-keys) refuses with 409 `repository.host_key.unpinned` before any child process starts.
 - `simple-git` performs every git operation of the connector by spawning the `git` binary of the host.
 - Its timeout plugin bounds each operation by the remaining resource budget that the caller supplies.
 - Its abort plugin binds to the `Context` of the caller.
-- Every `git` child of a network git operation takes the environment of the agent. In `readFilesAtCommit` this covers each `git` child, because `--filter=blob:none` fetches each blob later.
+- Every `git` child of a network git operation takes the environment of the SSH agent. In `readFilesAtCommit` this covers each `git` child, because `--filter=blob:none` fetches each blob later.
 - Every `git` child that the engine runs reads no global and no system git configuration of the host. The one builder `isolatedGitEnvironment` in `src/kernel/git-environment.ts` sets `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`.
 - The builder sets `core.excludesFile=/dev/null` and `core.attributesFile=/dev/null` through `GIT_CONFIG_COUNT=2`. It sets `GIT_ATTR_NOSYSTEM=1`. No attributes file of the host changes a committed file.
 - The builder `isolatedGitEnvironment` also removes `PAGER`, `GIT_PAGER`, `EDITOR`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_ASKPASS` and `SSH_ASKPASS`. It removes `GIT_TEMPLATE_DIR`, `GIT_EXTERNAL_DIFF` and `GIT_PROXY_COMMAND`, which the `simple-git` unsafe check rejects. It sets the commit identity `kanthord <kanthord@localhost>` for each name that the environment leaves empty.
@@ -217,16 +218,16 @@ KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of 
 `src/repository/ssh-agent.ts` holds one function `withSshAgent(access, context, deadlineMs, work)`.
 `access` is `SshAccess = { private_key, public_key, known_hosts }`, in memory only, and `known_hosts` holds complete lines.
 
-1. Sweep the expired agent directories under [crash and abort cleanup](#crash-and-abort-cleanup).
+1. Sweep the expired SSH agent directories under [crash and abort cleanup](#crash-and-abort-cleanup).
 2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
 3. Refuse a socket path above 100 bytes, because `sun_path` holds 104 bytes on macOS and `ssh-agent` fails without a message on a longer path. Refuse a path that holds `'`.
 4. Write `id.pub` with the public key and `known_hosts` with the lines of `access`, each with mode `0600` and flag `wx`. The directory holds no private key at any time.
 5. Spawn `ssh-agent -a <dir>/a cat` in command mode with the environment `{ PATH }`. Node holds the stdin pipe of `cat`. Wait for the socket, bounded by the deadline and by 5 s.
    - `-a` is mandatory. Without `-a`, OpenSSH 10.1 and later put the socket under `$HOME/.ssh/agent/` and clean stale sockets there at start.
-   - In command mode the agent checks every 10 s that `cat` lives, and it exits when `cat` ends. `cat` ends when the pipe closes.
+   - In command mode the SSH agent checks every 10 s that `cat` lives, and it exits when `cat` ends. `cat` ends when the pipe closes.
 6. Spawn `ssh-add -q -t <seconds> -` with the environment `{ PATH, SSH_AUTH_SOCK: <dir>/a }`. Write the private key to its stdin and close it. `<seconds>` is the remaining deadline rounded up, at least 1. Clear the key buffer after the write.
 7. Run `work(environment)`. The environment is the output of `isolatedGitEnvironment`, plus `GIT_SSH_VARIANT=ssh` and the `GIT_SSH_COMMAND` below, with each path in single quotes.
-8. In `finally`, run `ssh-add -D` on the socket, close the stdin pipe of `cat`, await the exit of `cat` and remove the directory. The agent then holds no key and exits within 10 s.
+8. In `finally`, run `ssh-add -D` on the socket, close the stdin pipe of `cat`, await the exit of `cat` and remove the directory. The SSH agent then holds no key and exits within 10 s.
 
 ```text
 ssh -F none -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o IdentityAgent=<dir>/a
@@ -238,30 +239,33 @@ ssh -F none -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o IdentityAgent=
 
 - A failure of steps 2 to 6 throws the `Diagnostic` `repository.connector.ssh_agent_failed`. Its cause holds the step and the stderr of the tool, never key material.
 - `-F none` stops the read of the user and the system SSH configuration files, and it stops the creation of `~/.ssh`.
-- `IdentityFile=<dir>/id.pub` is required. With `IdentitiesOnly=yes` and no `IdentityFile`, ssh loads the default files `~/.ssh/id_*` and offers no agent key.
+- `IdentityFile=<dir>/id.pub` is required. With `IdentitiesOnly=yes` and no `IdentityFile`, ssh loads the default files `~/.ssh/id_*` and offers no SSH agent key.
 - `GlobalKnownHostsFile=/dev/null` is required, because a version that reads `none` as a relative path reads a file of the repository checkout.
 - `GIT_SSH_COMMAND` overrides `core.sshCommand` of the checkout and nothing more. The [trust boundary](worker-service.impl.md#trust-boundary) covers the other paths through which a checkout runs code.
 - The process arguments hold paths and options only. The key travels through stdin. The environment of a process is readable by its user only.
 - The connector passes no credential inside a URL and no secret on the command line of a child.
+- The command line of a process is readable by every user of the host.
 - A network git operation names the `ssh` record of its binding in its attribution.
 
 ### Crash and abort cleanup
 
-- A cancel of the `Context` aborts git through the abort plugin of `simple-git`. The `finally` of step 8 ends the agent.
-- A crash of the process closes the stdin pipe of `cat`, so `cat` ends and the agent exits within 10 s.
-- A terminated worker thread closes its child pipes, so the agent also exits within 10 s.
-- The key lifetime of `ssh-add -t` removes the key from the agent at the deadline in every case.
-- Each `withSshAgent` call first removes each `kd-ssh-*` directory of the same user in the system temporary directory whose deadline lies more than 60 s in the past. The sweep kills no process and reads no pid.
+- A cancel of the `Context` aborts git through the abort plugin of `simple-git`. The `finally` of step 8 ends the SSH agent.
+- A crash of the process closes the stdin pipe of `cat`, so `cat` ends and the SSH agent exits within 10 s.
+- A terminated worker thread closes its child pipes, so the SSH agent also exits within 10 s.
+- The key lifetime of `ssh-add -t` removes the key from the SSH agent at the deadline in every case.
+- Each `withSshAgent` call first sweeps the `kd-ssh-*` directories of the same user in the system temporary directory. It removes each directory whose deadline lies more than 60 s in the past. The sweep kills no process and reads no pid.
 
 ### Core dumps
 
-- No code sets `RLIMIT_CORE`. A V8 heap exhaustion aborts the process, and a host core pattern then writes the heap with the key strings to disk. `ssh-agent` disables tracing and core dumps for itself.
+- No code sets `RLIMIT_CORE`. A V8 heap exhaustion aborts the process, and a host core pattern then writes the heap with the key strings to disk.
+- `ssh-agent` disables tracing and core dumps for itself.
+- On Linux, a core pattern that starts with `|` sends the dump to a program. The kernel does not apply `RLIMIT_CORE` to that pipe. That program decides whether it writes the dump. `systemd-coredump` reads the limit of the process.
 - The container guide and `platforms/homelab/kanthord/run.sh` run the container with `--ulimit core=0`.
 - A host install outside a container keeps the core-dump setting of its operator. A core dump of that host can hold an SSH private key.
 
 ### The release of a key
 
-- Custody releases the key through the [protected facility](custody.impl.md#the-protected-facility) with the grant kind `ssh_identity`. The Project Service supplies the authorization function, because it owns the binding.
+- Custody releases the key through the [protected facility](custody.impl.md#the-protected-facility) with the requested operation `ssh_identity`. The Project Service supplies the authorization function, because it owns the binding.
 - The holder builds `SshAccess` through `RepositoryComponent.sshAccessOf(tx, material, address)`. It parses the address, reads the pin of its host, parses the key, derives the public key and calls `material.drop()` in `finally`.
 
 ## Host keys
@@ -280,13 +284,14 @@ CREATE UNIQUE INDEX repository_host_key_host ON repository_host_key (host);
 ```
 
 - `id` is `host_key_<ulid>`. `public_key` is `ssh-ed25519 <base64>`.
-- `host` is a member of an SSH host set of [the platforms](#git-only-platforms). The component validates the host before the write.
+- `host` is a member of the SSH host set of [GitHub](#platform-connector-and-platform-implementations) or of [a git-only platform](#git-only-platforms). The component validates the host before the write.
 - `source` is derived on read: `github_meta` for `github.com` and `ssh.github.com`, `keyscan` for every other host. No column stores it.
 - The fingerprint is derived on read and never stored.
 - One host holds one pinned key, of type ed25519. OpenSSH prefers the key type that the known-hosts file holds for the host.
 - A pin replaces the row of its host: one transaction deletes the row and inserts the new one.
 - No operation deletes a pin. A new pin replaces it.
 - `serverMigrations` of `src/apps/server/index.ts` holds `{ service: "repository", migrations: repositoryMigrations }`.
+- `repository` is a new service with migration version 1. A pre-release database records no `repository` row, so `kanthord upgrade` applies the migration. No reset is necessary.
 - `github.com` and `ssh.github.com` take their key from `GET https://api.github.com/meta` over TLS with the CA set of Node. The scan takes the `ssh_keys` entry that starts with `ssh-ed25519 `.
 - Every other host takes its key from `ssh-keyscan -T 5 -t ed25519 -p 22 -- <host>` through `execFile`. The parser skips the comment lines `# <host>:<port> SSH-2.0-...`. `ssh-keyscan` reads no SSH configuration file.
 - A pin names the fingerprint that the human confirmed. The server reads the source again and pins only when the fingerprint is equal.
@@ -310,5 +315,5 @@ The classifier `src/repository/git-failure.ts` reads the stderr of ssh and of th
 | Any other text                                                                                             | `unclassified`         |
 
 - `host_key_changed` means that the host presented a key other than the pinned key. The human compares the published fingerprint before a new pin.
-- `identity_unavailable` means a local fault of the SSH identity: a legacy record, a key that does not parse, or an agent that does not start or load.
+- `identity_unavailable` means a local fault of the SSH identity. Examples: a legacy record, a key that does not parse, or an SSH agent that does not start or load.
 - No remote text reaches the client. The log keeps the redacted stderr.

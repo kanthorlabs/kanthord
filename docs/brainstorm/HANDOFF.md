@@ -26,12 +26,12 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Repository component
 
 - [ ] Added 2026-09-26 from the responsibility audit of Project, Worker and Intake. The `ls-remote` of a binding write and of the repository healthcheck runs on the server host. It proves no network path from the host of a `worker` application. Decide whether a check covers the worker host. Since 2026-10-19 the handover carries the SSH key, so the item covers only the network path.
-- [x] Added 2026-10-19 from the SSH identity epic. Ruled 2026-10-19 by Ulrich (Q1): KanthorD owns its SSH identities. Custody stores each private key, each network git operation loads the key into a private agent from stdin, and the handover carries the key to a worker application.
+- [x] Added 2026-10-19 from the SSH identity epic. Ruled 2026-10-19 by Ulrich (Q1): KanthorD owns its SSH identities. Custody stores the private key encrypted. Each git operation loads the key into a private short-lived ssh-agent from stdin. It runs ssh with `-F none`, `IdentitiesOnly=yes`, a pinned known-hosts file and `StrictHostKeyChecking=yes`. GitHub host keys come from `api.github.com/meta` over TLS. Other hosts need a human fingerprint confirmation. KanthorD reads and writes no user SSH file. `ssh_discover` and the import from `~/.ssh/config` go away. The worker handover carries the identity.
   - Ruled 2026-10-19 by Ulrich (D1): `ResourceFailureReason` gains `host_key_changed` and `identity_unavailable`.
   - Ruled 2026-10-19 by Ulrich (D2): an SSH key rotation takes effect at once under the custody revision rule. The rotate dialog shows the new public key and the bindings that name the credential.
   - Ruled 2026-10-19 by Ulrich (D3): the repository address stays `git@<host>:<owner>/<repository>.git` on port 22 only. `altssh.bitbucket.org` stays in the host set.
   - Ruled 2026-10-19 by Ulrich (D5): the `ssh` credential verify stays a local check with the capability `ssh identity`, and a refusal answers `identity_unavailable`.
-  - Closed 2026-10-19: [repository.impl.md](repository.impl.md#the-ssh-identity), [custody.impl.md](custody.impl.md#the-release-of-an-ssh-key) and [project-service.impl.md](project-service.impl.md#the-network-git-operations) state the rules. The alias model goes away: `ssh -G`, `repository.credential.ssh_discover`, the metadata `{ host, hostname, port, identity_file }` and the import from `~/.ssh/config`. The codes `repository.credential.ssh_identity_ambiguous`, `ssh_drift`, `ssh_config_unreadable`, `repository.connector.ssh_resolve_failed` and `project.bindings.repository.ssh_host_mismatch` go away with no alias. The removal of `ssh_host_mismatch` closes Q4b of the first-day plan.
+  - Closed 2026-10-19: [repository.impl.md](repository.impl.md#the-ssh-identity), [custody.impl.md](custody.impl.md#the-release-of-an-ssh-key) and [project-service.impl.md](project-service.impl.md#the-network-git-operations) state the rules. The alias model goes away: `ssh -G`, `repository.credential.ssh_discover`, the metadata `{ host, hostname, port, identity_file }` and the import from `~/.ssh/config`. The codes `repository.credential.ssh_identity_ambiguous`, `ssh_drift`, `ssh_config_unreadable`, `repository.connector.ssh_resolve_failed` and `project.bindings.repository.ssh_host_mismatch` go away, and no other code takes their place. The removal of `ssh_host_mismatch` closes Q4b of the first-day plan. It closes old B5, old S25 (by D5) and old C-S11.
 
 ### Project Service
 
@@ -135,7 +135,7 @@ After the first native-agent worker runs the acceptance path.
 
 ### Root repository
 
-- [ ] RULED 2026-10-19 by Ulrich (D4). `make e2e-start` creates the SSH key through the API and adds it as a write deploy key on `kanthorlabs/kanthord-verify` through `gh api`. `make e2e-stop STOP=daemon` deletes it. `E2E_GH_TOKEN` is a fine-grained token limited to `kanthorlabs/kanthord-verify` with "Administration: write". Package SR1 of the SSH identity epic builds it and records the token rule in `AGENTS.md`. Operator action: Ulrich updates the token.
+- [ ] RULED 2026-10-19 by Ulrich (D4). `make e2e-start` creates the SSH key through the API and adds it as a write deploy key on `kanthorlabs/kanthord-verify` through `gh api`. `make e2e-stop STOP=daemon` deletes it. `E2E_GH_TOKEN` is a fine-grained token limited to `kanthorlabs/kanthord-verify` with "Administration: write". Package SR1 of the SSH identity epic builds it and records the token rule in `AGENTS.md`. Operator action: Ulrich updates the token. Remove this item when SR1 merges and Ulrich confirms the new token.
 
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
@@ -144,14 +144,14 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Added 2026-10-19 from the first-day plan. The first-day plan of 2026-10-19 replaces six open rulings of the plan of 2026-10-18. The READY workstreams of the plan of 2026-10-18 are merged, and root `#113` moved the pointers. "Old" names an item of the plan of 2026-10-18. Remove this item when each listed old ruling is ruled or moved to the HANDOFF section of its owning component.
   - Sources, not versioned: `.dev/first-day-experiment/fix-plan.md` holds the plan of 2026-10-18. `.dev/first-day-2026-10-19/` holds `first-day-plan.md`, `first-day-findings.md` and `first-day-plan-review.md`.
   - Labels of the plan of 2026-10-19:
-    - Q2 proposes a nullable `failure_reason` enum on the shared health entry. It waits on Ulrich.
+    - Q2 proposes a nullable `failure_reason` enum on the shared health entry. Ruled 2026-10-19 by Ulrich: the closed enum `ResourceFailureReason` in `engine/src/kernel/health.ts`. The health report, the binding check and the credential check carry it.
     - Q4, first-start diagnostics, proposes the refused host in `gateway.http.host_not_allowed` and a `warn` start record for a loopback `gateway.bind`. It waits on Ulrich.
     - Q5 proposes a setup checklist on Overview with no project, and a readiness panel on the project page. It waits on Ulrich.
     - Q6 raises the first public release now and proposes the release after P3. It waits on Ulrich.
     - Q14 proposes a `kanthord gateway liveness` command and a `HEALTHCHECK` in the image. It waits on Ulrich.
     - Q3 and Q11 are confirmations of ruled pages. Q3 confirms the one-off `config init --gateway-bind ::` of [architecture.impl.md](architecture.impl.md#container-image).
     - Q11 confirms that no command edits an existing configuration file: [the command surface](architecture.impl.md#the-command-surface) and [the CLI configuration commands](architecture.impl.md#the-cli-configuration-commands).
-    - D1a, the container how-to guide with the SSH shell steps, is READY. D1b moves the guide to the dashboard SSH key flow after P1.
+    - D1a, the container how-to guide with the SSH shell steps, is READY. SD2 of the SSH identity epic moves the guide to the dashboard SSH key flow.
     - D3, the first-task tutorial, starts after P2.
     - A3 builds the Q5 checklist and the readiness panel in `apps`. It waits on Q5.
     - P1, P2 and P3 move the submodule pointers after layer 1, layer 2 and layer 3 of the plan of 2026-10-19.

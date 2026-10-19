@@ -76,7 +76,7 @@ Custody grants no authority through possession of a credential reference.
 - A refusal reaches no secret material.
 - Custody releases the material of an authorized grant inside the server process, and the holder performs its own operation.
 - A credential leaves the server only through a [credential handover](custody.vocabulary.md#credential-handover) to a kanthord worker application.
-- The handover also carries the SSH identity of each repository binding of the execution, so a worker host holds no SSH key of its own.
+- The handover also carries the SSH identity of each repository binding of the execution. A worker host therefore holds no SSH key of its own.
 - The handover lasts for the execution.
 - The worker application reports a refreshed credential to custody.
 - Custody refreshes no revision while a handover of that revision remains outstanding.

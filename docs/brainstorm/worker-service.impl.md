@@ -391,8 +391,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credential_id` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ binding_id, name, address, ssh_identity, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
-- `ssh_identity` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The answer holds no key.
+- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
+- `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The answer holds no key.
 - The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
 - The worker matches each entry of `repositories` to its `ssh_identities` entry of the handover by `binding_id`. It derives the public key from the private key and builds `SshAccess` in memory.
 - The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
@@ -772,17 +772,19 @@ The host of every `worker` application sits inside it because that host holds it
 The host of a `server` application that runs a pool slot sits inside it for the same reason. A worker thread is no containment boundary for the code that the repository supplies.
 Its child processes run with the rights of the server process.
 
-During a network git operation, a process of the same host user can sign through the agent socket of that operation.
-A checkout that an agent writes can run code during a git operation through `.git/hooks`, `core.hooksPath`, `core.fsmonitor`, `url.<base>.insteadOf` or `protocol.<name>.allow`.
+During a network git operation, a process of the same host user can sign through the SSH agent socket of that operation.
+A checkout that an LLM agent writes can run code during a git operation through `.git/hooks`, `core.hooksPath`, `core.fsmonitor`, `url.<base>.insteadOf` or `protocol.<name>.allow`.
 A hook process sees `GIT_SSH_COMMAND` with the socket path.
-The trust boundary covers these paths, and the agent exports no private key.
+The trust boundary covers these paths, and the SSH agent exports no private key.
+The worker application holds the SSH private key of each binding in its memory for the execution.
+A process of the same host user can read that memory through `ptrace` or a core dump.
 
 ## Traces
 
 The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The finish of the steps method on an `implement` node writes one `worker.git` span for each git step, with `kanthord.git.step` set to `commit`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The finish of the steps method on an `implement` node writes one `worker.git` span for each git step. `kanthord.git.step` is `commit`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 
