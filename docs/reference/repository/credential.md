@@ -8,16 +8,16 @@ A repository credential is a named, revisioned secret record for a repository pl
 
 The Repository component owns two platforms:
 
-| Platform | Secret shape | Secret object | Metadata                                                    | Platform check                                                 |
-| -------- | ------------ | ------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
-| `github` | `api_key`    | `{ "key" }`   | None; send `null`.                                          | `rate-limit read`: reads `https://api.github.com/rate_limit`.  |
-| `ssh`    | `none`       | `{}`          | `{ "host", "hostname", "port", "identity_file" }`, all set. | `ssh identity`: compares `ssh -G -- <host>` with the metadata. |
+| Platform | Secret shape | Secret object       | Metadata                                                 | Platform check                                                                 |
+| -------- | ------------ | ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `github` | `api_key`    | `{ "key" }`         | None; send `null`.                                       | `rate-limit read`: reads `https://api.github.com/rate_limit`.                  |
+| `ssh`    | `ssh_key`    | `{ "private_key" }` | `{ "public_key", "fingerprint" }`; the server sets both. | `ssh identity`: a local check that the stored key gives the stored public key. |
 
 A credential name has 1 to 63 characters. It starts with a lower-case letter, then holds lower-case letters, digits and hyphens. The names `login`, `platform`, `check` and `ssh` are reserved. A name stays taken after an archive. A name whose platform belongs to another component answers `404 credential.credential.not_found` on every command that takes a name.
 
 Each change adds a revision with an identity `credential_<ULID>` (see [identities](../identities.md)). The newest live revision is the current secret. An older live revision stays live while a live execution pins it. A drain sets `ended_at` on each older live revision that no live execution pins. The `api_key` secret has a limit of 48,914 UTF-8 bytes of normalized credential JSON.
 
-The `ssh` metadata pins an alias of `~/.ssh/config` on the server host. `host` matches `^[A-Za-z0-9][A-Za-z0-9.-]*$`, and `port` is an integer from 1 to 65535. The resolved alias needs `identitiesonly yes` and exactly one `identityfile`. Create, rotate and update-metadata of an `ssh` record run `ssh -G -- <host>` on the server before the write. A different `hostname`, `port` or `identity_file` refuses the write. To find aliases, use [SSH alias discovery](ssh-discover.md).
+The server generates the key of an `ssh` record. Only [`ssh-key-create`](ssh-key.md#ssh-key-create) creates an `ssh` record, and only [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate) adds its next revision. `create`, `rotate` and `update-metadata` of an `ssh` record answer `400 credential.entry.unsupported`, and `check` of the platform `ssh` answers `400 credential.check.unsupported`. An `ssh` record names no host; a repository binding pairs it with an address, and the [host key pin](host-key.md) of the address host decides which host it trusts.
 
 No answer contains a secret.
 
@@ -39,15 +39,15 @@ No answer contains a secret.
 
 ### create
 
-`create` adds a credential with revision 1. The `github` create makes no remote call. The `ssh` create runs `ssh -G` first.
+`create` adds a `github` credential with revision 1 and makes no remote call. For an `ssh` record, use [`ssh-key-create`](ssh-key.md#ssh-key-create).
 
 ### rotate
 
-`rotate` adds the next revision with a new secret under the same name. An absent `metadata` copies the metadata of the newest live revision. The same transaction drains the name. Rotation changes no binding.
+`rotate` adds the next revision of a `github` credential with a new secret under the same name. An absent `metadata` copies the metadata of the newest live revision. The same transaction drains the name. Rotation changes no binding. For an `ssh` record, use [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate).
 
 ### update-metadata
 
-`update-metadata` adds the next revision with a full metadata replacement and the secret of the newest live revision. It drains no revision. For `github`, the only valid metadata is `null`.
+`update-metadata` adds the next revision with a full metadata replacement and the secret of the newest live revision. It drains no revision. For `github`, the only valid metadata is `null`. An `ssh` record refuses it, because the server derives its metadata.
 
 ### revoke
 
@@ -59,7 +59,7 @@ No answer contains a secret.
 
 ### check
 
-`check` runs the platform check on a typed secret before a create. It stores nothing, and the check has a 10-second deadline.
+`check` runs the platform check on a typed `github` secret before a create. It stores nothing, and the check has a 10-second deadline.
 
 ## Expected response
 
@@ -92,17 +92,17 @@ Every API success returns HTTP `200` with JSON. The CLI writes the same object a
 }
 ```
 
-| Property                 | Type                  | Purpose                                                           |
-| ------------------------ | --------------------- | ----------------------------------------------------------------- |
-| `name`                   | string                | Credential name.                                                  |
-| `platform`               | string                | `github` or `ssh`.                                                |
-| `revisions`              | array                 | Every revision, newest first.                                     |
-| `revisions[].id`         | string                | Revision identity `credential_<ULID>`.                            |
-| `revisions[].revision`   | positive integer      | Revision number; the first is `1`.                                |
-| `revisions[].metadata`   | object or `null`      | Metadata of the revision; `null` for `github`.                    |
-| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                               |
-| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live. |
-| `idempotency_key`        | canonical ULID string | CLI mutations only; key of the request, for a retry.              |
+| Property                 | Type                  | Purpose                                                                                     |
+| ------------------------ | --------------------- | ------------------------------------------------------------------------------------------- |
+| `name`                   | string                | Credential name.                                                                            |
+| `platform`               | string                | `github` or `ssh`.                                                                          |
+| `revisions`              | array                 | Every revision, newest first.                                                               |
+| `revisions[].id`         | string                | Revision identity `credential_<ULID>`.                                                      |
+| `revisions[].revision`   | positive integer      | Revision number; the first is `1`.                                                          |
+| `revisions[].metadata`   | object or `null`      | Metadata of the revision; `null` for `github`, `{ "public_key", "fingerprint" }` for `ssh`. |
+| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                                         |
+| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.                           |
+| `idempotency_key`        | canonical ULID string | CLI mutations only; key of the request, for a retry.                                        |
 
 An archived credential has no revision with `ended_at` set to `null`.
 
@@ -126,9 +126,20 @@ The answer is a credential answer with one more property:
 
 ```json
 {
-  "name": "deploy-ssh",
+  "name": "deploy-api",
   "platform": "ssh",
-  "revisions": [],
+  "revisions": [
+    {
+      "id": "credential_01M34JC4BJ66JHP41M4MYY6PST",
+      "revision": 1,
+      "metadata": {
+        "public_key": "ssh-ed25519 <base64> kanthord-deploy-api",
+        "fingerprint": "SHA256:<43-base64-characters>"
+      },
+      "created_at": 1791441600000,
+      "ended_at": null
+    }
+  ],
   "bindings": [
     {
       "project_id": "<project-id>",
@@ -168,32 +179,33 @@ The answer is a credential answer with one more property:
 | `capability`     | string         | `rate-limit read` for `github`; `ssh identity` for `ssh`.                                  |
 | `failure_reason` | string or null | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
 
-The `github` check reads the rate limit with the token. The `ssh` check answers `healthy` when `ssh -G` resolves exactly the stored or typed metadata. Each result maps to a status and a `failure_reason`. The first row that matches decides.
+The `github` check reads the rate limit with the token. The `ssh` check runs only in `verify`, and it is local: it decrypts the newest live revision, parses the key, derives the public key, and compares it and its fingerprint with the stored metadata. It makes no network call, so it proves neither the deploy key nor the host. The [binding check](../project/binding.md#project-binding-check) proves those. Each result maps to a status and a `failure_reason`. The first row that matches decides.
 
-| Result                                             | `status`    | `failure_reason`   |
-| -------------------------------------------------- | ----------- | ------------------ |
-| The check exceeds its deadline                     | `unknown`   | `unclassified`     |
-| `github`: HTTP `200`                               | `healthy`   | `null`             |
-| `github`: HTTP `401`                               | `unhealthy` | `unauthorized`     |
-| `github`: HTTP `403`                               | `unknown`   | `forbidden`        |
-| `github`: HTTP `429`                               | `unhealthy` | `rate_limited`     |
-| `github`: another HTTP status, a redirect included | `unhealthy` | `invalid_response` |
-| `github`: the request fails before an HTTP answer  | `unknown`   | `unreachable`      |
-| `ssh`: `ssh -G` resolves the metadata              | `healthy`   | `null`             |
-| `ssh`: `ssh -G` fails or resolves other values     | `unhealthy` | `unclassified`     |
+| Result                                             | `status`    | `failure_reason`       |
+| -------------------------------------------------- | ----------- | ---------------------- |
+| The check exceeds its deadline                     | `unknown`   | `unclassified`         |
+| `github`: HTTP `200`                               | `healthy`   | `null`                 |
+| `github`: HTTP `401`                               | `unhealthy` | `unauthorized`         |
+| `github`: HTTP `403`                               | `unknown`   | `forbidden`            |
+| `github`: HTTP `429`                               | `unhealthy` | `rate_limited`         |
+| `github`: another HTTP status, a redirect included | `unhealthy` | `invalid_response`     |
+| `github`: the request fails before an HTTP answer  | `unknown`   | `unreachable`          |
+| `ssh`: the key gives the stored public key         | `healthy`   | `null`                 |
+| `ssh`: the key does not parse or gives another key | `unhealthy` | `identity_unavailable` |
 
 GitHub can answer `403` for a rate limit, so `403` reports `unknown`. The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`.
 
 The dashboard shows a hint under a check result that carries a `failure_reason`. The hint texts of this component:
 
-| `failure_reason`   | Hint                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `unauthorized`     | The remote service refused the token or the access key. Correct the token or the key. Then verify again.                                                                       |
-| `forbidden`        | The remote service accepted the token or the key but refused the access. Check the permissions of the token or the key.                                                        |
-| `rate_limited`     | The remote service limited the requests. Wait some minutes, or check the quota of the account. Then verify again.                                                              |
-| `unreachable`      | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
-| `invalid_response` | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
-| `unclassified`     | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                   |
+| `failure_reason`       | Hint                                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unauthorized`         | The remote service refused the token or the access key. Correct the token or the key. Then verify again.                                                                       |
+| `forbidden`            | The remote service accepted the token or the key but refused the access. Check the permissions of the token or the key.                                                        |
+| `rate_limited`         | The remote service limited the requests. Wait some minutes, or check the quota of the account. Then verify again.                                                              |
+| `unreachable`          | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
+| `invalid_response`     | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
+| `identity_unavailable` | The server cannot load the SSH key. Rotate the key. If the fault stays, read the server log.                                                                                   |
+| `unclassified`         | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                   |
 
 A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 
@@ -211,55 +223,53 @@ A value with no hint shows "The check failed with the reason <value>. Verify aga
     },
     {
       "platform": "ssh",
-      "secret_shape": "none",
+      "secret_shape": "ssh_key",
       "login_modes": [],
-      "metadata_fields": ["host", "hostname", "identity_file"],
+      "metadata_fields": ["public_key", "fingerprint"],
       "verifiable": true
     }
   ]
 }
 ```
 
-| Property          | Type    | Purpose                                               |
-| ----------------- | ------- | ----------------------------------------------------- |
-| `platform`        | string  | Platform name.                                        |
-| `secret_shape`    | string  | Secret shape: `api_key` or `none` for this component. |
-| `login_modes`     | array   | Login modes; empty for both repository platforms.     |
-| `metadata_fields` | array   | Names of the string fields of the metadata schema.    |
-| `verifiable`      | boolean | `true` when the platform has a check.                 |
+| Property          | Type    | Purpose                                                  |
+| ----------------- | ------- | -------------------------------------------------------- |
+| `platform`        | string  | Platform name.                                           |
+| `secret_shape`    | string  | Secret shape: `api_key` or `ssh_key` for this component. |
+| `login_modes`     | array   | Login modes; empty for both repository platforms.        |
+| `metadata_fields` | array   | Names of the string fields of the metadata schema.       |
+| `verifiable`      | boolean | `true` when the platform has a check.                    |
 
-`metadata_fields` lists string fields only. The `ssh` field `port` is an integer, so the list leaves it out.
+`metadata_fields` lists the string fields of the metadata schema. The server sets both `ssh` fields; no request supplies them.
 
 ### Failures
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                                 | Commands                                      | Meaning                                                                                                                  |
-| -------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `401 gateway.authentication.unauthorized`          | All                                           | Missing, invalid, expired or banned token, or a machine token.                                                           |
-| `400 gateway.request.validation_failed`            | All                                           | Params, query or body fail the operation schema; `details` lists each path and issue code.                               |
-| `400 gateway.request.invalid_json`                 | create, rotate, update-metadata, check        | The body is not valid JSON with unique object members.                                                                   |
-| `415 gateway.request.unsupported_media_type`       | create, rotate, update-metadata, check        | The body is not `application/json`.                                                                                      |
-| `413 gateway.request.body_too_large`               | create, rotate, update-metadata, check        | The body exceeds the route limit.                                                                                        |
-| `400 gateway.request.unexpected_body`              | list, get, verify, platforms, revoke, archive | The operation accepts no body.                                                                                           |
-| `400 gateway.idempotency.invalid_key`              | Mutations                                     | Absent or malformed `Idempotency-Key`.                                                                                   |
-| `409 gateway.idempotency.conflict`                 | Mutations                                     | The key cannot be replayed for this request.                                                                             |
-| `504 gateway.invocation.timeout`                   | All                                           | The 30-second operation timeout expired; a mutation can still complete.                                                  |
-| `400 system.pagination.cursor_invalid`             | list                                          | The cursor is not a cursor of this list.                                                                                 |
-| `404 credential.credential.not_found`              | get, verify, rotate, update-metadata, archive | The name is unknown, or its platform belongs to another component.                                                       |
-| `400 credential.input.invalid`                     | create, rotate, update-metadata, check        | Invalid or reserved name, invalid secret or metadata, or a secret over the byte limit.                                   |
-| `400 credential.platform.unsupported`              | create, check                                 | The platform is not `github` or `ssh`.                                                                                   |
-| `409 credential.name.conflict`                     | create                                        | The name is taken; `details.id` holds the newest revision identity of the holder.                                        |
-| `409 credential.revision.conflict`                 | rotate, update-metadata                       | `expected_revision` is not the newest live revision; `details.revision` holds it.                                        |
-| `409 credential.credential.archived`               | verify, rotate, update-metadata, archive      | The credential is archived.                                                                                              |
-| `400 credential.check.unsupported`                 | verify, check                                 | The platform has no check.                                                                                               |
-| `404 credential.revision.not_found`                | revoke                                        | The name has no such revision, or the name is unknown.                                                                   |
-| `409 credential.revision.ended`                    | revoke                                        | The revision is already ended.                                                                                           |
-| `409 credential.revision.newest_live`              | revoke                                        | The revision is the newest live revision.                                                                                |
-| `409 credential.credential.in_use`                 | archive                                       | A dependent names the credential; see below.                                                                             |
-| `400 repository.credential.ssh_identity_ambiguous` | create, rotate, update-metadata (`ssh`)       | The alias resolves without `identitiesonly yes` or without exactly one `identityfile`; `details` holds `host` and `key`. |
-| `400 repository.credential.ssh_drift`              | create, rotate, update-metadata (`ssh`)       | The alias resolves to other values; `details` holds `host` and `keys`, the keys that differ.                             |
-| `422 repository.credential.ssh_resolve_failed`     | create, rotate, update-metadata (`ssh`)       | The `ssh -G` process fails on the server or exceeds its deadline; `details` holds `host`.                                |
+| HTTP status / code                           | Commands                                      | Meaning                                                                                    |
+| -------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `401 gateway.authentication.unauthorized`    | All                                           | Missing, invalid, expired or banned token, or a machine token.                             |
+| `400 gateway.request.validation_failed`      | All                                           | Params, query or body fail the operation schema; `details` lists each path and issue code. |
+| `400 gateway.request.invalid_json`           | create, rotate, update-metadata, check        | The body is not valid JSON with unique object members.                                     |
+| `415 gateway.request.unsupported_media_type` | create, rotate, update-metadata, check        | The body is not `application/json`.                                                        |
+| `413 gateway.request.body_too_large`         | create, rotate, update-metadata, check        | The body exceeds the route limit.                                                          |
+| `400 gateway.request.unexpected_body`        | list, get, verify, platforms, revoke, archive | The operation accepts no body.                                                             |
+| `400 gateway.idempotency.invalid_key`        | Mutations                                     | Absent or malformed `Idempotency-Key`.                                                     |
+| `409 gateway.idempotency.conflict`           | Mutations                                     | The key cannot be replayed for this request.                                               |
+| `504 gateway.invocation.timeout`             | All                                           | The 30-second operation timeout expired; a mutation can still complete.                    |
+| `400 system.pagination.cursor_invalid`       | list                                          | The cursor is not a cursor of this list.                                                   |
+| `404 credential.credential.not_found`        | get, verify, rotate, update-metadata, archive | The name is unknown, or its platform belongs to another component.                         |
+| `400 credential.input.invalid`               | create, rotate, update-metadata, check        | Invalid or reserved name, invalid secret or metadata, or a secret over the byte limit.     |
+| `400 credential.platform.unsupported`        | create, check                                 | The platform is not `github` or `ssh`.                                                     |
+| `409 credential.name.conflict`               | create                                        | The name is taken; `details.id` holds the newest revision identity of the holder.          |
+| `409 credential.revision.conflict`           | rotate, update-metadata                       | `expected_revision` is not the newest live revision; `details.revision` holds it.          |
+| `409 credential.credential.archived`         | verify, rotate, update-metadata, archive      | The credential is archived.                                                                |
+| `400 credential.check.unsupported`           | verify, check                                 | The platform has no check, or `check` names the platform `ssh`.                            |
+| `400 credential.entry.unsupported`           | create, rotate, update-metadata               | The command names the platform `ssh` or an `ssh` record. Use [SSH keys](ssh-key.md).       |
+| `404 credential.revision.not_found`          | revoke                                        | The name has no such revision, or the name is unknown.                                     |
+| `409 credential.revision.ended`              | revoke                                        | The revision is already ended.                                                             |
+| `409 credential.revision.newest_live`        | revoke                                        | The revision is the newest live revision.                                                  |
+| `409 credential.credential.in_use`           | archive                                       | A dependent names the credential; see below.                                               |
 
 The `credential.credential.in_use` details list the dependents:
 
@@ -307,7 +317,7 @@ Common properties of every operation:
 | `Content-Type`    | With a body | `application/json`.                                           |
 | `Idempotency-Key` | Mutations   | Canonical ULID; reuse the same key to retry the same request. |
 
-The `:credential_name` parameter is a nonempty string. The static paths `/platform`, `/check` and `/ssh/discover` take precedence over `/:credential_name`.
+The `:credential_name` parameter is a nonempty string. The static paths `/platform`, `/check` and `/ssh/key` take precedence over `/:credential_name`. [SSH keys](ssh-key.md#api-shape) states the two `ssh/key` routes.
 
 ### list
 
@@ -385,12 +395,12 @@ curl -i http://127.0.0.1:31415/api/repository/credential/platform \
 | Parameters      | None                              |
 | Body limit      | 64 KiB                            |
 
-| Body field | Required | Value                                                                     |
-| ---------- | -------- | ------------------------------------------------------------------------- |
-| `name`     | Yes      | Credential name.                                                          |
-| `platform` | Yes      | `github` or `ssh`.                                                        |
-| `metadata` | Yes      | Platform metadata; `null` for `github`.                                   |
-| `secret`   | Yes      | `{ "key": "<token>" }` for `github`, with a nonblank key; `{}` for `ssh`. |
+| Body field | Required | Value                                                                    |
+| ---------- | -------- | ------------------------------------------------------------------------ |
+| `name`     | Yes      | Credential name.                                                         |
+| `platform` | Yes      | `github`. The platform `ssh` answers `400 credential.entry.unsupported`. |
+| `metadata` | Yes      | `null`.                                                                  |
+| `secret`   | Yes      | `{ "key": "<token>" }`, with a nonblank key.                             |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential \
@@ -398,22 +408,6 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential \
   -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"name":"github-main","platform":"github","metadata":null,"secret":{"key":"<github-token>"}}'
-```
-
-An `ssh` body:
-
-```json
-{
-  "name": "deploy-ssh",
-  "platform": "ssh",
-  "metadata": {
-    "host": "github-deploy",
-    "hostname": "github.com",
-    "port": 22,
-    "identity_file": "<identity-file-path>"
-  },
-  "secret": {}
-}
 ```
 
 ### rotate
@@ -456,11 +450,11 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/rev
 | `metadata`          | Yes      | Full metadata replacement; `null` for `github`.                  |
 
 ```sh
-curl -i -X PUT http://127.0.0.1:31415/api/repository/credential/deploy-ssh/metadata \
+curl -i -X PUT http://127.0.0.1:31415/api/repository/credential/github-main/metadata \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
-  -d '{"expected_revision":1,"metadata":{"host":"github-deploy","hostname":"github.com","port":22,"identity_file":"<identity-file-path>"}}'
+  -d '{"expected_revision":1,"metadata":null}'
 ```
 
 ### revoke
@@ -505,11 +499,11 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/arc
 | Parameters      | None                                    |
 | Body limit      | 64 KiB                                  |
 
-| Body field | Required | Value                                   |
-| ---------- | -------- | --------------------------------------- |
-| `platform` | Yes      | `github` or `ssh`.                      |
-| `metadata` | Yes      | Platform metadata; `null` for `github`. |
-| `secret`   | Yes      | Secret object of the platform.          |
+| Body field | Required | Value                                                                    |
+| ---------- | -------- | ------------------------------------------------------------------------ |
+| `platform` | Yes      | `github`. The platform `ssh` answers `400 credential.check.unsupported`. |
+| `metadata` | Yes      | `null`.                                                                  |
+| `secret`   | Yes      | `{ "key": "<token>" }`.                                                  |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential/check \
@@ -540,7 +534,7 @@ kanthord repository credential verify github-main
 kanthord repository credential platforms
 kanthord repository credential create --file ./github-main.json
 kanthord repository credential rotate github-main --file ./github-main-rotate.json
-kanthord repository credential update-metadata deploy-ssh --file ./deploy-ssh-metadata.json
+kanthord repository credential update-metadata github-main --file ./github-main-metadata.json
 kanthord repository credential revoke github-main 1 --idempotency-key 01M34JC4BJ66JHP41M4MYY6PST
 kanthord repository credential archive github-main
 kanthord repository credential check --file ./github-main-check.json

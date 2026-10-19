@@ -8,6 +8,8 @@ Receive the provider credential of a running execution as a sealed envelope. The
 
 The server reads the worker binding of the execution and the agent selection that its claim pinned. It then releases the credential revision that the execution pins. If the execution pins no revision yet, the handover pins the newest live revision of that credential. The server seals the credential with AES-256-GCM before the response.
 
+The envelope also carries the [SSH key](../repository/ssh-key.md) of each repository binding of the pinned node revision, as `ssh_identities`: one `{ binding_id, credential_id, private_key }` item for each binding. An execution with no repository binding gets `[]`. The handover pins each SSH credential revision to the execution in the same way. The worker matches each item to its setup entry by `binding_id`, keeps the key in memory, and writes no key file. A worker host therefore needs no SSH key of its own.
+
 The seal key derives from the client secret of the caller's client identity. The additional authenticated data binds the envelope to the execution identity and the runtime identity. The worker opens the envelope with a key that it derives from the same client secret.
 
 The response is secret. Gateway records no replayable answer for it. A repeated idempotency key returns a conflict without the envelope. Use a new key to receive the envelope again.
@@ -60,6 +62,8 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `403 worker.authorization.refused`              | The worker binding does not permit the handover. `details.reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`. |
 | `400` agent configuration code                  | The effective agent configuration is not valid; the code is the first issue, for example `agent.enablement.unavailable`.                             |
 | `409 credential.revision.revoked`               | The pinned credential revision is revoked.                                                                                                           |
+| `409 repository.host_key.unpinned`              | The address host of a repository binding holds no pin. `details.host` holds the host.                                                                |
+| `409 repository.credential.ssh_key_legacy`      | The SSH credential of a repository binding holds no generated key. `details.credential` holds the name.                                              |
 | `404 credential.credential.not_found`           | The credential has no live revision to pin.                                                                                                          |
 | `400 credential.platform.mismatch`              | The credential platform does not match the agent provider.                                                                                           |
 
