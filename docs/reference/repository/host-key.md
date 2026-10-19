@@ -33,7 +33,7 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 
 ### pin
 
-`pin` stores the key of a host after a human confirms its fingerprint:
+`pin` stores the key of a host after a human confirms its fingerprint. The GitHub hosts `github.com` and `ssh.github.com` are the exception. Their key comes over TLS from `api.github.com/meta`, so the dashboard pins them without a confirmation; see [Dashboard](#dashboard). Every other host follows these steps:
 
 1. Run `scan`, or read the fingerprint from the dashboard.
 2. Compare it with the fingerprint that the provider publishes.
@@ -45,13 +45,13 @@ The workbench agent has no tool for `pin`, so only a human confirms a host key. 
 
 ### A changed host key
 
-When a host presents a key other than its pin, ssh writes "REMOTE HOST IDENTIFICATION HAS CHANGED". A binding check then answers `failure_reason` `host_key_changed`. A changed key can mean an interception. Compare the published fingerprint of the provider before you pin again. KanthorD never pins a new key without a human.
+When a host presents a key other than its pin, ssh writes "REMOTE HOST IDENTIFICATION HAS CHANGED". A binding check then answers `failure_reason` `host_key_changed`. A changed key can mean an interception. Compare the published fingerprint of the provider before you pin again. KanthorD never pins a new key of a host other than `github.com` and `ssh.github.com` without a human. For these two GitHub hosts, `Pin again` in the dashboard pins the key of `api.github.com/meta` without a confirmation, because that answer arrives over TLS.
 
 ### Dashboard
 
 - The binding sheet pins `github.com` and `ssh.github.com` without a confirmation, because the GitHub meta answer arrives over TLS. It shows "Host key pinned from api.github.com" with the fingerprint.
 - For every other host, the binding sheet shows the scanned fingerprint, a link to the published fingerprints of the provider and `Confirm host key`. Save stays off until the pin exists.
-- Credentials > Git holds the `Host keys` panel: one row for each pin, with its host, fingerprint, source, pin time and `Pin again`. `Pin again` scans the host and shows the scanned and the pinned fingerprint before `Confirm host key`.
+- Credentials > Git holds the `Host keys` panel: one row for each pin, with its host, fingerprint, source, pin time and `Pin again`. `Pin again` scans the host and shows the scanned and the pinned fingerprint before `Confirm host key`. For `github.com` and `ssh.github.com`, `Pin again` pins the scanned key at once and shows "Host key of <host> pinned from api.github.com."
 
 ## Expected response
 
