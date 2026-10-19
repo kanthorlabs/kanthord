@@ -129,4 +129,30 @@ git -c protocol.file.allow=always clone --quiet --recurse-submodules "$sandbox/p
 [ -f "$sandbox/fresh/platforms/webhook/README.md" ] || fail 'fresh clone lacks webhook'
 ROOT="$sandbox/fresh" "$sandbox/fresh/scripts/repo/attach.sh"
 [ "$(git -C "$sandbox/fresh/platforms/webhook" symbolic-ref --short HEAD)" = main ] || fail 'fresh webhook checkout stayed detached'
-printf 'test-submodules: PASS (aliases, hooks, historical modes, publication order, pointers, status, identity, attach, recursive clone)\n'
+
+repair="$sandbox/repair"
+git -c protocol.file.allow=always clone --quiet --recurse-submodules "$sandbox/parent.git" "$repair"
+git -C "$repair" config user.name 'Fixture Operator'
+git -C "$repair" config user.email 'fixture@example.invalid'
+git -C "$repair/engine" ls-files -z | (cd "$repair/engine" && xargs -0 rm -f)
+printf 'uncommitted apps edit\n' >>"$repair/apps/README.md"
+mkdir -p "$sandbox/bootstrap-bin"
+printf '#!/bin/sh\ncase "$*" in\n*" submodule update --init")\n\t[ -e "%s/update-failed" ] || { : >"%s/update-failed"; exit 1; } ;;\nesac\nexec "%s" "$@"\n' \
+	"$sandbox" "$sandbox" "$(command -v git)" >"$sandbox/bootstrap-bin/git"
+printf '#!/bin/sh\ncase "$1" in -v) printf "v24.0.0\\n" ;; *) printf "24\\n" ;; esac\n' >"$sandbox/bootstrap-bin/node"
+printf '#!/bin/sh\nexit 0\n' >"$sandbox/bootstrap-bin/pnpm"
+chmod 700 "$sandbox/bootstrap-bin/git" "$sandbox/bootstrap-bin/node" "$sandbox/bootstrap-bin/pnpm"
+for script in repo/install.sh engine/install.sh app/install.sh; do
+	printf '#!/bin/sh\nexit 0\n' >"$repair/scripts/$script"
+done
+PATH="$sandbox/bootstrap-bin:$PATH" ROOT="$repair" \
+	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always \
+	"$repair/scripts/repo/bootstrap.sh" >"$sandbox/bootstrap.log" 2>&1 || {
+	printf 'test-submodules: bootstrap log follows\n' >&2
+	cat "$sandbox/bootstrap.log" >&2
+	fail 'bootstrap did not repair a failed submodule update'
+}
+[ -e "$sandbox/update-failed" ] || fail 'the first submodule update did not fail'
+[ -f "$repair/engine/README.md" ] || fail 'bootstrap left the engine checkout empty'
+grep -q 'uncommitted apps edit' "$repair/apps/README.md" || fail 'bootstrap discarded an uncommitted apps change'
+printf 'test-submodules: PASS (aliases, hooks, historical modes, publication order, pointers, status, identity, attach, recursive clone, bootstrap repair)\n'

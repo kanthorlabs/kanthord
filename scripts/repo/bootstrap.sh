@@ -32,7 +32,20 @@ log "pnpm $(cd "$ENGINE_DIR" 2>/dev/null && pnpm -v 2>/dev/null || pnpm -v)"
 
 step "2/6 submodules"
 git -C "$ROOT" submodule sync --quiet || die "submodule sync failed"
-git -C "$ROOT" submodule update --init || die "submodule update failed"
+update=0
+git -C "$ROOT" submodule update --init || update=1
+for name in $SUBMODULES; do
+	dir=$(repo_dir "$name")
+	[ -e "$dir/.git" ] || continue
+	tracked=$(git -C "$dir" ls-files | wc -l)
+	absent=$(git -C "$dir" ls-files --deleted | wc -l)
+	[ "$tracked" -gt 0 ] && [ "$tracked" -eq "$absent" ] || continue
+	log "$name has no tracked file on disk. Restoring it with a forced update"
+	git -C "$ROOT" submodule update --init --force -- "$(repo_path "$name")" || die "the forced update of $name failed"
+done
+if [ "$update" != "0" ]; then
+	git -C "$ROOT" submodule update --init || die "submodule update failed"
+fi
 for name in $SUBMODULES; do
 	log "$name at $(git -C "$(repo_dir "$name")" rev-parse --short HEAD)"
 done
