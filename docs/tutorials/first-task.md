@@ -19,7 +19,7 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
 - An account at an LLM provider of one of these platforms: `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`. The dashboard enables an agent only with a credential of these six platforms.
 - A free host port for the dashboard, for example `8080`.
-- Host port `1455` free: the `podman run` command of step 1 publishes it. If you do not use `openai-codex`, remove `-p 127.0.0.1:1455:1455` from that command.
+- Host port `1455` free: the `podman run` command of guide step 3 publishes it. If you do not use `openai-codex`, remove `-p 127.0.0.1:1455:1455` from that command.
 
 ## The path at a glance
 
@@ -80,7 +80,7 @@ The agents call a model with this credential.
 1. On step 1, select **New LLM credential**. The **New credential** form opens.
 2. Enter a **Name**, for example `claude`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens.
 3. Choose the **Platform**. The list has three groups:
-   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` does not.
+   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` does not. A credential of another platform makes step 1 `Done`, but step 4 of this tutorial cannot use it.
    - **Sign in with an account**: `openai-codex`, `anthropic-subscription` and `github-copilot`. The server stores the credential when the sign-in completes.
    - **Not checked before save**: the other platforms. An agent cannot use them.
 
@@ -110,7 +110,7 @@ The sheet gives each agent an agent provider for the credential and a default co
 
 When the credential check answers `unhealthy`, **Enable agents** asks "Enable re@1 and swe@1 with an unhealthy credential?". Select **Keep editing** and close the sheet. Select **Rotate secret** on the credential page, then select **Enable agents** again.
 
-Step 2 can show **Enable re@1** or **Enable swe@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. The button opens the page of the agent, not the sheet. Add a credential of one of those platforms, see [What you need](#what-you-need).
+Step 2 can show **Enable re@1** or **Enable swe@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. Before the worker bindings exist, the button names `re@1`, the first agent in name order. It opens the page of the agent, not the sheet. Add a credential of one of those platforms, see [What you need](#what-you-need).
 
 ## 5. Create the SSH key
 
@@ -267,7 +267,7 @@ The node has no dependency, so it is `Available` at once. A worker claims the no
 | State        | What happens                                                                                                                        |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `Available`  | The node waits for `coder@1`.                                                                                                       |
-| `Executing`  | `coder@1` claimed the node in `Available`. `swe@1` edits the files, and the worker commits and runs the verification.               |
+| `Executing`  | `coder@1` claimed the node in `Available`. `swe@1` edits the files, and `coder@1` commits and runs the verification.                |
 | `Waiting`    | `coder@1` pushed the branch `kanthord/<node_id>` and recorded its head commit. The node waits for `reviewer@1`.                     |
 | `Evaluating` | `reviewer@1` claimed the node in `Waiting`. It checks out the commit, runs the verification again, and `re@1` judges the criterion. |
 | `Completed`  | The assessment of `reviewer@1` is `success`. With no external action, the Mission Service completes the node.                       |
