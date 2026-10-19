@@ -216,7 +216,7 @@ A spawn of `ssh-agent` or `ssh-add` that answers `ENOENT` is a missing tool. `ss
 KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of the host user.
 
 `src/repository/ssh-agent.ts` holds one function `withSshAgent(access, context, deadlineMs, work)`.
-`access` is `SshAccess = { private_key, public_key, known_hosts, port }`, in memory only. `known_hosts` holds complete lines. `port` is the SSH port of the address host from `SSH_HOST_PORTS`.
+`access` is `SshAccess = { private_key, public_key, known_hosts, port }`, in memory only. `known_hosts` holds complete lines. `port` is `sshPortOf` of the address host: its value in `SSH_HOST_PORTS`, else 22.
 
 1. Sweep the expired SSH agent directories under [crash and abort cleanup](#crash-and-abort-cleanup).
 2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
