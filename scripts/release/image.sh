@@ -18,7 +18,7 @@ require_command "$engine"
 [ -f "$APP_DIR/package.json" ] || die "the apps submodule is missing. Run git submodule update --init -- engine apps"
 
 version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$ENGINE_DIR/package.json")
-[ -n "$version" ] || die "$ENGINE_DIR/package.json has no version"
+[ -n "$version" ] || die "$ENGINE_DIR/package.json has no line in the form '  \"version\": \"<version>\",'"
 node_version=$(tr -d '[:space:]v' <"$ENGINE_DIR/.nvmrc")
 image=${IMAGE:-kanthord}
 load=
