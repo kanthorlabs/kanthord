@@ -8,15 +8,22 @@ A host key pin is the one ed25519 host key that KanthorD trusts for an SSH host.
 
 A pin serves every binding whose address names its host. A host with no pin refuses each network git operation with `409 repository.host_key.unpinned` before any process starts. A binding apply refuses the same way, and a binding check or verify answers `failure_reason` `host_key_unknown`.
 
-Only the hosts of the SSH host sets have a pin. A host compares without regard to case, and the answers hold it in lower case. KanthorD uses port 22 only.
+Only the hosts of the SSH host sets have a pin. A host compares without regard to case, and the answers hold it in lower case. A fixed table in the engine gives the SSH port of each host. You cannot set a port.
 
-| Platform    | SSH host set                            | Source of the key                                        |
-| ----------- | --------------------------------------- | -------------------------------------------------------- |
-| `github`    | `github.com`, `ssh.github.com`          | `github_meta`: `GET https://api.github.com/meta`         |
-| `gitlab`    | `gitlab.com`, `altssh.gitlab.com`       | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p 22 -- <host>` |
-| `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p 22 -- <host>` |
+| Platform    | SSH host set                            | Source of the key                                            |
+| ----------- | --------------------------------------- | ------------------------------------------------------------ |
+| `github`    | `github.com`, `ssh.github.com`          | `github_meta`: `GET https://api.github.com/meta`             |
+| `gitlab`    | `gitlab.com`, `altssh.gitlab.com`       | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` |
+| `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` |
 
-`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. Their scan fails with `422 repository.host_key.scan_failed`, and a binding with such an address cannot pass. Use `gitlab.com` or `bitbucket.org`.
+| Host                                        | SSH port | `known_hosts` line   |
+| ------------------------------------------- | -------- | -------------------- |
+| `altssh.gitlab.com`, `altssh.bitbucket.org` | 443      | `[<host>]:443 <key>` |
+| every other host of the table above         | 22       | `<host> <key>`       |
+
+`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. Use them when a network blocks the outbound port 22. The address keeps the form `git@<host>:<owner>/<repository>.git` and takes no port, for example `git@altssh.gitlab.com:acme/app.git`. Any other form, for example `ssh://git@altssh.gitlab.com:443/acme/app.git`, fails with `400 project.bindings.repository.address_invalid`. The scan, the `known_hosts` line and each git operation use the port of the table. The scan of `altssh.gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 443 -- altssh.gitlab.com`, and the scan of `gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 22 -- gitlab.com`. The `known_hosts` line of a host on port 443 takes the form `[<host>]:443`, because ssh looks up a host on a port other than 22 under that name. A line with the bare name does not match, and ssh refuses the host. The pin stores the bare host name, so `list`, `scan` and `pin` answer `host` without a port. For example, the `known_hosts` line of `altssh.gitlab.com` is `[altssh.gitlab.com]:443 ssh-ed25519 <base64>`.
+
+`ssh.github.com` also answers SSH on port 443. Today KanthorD connects to it on port 22, so a network that blocks the outbound port 22 has no GitHub path.
 
 ### list
 
@@ -24,7 +31,7 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 
 ### scan
 
-`scan` reads the current ed25519 key of one host and writes nothing. For a GitHub host, the server reads the `ssh_keys` list of the GitHub meta answer over TLS and takes the entry that starts with `ssh-ed25519 `. For every other host, the server runs `ssh-keyscan`, skips its comment lines, and takes the `ssh-ed25519` line of the host. `ssh-keyscan` reads no SSH configuration file. The read has a 10-second deadline.
+`scan` reads the current ed25519 key of one host and writes nothing. For a GitHub host, the server reads the `ssh_keys` list of the GitHub meta answer over TLS and takes the entry that starts with `ssh-ed25519 `. For every other host, the server runs `ssh-keyscan` on the port of the host, skips its comment lines, and takes the `ssh-ed25519` line of the host. On port 443 that line starts with `[<host>]:443`. `ssh-keyscan` reads no SSH configuration file. The read has a 10-second deadline.
 
 ### pin
 
@@ -72,7 +79,7 @@ Every API success returns HTTP `200` with JSON. The CLI writes the same object a
 | Property              | Type             | Purpose                                                                         |
 | --------------------- | ---------------- | ------------------------------------------------------------------------------- |
 | `items`               | array            | Pins of this page, in ascending `host` order.                                   |
-| `items[].host`        | string           | SSH host in lower case.                                                         |
+| `items[].host`        | string           | SSH host in lower case, without a port, for example `altssh.gitlab.com`.        |
 | `items[].public_key`  | string           | Pinned key, `ssh-ed25519 <base64>`.                                             |
 | `items[].fingerprint` | string           | `SHA256:` fingerprint of the key, the form of `ssh-keygen -l`.                  |
 | `items[].source`      | string           | `github_meta` for `github.com` and `ssh.github.com`; `keyscan` for other hosts. |
@@ -213,9 +220,9 @@ kanthord repository host-key pin gitlab.com --fingerprint 'SHA256:<43-base64-cha
 
 Invoke `kanthord repository host-key` without a command to show its help.
 
-| Argument | Commands      | Value                                                           |
-| -------- | ------------- | --------------------------------------------------------------- |
-| `<host>` | `scan`, `pin` | SSH host; sent as `body.host` by `scan` and as `host` by `pin`. |
+| Argument | Commands      | Value                                                                          |
+| -------- | ------------- | ------------------------------------------------------------------------------ |
+| `<host>` | `scan`, `pin` | SSH host without a port; sent as `body.host` by `scan` and as `host` by `pin`. |
 
 | Option                       | Commands | Default / resolution                                                  | Purpose                                                                |
 | ---------------------------- | -------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |

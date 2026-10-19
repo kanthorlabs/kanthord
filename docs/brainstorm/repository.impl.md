@@ -191,7 +191,7 @@ The server also requires `ssh-keyscan`.
 It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 A spawn of `ssh-agent` or `ssh-add` that answers `ENOENT` is a missing tool. `ssh -V` keeps its version check.
 
-- The connector reaches each host of an SSH host set on port 22, except `altssh.gitlab.com` and `altssh.bitbucket.org`. The address `git@<host>:<owner>/<repository>.git` carries no port, and `ssh -F none` sets none, so `ssh` uses port 22. The host key scan runs `ssh-keyscan -p 22`. `altssh.gitlab.com` and `altssh.bitbucket.org` stay in the set, but they answer on port 443 only (probed 2026-10-19), so the connector cannot reach them.
+- The connector reaches `altssh.gitlab.com` and `altssh.bitbucket.org` on port 443 and every other host of an SSH host set on port 22. The fixed table `SSH_HOST_PORTS` of `src/repository/platform.ts` holds the two port-443 hosts, and `sshPortOf(host)` answers 22 for every other host. No user setting changes a port. The address `git@<host>:<owner>/<repository>.git` carries no port. The host key scan runs `ssh-keyscan -p <port>`. `RepositoryComponent.sshAccessOf` at the server and `RepositoryComponent.sshPortOfAddress` at the worker put the port into `SshAccess.port`, and `GIT_SSH_COMMAND` passes it as `-o Port=<port>`.
 
 - Each network git function of the connector takes `ssh: SshAccess` and runs inside one `withSshAgent` call of [the SSH identity](#the-ssh-identity).
 - A network git operation whose address host holds no [pin](#host-keys) refuses with 409 `repository.host_key.unpinned` before any child process starts.
@@ -216,7 +216,7 @@ A spawn of `ssh-agent` or `ssh-add` that answers `ENOENT` is a missing tool. `ss
 KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of the host user.
 
 `src/repository/ssh-agent.ts` holds one function `withSshAgent(access, context, deadlineMs, work)`.
-`access` is `SshAccess = { private_key, public_key, known_hosts }`, in memory only, and `known_hosts` holds complete lines.
+`access` is `SshAccess = { private_key, public_key, known_hosts, port }`, in memory only. `known_hosts` holds complete lines. `port` is `sshPortOf` of the address host: its value in `SSH_HOST_PORTS`, else 22.
 
 1. Sweep the expired SSH agent directories under [crash and abort cleanup](#crash-and-abort-cleanup).
 2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
@@ -230,7 +230,7 @@ KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of 
 8. In `finally`, run `ssh-add -D` on the socket, close the stdin pipe of `cat`, await the exit of `cat` and remove the directory. The SSH agent then holds no key and exits within 10 s.
 
 ```text
-ssh -F none -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o IdentityAgent=<dir>/a
+ssh -F none -o Port=<port> -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o IdentityAgent=<dir>/a
     -o UserKnownHostsFile=<dir>/known_hosts -o GlobalKnownHostsFile=/dev/null
     -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o BatchMode=yes
     -o ForwardAgent=no -o ControlMaster=no -o ControlPath=none
@@ -293,7 +293,8 @@ CREATE UNIQUE INDEX repository_host_key_host ON repository_host_key (host);
 - `serverMigrations` of `src/apps/server/index.ts` holds `{ service: "repository", migrations: repositoryMigrations }`.
 - `repository` is a new service with migration version 1. A pre-release database records no `repository` row, so `kanthord upgrade` applies the migration. No reset is necessary.
 - `github.com` and `ssh.github.com` take their key from `GET https://api.github.com/meta` over TLS with the CA set of Node. The scan takes the `ssh_keys` entry that starts with `ssh-ed25519 `.
-- Every other host takes its key from `ssh-keyscan -T 5 -t ed25519 -p 22 -- <host>` through `execFile`. The parser skips the comment lines `# <host>:<port> SSH-2.0-...`. `ssh-keyscan` reads no SSH configuration file.
+- Every other host takes its key from `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` through `execFile`. The parser skips the comment lines `# <host>:<port> SSH-2.0-...`. It takes the line of `<host>` on port 22 and of `[<host>]:<port>` on another port.
+- The pin row holds the bare host. `knownHostsLine` writes `<host> <key>` for port 22 and `[<host>]:<port> <key>` for another port, because ssh looks up a host on another port under that name. `ssh-keyscan` reads no SSH configuration file.
 - A pin names the fingerprint that the human confirmed. The server reads the source again and pins only when the fingerprint is equal.
 - For a GitHub host, the dashboard confirms on behalf of the human, because the TLS source is authoritative. Every other host needs the confirmation of a human.
 - A pinned key that differs from the key of the host fails ssh with "REMOTE HOST IDENTIFICATION HAS CHANGED". The classifier answers `host_key_changed`.
