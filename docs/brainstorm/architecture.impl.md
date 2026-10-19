@@ -1224,11 +1224,11 @@ The page shows six steps in this order. In the Action column, the first rule tha
   - the create of a credential on its form screen, for example `/llm/new`, with a secret or with a sign-in, when the action passed `return_to`;
   - the create and the edit of a project;
   - the create of an enablement on the agent page of an agent with no enablement;
-  - the save of the binding set on the Bindings tab, for example `Save binding` of the binding sheet, after the first binding write;
+  - the save of the binding set on the Bindings tab, for example `Save binding` of the binding sheet. The first successful write opens `return_to`;
   - the enable of agents on the detail of an LLM credential;
   - the create of an SSH key in the `Create SSH key` sheet of the Git section, at Done or at a close of the sheet after the create.
 - A credential create sheet that a credential field opens does not navigate. It returns the new credential to the form that opened it.
-- The `Create SSH key` sheet that `New SSH credential` of the `SSH credential` field opens on the Bindings tab does not navigate. Done, or a close of the sheet after the create, selects the new key in that field, also when the project page holds `return_to`.
+- The `Create SSH key` sheet that `New SSH credential` of the `SSH credential` field opens on the Bindings tab does not navigate. Done, or a close of the sheet after the create, selects the new key in that field and keeps the rest of the draft, also when the project page holds `return_to`.
 - The fragment `#create-ssh-key` opens the `Create SSH key` sheet of the Git section once. The list then replaces its URL with the URL without the fragment and keeps the router state, and with it `return_to`. Only `/repositories` opens the sheet for the fragment. On `/llm` and `/storage`, the fragment opens no sheet and stays in the URL.
 - After the create, the sheet shows the public key and the deploy key steps. Done opens `return_to`. A close of the sheet after the create also opens `return_to`. A close is Escape, an outside click or the close button of the sheet. Without `return_to`, Done and a close of the sheet after the create close the sheet and reload the list.
 - A close of the sheet before the create keeps the human on `/repositories`. The router state keeps `return_to`, so a later `Create SSH key` on that page also returns to `/` after the create.
