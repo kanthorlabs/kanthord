@@ -149,7 +149,7 @@ The pin is the host key that the server trusts for `github.com`. Every binding w
 
 An earlier version of this guide created the key with `ssh-keygen` in `/var/lib/kanthord/.ssh`. That setup used the alias `github` and the address `git@github:<owner>/<repository>.git`. The server now accepts only `github.com` and `ssh.github.com` as GitHub hosts. The credential `github` holds no key that the server generated. **Verify** on the binding row of the **Bindings** tab shows **Address · Unhealthy** and **SSH credential · Unhealthy**.
 
-First run a newer image with [Use a newer image](#use-a-newer-image). Then do these steps in the dashboard:
+First run a newer image with [Use a newer image](#use-a-newer-image). Then do these repair steps in the dashboard:
 
 1. Open **Credentials**, then **Git**. On the row of the credential `github`, select **Rotate key**. In the dialog, select **Rotate key** again.
 2. The dialog shows the new public key. Select **Copy**. Then select **Done**.
@@ -161,9 +161,9 @@ First run a newer image with [Use a newer image](#use-a-newer-image). Then do th
 
 Repeat steps 1 to 7 for each SSH credential and repository binding of the earlier setup, for example `github-lib`. If you added the old key as an account SSH key, delete it in the SSH key settings of the account.
 
-The rotation makes a new revision of the credential. The binding keeps the credential name, so the binding needs no other change. If repair step 3 is not done, the **Verify** of repair step 6 shows **Address · Unhealthy** with the hint "The repository host refused the SSH key."
+The rotation makes a new revision of the credential. The binding keeps the credential name, so the binding needs no other change. If repair step 3 is not done, the **Verify** of repair step 6 shows **Address · Unhealthy** with the hint "The repository host refused the SSH key." **SSH credential** shows **Healthy**.
 
-The old files stay in the volume. The server ignores them, but an agent tool process of the server can still read them. After repair step 7, remove them:
+The old files stay in the volume. The server ignores them, but an agent tool process of the server can still read them. After repair step 7 for every credential, remove them:
 
 ```sh
 podman exec kanthord rm -r /var/lib/kanthord/.ssh
