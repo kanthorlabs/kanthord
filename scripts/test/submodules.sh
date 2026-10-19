@@ -143,8 +143,8 @@ git -C "$repair" config user.email 'fixture@example.invalid'
 git -C "$repair/engine" ls-files -z | (cd "$repair/engine" && xargs -0 rm -f)
 printf 'uncommitted apps edit\n' >>"$repair/apps/README.md"
 mkdir -p "$sandbox/bootstrap-bin"
-printf '#!/bin/sh\ncase "$*" in\n*" submodule update --init")\n\t[ -e "%s/update-failed" ] || { : >"%s/update-failed"; exit 1; } ;;\nesac\nexec "%s" "$@"\n' \
-	"$sandbox" "$sandbox" "$(command -v git)" >"$sandbox/bootstrap-bin/git"
+printf '#!/bin/sh\ncase "$*" in\n*" submodule update --init")\n\t[ ! -e "%s/update-fails" ] || exit 1\n\t[ -e "%s/update-failed" ] || { : >"%s/update-failed"; exit 1; } ;;\nesac\nexec "%s" "$@"\n' \
+	"$sandbox" "$sandbox" "$sandbox" "$(command -v git)" >"$sandbox/bootstrap-bin/git"
 printf '#!/bin/sh\ncase "$1" in -v) printf "v24.0.0\\n" ;; *) printf "24\\n" ;; esac\n' >"$sandbox/bootstrap-bin/node"
 printf '#!/bin/sh\nexit 0\n' >"$sandbox/bootstrap-bin/pnpm"
 chmod 700 "$sandbox/bootstrap-bin/git" "$sandbox/bootstrap-bin/node" "$sandbox/bootstrap-bin/pnpm"
@@ -161,4 +161,22 @@ PATH="$sandbox/bootstrap-bin:$PATH" ROOT="$repair" \
 [ -e "$sandbox/update-failed" ] || fail 'the first submodule update did not fail'
 [ -f "$repair/engine/README.md" ] || fail 'bootstrap left the engine checkout empty'
 grep -q 'uncommitted apps edit' "$repair/apps/README.md" || fail 'bootstrap discarded an uncommitted apps change'
+
+git -C "$repair/engine" ls-files -z | (cd "$repair/engine" && xargs -0 rm -f)
+PATH="$sandbox/bootstrap-bin:$PATH" ROOT="$repair" \
+	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always \
+	"$repair/scripts/repo/bootstrap.sh" >"$sandbox/bootstrap.log" 2>&1 || {
+	printf 'test-submodules: bootstrap log follows\n' >&2
+	cat "$sandbox/bootstrap.log" >&2
+	fail 'bootstrap failed after a passed submodule update'
+}
+[ -f "$repair/engine/README.md" ] || fail 'bootstrap left the engine checkout empty after a passed update'
+
+: >"$sandbox/update-fails"
+if PATH="$sandbox/bootstrap-bin:$PATH" ROOT="$repair" \
+	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always \
+	"$repair/scripts/repo/bootstrap.sh" >"$sandbox/bootstrap.log" 2>&1; then
+	fail 'bootstrap accepted a second failed submodule update'
+fi
+grep -q 'repo-bootstrap: submodule update failed' "$sandbox/bootstrap.log" || fail 'bootstrap failed for the wrong reason'
 printf 'test-submodules: PASS (aliases, hooks, historical modes, publication order, pointers, status, identity, attach, recursive clone, bootstrap repair)\n'
