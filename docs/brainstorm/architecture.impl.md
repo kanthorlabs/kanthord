@@ -149,6 +149,8 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `journal_size_limit` is 64 MiB, so a large transaction leaves no large write-ahead log behind it.
 - Every write runs inside a `BEGIN IMMEDIATE` transaction.
 - `DatabaseSync` performs synchronous input and output, so a transaction runs inside one synchronous function and it awaits nothing.
+- Each connection keeps one prepared statement for each SQL text across its transactions, in a cache of 256 entries. A `ROLLBACK` and every other `exec` clear the cache. Change the schema only with `exec`. A schema change through `prepare` leaves cached statements that answer the old columns with no error. No code calls `iterate` or a setter on a cached statement.
+- A transaction that SQLite ended itself, for example after `INSERT OR ROLLBACK`, keeps the error of its work, and the store clears the cache without a `ROLLBACK`.
 - One transaction holds one owner, the handler of the operation. A service function that participates in that transaction receives it as an explicit caller argument, and it opens no transaction of its own and commits none.
 - SQLite commits no remote effect together with its local transaction.
 - The invocation chain records an answer in memory after the operation commits on its declared store.
