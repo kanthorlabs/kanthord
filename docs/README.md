@@ -11,6 +11,7 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | What commands and endpoints are available?     | [Feature reference (API and CLI)](reference/README.md)                                                                            |
 | How do I create or check server configuration? | [config init](reference/config/init.md), [config validate](reference/config/validate.md), [config show](reference/config/show.md) |
 | How do I run the server?                       | [serve](reference/serve.md)                                                                                                       |
+| How do I run it in a container?                | [Run in a container](how-to-guides/run-in-a-container.md)                                                                         |
 | How do I reach it from a phone or a domain?    | [Mac with Tailscale](how-to-guides/run-on-a-mac-with-tailscale.md), [VPS](how-to-guides/run-on-a-vps.md)                          |
 | How do I authenticate?                         | [Human JWT generation](reference/auth/jwt.md) and [verification](reference/gateway/verify.md)                                     |
 | How does the system work?                      | [Service architecture](explanation/architecture.md)                                                                               |

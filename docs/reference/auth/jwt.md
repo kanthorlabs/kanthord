@@ -25,7 +25,7 @@ In human mode, `auth jwt generate` prints the row `token: <jwt>` to **terminal s
 | `exp`               | integer                 | Expiry in Unix seconds, using `gateway.auth.token_lifetime`.                       |
 | `jti`               | canonical ULID string   | Fresh bare ULID identifying this token issuance.                                   |
 
-Invalid inputs, configuration failures, or redirected stdout fail with exit `1` and a [diagnostic](../errors.md#cli-diagnostics). The command saves no client file and calls no server.
+Invalid inputs, configuration failures, or redirected stdout fail with exit `1` and a [diagnostic](../errors.md#cli-diagnostics). Without `--output`, the command saves no client file. It never calls the server.
 
 The claim list holds one `<claim>: <value>` line per claim, in signed order, between two `---` lines. `iat` and `exp` carry their UTC time as a YAML comment:
 
@@ -50,7 +50,7 @@ Not available. JWT issuance is a local operation using the server configuration,
 
 ```text
 kanthord auth jwt generate [username] [--name <display>] [--output [path]] [--endpoint <url>] [--config <path>]
-kanthord auth jwt generate --project <project id> --binding <binding name> [--name <display>] [--config <path>]
+kanthord auth jwt generate --project <project id> --binding <binding name> [--name <display>] [--output [path]] [--endpoint <url>] [--config <path>]
 kanthord auth jwt inspect [token]
 ```
 
