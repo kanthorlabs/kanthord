@@ -1221,7 +1221,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The switch of an enablement that exists does not navigate. Without an agent LLM credential, `Enable <agent>` opens the agent page. For an agent with a disabled enablement, that page shows only the switch, and the human returns through the sidebar.
 - A tab switch on the project page drops the router state, and with it `return_to`.
 - A screen accepts `return_to` only as a path that starts with `/` and stays on the origin of the dashboard. For any other value, the screen keeps its usual behavior after the save. A crafted router state thus cannot send the human to a foreign site.
-- Today the SSH key step does not return. The human creates the SSH key on `/repositories` with `Import from ~/.ssh/config`, and the dashboard stays on `/repositories`. The step text tells the human to open Overview, and the human returns through the sidebar.
+- Today the dashboard holds no `Create SSH key`, and the SSH key step does not return. The human creates the SSH key on `/repositories` with `Import from ~/.ssh/config`, and the dashboard stays on `/repositories`. The step text tells the human to open Overview, and the human returns through the sidebar.
 
 ### The skip of the onboarding
 
@@ -1251,12 +1251,12 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - A failed read shows in an alert with `Retry`. An item of that read shows `Open`. Its detail line does not state the failed read. It states an absence, for example "The project holds no repository binding."
 - The links of the panel pass no `return_to`. After the save of the `Enable agents` sheet, the human stays on the detail of the LLM credential.
 - The `Enable agents` sheet lists every agent that is not enabled, also an agent that no worker binding of the project names.
-- [The onboarding steps](#the-onboarding-steps) define an agent LLM credential and `<credential>`.
+- [The onboarding steps](#the-onboarding-steps) define an agent LLM credential. `<credential>` is the first agent LLM credential in name order.
 
 ## The dashboard toasts
 
-- Below the `md` breakpoint, 768 px wide, a toast shows at the top centre, 64 px below the top edge of the window.
-- From the `md` breakpoint, a toast shows at the top right, 64 px below the top edge of the window.
+- In a window less than 768 px wide, below the `md` breakpoint, a toast shows at the top centre, 64 px below the top edge of the window.
+- In a window 768 px wide or wider, from the `md` breakpoint, a toast shows at the top right, 64 px below the top edge of the window.
 - A top bar of one line is 56 px high. The 64 px keep a toast below that top bar and below the close button of a sheet, at 16 px to 48 px.
 - A toast shows at the top of the window, and the footer of a sheet is at the bottom. A toast thus does not cover the submit button of a sheet, for example `Enable agents` or `Save binding`.
 - The sign-in screen shows a toast at the top right at every width, with the default offset of the toast library.
