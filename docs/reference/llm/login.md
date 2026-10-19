@@ -208,11 +208,11 @@ kanthord llm credential login-status login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W
 kanthord llm credential login-code login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W '<redirect-url-or-code>'
 ```
 
-| Positional argument | Commands                     | Purpose                                                    |
-| ------------------- | ---------------------------- | ---------------------------------------------------------- |
-| `<platform>`        | `login`                      | OAuth platform: `github-copilot` or `openai-codex`.        |
-| `<session>`         | `login-code`, `login-status` | Login session ID; sent as the `session_id` path parameter. |
-| `<value>`           | `login-code`                 | Code or redirect URL that the session awaits.              |
+| Positional argument | Commands                     | Purpose                                                                       |
+| ------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
+| `<platform>`        | `login`                      | OAuth platform: `github-copilot`, `openai-codex` or `anthropic-subscription`. |
+| `<session>`         | `login-code`, `login-status` | Login session ID; sent as the `session_id` path parameter.                    |
+| `<value>`           | `login-code`                 | Code or redirect URL that the session awaits.                                 |
 
 | Option                     | Commands              | Default / resolution                                                        | Purpose                                                             |
 | -------------------------- | --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |

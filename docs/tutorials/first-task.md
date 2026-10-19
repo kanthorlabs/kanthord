@@ -19,7 +19,7 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
 - An account at an LLM provider of one of these platforms: `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`. The dashboard enables an agent only with a credential of these six platforms.
 - A free host port for the dashboard, for example `8080`.
-- Host port `1455` free: the `podman run` command of guide step 3 publishes it. If you do not use `openai-codex`, remove `-p 127.0.0.1:1455:1455` from that command.
+- Host port `1455` free: the `podman run` command of guide step 3 publishes it. If you do not use `openai-codex`, remove `-p 127.0.0.1:1455:1455` from that command. The `anthropic-subscription` sign-in does not use port 1455.
 
 ## The path at a glance
 
@@ -60,14 +60,14 @@ The Onboarding page lists six setup steps in a fixed order. Each step shows a ba
 - `Next`: the first step that is not done. Do this step now.
 - `Open`: a later step that is not done.
 
-| Step                  | Action button                                                 | The step is `Done` when                         |
-| --------------------- | ------------------------------------------------------------- | ----------------------------------------------- |
-| 1. LLM credential     | **New LLM credential**                                        | A live LLM credential exists.                   |
-| 2. Enabled agents     | **Enable agents**                                             | At least one agent is enabled.                  |
-| 3. SSH key            | **Create SSH key**                                            | A live Git credential of platform `ssh` exists. |
-| 4. Project            | **New project**                                               | A project exists.                               |
-| 5. Repository binding | **Open bindings**, or **New project** while no project exists | The project holds a repository binding.         |
-| 6. Worker bindings    | **Open bindings**, or **New project** while no project exists | The project holds a worker binding.             |
+| Step                  | Action button                                                                                                  | The step is `Done` when                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. LLM credential     | **New LLM credential**                                                                                         | A live LLM credential exists.                   |
+| 2. Enabled agents     | **Enable agents**; **Enable re@1** on a fresh install, until a live LLM credential of an agent platform exists | At least one agent is enabled.                  |
+| 3. SSH key            | **Create SSH key**                                                                                             | A live Git credential of platform `ssh` exists. |
+| 4. Project            | **New project**                                                                                                | A project exists.                               |
+| 5. Repository binding | **Open bindings**, or **New project** while no project exists                                                  | The project holds a repository binding.         |
+| 6. Worker bindings    | **Open bindings**, or **New project** while no project exists                                                  | The project holds a worker binding.             |
 
 Each action opens the screen or the sheet of the step. After a successful save, the dashboard returns to `/`. While a step is not done, `/` shows Onboarding. When every step is `Done`, `/` shows **Overview**.
 
@@ -94,7 +94,17 @@ When the badge shows `Unhealthy`, the form shows a hint below it. For a refused 
 
 For `openai-codex`, select **Start sign-in** and follow [Sign in to OpenAI Codex](../how-to-guides/run-in-a-container.md#6-sign-in-to-openai-codex). When the sign-in completes, the dashboard shows "Signed in. Custody stored <name>." and returns to Onboarding.
 
-For `anthropic-subscription` and `github-copilot`, select **Start sign-in** and follow the steps of the sign-in panel. When the sign-in completes, the dashboard shows "Signed in. Custody stored <name>." and returns to Onboarding.
+For `anthropic-subscription`, the sign-in has one mode: you copy a code from the provider page. It needs no port 1455.
+
+1. Select **Start sign-in**. The sign-in panel shows the address and the field **Paste code**.
+2. Select **Open sign-in page**. Sign in to the Anthropic account, then approve the access.
+3. The provider page shows a code of the form `code#state`. Copy the whole value.
+4. Paste the value into **Paste code**, then select **Send code**.
+5. The dashboard shows "Signed in. Custody stored <name>." and returns to Onboarding.
+
+Do steps 1 to 4 within 15 minutes of **Start sign-in**. After 15 minutes, the session expires, and the panel shows **Start again**.
+
+For `github-copilot`, select **Start sign-in** and follow the steps of the sign-in panel. When the sign-in completes, the dashboard shows "Signed in. Custody stored <name>." and returns to Onboarding.
 
 ## 4. Enable the agents
 
@@ -172,7 +182,7 @@ Add the `reviewer` binding on the project page:
 4. Wait until **Placement** shows `server`. Keep **Instance count** `1`.
 5. Select **Save binding**. The sheet closes, and the project page stays open.
 
-At the `server` placement, the server runs each instance as a thread. You start no process and generate no token. To run a worker on another host, use the `worker` placement of [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host).
+At the `server` placement, the server runs each instance as a thread. You start no process and generate no token. To run a worker on another host, use the `worker` placement of [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement).
 
 Add both bindings before the import. The import refuses a node when no worker binding can claim one of its states. `coder@1` claims a node in `Available`. `reviewer@1` claims it in `Waiting`, and in `External.Requested` after an external action such as a pull request.
 
@@ -233,6 +243,13 @@ Import the file:
 
 The mission graph shows the node **Add a HEALTH.md file** with the intent `implement`. The readiness panel does not refresh after the import. Reload the page. The **Plan import** item then shows "The mission holds 1 node."
 
+An import replaces the whole mission. A later import retires each current node that it does not name by its `id`. To keep the current nodes and add new ones:
+
+1. On the **Mission** tab, select **Export Markdown**. The browser saves a zip file. Each file in it holds the `id` of one node.
+2. Unpack the zip file. **Plan files** accepts `.md` files, or one `.json` mission export, not a zip file.
+3. Choose the exported files and the new plan files together, then select **Preview**.
+4. Check that **Retirements** shows "No node retires." Then select **Apply import**.
+
 ## 11. Watch the first task
 
 The node has no dependency, so it is `Available` at once. A worker claims the node in one state, and the node then moves to the state of the work. The Mission Service sets every state, from the claim, the release or the assessment of a worker:
@@ -252,26 +269,56 @@ When the node is `Completed`, open the repository on GitHub. The branch `kanthor
 A node can also stop in two other states:
 
 - `Blocked`: the assessment is `undetermined`, or the attempt got its third `criterion-not-met`. The **Attempts** tab shows the rationale of each assessment. Fix the cause, then select **Unblock** on the **Details** tab of the node sheet.
-- `Paused`: three executions in a row failed, or three executions in a row ended at their budget with no task done. The **Attempts** tab shows the stop of each execution. Fix the cause, then select **Resume** on the **Details** tab of the node sheet.
+- `Paused`: three executions in a row failed, or three executions in a row ended at their budget with no task done. A provider failure with the code `rate_limited`, `quota_exhausted` or `unavailable` does not count as a failed execution. See [Provider failures](#provider-failures). The **Attempts** tab shows the stop of each execution. Fix the cause, then select **Resume** on the **Details** tab of the node sheet.
 
 [How a worker works](../explanation/worker.md#the-life-of-an-implement-node) explains every state and the limits.
 
+### Provider failures
+
+When the provider of the model fails a call, the execution ends with a provider failure. The **Attempts** tab shows the stop as **Provider failed** and the code, for example **Provider failed: rate limited**.
+
+| Code              | Effect                                                                    |
+| ----------------- | ------------------------------------------------------------------------- |
+| `rate_limited`    | Starts a cooldown of the LLM credential. The first cooldown lasts 60 s.   |
+| `unavailable`     | Starts a cooldown of the LLM credential. The first cooldown lasts 60 s.   |
+| `quota_exhausted` | Starts a cooldown of the LLM credential. The first cooldown lasts 1 hour. |
+| `unauthorized`    | Starts no cooldown. The execution counts as a failed execution.           |
+| `bad_request`     | Starts no cooldown. The execution counts as a failed execution.           |
+
+A cooldown does not pause the node. The node returns to `Available`, or to `Waiting` for a review. No agent selects a model of the credential until the cooldown ends. The tutorial has one LLM credential, so the node waits for the end of the cooldown.
+
+Each further cooldown of the same credential doubles the duration, up to 24 hours. For `rate_limited`, the durations are 60, 120, 240, 480 and 960 s. A release with no provider failure on the credential resets the doubling.
+
+Three `unauthorized` or `bad_request` failures in a row pause the node. For a refused API key, select **Rotate secret** on the credential page.
+
+The dashboard does not list or clear a cooldown. While every model of an agent cools down, **Overview** shows "<agent> in <binding>: every model cools down until <time>." To list or clear a cooldown, use the CLI with the human token of [guide step 4](../how-to-guides/run-in-a-container.md#4-sign-in):
+
+```sh
+podman exec kanthord kanthord agent cooldown list --token '<human token>'
+podman exec kanthord kanthord agent cooldown clear <credential name> --token '<human token>'
+```
+
+See [Agent cooldowns](../reference/agent/cooldown.md).
+
 ## Troubleshooting
 
-| Symptom                                                                                                | Cause and fix                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Step 2 of Onboarding shows **Enable swe@1** or **Enable re@1**, not **Enable agents**                  | No live LLM credential has an agent platform. Create a credential of `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`.                                                                   |
-| The credential page shows "An agent cannot use a credential of platform <platform>."                   | The same cause. An agent uses only a credential of the six agent platforms.                                                                                                                                                                          |
-| **Verify** of the repository binding shows "The repository host refused the SSH key."                  | The repository does not hold the public key. Add it as a deploy key with write access, as step 5 shows. The [container guide troubleshooting](../how-to-guides/run-in-a-container.md#troubleshooting) lists every other hint.                        |
-| The worker binding sheet shows `swe@1` or `re@1` with the badge `Not enabled` or `Disabled`            | Do step 4, or select **Enable swe@1** or **Enable re@1** in the sheet. The server refuses a worker binding with an agent that is not enabled.                                                                                                        |
-| The preview shows "The node write adds a node and claimable state pair that no worker binding covers." | A state of the node has no worker binding that can claim it. Add the `coder` and the `reviewer` bindings of step 8, then select **Preview** again.                                                                                                   |
-| The preview shows "No binding named <name>. Current bindings: …"                                       | The plan names a binding that the project does not hold. Write the name of your repository binding under `bindings`.                                                                                                                                 |
-| The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                   | A verification fails on every run. At the `server` placement, each verification runs inside the container, and the image holds no Node.js, for example for `npm test`. Use a command that the container can run, as the sample plan of step 10 does. |
-| **Live instances** stays `Open`                                                                        | Select **Open workers** on the item. The Workers page shows the instances of the project.                                                                                                                                                            |
+| Symptom                                                                                                                              | Cause and fix                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step 2 of Onboarding shows **Enable swe@1** or **Enable re@1**, not **Enable agents**                                                | No live LLM credential has an agent platform. Create a credential of `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`.                                                                   |
+| The credential page shows "An agent cannot use a credential of platform <platform>."                                                 | The same cause. An agent uses only a credential of the six agent platforms.                                                                                                                                                                          |
+| **Verify** of the repository binding shows "The repository host refused the SSH key."                                                | The repository does not hold the public key. Add it as a deploy key with write access, as step 5 shows. The [container guide troubleshooting](../how-to-guides/run-in-a-container.md#troubleshooting) lists every other hint.                        |
+| The worker binding sheet shows `swe@1` or `re@1` with the badge `Not enabled` or `Disabled`                                          | Do step 4, or select **Enable swe@1** or **Enable re@1** in the sheet. The server refuses a worker binding with an agent that is not enabled.                                                                                                        |
+| The preview shows "The node write adds a node and claimable state pair that no worker binding covers."                               | A state of the node has no worker binding that can claim it. Add the `coder` and the `reviewer` bindings of step 8, then select **Preview** again.                                                                                                   |
+| The preview shows "No binding named <name>. Current bindings: …"                                                                     | The plan names a binding that the project does not hold. Write the name of your repository binding under `bindings`.                                                                                                                                 |
+| The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                                                 | A verification fails on every run. At the `server` placement, each verification runs inside the container, and the image holds no Node.js, for example for `npm test`. Use a command that the container can run, as the sample plan of step 10 does. |
+| The **Attempts** tab shows **Provider failed: rate limited**, **quota exhausted** or **unavailable**, and the node stays `Available` | The LLM credential has a cooldown. The node does not pause. It runs again when the cooldown ends. See [Provider failures](#provider-failures).                                                                                                       |
+| The **Attempts** tab shows **Provider failed: unauthorized** or **bad request**                                                      | The provider refused the call. Each such execution counts as a failed execution, and three in a row pause the node. For a refused API key, select **Rotate secret** on the credential page.                                                          |
+| **Live instances** stays `Open`                                                                                                      | Select **Open workers** on the item. The Workers page shows the instances of the project.                                                                                                                                                            |
 
 ## Read next
 
 - [How a worker works](../explanation/worker.md): the life of a node, the claim, the execution and the review.
 - [How the coder@1 worker works](../explanation/coder-worker.md): every step of one execution.
 - [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host): the `worker` placement.
+- [Import the plan](#10-import-the-plan): a later import must name the current nodes by their `id`, or it retires them.
 - Reference: [project bindings](../reference/project/binding.md), [Git credentials](../reference/repository/credential.md), [mission import](../reference/mission/import.md).
