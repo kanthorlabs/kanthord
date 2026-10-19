@@ -158,24 +158,51 @@ The Project service answers this list. A binding in this list blocks [`archive`]
 #### verify and check
 
 ```json
-{ "status": "healthy", "capability": "bucket head" }
+{ "status": "healthy", "capability": "bucket head", "failure_reason": null }
 ```
 
-| Property     | Type   | Purpose                                                   |
-| ------------ | ------ | --------------------------------------------------------- |
-| `status`     | string | `healthy`, `unhealthy` or `unknown`.                      |
-| `capability` | string | Capability of the platform probe; `bucket head` for `s3`. |
+```json
+{
+  "status": "unknown",
+  "capability": "bucket head",
+  "failure_reason": "forbidden"
+}
+```
 
-The `s3` probe maps the `HeadBucket` result to a status:
+| Property         | Type           | Purpose                                                                                    |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                       |
+| `capability`     | string         | Capability of the platform probe; `bucket head` for `s3`.                                  |
+| `failure_reason` | string or null | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
 
-| `HeadBucket` result                                  | `status`    |
-| ---------------------------------------------------- | ----------- |
-| HTTP `200`                                           | `healthy`   |
-| HTTP `404`                                           | `unhealthy` |
-| Another HTTP status, for example `403`               | `unknown`   |
-| A transport failure, a 10-second timeout or a cancel | `unknown`   |
+The `s3` probe maps the `HeadBucket` result to a status and a `failure_reason`. The first row that matches decides.
 
-A key that can only write can get `unknown` from a forbidden probe and still work. The server logs a reason for a failed probe, without key material.
+| `HeadBucket` result                     | `status`    | `failure_reason`   |
+| --------------------------------------- | ----------- | ------------------ |
+| A 10-second timeout or a cancel         | `unknown`   | `unclassified`     |
+| HTTP `200`                              | `healthy`   | `null`             |
+| HTTP `404`                              | `unhealthy` | `invalid_response` |
+| HTTP `401`                              | `unknown`   | `unauthorized`     |
+| HTTP `403`                              | `unknown`   | `forbidden`        |
+| HTTP `429`                              | `unknown`   | `rate_limited`     |
+| Another HTTP status                     | `unknown`   | `invalid_response` |
+| A transport failure with no HTTP status | `unknown`   | `unreachable`      |
+| Any other failure                       | `unknown`   | `unclassified`     |
+
+A key that can only write can get `unknown` from a forbidden probe and still work. The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`, without key material.
+
+The dashboard shows a hint under a check result that carries a `failure_reason`. The hint texts of this component:
+
+| `failure_reason`   | Hint                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unauthorized`     | The remote service refused the token or the access key. Correct the token or the key. Then verify again.                                                                       |
+| `forbidden`        | The remote service accepted the token or the key but refused the access. Check the permissions of the token or the key.                                                        |
+| `rate_limited`     | The remote service limited the requests. Wait some minutes, or check the quota of the account. Then verify again.                                                              |
+| `unreachable`      | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
+| `invalid_response` | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
+| `unclassified`     | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                   |
+
+A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 
 #### platforms
 

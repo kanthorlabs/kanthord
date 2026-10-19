@@ -151,15 +151,51 @@ The answer is a credential answer with one more property:
 ### verify and check
 
 ```json
-{ "status": "healthy", "capability": "rate-limit read" }
+{ "status": "healthy", "capability": "rate-limit read", "failure_reason": null }
 ```
 
-| Property     | Type   | Purpose                                                   |
-| ------------ | ------ | --------------------------------------------------------- |
-| `status`     | string | `healthy`, `unhealthy` or `unknown`.                      |
-| `capability` | string | `rate-limit read` for `github`; `ssh identity` for `ssh`. |
+```json
+{
+  "status": "unhealthy",
+  "capability": "rate-limit read",
+  "failure_reason": "unauthorized"
+}
+```
 
-The `github` check answers `healthy` for HTTP `200`, `unknown` for HTTP `403`, and `unhealthy` for another status. A network error or an expired deadline answers `unknown`. The `ssh` check answers `healthy` when `ssh -G` resolves exactly the stored or typed metadata. A refusal answers `unhealthy`, and an expired deadline answers `unknown`.
+| Property         | Type           | Purpose                                                                                    |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                       |
+| `capability`     | string         | `rate-limit read` for `github`; `ssh identity` for `ssh`.                                  |
+| `failure_reason` | string or null | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
+
+The `github` check reads the rate limit with the token. The `ssh` check answers `healthy` when `ssh -G` resolves exactly the stored or typed metadata. Each result maps to a status and a `failure_reason`. The first row that matches decides.
+
+| Result                                             | `status`    | `failure_reason`   |
+| -------------------------------------------------- | ----------- | ------------------ |
+| The check exceeds its deadline                     | `unknown`   | `unclassified`     |
+| `github`: HTTP `200`                               | `healthy`   | `null`             |
+| `github`: HTTP `401`                               | `unhealthy` | `unauthorized`     |
+| `github`: HTTP `403`                               | `unknown`   | `forbidden`        |
+| `github`: HTTP `429`                               | `unhealthy` | `rate_limited`     |
+| `github`: another HTTP status, a redirect included | `unhealthy` | `invalid_response` |
+| `github`: the request fails before an HTTP answer  | `unknown`   | `unreachable`      |
+| `ssh`: `ssh -G` resolves the metadata              | `healthy`   | `null`             |
+| `ssh`: `ssh -G` fails or resolves other values     | `unhealthy` | `unclassified`     |
+
+GitHub can answer `403` for a rate limit, so `403` reports `unknown`. The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`.
+
+The dashboard shows a hint under a check result that carries a `failure_reason`. The hint texts of this component:
+
+| `failure_reason`   | Hint                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unauthorized`     | The remote service refused the token or the access key. Correct the token or the key. Then verify again.                                                                       |
+| `forbidden`        | The remote service accepted the token or the key but refused the access. Check the permissions of the token or the key.                                                        |
+| `rate_limited`     | The remote service limited the requests. Wait some minutes, or check the quota of the account. Then verify again.                                                              |
+| `unreachable`      | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
+| `invalid_response` | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
+| `unclassified`     | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                   |
+
+A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 
 ### platforms
 

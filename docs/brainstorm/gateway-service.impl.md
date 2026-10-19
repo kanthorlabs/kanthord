@@ -371,7 +371,7 @@ The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy
 - The [container healthcheck](architecture.impl.md#container-image) runs this command, because a supervisor holds no token.
 
 The server owns the shared `HealthRegistry` and passes it to the Gateway Service.
-Each service and shared component registers one map under its name: `server`, `gateway`, `custody`, `scheduler`, `worker`, `repository`, `project`, `mission` and `intake`.
+Each service and shared component registers one map under its name: `server`, `gateway`, `custody`, `scheduler`, `worker`, `repository`, `project`, `mission`, `intake` and `tracking`.
 
 - The `server` map contains `gateway`, `store` and `log`.
 - The `store` probe checks the SQLite database with `SELECT 1`.
@@ -380,10 +380,10 @@ Each service and shared component registers one map under its name: `server`, `g
 - Its map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation`.
 - The `gateway` component of `server` summarizes that map.
 - The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
-- A domain map reads in-process state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings`, `mission` holds `operations` and `intake` holds `events`. The `events` probe reports the dispatcher of the running Intake Service.
+- A domain map reads local state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings`, `mission` holds `operations`, `intake` holds `events` and `tracking` holds `store`. The `events` probe reports the dispatcher of the running Intake Service.
 - The `repository` map holds `toolchain`, which runs the version commands of the required tools without blocking the event loop.
 
-The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200},"intake":{"events":200}}}`.
+The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200},"intake":{"events":200},"tracking":{"store":200}}}`.
 A component code of `200` means healthy, and `503` means unavailable.
 HTTP 200 requires a nonempty, entirely healthy map from each owner.
 An unavailable component produces HTTP 503 with code `gateway.liveness.unhealthy` through the shared error envelope.

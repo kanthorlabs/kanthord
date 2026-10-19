@@ -259,7 +259,7 @@ The Project resolution checks the disablement and the removal of a binding revis
 - A repository address has the form `git@<host>:<owner>/<repository>.git`, on port 22 only. The host starts with a letter or a digit and holds only letters, digits, `.` and `-`.
 - The dashboard checks the form and the host set, and it derives the identity without the host.
 - The server reads no SSH configuration for the host. The host of the address must be a member of the SSH host set of the binding platform, and it must hold a pin.
-- At every repository binding write, the Project Service releases the key of the `ssh_credential` through the `ssh_identity` grant. It performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector), inside one private SSH agent.
+- At every repository binding write, the Project Service checks each new or changed repository binding. A binding that is unchanged at the submitted version gets no check. For each checked binding, it releases the key of the `ssh_credential` through the `ssh_identity` grant. It performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector), inside one private SSH agent.
 - The read precedes the `BEGIN IMMEDIATE` transaction.
 - A deadline of 30 s bounds the read.
 - A failed or timed-out read refuses the write with 422 `project.bindings.repository.ssh_unreachable`. Its `details.failure_reason` holds the value of [the failure reason](repository.impl.md#the-failure-reason-of-a-git-operation).
