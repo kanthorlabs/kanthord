@@ -33,5 +33,6 @@ ENV HOME=/var/lib/kanthord \
 VOLUME /var/lib/kanthord
 WORKDIR /var/lib/kanthord
 EXPOSE 31415 1455
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD ["kanthord","gateway","liveness"]
 ENTRYPOINT ["/usr/bin/tini", "--", "kanthord"]
 CMD ["serve"]

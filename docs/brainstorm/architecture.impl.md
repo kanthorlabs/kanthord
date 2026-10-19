@@ -64,7 +64,6 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
   - The command reads `cli.yaml` of the volume before the request. An invalid `cli.yaml`, a mode wider than `0600` or a symlink fails the healthcheck while the server is healthy. An `endpoint` in that file replaces the default, so that endpoint must reach the server from inside the container.
   - A healthy status proves no reach through the published port. A container with a loopback bind, or with no allowed host for its host port, also reports healthy.
 - Under Podman, `make release-image` builds with `--format docker`, because the OCI image format drops `HEALTHCHECK`.
-- Today the `Containerfile` declares no `HEALTHCHECK`, and `scripts/release/image.sh` passes no `--format docker`.
 - A tag `v<version>` on the root repository publishes `docker.io/kanthorlabs/kanthord` for `linux/amd64` and `linux/arm64`. Each architecture builds with `make release-image` on a native runner and pushes `<version>-<arch>`. One manifest then joins both as `<version>` and `latest`.
 - The workflow logs in to Docker Hub with the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
