@@ -22,7 +22,8 @@ version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$ENGINE_DIR/package.json")
 node_version=$(tr -d '[:space:]v' <"$ENGINE_DIR/.nvmrc")
 image=${IMAGE:-kanthord}
 load=
-case "$(basename "$engine")" in docker) load=--load ;; esac
+format=
+case "$(basename "$engine")" in docker) load=--load ;; podman) format=--format=docker ;; esac
 
 log "building $image:$version with $engine on node $node_version"
 "$engine" build \
@@ -31,6 +32,7 @@ log "building $image:$version with $engine on node $node_version"
 	--tag "$image:$version" \
 	--tag "$image:latest" \
 	$load \
+	$format \
 	"$ROOT" || die "$engine build failed"
 
 [ "$("$engine" run --rm "$image:$version" --version)" = "$version" ] ||
