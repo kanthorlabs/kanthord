@@ -212,7 +212,7 @@ kanthord llm credential login-code login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W '<re
 | ------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
 | `<platform>`        | `login`                      | OAuth platform: `github-copilot`, `openai-codex` or `anthropic-subscription`. |
 | `<session>`         | `login-code`, `login-status` | Login session ID; sent as the `session_id` path parameter.                    |
-| `<value>`           | `login-code`                 | Code or redirect URL that the session awaits.                                 |
+| `<value>`           | `login-code`                 | Code, redirect URL or `code#state` value that the session awaits.             |
 
 | Option                     | Commands              | Default / resolution                                                        | Purpose                                                             |
 | -------------------------- | --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |

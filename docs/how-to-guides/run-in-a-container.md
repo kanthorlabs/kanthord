@@ -225,7 +225,7 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 
 ## 8. Run a worker on another host
 
-A worker binding with the placement `worker` runs its instances on a worker host, not in the container. Create the worker binding first:
+A worker binding with the placement `worker` runs its instances in a separate `kanthord serve worker` process, not in the server container. Create the worker binding first:
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
 2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
@@ -235,7 +235,7 @@ A worker binding with the placement `worker` runs its instances on a worker host
 
 `<binding name>` is the name of this worker binding, not the name of the repository binding of step 5.
 
-A machine token names one worker binding. One `kanthord serve worker` process serves the binding of its token only. The tutorial needs two workers: `coder@1` and `reviewer@1`. To run both on worker hosts, add two worker bindings, for example `coder-remote` with `coder@1` and `reviewer-remote` with `reviewer@1`. Then do the token steps below once for each binding, and run one `kanthord serve worker` process for each token. Two processes on one host need two client files. Give each process its own `XDG_CONFIG_HOME` and `XDG_STATE_HOME`.
+A machine token names one worker binding. One `kanthord serve worker` process serves the binding of its token only. [The first-task tutorial](../tutorials/first-task.md) needs two workers: `coder@1` and `reviewer@1`. To run both on worker hosts, add two worker bindings, for example `coder-remote` with `coder@1` and `reviewer-remote` with `reviewer@1`. Do the token steps below once for each binding. Run one `kanthord serve worker` process for each token. Two processes on one host need two client files. Give each process its own `XDG_CONFIG_HOME` and `XDG_STATE_HOME`.
 
 The worker host needs these items:
 
@@ -284,14 +284,14 @@ A later write cannot change the placement of a worker binding. The tutorial bind
 
 1. In the project, open the **Bindings** tab. Select **Remove** on the `coder` row.
 2. In the dialog, select **Make unavailable instead**. The binding keeps its name, and its instance count becomes `0`. The live instances of the binding end, and the binding claims no node.
-3. Add a worker binding with another name and the placement `worker`, for example `coder-remote` with `coder@1`, as the start of this step shows.
-4. Create its machine token and start its worker process.
+3. Add a worker binding with another name and the placement `worker`. For example, add `coder-remote` with `coder@1`, as the start of this step shows.
+4. Create its machine token and start its worker process. On another host, use the token steps above. On the container host, use [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
 
-Do the same for `reviewer`, for example with `reviewer-remote`. Do not select **Remove binding**. A removed binding refuses every use of its name, also by records that pin an earlier revision.
+Do the same for `reviewer`, for example with `reviewer-remote`. Do not select **Remove binding** in step 2. While a node is not `Completed`, the server refuses the removal of the only `coder@1` binding with `project.bindings.worker.node_unmatched`. A binding with instance count `0` still covers the states of the node. To use the binding again, set its instance count above `0`.
 
 ### Run a worker in a container on the same host
 
-A worker can run in a second container of the same image on the container host. The image holds `bash`, `git` and the OpenSSH client, at the version of the server. The worker container reaches the server container through a container network, by the container name `kanthord`.
+A worker can run in a second container of the same image on the container host. The image holds `bash`, `git`, the OpenSSH client and the `kanthord` binary of the server version. The worker container reaches the server container through a container network, by the container name `kanthord`.
 
 1. Create a network, and connect the server container to it:
 
@@ -327,11 +327,11 @@ The command of item 3 does these things:
 - `--output` with no path writes the default client file of the image. The image sets `XDG_CONFIG_HOME=/var/lib/kanthord/config`, so the file is `/var/lib/kanthord/config/kanthord/cli.yaml` in the worker volume, not `~/.config/kanthord/cli.yaml`. The file has mode `0600`.
 - `--endpoint http://kanthord:31415` writes the address of the server on the container network into the file. `serve worker` reads it there.
 
-The token stays in the volumes, so no copy on the host needs removal.
+The token stays in the worker volume, so no copy on the host needs removal.
 
 `podman logs kanthord-<binding name>` shows `Worker application ready` when the worker is registered. For two bindings, do items 3 and 4 once for each binding.
 
-`podman restart kanthord` keeps the network connection. After `podman rm` and a new `podman run` of the server, run `podman network connect kanthord-net kanthord` again. The worker refuses a server of another version with `worker.version.mismatch`. After [Use a newer image](#use-a-newer-image), remove each worker container with `podman rm -f kanthord-<binding name>`, then run item 4 again with the new version.
+`podman restart kanthord` keeps the network connection. After `podman rm` and a new `podman run` of the server, run `podman network connect kanthord-net kanthord` again. The worker refuses a server of another version with `worker.version.mismatch`. After [Use a newer image](#use-a-newer-image), remove each worker container with `podman rm -f kanthord-<binding name>`. Then run item 4 again with the new version.
 
 ## Use a newer image
 
