@@ -56,7 +56,7 @@ After the sign-in, the dashboard opens `/`. A fresh install has no setup, so `/`
 
 The Onboarding page lists six setup steps in a fixed order. Each step shows a badge and one action button:
 
-- `Done`: the setup of the step exists.
+- `Done`: the setup of the step exists. A credential counts only while it is live, that is, not archived.
 - `Next`: the first step that is not done. Do this step now.
 - `Open`: a later step that is not done.
 
@@ -71,7 +71,7 @@ The Onboarding page lists six setup steps in a fixed order. Each step shows a ba
 
 Each action opens the screen or the sheet of the step. After a successful save, the dashboard returns to `/`. While a step is not done, `/` shows Onboarding. When every step is `Done`, `/` shows **Overview**.
 
-**Skip onboarding** shows Overview in this browser only. The browser keeps the choice. While a step is not done, Overview then shows the link **Resume onboarding**. The link shows Onboarding again.
+**Skip onboarding** shows Overview in this browser only. The browser keeps the choice until you select **Resume onboarding**. While a step is not done, Overview then shows the link **Resume onboarding**. The link shows Onboarding again.
 
 ## 3. Add the LLM credential
 
@@ -103,14 +103,14 @@ For `anthropic-subscription` and `github-copilot`, select **Start sign-in** and 
 1. On step 2, select **Enable agents**. The page of the LLM credential opens with the sheet **Enable agents with claude**.
 2. The sheet lists each agent that is not enabled: `re@1` and `swe@1`. Keep both switches on.
 3. **Model identifier** shows the first model of the credential. To use another model, choose it.
-4. **Reasoning effort** shows `medium` when the model supports it. Otherwise choose a value.
+4. **Reasoning effort** shows `medium` when the model supports it. Otherwise choose a value. The list holds the effort levels of the model.
 5. Select **Enable agents**. The dashboard shows "Enabled re@1 at revision 1. Enabled swe@1 at revision 1." and returns to Onboarding.
 
 The sheet gives each agent an agent provider for the credential and a default configuration with that model and effort. A worker binding uses this default configuration.
 
 When the credential check answers `unhealthy`, **Enable agents** asks "Enable re@1 and swe@1 with an unhealthy credential?". Select **Keep editing** and close the sheet. Select **Rotate secret** on the credential page, then select **Enable agents** again.
 
-Step 2 can show **Enable swe@1** or **Enable re@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. Add a credential of one of those platforms, see [What you need](#what-you-need).
+Step 2 can show **Enable re@1** or **Enable swe@1** in place of **Enable agents**. Then no live LLM credential has one of the six agent platforms. The button opens the page of the agent, not the sheet. Add a credential of one of those platforms, see [What you need](#what-you-need).
 
 ## 5. Create the SSH key
 
@@ -162,7 +162,7 @@ Add the `coder` binding from Onboarding:
 6. Keep **Placement** `server` and **Instance count** `1`.
 7. Select **Save binding**.
 
-Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**.
+Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**. Onboarding counts one worker binding as enough, but the first task needs both. Add the `reviewer` binding now.
 
 Add the `reviewer` binding on the project page:
 
@@ -174,7 +174,7 @@ Add the `reviewer` binding on the project page:
 
 At the `server` placement, the server runs each instance as a thread. You start no process and generate no token. To run a worker on another host, use the `worker` placement of [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host).
 
-Add both bindings before the import. The import refuses a node when no worker binding can claim one of its states. `coder@1` claims a node in `Available`. `reviewer@1` claims it in `Waiting` and `External.Requested`.
+Add both bindings before the import. The import refuses a node when no worker binding can claim one of its states. `coder@1` claims a node in `Available`. `reviewer@1` claims it in `Waiting`, and in `External.Requested` after an external action such as a pull request.
 
 ## 9. Check the readiness panel
 
@@ -222,7 +222,7 @@ Serve the status of the service at GET /health.
 GET /health answers 200 with a JSON body that holds the status.
 ```
 
-The verification `npm test` needs Node.js. The image holds `bash`, `git` and the OpenSSH client, but no Node.js. At the `server` placement, the worker runs each verification inside the container. `npm test` therefore fails on every run, and the node cannot pass.
+The verification `npm test` needs Node.js. The image holds `bash`, `git`, the OpenSSH client and the base Debian tools, for example `head` and `grep`, but no Node.js. At the `server` placement, the worker runs each verification inside the container. `npm test` therefore fails on every run, and the node cannot pass.
 
 Edit the file in a text editor. Keep `intent`, `depends_on`, `tags` and `bindings`. Replace the verification, the name, the requirement and the criterion:
 
@@ -262,15 +262,15 @@ The mission graph shows the node **Add a health note** with the intent `implemen
 
 ## 11. Watch the first task
 
-The node has no dependency, so it is `Available` at once. The workers move it through these states:
+The node has no dependency, so it is `Available` at once. A worker claims the node in one state, and the node then moves to the state of the work. The Mission Service sets every state, from the claim, the release or the assessment of a worker:
 
-| State        | What happens                                                                                                    |
-| ------------ | --------------------------------------------------------------------------------------------------------------- |
-| `Available`  | The node waits for `coder@1`.                                                                                   |
-| `Executing`  | `coder@1` claims the node. `swe@1` edits the files, and the worker commits and runs the verification.           |
-| `Waiting`    | `coder@1` pushed the branch `kanthord/<node_id>` and recorded its head commit. The node waits for `reviewer@1`. |
-| `Evaluating` | `reviewer@1` checks out the commit, runs the verification again, and `re@1` judges the criterion.               |
-| `Completed`  | The assessment is `success`. With no external action, the node is complete.                                     |
+| State        | What happens                                                                                                                        |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Available`  | The node waits for `coder@1`.                                                                                                       |
+| `Executing`  | `coder@1` claimed the node in `Available`. `swe@1` edits the files, and the worker commits and runs the verification.               |
+| `Waiting`    | `coder@1` pushed the branch `kanthord/<node_id>` and recorded its head commit. The node waits for `reviewer@1`.                     |
+| `Evaluating` | `reviewer@1` claimed the node in `Waiting`. It checks out the commit, runs the verification again, and `re@1` judges the criterion. |
+| `Completed`  | The assessment of `reviewer@1` is `success`. With no external action, the Mission Service completes the node.                       |
 
 The **Mission** tab does not refresh by itself. Reload the page to see the current state. Select the node to open its sheet. The **Attempts** tab shows the executions, the assessments and the outcomes of each attempt.
 
