@@ -25,7 +25,6 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 ## Owners without a table
 
 - The Gateway Service owns no table. It holds idempotency records in memory. It stores no human account and no client identity. A human `sub` and a `client_identity_<ulid>` appear only as values inside an `actor` column.
-- The Repository component owns no table. It is stateless transport.
 - The worker catalog and the agent catalog are static server modules. A worker name and an agent name are keys of those modules, not rows.
 
 ## Diagram
@@ -44,6 +43,13 @@ erDiagram
         integer ended_at "Unix ms, null while live"
         integer available_at "Unix ms, end of the cooldown of the name, revision 1 only, else null"
         integer strikes "failures of the name in a row, revision 1 only, default 0"
+    }
+
+    repository_host_key {
+        text id PK "host_key_ + ULID"
+        text host UK "member of an SSH host set"
+        text public_key "ssh-ed25519 and base64"
+        integer created_at "Unix ms"
     }
 
     project_project {
@@ -153,12 +159,14 @@ erDiagram
     project_project ||..o{ scheduler_job : "ref, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
+    classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
 
     class credential custody
+    class repository_host_key repository
     class project_project,project_binding project
     class agent_enablement,agent_prompt agent
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
@@ -171,18 +179,19 @@ The basis column states the source of each table.
 A ruled table has its name and its columns in a design page.
 A derived table maps a ruled record to rows, and this page proposes that mapping.
 
-| Table                   | Owner             | Basis                                                                                                                                                                                                                                                                             |
-| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `credential`            | Custody           | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table).     |
-| `project_project`       | Project Service   | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
-| `project_binding`       | Project Service   | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
-| `agent_prompt`          | Agent component   | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings).                                                                                                                                                        |
-| `agent_enablement`      | Agent component   | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
-| `mission_mission`       | Mission Service   | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas).                                                                                                                     |
-| `mission_node`          | Mission Service   | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name).                                                                             |
-| `mission_node_revision` | Mission Service   | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions).                                                                                                                                            |
-| `mission_dependency`    | Mission Service   | Derived from the [dependency](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#dependency).                                                                                                                                        |
-| `scheduler_job`         | Scheduler Service | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts).                                                                                            |
+| Table                   | Owner                | Basis                                                                                                                                                                                                                                                                             |
+| ----------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `credential`            | Custody              | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table).     |
+| `repository_host_key`   | Repository component | Ruled: [host keys](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#host-keys).                                                                                                                                                               |
+| `project_project`       | Project Service      | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
+| `project_binding`       | Project Service      | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
+| `agent_prompt`          | Agent component      | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings).                                                                                                                                                        |
+| `agent_enablement`      | Agent component      | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
+| `mission_mission`       | Mission Service      | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas).                                                                                                                     |
+| `mission_node`          | Mission Service      | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name).                                                                             |
+| `mission_node_revision` | Mission Service      | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions).                                                                                                                                            |
+| `mission_dependency`    | Mission Service      | Derived from the [dependency](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#dependency).                                                                                                                                        |
+| `scheduler_job`         | Scheduler Service    | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts).                                                                                            |
 
 ## Keys and relationship notation
 
@@ -208,6 +217,13 @@ The owning service enforces every rule below in the transaction of its write. A 
 - Revision 1 of a name holds the cooldown of the name in `available_at` and `strikes`. A rotation inserts the next revision with no hold and copies none. The Agent component reads and writes the hold through the Custody port `CredentialHolds`.
 - An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision and keeps the rows. A name with no live revision is archived, and an archive is final.
 - A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
+
+### Repository component
+
+- `repository_host_key` holds one row for each pinned SSH host. `host` has the unique index `repository_host_key_host`, and the table declares no other index.
+- `host` is a member of an SSH host set of a platform. The Repository component validates it before the write.
+- A pin replaces the row of its host: one transaction deletes the row and inserts the new one. No operation deletes a pin.
+- `source` and the fingerprint are derived on read, and no column stores them.
 
 ### Project Service
 

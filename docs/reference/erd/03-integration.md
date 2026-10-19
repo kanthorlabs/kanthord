@@ -139,7 +139,7 @@ A remote effect never commits with a SQLite transaction. An outbound request com
 - The count of pending events has a bound, and its value is open.
 - `intake_outbound_request.project_id` names the project of the binding that the caller resolved.
 - `operation` holds a value of the closed set of outbound operations in code, named `<platform>.<operation>`.
-- `credential` holds the name of the credential that custody released for the write. `git.merge_push` holds null, because it uses the SSH configuration of the host.
+- `credential` holds the name of the credential that custody released for the write. `git.merge_push` holds the name of the `ssh_credential` of the binding.
 - `intake_outbound_request` has a unique index on `(operation, request_key)`, so a repeat of a key finds the first request and calls the write no second time. The caller derives `request_key` from its durable intent, and the key holds every operand that can change under that intent.
 - The Intake Service authorizes the write and obtains its release before the insert. A refusal inserts no row.
 - `state` starts as `pending`, and the insert commits before the call. The call sets `succeeded` on a 2xx answer or a CLI exit code 0, and `failed` on every other result, with a write conditional on `pending`.
