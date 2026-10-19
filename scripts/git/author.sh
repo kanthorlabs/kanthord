@@ -11,10 +11,12 @@ name=$(git -C "$ROOT" config --local user.name)
 email=$(git -C "$ROOT" config --local user.email)
 
 if [ -z "$name" ] || [ -z "$email" ]; then
+	global_name=$(git config user.name)
+	global_email=$(git config user.email)
 	warn "$ROOT has no local user section. Set one. This machine reports:"
 	warn ""
-	warn "	git -C $ROOT config user.name \"$(git config user.name)\""
-	warn "	git -C $ROOT config user.email \"$(git config user.email)\""
+	warn "	git -C $ROOT config user.name \"${global_name:-<your name>}\""
+	warn "	git -C $ROOT config user.email \"${global_email:-<your email>}\""
 	warn ""
 	exit 1
 fi
