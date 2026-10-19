@@ -80,7 +80,7 @@ The agents call a model with this credential.
 1. On step 1, select **New LLM credential**. The **New credential** form opens.
 2. Enter a **Name**, for example `claude`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens.
 3. Choose the **Platform**. The list has three groups:
-   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` and `opencode-go` do not. A credential of another platform makes step 1 `Done`, but step 4 of this tutorial cannot use it.
+   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` and `opencode-go` do not. A credential of another platform makes step 1 `Done`, but [4. Enable the agents](#4-enable-the-agents) cannot use it.
    - **Sign in with an account**: `openai-codex`, `anthropic-subscription` and `github-copilot`. The server stores the credential when the sign-in completes.
    - **Not checked before save**: the other platforms. An agent cannot use them.
 

@@ -112,7 +112,7 @@ The command prints `token: <jwt>`. It prints a token only to a terminal, so keep
 
 See [auth jwt generate](../reference/auth/jwt.md).
 
-For the first task, follow [From a fresh install to the first task](../tutorials/first-task.md) from its [step 2](../tutorials/first-task.md#2-read-the-onboarding-page). The Onboarding page of the dashboard replaces steps 5 and 6 of this guide.
+For the first task, follow [From a fresh install to the first task](../tutorials/first-task.md) from its [step 2](../tutorials/first-task.md#2-read-the-onboarding-page). The Onboarding page of the dashboard replaces steps 5 and 6 of this guide. The tutorial links to them only for the screen details.
 
 ## 5. Connect a repository
 
