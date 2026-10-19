@@ -145,10 +145,10 @@ After the first native-agent worker runs the acceptance path.
   - Sources, not versioned: `.dev/first-day-experiment/fix-plan.md` holds the plan of 2026-10-18. `.dev/first-day-2026-10-19/` holds `first-day-plan.md`, `first-day-findings.md` and `first-day-plan-review.md`.
   - Labels of the plan of 2026-10-19:
     - Q2 proposes a nullable `failure_reason` enum on the shared health entry. Ruled 2026-10-19 by Ulrich: the closed enum `ResourceFailureReason` in `engine/src/kernel/health.ts`. The health report, the binding check and the credential check carry it.
-    - Q4, first-start diagnostics, proposes the refused host in `gateway.http.host_not_allowed` and a `warn` start record for a loopback `gateway.bind`. It waits on Ulrich.
+    - Q4, first-start diagnostics, proposes the refused host in `gateway.http.host_not_allowed` and a `warn` start record for a loopback `gateway.bind`. Ruled 2026-10-19 by Ulrich (Q4a, Q4c). The refusal carries `details: { host, field }`. The `info` start record carries `bind`, `port` and the loopback sentence, with no `warn`. Engine `#124` builds it. [gateway-service.impl.md](gateway-service.impl.md#host-and-origin) and [the start record](gateway-service.impl.md#the-start-record) state it.
     - Q5 proposes a setup checklist on Overview with no project, and a readiness panel on the project page. It waits on Ulrich.
     - Q6 raises the first public release now and proposes the release after P3. It waits on Ulrich.
-    - Q14 proposes a `kanthord gateway liveness` command and a `HEALTHCHECK` in the image. It waits on Ulrich.
+    - Q14 proposes a `kanthord gateway liveness` command and a `HEALTHCHECK` in the image. Ruled 2026-10-19 by Ulrich. Engine `#129` builds the command, and [gateway-service.impl.md](gateway-service.impl.md#component-healthchecks) states it. [architecture.impl.md](architecture.impl.md#container-image) states the `HEALTHCHECK` and the Podman `--format docker` build. Today the `Containerfile` declares no `HEALTHCHECK`, and `scripts/release/image.sh` passes no `--format docker`. P1 adds both in the same branch as its pointer move. H2 then sets `KANTHORD_ENDPOINT` in `platforms/homelab/kanthord/run.sh`, because that container serves under `/s/kanthord`.
     - Q3 and Q11 are confirmations of ruled pages. Q3 confirms the one-off `config init --gateway-bind ::` of [architecture.impl.md](architecture.impl.md#container-image).
     - Q11 confirms that no command edits an existing configuration file: [the command surface](architecture.impl.md#the-command-surface) and [the CLI configuration commands](architecture.impl.md#the-cli-configuration-commands).
     - D1a, the container how-to guide with the SSH shell steps, is READY. SD2 of the SSH identity epic moves the guide to the dashboard SSH key flow.
@@ -158,8 +158,8 @@ After the first native-agent worker runs the acceptance path.
   - Replaced by the plan of 2026-10-19:
     - Old B3, the first-start configuration in the image: by Q3.
     - Old B4, the reason of an unhealthy repository address: by Q2.
-    - Old S2, the details of `gateway.http.host_not_allowed`: by Q4.
-    - Old S3, the `warn` start record for a loopback `gateway.bind`: by Q4.
+    - Old S2, the details of `gateway.http.host_not_allowed`: by Q4a.
+    - Old S3, the `warn` start record for a loopback `gateway.bind`: by Q4c.
     - Old S4, a configuration edit command: by Q11.
     - Old S6, the setup checklist on Overview: by Q5. Old A7, the dashboard workstream of old S6: by A3.
   - Continued by the plan of 2026-10-19:
@@ -168,7 +168,7 @@ After the first native-agent worker runs the acceptance path.
       - Before the release, create the public Docker Hub repository `kanthorlabs/kanthord`. The version goes from `28.0.1` to `26.10.1` once.
     - Old D2, the container how-to guide, and old D3, the first-node tutorial: by D1a, D1b and D3. The `jq` filter of old C-S1 and the polling loop of old C-S2 stay with those rulings.
   - Open old rulings that the plan of 2026-10-19 depends on:
-    - Old C-B1, the code `gateway.client.unreachable` for a refused connect. Q14 proposes a `gateway liveness` command that follows the `gateway verify` pattern. A ruling of old C-B1 changes both commands together.
+    - Old C-B1, the code `gateway.client.unreachable` for a refused connect. The `gateway liveness` command of Q14 follows the `gateway verify` pattern and answers `cli.gateway.liveness.indeterminate` for a refused connect. A ruling of old C-B1 changes both commands together.
     - Old C-S8, the remote message in the CLI. Until old C-S8 is ruled, the CLI shows the Q4 `details.host` and `details.field` but not the hint in the message.
   - Open old rulings with no effect on the plan of 2026-10-19. Old E2b, the engine CLI docs of C-B2, C-S10, C-S12, C-S14 and C-S15, stays with those rulings.
     - Old S3, the fields `version`, `base_path` and `url` of the Gateway start record.

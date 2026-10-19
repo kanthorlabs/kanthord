@@ -54,7 +54,17 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The runtime stage is Debian trixie slim, because the Repository component needs git 2.40 or later. It holds `bash`, `git`, `openssh-client`, `ca-certificates` and `tini`. The single binary supplies `rg` and `fd`.
 - The image runs as the user `kanthord` with uid 10001. `tini` is PID 1 and it starts `kanthord serve`.
 - The volume `/var/lib/kanthord` holds `HOME` and the four XDG directories.
-- The container binds `::`, which accepts IPv4 and IPv6. It publishes port 31415 and port 1455, the OpenAI Codex login callback. The operator creates the configuration once with `kanthord config init --gateway-bind ::`.
+- The image holds no configuration file and sets no bind address. The operator creates the configuration once with `kanthord config init --gateway-bind ::`, before the first start. Only after that step does the container bind `::`, which accepts IPv4 and IPv6. The container publishes port 31415 and port 1455, the OpenAI Codex login callback.
+- The image declares `HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD ["kanthord","gateway","liveness"]`. The check runs the [liveness command](gateway-service.impl.md#component-healthchecks), which needs no token.
+  - The timeout of 5 s ends a hung check long before the client deadline of 31 s.
+  - The start period of 30 s gives the server time to open its listener.
+  - The image keeps the default of 3 retries, so three failed checks in a row after the start period mark the container `unhealthy`.
+  - A probe deadline is also 5 s. A probe that reaches its deadline ends the check by the timeout, so the health log then holds no `details`.
+  - The command resolves its endpoint like every client command. With no option, no `KANTHORD_ENDPOINT` and no `cli.yaml`, it reads `http://127.0.0.1:31415`, which reaches a container with the default port. Its `Host` header `127.0.0.1:31415` is on the default `gateway.allowed_hosts`. A container with another `gateway.port` sets `KANTHORD_ENDPOINT` to `http://127.0.0.1:<port>` and adds `127.0.0.1:<port>` to `gateway.allowed_hosts`. A container with a `gateway.base_path` sets `KANTHORD_ENDPOINT`, for example `http://127.0.0.1:31415/s/kanthord`.
+  - The command reads `cli.yaml` of the volume before the request. An invalid `cli.yaml`, a mode wider than `0600` or a symlink fails the healthcheck while the server is healthy. An `endpoint` in that file replaces the default, so that endpoint must reach the server from inside the container.
+  - A healthy status proves no reach through the published port. A container with a loopback bind, or with no allowed host for its host port, also reports healthy.
+- Under Podman, `make release-image` builds with `--format docker`, because the OCI image format drops `HEALTHCHECK`.
+- Today the `Containerfile` declares no `HEALTHCHECK`, and `scripts/release/image.sh` passes no `--format docker`.
 - A tag `v<version>` on the root repository publishes `docker.io/kanthorlabs/kanthord` for `linux/amd64` and `linux/arm64`. Each architecture builds with `make release-image` on a native runner and pushes `<version>-<arch>`. One manifest then joins both as `<version>` and `latest`.
 - The workflow logs in to Docker Hub with the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
@@ -880,6 +890,7 @@ A process split retains these boundaries.
 - It generates `master_key` from 32 bytes of `crypto.randomBytes`, encoded in base64.
 - The repeatable option `--gateway-allowed-host <host>` appends each host to the default `gateway.allowed_hosts`. The command lowercases each value and drops a duplicate.
 - A value that is not exactly `<name>` or `<name>:<port>` fails with `cli.config.invalid_allowed_host` before the write.
+- The option `--gateway-bind <address>` writes `gateway.bind`. A value that is not an IP address fails with `system.config.invalid_field` before the write.
 - The option `--gateway-base-path <path>` writes `gateway.base_path`. A value outside its format fails with `system.config.invalid_field` before the write.
 - It validates the document before it writes it.
 - The invocation authorizes the creation. It reads no confirmation and requires no terminal.
@@ -889,6 +900,10 @@ A process split retains these boundaries.
 - It writes a temporary file in the directory of the destination with mode `0600`, links that file to the destination, and unlinks the temporary file.
 - A link fails when the destination exists, so the command overwrites no file and leaves no partial file.
 - `kanthord config validate` loads the stored file with no environment binding and no command-line override, reports each invalid field, and writes nothing.
+- A command that reads the configuration file (`kanthord serve`, `config validate`, `config show`, `upgrade` and `auth jwt generate`) fails on an absent file with `system.config.not_found`. The diagnostic prints three rows:
+  - `config`: the resolved path.
+  - `command`: `kanthord config init --config "<path>"`.
+  - `container`: `podman run --rm -v <volume>:/var/lib/kanthord docker.io/kanthorlabs/kanthord:<version> config init --gateway-bind :: --gateway-allowed-host localhost:<port> --gateway-allowed-host 127.0.0.1:<port>`. A container operator runs this form once, before the first start. `<port>` is the host port that the container publishes, `<volume>` is the named volume, and `<version>` is the image tag.
 - `kanthord config show` prints the effective configuration with every sensitive field masked.
 - The help output of `config` and of every command of that group prints the absolute path of the configuration file that this invocation resolves.
 - That path is the path of the invocation and no path of a process, because a running server resolved its own path at its start and can hold another one.
