@@ -198,35 +198,9 @@ A plan file describes one node: what to build, how to judge it and which command
 1. Open the **Mission** tab. The tab shows "The mission holds no nodes."
 2. Select **Download a sample plan**. The browser saves `sample-plan.md`.
 
-With exactly one repository binding, the sample names it. With the binding `app`, the file is:
+With exactly one repository binding, the sample names it. Import the file unchanged. With the binding `app`, the file is:
 
-```markdown
----
-intent: implement
-depends_on: []
-tags: []
-bindings:
-  - app
-verifications:
-  - npm test
----
-
-# Add a health endpoint
-
-## Requirement
-
-Serve the status of the service at GET /health.
-
-## Criterion
-
-GET /health answers 200 with a JSON body that holds the status.
-```
-
-The verification `npm test` needs Node.js. The image holds `bash`, `git`, the OpenSSH client and the base Debian tools, for example `head` and `grep`, but no Node.js. At the `server` placement, the worker runs each verification inside the container. `npm test` therefore fails on every run, and the node cannot pass.
-
-Edit the file in a text editor. Keep `intent`, `depends_on`, `tags` and `bindings`. Replace the verification, the name, the requirement and the criterion:
-
-```markdown
+```text
 ---
 intent: implement
 depends_on: []
@@ -236,19 +210,18 @@ bindings:
 verifications:
   - "head -n 1 HEALTH.md | grep -qx 'status: ok'"
 ---
-
-# Add a health note
+# Add a HEALTH.md file
 
 ## Requirement
 
-Add the file HEALTH.md at the root of the repository. Its first line is `status: ok`.
+Add a file HEALTH.md at the root of the repository that reports the status of the project.
 
 ## Criterion
 
-HEALTH.md exists at the root of the repository, and its first line is exactly `status: ok`.
+The first line of HEALTH.md is exactly `status: ok`, with no trailing spaces.
 ```
 
-Write your binding name in place of `app`. The verification exits `0` only when the first line of `HEALTH.md` is `status: ok`. Keep the double quotes. Without them, the text `: ` makes the line a YAML map, and the import refuses the file with `field_invalid`.
+The verification exits `0` only when the first line of `HEALTH.md` is exactly `status: ok`. At the `server` placement, the worker runs each verification inside the container. The image holds `bash`, `git`, the OpenSSH client and the base Debian tools, for example `head` and `grep`, so the verification runs there.
 
 Import the file:
 
@@ -258,7 +231,7 @@ Import the file:
 4. Select **Preview**. **Creates** lists `sample-plan.md`, and no violation shows.
 5. Select **Apply import**.
 
-The mission graph shows the node **Add a health note** with the intent `implement`. The readiness panel does not refresh after the import. Reload the page. The **Plan import** item then shows "The mission holds 1 node."
+The mission graph shows the node **Add a HEALTH.md file** with the intent `implement`. The readiness panel does not refresh after the import. Reload the page. The **Plan import** item then shows "The mission holds 1 node."
 
 ## 11. Watch the first task
 
@@ -285,16 +258,16 @@ A node can also stop in two other states:
 
 ## Troubleshooting
 
-| Symptom                                                                                                | Cause and fix                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Step 2 of Onboarding shows **Enable swe@1** or **Enable re@1**, not **Enable agents**                  | No live LLM credential has an agent platform. Create a credential of `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`.                                            |
-| The credential page shows "An agent cannot use a credential of platform <platform>."                   | The same cause. An agent uses only a credential of the six agent platforms.                                                                                                                                                   |
-| **Verify** of the repository binding shows "The repository host refused the SSH key."                  | The repository does not hold the public key. Add it as a deploy key with write access, as step 5 shows. The [container guide troubleshooting](../how-to-guides/run-in-a-container.md#troubleshooting) lists every other hint. |
-| The worker binding sheet shows `swe@1` or `re@1` with the badge `Not enabled` or `Disabled`            | Do step 4, or select **Enable swe@1** or **Enable re@1** in the sheet. The server refuses a worker binding with an agent that is not enabled.                                                                                 |
-| The preview shows "The node write adds a node and claimable state pair that no worker binding covers." | A state of the node has no worker binding that can claim it. Add the `coder` and the `reviewer` bindings of step 8, then select **Preview** again.                                                                            |
-| The preview shows "No binding named <name>. Current bindings: …"                                       | The plan names a binding that the project does not hold. Write the name of your repository binding under `bindings`.                                                                                                          |
-| The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                   | A verification fails on every run, for example `npm test` in the container. Use a verification that the container can run, as step 10 shows.                                                                                  |
-| **Live instances** stays `Open`                                                                        | Select **Open workers** on the item. The Workers page shows the instances of the project.                                                                                                                                     |
+| Symptom                                                                                                | Cause and fix                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step 2 of Onboarding shows **Enable swe@1** or **Enable re@1**, not **Enable agents**                  | No live LLM credential has an agent platform. Create a credential of `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`.                                                                   |
+| The credential page shows "An agent cannot use a credential of platform <platform>."                   | The same cause. An agent uses only a credential of the six agent platforms.                                                                                                                                                                          |
+| **Verify** of the repository binding shows "The repository host refused the SSH key."                  | The repository does not hold the public key. Add it as a deploy key with write access, as step 5 shows. The [container guide troubleshooting](../how-to-guides/run-in-a-container.md#troubleshooting) lists every other hint.                        |
+| The worker binding sheet shows `swe@1` or `re@1` with the badge `Not enabled` or `Disabled`            | Do step 4, or select **Enable swe@1** or **Enable re@1** in the sheet. The server refuses a worker binding with an agent that is not enabled.                                                                                                        |
+| The preview shows "The node write adds a node and claimable state pair that no worker binding covers." | A state of the node has no worker binding that can claim it. Add the `coder` and the `reviewer` bindings of step 8, then select **Preview** again.                                                                                                   |
+| The preview shows "No binding named <name>. Current bindings: …"                                       | The plan names a binding that the project does not hold. Write the name of your repository binding under `bindings`.                                                                                                                                 |
+| The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                   | A verification fails on every run. At the `server` placement, each verification runs inside the container, and the image holds no Node.js, for example for `npm test`. Use a command that the container can run, as the sample plan of step 10 does. |
+| **Live instances** stays `Open`                                                                        | Select **Open workers** on the item. The Workers page shows the instances of the project.                                                                                                                                                            |
 
 ## Read next
 
