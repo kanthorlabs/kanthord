@@ -28,7 +28,7 @@ Replace each placeholder with your value:
 | `<owner>`         | The GitHub owner of the repository, for example `acme`.                  |
 | `<repository>`    | The GitHub repository name, for example `app`.                           |
 | `<project id>`    | The **Identity** value on the project page, for example `project_01M5…`. |
-| `<binding name>`  | The name of a worker binding, for example `coder`. See step 8.           |
+| `<binding name>`  | The name of a worker binding, for example `coder-remote`. See step 8.    |
 | `<server URL>`    | The full URL that a worker host uses, for example `https://kd.acme.dev`. |
 
 ## 1. Get the image
@@ -226,9 +226,9 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 A worker binding with the placement `worker` runs its instances on a worker host, not in the container. Create the worker binding first:
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
-2. Enter a **Name**, for example `coder`.
+2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
 3. Choose the **Worker**, for example `coder@1`.
-4. Keep the **Placement** `worker`.
+4. Choose the **Placement** `worker`. The sheet shows `server` by default.
 5. Select **Save binding**.
 
 `<binding name>` is the name of this worker binding, not the name of the repository binding of step 5.
