@@ -167,12 +167,12 @@ The Agent component owns these keys of the section `agent`.
 - The hold adds 1 to `strikes`, so the first failure sets `strikes` to 1, and it sets `available_at`.
 - A `stop` with the reason `provider_failed` and the code `bad_request` or `unauthorized` holds no credential and releases no credential.
 - A release with no `stop`, or with a `stop` whose reason is not `provider_failed`, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
-- A release of a credential sets `available_at` to null and `strikes` to 0. It changes a row only when `strikes` is above 0.
+- A release of a credential sets `available_at` to null and `strikes` to 0. It changes a row only when `strikes` is above 0, also for a hold whose `available_at` is in the past.
 - An advancing `stop` is neutral for the failure count, as [the failure count](scheduler-service.impl.md#loss-settlement) states.
-- The write logs `agent.fallback.cooldown_started` at level `info` with `execution_id`, `credential_name`, `code`, `strikes` and `available_at`, once for each held credential.
-- A release that ends a hold logs `agent.fallback.cooldown_cleared` at level `info` with `execution_id` and `credential_name`. A release of a credential with no hold logs nothing.
+- The write logs `agent.fallback.cooldown_started` at level `info` with `execution_id`, `credential_name`, `code`, `strikes` and `available_at`, once for each held credential. `strikes` and `available_at` are the new values of the hold.
+- A release that changes a row logs `agent.fallback.cooldown_cleared` at level `info` with `execution_id` and `credential_name`. A release of a credential with `strikes` 0 logs nothing.
 - A human clear of a cooldown logs `agent.fallback.cooldown_cleared` at level `info` with `credential_name` and no `execution_id`.
-- Today the release and the clear write the cooldown logs inside their transaction, so a rolled-back write still leaves its log line.
+- The release and the clear write the cooldown logs after their commit, so a rolled-back write leaves no log line. Today they write the logs inside their transaction, so a rolled-back write still leaves its log line, and no hold row.
 
 ### The claim selection
 
@@ -185,7 +185,7 @@ The Agent component owns these keys of the section `agent`.
 - The component rebuilds the pinned selection from a pin with the pinned worker binding row and the pinned enablement revision. A later hold, enablement revision or worker binding revision changes no pin.
 - After the claim commits a new execution, the Scheduler Service passes the selections to the Agent component. The component logs `agent.fallback.selected` at level `info` for each selection with `execution_id`, `agent_name`, `chain_position`, `chain_level`, `agent_provider`, `provider`, `model_identifier` and `credential_name`.
 - A pull that claims no work logs no selection. A pull that answers the running execution logs no selection. The probe of a pull rolls back, so it logs no selection.
-- The log names the fields `chain_position` and `chain_level`, because the logger writes its own top-level key `level`. It names the credential `credential_name`, because the redaction paths of the operational log hold `credential`.
+- The log names the fields `chain_position` and `chain_level`, because the logger writes its own top-level key `level`. The names also match the span attributes `kanthord.agent.chain_position` and `kanthord.agent.chain_level`. It names the credential `credential_name`, because the redaction paths of the operational log hold `credential`.
 - The span `agent.turn` of the native producer carries `kanthord.agent.chain_position` and `kanthord.agent.chain_level`. The values come from `position` and `level` of the entry of the agent in the execution setup.
 - Tests cover the selection of the first entry with a free credential and the return of an earlier entry after its hold expires.
 - Tests cover the skip of every model of a cooling credential and the no-work answer.
