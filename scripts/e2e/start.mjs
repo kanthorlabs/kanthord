@@ -129,16 +129,6 @@ log("SSH key created", {
 const sshHost = sshHostOf(config.repository.config.address);
 const pin = await pinHostKey(api, sshHost);
 log("host key pinned", { host: pin.host, fingerprint: pin.fingerprint });
-const deployKeyId = addDeployKey({
-  repository: config.repository.github,
-  token: secretOf(githubTokenEnv),
-  run,
-  publicKey: sshKey.public_key,
-});
-log("deploy key added", {
-  repository: config.repository.github,
-  id: deployKeyId,
-});
 const runState = {
   run,
   endpoint: config.endpoint,
@@ -146,10 +136,21 @@ const runState = {
   github_token_env: githubTokenEnv,
   github: config.repository.github,
   ssh_credential: sshCredentialName,
-  deploy_key_id: deployKeyId,
+  deploy_key_id: null,
   placement,
 };
 writeRunState();
+runState.deploy_key_id = addDeployKey({
+  repository: config.repository.github,
+  token: secretOf(githubTokenEnv),
+  run,
+  publicKey: sshKey.public_key,
+});
+writeRunState();
+log("deploy key added", {
+  repository: config.repository.github,
+  id: runState.deploy_key_id,
+});
 
 for (const [agent, enablement] of Object.entries(config.enablements)) {
   const current = await api.get(`/api/agent/enablement/${agent}`);
