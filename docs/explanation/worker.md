@@ -263,10 +263,10 @@ To run 3 instances of `coder@1` at the `worker` placement:
 A worker host needs no SSH key, no SSH configuration and no `known_hosts` entry. The server keeps each [SSH key](../reference/repository/ssh-key.md) in custody. For each execution:
 
 1. The [credential handover](../reference/worker/handover.md) carries the SSH key of each repository binding of the node, in the sealed envelope.
-2. The execution setup carries the [pinned host key](../reference/repository/host-key.md) of each repository address.
-3. The worker keeps both in memory. Each clone, fetch and push starts a private SSH agent, loads the key, and ends the agent after the git command. The worker writes no key file.
+2. The execution setup carries the [pinned host key](../reference/repository/host-key.md) of each repository address. An address host with no pin refuses the setup with `409 repository.host_key.unpinned`, and a host outside the SSH host set with `400 project.bindings.repository.address_invalid`. The execution then does not start.
+3. The worker keeps both in memory. Each clone, fetch and push starts a private SSH agent, loads the key, and ends the agent after the git command. The worker writes no private key file.
 
-The worker reads no file under `~/.ssh`, so a key or an alias in the SSH configuration of the host has no effect. A temporary directory path above 75 bytes makes every SSH operation fail; see [the temporary directory limit](../reference/repository/ssh-key.md#the-temporary-directory-limit).
+The worker host must reach port 22 of each repository address host. No binding check proves that path from the worker host. The worker reads no file under `~/.ssh`, so a key or an alias in the SSH configuration of the host has no effect. A temporary directory path above 75 bytes makes every SSH operation fail; see [the temporary directory limit](../reference/repository/ssh-key.md#the-temporary-directory-limit).
 
 An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
 

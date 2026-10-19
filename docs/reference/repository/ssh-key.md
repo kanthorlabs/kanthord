@@ -6,21 +6,21 @@
 
 An SSH key is a [repository credential](credential.md) of the platform `ssh`. The server generates the key and keeps it. A repository binding names the credential in `ssh_credential`. KanthorD uses the key for every network git operation of that binding: the binding apply, check and verify, the instruction file read, the clone, fetch and push of a worker, and the `git.merge_push` action.
 
-| Fact          | Value                                                                                                                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Key type      | ed25519. The server generates the key; no command accepts a key.                                                                                                                            |
-| Secret        | `{ "private_key" }`, an unencrypted `openssh-key-v1` text of at most 4096 bytes. Custody encrypts it with AES-256-GCM in the credential store. No answer and no log holds it.               |
-| Metadata      | `{ "public_key", "fingerprint" }`. The server derives both fields.                                                                                                                          |
-| `public_key`  | `ssh-ed25519 <base64> kanthord-<credential name>`.                                                                                                                                          |
-| `fingerprint` | `SHA256:` and 43 base64 characters: the SHA-256 of the key blob, the form of `ssh-keygen -l`.                                                                                               |
-| Host          | None. The record names no host. The [host key pin](host-key.md) of the address host and the deploy key of the repository decide the access.                                                 |
-| Entry         | Only `ssh-key-create` creates an `ssh` record, and only `ssh-key-rotate` adds a revision. `list`, `get`, `verify`, `revoke` and `archive` of [repository credentials](credential.md) apply. |
+| Fact          | Value                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key type      | ed25519. The server generates the key; no command accepts a key.                                                                                                                                |
+| Secret        | `{ "private_key" }`, an unencrypted `openssh-key-v1` text of at most 4096 bytes. Custody encrypts it with AES-256-GCM in the credential store. No answer and no log holds it.                   |
+| Metadata      | `{ "public_key", "fingerprint" }`. The server derives both fields.                                                                                                                              |
+| `public_key`  | `ssh-ed25519 <base64> kanthord-<credential name>`.                                                                                                                                              |
+| `fingerprint` | `SHA256:` and 43 base64 characters: the SHA-256 of the key blob, the form of `ssh-keygen -l`.                                                                                                   |
+| Host          | None. The record names no host. The [host key pin](host-key.md) of the address host and the deploy key of the repository decide the access.                                                     |
+| Entry         | Only `ssh-key-create` creates an `ssh` credential, and only `ssh-key-rotate` adds a revision. `list`, `get`, `verify`, `revoke` and `archive` of [repository credentials](credential.md) apply. |
 
-The generic `create`, `rotate` and `update-metadata` of an `ssh` record answer `400 credential.entry.unsupported`. The generic `check` of the platform `ssh` answers `400 credential.check.unsupported`.
+The generic `create`, `rotate` and `update-metadata` of an `ssh` credential answer `400 credential.entry.unsupported`. The generic `check` of the platform `ssh` answers `400 credential.check.unsupported`.
 
 ### ssh-key-create
 
-`ssh-key-create` generates a key and stores it as revision 1 of a new `ssh` record. The name follows the rule of [repository credentials](credential.md#function-description). The answer holds the public key and the fingerprint. Custody logs the human identity and the revision identity, never the key.
+`ssh-key-create` generates a key and stores it as revision 1 of a new `ssh` credential. The name follows the rule of [repository credentials](credential.md#function-description). The answer holds the public key and the fingerprint. Custody logs the human identity and the revision identity, never the key.
 
 Add the public key to the repository as a deploy key:
 
@@ -46,21 +46,21 @@ Every new operation uses the new key at once. Until the repository holds the new
 
 To end a compromised key, rotate it, [revoke](credential.md#revoke) the older revision if it is still live, then delete its deploy key. A revoke of a revision that the rotation already drained answers `409 credential.revision.ended`.
 
-In the dashboard, the row of an `ssh` record holds `Rotate key`. The dialog shows the new public key and the bindings of the credential.
+In the dashboard, the row of an `ssh` credential holds `Rotate key`. The dialog shows the new public key and the bindings of the credential.
 
-### A legacy record
+### A legacy credential
 
-A legacy record is an `ssh` record whose newest live revision holds no generated key, for example a record of the earlier SSH alias model. Every use of a legacy record answers `409 repository.credential.ssh_key_legacy` with `details.credential`. Its `verify` answers `unhealthy` with `failure_reason` `identity_unavailable`. `ssh-key-rotate` accepts a legacy record and replaces it with a generated key. Then add the new deploy key.
+A legacy credential is an `ssh` credential whose newest live revision holds no generated key, for example a credential of the earlier SSH alias model. A binding apply, the instruction file read, the handover and every git operation refuse a legacy credential with `409 repository.credential.ssh_key_legacy` and `details.credential`. A binding check or verify reports `failure_reason` `identity_unavailable` in the `address` entry. The `verify` of the credential answers `unhealthy` with `failure_reason` `identity_unavailable`. `ssh-key-rotate` accepts a legacy credential and replaces it with a generated key. Then add the new deploy key.
 
 ### The agent of one operation
 
-Each network git operation runs its own SSH agent. The server and a worker host do the same steps:
+Each network git operation runs its own SSH agent. Steps 2 to 8 run on the server and on a worker host:
 
-1. Read the pinned host key of the address host. A host with no pin refuses with `409 repository.host_key.unpinned` before any process starts.
+1. The server reads the pinned host key of the address host. For a worker, the execution setup carries it. A host with no pin refuses with `409 repository.host_key.unpinned` before any process starts.
 2. Delete each expired agent directory of the same user. A directory is expired when its deadline lies more than 60 seconds in the past and its socket accepts no connection.
 3. Create the directory `kd-ssh-<deadline>-<6 characters>` in the temporary directory of the host, with mode `0700`. `<deadline>` is the deadline in Unix milliseconds, in base 36.
 4. Write `id.pub` (the public key) and `known_hosts` (the pinned line), each with mode `0600`. The directory holds no private key file.
-5. Start `ssh-agent -a <directory>/a cat`. The agent ends when its `cat` child ends, so a crash of KanthorD ends the agent within about 10 seconds.
+5. Start `ssh-agent -a <directory>/a cat`. The process runs `cat`, and the agent checks every 10 seconds that `cat` lives. KanthorD holds the standard input of `cat`, so a crash of KanthorD ends `cat` and then the agent within about 10 seconds.
 6. Load the key through the standard input of `ssh-add -t <seconds> -`. `<seconds>` is the remaining deadline of the operation, rounded up, at least 1.
 7. Run git with `GIT_SSH_COMMAND`. The command starts `ssh -F none` with `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `BatchMode=yes`, `GlobalKnownHostsFile=/dev/null` and the three files of the directory.
 8. Remove the key from the agent, end the agent and delete the directory.
@@ -140,7 +140,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `404 credential.credential.not_found`        | `ssh-key-rotate` | The name is unknown, or its platform belongs to another component.                                  |
 | `409 credential.credential.archived`         | `ssh-key-rotate` | The credential is archived.                                                                         |
 | `409 credential.revision.conflict`           | `ssh-key-rotate` | `expected_revision` is not the newest live revision; `details.revision` holds it.                   |
-| `400 credential.entry.unsupported`           | `ssh-key-rotate` | The credential is not an `ssh` record, for example a `github` record.                               |
+| `400 credential.entry.unsupported`           | `ssh-key-rotate` | The credential is not an `ssh` credential, for example a `github` credential.                       |
 
 The CLI exits `1` for every failure and writes a diagnostic line `<code>: <message>` to stderr, as [repository credentials](credential.md#failures) states.
 

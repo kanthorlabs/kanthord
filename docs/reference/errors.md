@@ -90,21 +90,21 @@ A health entry is the object `{ status, capability, failure_reason }`. The [reso
 
 A failure reason is not an error code. It is a value of one closed list:
 
-| Value                  | Kind | Meaning                                                                                                                                               |
-| ---------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `address_invalid`      | git  | The repository address host is outside the SSH host set of the platform. No read runs.                                                                |
-| `host_key_unknown`     | git  | The repository host holds no [host key pin](repository/host-key.md), or ssh does not accept its host key.                                             |
-| `host_key_changed`     | git  | The repository host presented a key other than its pin. It can mean an interception.                                                                  |
-| `key_refused`          | git  | The repository host refuses the SSH key.                                                                                                              |
-| `repository_not_found` | git  | The repository host does not find the repository, or the key has no access to it.                                                                     |
-| `host_unreachable`     | git  | ssh cannot resolve or reach the repository host.                                                                                                      |
-| `identity_unavailable` | git  | The server cannot load the [SSH key](repository/ssh-key.md): a legacy record, a key that does not parse, or an SSH agent that does not start or load. |
-| `unauthorized`         | HTTP | The remote answers `401`, or a stored OAuth access token is expired.                                                                                  |
-| `forbidden`            | HTTP | The remote answers `403`.                                                                                                                             |
-| `rate_limited`         | HTTP | The remote answers `429`.                                                                                                                             |
-| `invalid_response`     | HTTP | The remote answers another status, or a body that the check cannot read.                                                                              |
-| `unreachable`          | HTTP | The request fails before an HTTP answer.                                                                                                              |
-| `unclassified`         | both | Any other failure, a check that exceeds its deadline included.                                                                                        |
+| Value                  | Kind | Meaning                                                                                                                                                         |
+| ---------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `address_invalid`      | git  | The repository address host is outside the SSH host set of the platform. No read runs.                                                                          |
+| `host_key_unknown`     | git  | The repository host holds no [host key pin](repository/host-key.md), or ssh does not accept its host key.                                                       |
+| `host_key_changed`     | git  | The repository host presented a key other than its pin. It can mean an interception.                                                                            |
+| `key_refused`          | git  | The repository host refuses the SSH key.                                                                                                                        |
+| `repository_not_found` | git  | The repository host does not find the repository, or the key has no access to it.                                                                               |
+| `host_unreachable`     | git  | ssh cannot resolve or reach the repository host.                                                                                                                |
+| `identity_unavailable` | git  | The server cannot load the [SSH key](repository/ssh-key.md): a legacy `ssh` credential, a key that does not parse, or an SSH agent that does not start or load. |
+| `unauthorized`         | HTTP | The remote answers `401`, or a stored OAuth access token is expired.                                                                                            |
+| `forbidden`            | HTTP | The remote answers `403`.                                                                                                                                       |
+| `rate_limited`         | HTTP | The remote answers `429`.                                                                                                                                       |
+| `invalid_response`     | HTTP | The remote answers another status, or a body that the check cannot read.                                                                                        |
+| `unreachable`          | HTTP | The request fails before an HTTP answer.                                                                                                                        |
+| `unclassified`         | both | Any other failure, a check that exceeds its deadline included.                                                                                                  |
 
 The same value can map to a different status for each check. For example, `rate_limited` is `unhealthy` for a `github` credential and `unknown` for an `s3` credential. Each check page states its own mapping: [project binding](project/binding.md#failure-reasons-of-the-address-entry), [LLM credential](llm/credential.md#check-and-verify-answer), [repository credential](repository/credential.md#verify-and-check) and [storage credential](storage/credential.md#verify-and-check). No answer holds remote text. The server log keeps the redacted remote text under `reason`.
 

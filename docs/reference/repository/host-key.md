@@ -16,7 +16,7 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 | `gitlab`    | `gitlab.com`, `altssh.gitlab.com`       | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p 22 -- <host>` |
 | `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p 22 -- <host>` |
 
-`altssh.bitbucket.org` answers SSH on port 443 only, so its scan fails with `422 repository.host_key.scan_failed`.
+`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. Their scan fails with `422 repository.host_key.scan_failed`, and a binding with such an address cannot pass. Use `gitlab.com` or `bitbucket.org`.
 
 ### list
 
@@ -46,7 +46,7 @@ When a host presents a key other than its pin, ssh writes "REMOTE HOST IDENTIFIC
 
 - The binding sheet pins `github.com` and `ssh.github.com` without a confirmation, because the GitHub meta answer arrives over TLS. It shows "Host key pinned from api.github.com" with the fingerprint.
 - For every other host, the binding sheet shows the scanned fingerprint, a link to the published fingerprints of the provider and `Confirm host key`. Save stays off until the pin exists.
-- Credentials > Git holds the `Host keys` panel: one row for each pin, with its host, fingerprint, source and `Pin again`. `Pin again` scans the host and shows the scanned and the pinned fingerprint before `Confirm host key`.
+- Credentials > Git holds the `Host keys` panel: one row for each pin, with its host, fingerprint, source, pin time and `Pin again`. `Pin again` scans the host and shows the scanned and the pinned fingerprint before `Confirm host key`.
 
 ## Expected response
 

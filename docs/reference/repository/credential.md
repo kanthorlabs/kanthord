@@ -17,7 +17,7 @@ A credential name has 1 to 63 characters. It starts with a lower-case letter, th
 
 Each change adds a revision with an identity `credential_<ULID>` (see [identities](../identities.md)). The newest live revision is the current secret. An older live revision stays live while a live execution pins it. A drain sets `ended_at` on each older live revision that no live execution pins. The `api_key` secret has a limit of 48,914 UTF-8 bytes of normalized credential JSON.
 
-The server generates the key of an `ssh` record. Only [`ssh-key-create`](ssh-key.md#ssh-key-create) creates an `ssh` record, and only [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate) adds its next revision. `create`, `rotate` and `update-metadata` of an `ssh` record answer `400 credential.entry.unsupported`, and `check` of the platform `ssh` answers `400 credential.check.unsupported`. An `ssh` record names no host; a repository binding pairs it with an address, and the [host key pin](host-key.md) of the address host decides which host it trusts.
+The server generates the key of an `ssh` credential. Only [`ssh-key-create`](ssh-key.md#ssh-key-create) creates an `ssh` credential, and only [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate) adds its next revision. `create`, `rotate` and `update-metadata` of an `ssh` credential answer `400 credential.entry.unsupported`, and `check` of the platform `ssh` answers `400 credential.check.unsupported`. An `ssh` credential names no host; a repository binding pairs it with an address, and the [host key pin](host-key.md) of the address host decides which host it trusts.
 
 No answer contains a secret.
 
@@ -39,15 +39,15 @@ No answer contains a secret.
 
 ### create
 
-`create` adds a `github` credential with revision 1 and makes no remote call. For an `ssh` record, use [`ssh-key-create`](ssh-key.md#ssh-key-create).
+`create` adds a `github` credential with revision 1 and makes no remote call. For an `ssh` credential, use [`ssh-key-create`](ssh-key.md#ssh-key-create).
 
 ### rotate
 
-`rotate` adds the next revision of a `github` credential with a new secret under the same name. An absent `metadata` copies the metadata of the newest live revision. The same transaction drains the name. Rotation changes no binding. For an `ssh` record, use [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate).
+`rotate` adds the next revision of a `github` credential with a new secret under the same name. An absent `metadata` copies the metadata of the newest live revision. The same transaction drains the name. Rotation changes no binding. For an `ssh` credential, use [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate).
 
 ### update-metadata
 
-`update-metadata` adds the next revision with a full metadata replacement and the secret of the newest live revision. It drains no revision. For `github`, the only valid metadata is `null`. An `ssh` record refuses it, because the server derives its metadata.
+`update-metadata` adds the next revision with a full metadata replacement and the secret of the newest live revision. It drains no revision. For `github`, the only valid metadata is `null`. An `ssh` credential refuses it, because the server derives its metadata.
 
 ### revoke
 
@@ -265,7 +265,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `409 credential.revision.conflict`           | rotate, update-metadata                       | `expected_revision` is not the newest live revision; `details.revision` holds it.          |
 | `409 credential.credential.archived`         | verify, rotate, update-metadata, archive      | The credential is archived.                                                                |
 | `400 credential.check.unsupported`           | verify, check                                 | The platform has no check, or `check` names the platform `ssh`.                            |
-| `400 credential.entry.unsupported`           | create, rotate, update-metadata               | The command names the platform `ssh` or an `ssh` record. Use [SSH keys](ssh-key.md).       |
+| `400 credential.entry.unsupported`           | create, rotate, update-metadata               | The command names the platform `ssh` or an `ssh` credential. Use [SSH keys](ssh-key.md).   |
 | `404 credential.revision.not_found`          | revoke                                        | The name has no such revision, or the name is unknown.                                     |
 | `409 credential.revision.ended`              | revoke                                        | The revision is already ended.                                                             |
 | `409 credential.revision.newest_live`        | revoke                                        | The revision is the newest live revision.                                                  |
