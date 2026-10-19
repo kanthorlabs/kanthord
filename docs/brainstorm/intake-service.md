@@ -40,7 +40,7 @@ It obtains no credential material from a store, and it holds that material for t
 An outbound operation or a check forwards the identity of its caller.
 The service that owns the entity of the operation authorizes that caller, custody releases the material, and the Intake Service performs the call.
 The Intake Service performs the control operations of a platform.
-The bytes of an object and the git transport of an execution travel directly, through a presigned URL or the SSH configuration of the host.
+The bytes of an object and the git transport of an execution travel directly, through a presigned URL or the SSH identity of the binding.
 The Intake Service performs the operations on a platform that an inbound or a project binding names.
 A model inference call and the provider check belong to the model connector of the Worker Service.
 The Intake Service verifies the signature of a webhook event with a secret that it derives, and it stores no secret.
@@ -131,7 +131,7 @@ The [admission contract](mission-service.md#delivery-admission-and-check) assign
 ## Outbound operations and checks
 
 The Intake Service performs a configured action for the action performer of the Worker Service: it opens a pull request, or it merges the node branch into the base branch and pushes.
-For a network git write, it creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the write and removes the clone after the call.
+For a network git write, it creates a fresh clone through the repository connector with the SSH identity of the binding, performs the write and removes the clone after the call.
 It checks the state of the external object of a request evidence for the Mission Service, and it answers the end state that the platform implementation folds.
 It reads a pull request and its review comments for an execution.
 It signs a presigned PUT or GET, checks an uploaded object and deletes an object of a storage binding for the Mission Service.
