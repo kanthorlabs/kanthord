@@ -11,7 +11,7 @@ The daemon listens on `127.0.0.1` only. `tailscale serve` gives the daemon an HT
 - A Mac with Apple silicon.
 - Tailscale installed and signed in on the Mac and on the phone or tablet.
 - MagicDNS and HTTPS certificates turned on for your tailnet in the Tailscale admin console.
-- The binary `kanthord-darwin-arm64` and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases). The releases page is empty until the first release. To build the binary from a checkout of this repository instead, run `make release-build`. The file is then in `dist/`.
+- The binary `kanthord-darwin-arm64` and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases). To build the binary from a checkout of this repository instead, run `make release-build`. The file is then in `dist/`.
 
 ## 1. Install the binary
 

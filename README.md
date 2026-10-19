@@ -15,7 +15,7 @@
 
 Run `make bootstrap` in a fresh clone. It initializes all submodules, attaches them to `main`, and propagates the root Git identity. Runtime setup remains limited to engine and apps.
 
-Run in a container: follow [Run kanthord in a container](docs/how-to-guides/run-in-a-container.md). This path needs no `node`, no `pnpm` and no `make bootstrap`.
+Run in a container: follow [Run kanthord in a container](docs/how-to-guides/run-in-a-container.md).
 
 Run `make dev` to start the engine and the dashboard with hot reload. `make help` lists every target.
 
