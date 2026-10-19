@@ -16,14 +16,12 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 | `gitlab`    | `gitlab.com`, `altssh.gitlab.com`       | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` |
 | `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` |
 
-| Host                                        | SSH port | `known_hosts` line   |
-| ------------------------------------------- | -------- | -------------------- |
-| `altssh.gitlab.com`, `altssh.bitbucket.org` | 443      | `[<host>]:443 <key>` |
-| every other host of the table above         | 22       | `<host> <key>`       |
+| Host                                                          | SSH port | `known_hosts` line   |
+| ------------------------------------------------------------- | -------- | -------------------- |
+| `ssh.github.com`, `altssh.gitlab.com`, `altssh.bitbucket.org` | 443      | `[<host>]:443 <key>` |
+| every other host of the table above                           | 22       | `<host> <key>`       |
 
-`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. Use them when a network blocks the outbound port 22. The address keeps the form `git@<host>:<owner>/<repository>.git` and takes no port, for example `git@altssh.gitlab.com:acme/app.git`. Any other form, for example `ssh://git@altssh.gitlab.com:443/acme/app.git`, fails with `400 project.bindings.repository.address_invalid`. The scan, the `known_hosts` line and each git operation use the port of the table. The scan of `altssh.gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 443 -- altssh.gitlab.com`, and the scan of `gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 22 -- gitlab.com`. The `known_hosts` line of a host on port 443 takes the form `[<host>]:443`, because ssh looks up a host on a port other than 22 under that name. A line with the bare name does not match, and ssh refuses the host. The pin stores the bare host name, so `list`, `scan` and `pin` answer `host` without a port. For example, the `known_hosts` line of `altssh.gitlab.com` is `[altssh.gitlab.com]:443 ssh-ed25519 <base64>`.
-
-`ssh.github.com` also answers SSH on port 443. Today KanthorD connects to it on port 22, so a network that blocks the outbound port 22 has no GitHub path.
+`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. `ssh.github.com` answers on port 22 and port 443, and KanthorD uses port 443. Use these three hosts when a network blocks the outbound port 22, for example `git@ssh.github.com:acme/app.git` for GitHub. The address keeps the form `git@<host>:<owner>/<repository>.git` and takes no port, for example `git@altssh.gitlab.com:acme/app.git`. Any other form, for example `ssh://git@altssh.gitlab.com:443/acme/app.git`, fails with `400 project.bindings.repository.address_invalid`. The scan, the `known_hosts` line and each git operation use the port of the table. The scan of `altssh.gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 443 -- altssh.gitlab.com`, and the scan of `gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 22 -- gitlab.com`. The `known_hosts` line of a host on port 443 takes the form `[<host>]:443`, because ssh looks up a host on a port other than 22 under that name. A line with the bare name does not match, and ssh refuses the host. The pin stores the bare host name, so `list`, `scan` and `pin` answer `host` without a port. For example, the `known_hosts` line of `altssh.gitlab.com` is `[altssh.gitlab.com]:443 ssh-ed25519 <base64>`. The key of `ssh.github.com` still comes from the GitHub meta answer, and its line is `[ssh.github.com]:443 ssh-ed25519 <base64>`.
 
 ### list
 
