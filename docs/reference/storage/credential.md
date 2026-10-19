@@ -158,24 +158,38 @@ The Project service answers this list. A binding in this list blocks [`archive`]
 #### verify and check
 
 ```json
-{ "status": "healthy", "capability": "bucket head" }
+{ "status": "healthy", "capability": "bucket head", "failure_reason": null }
 ```
 
-| Property     | Type   | Purpose                                                   |
-| ------------ | ------ | --------------------------------------------------------- |
-| `status`     | string | `healthy`, `unhealthy` or `unknown`.                      |
-| `capability` | string | Capability of the platform probe; `bucket head` for `s3`. |
+```json
+{
+  "status": "unknown",
+  "capability": "bucket head",
+  "failure_reason": "forbidden"
+}
+```
 
-The `s3` probe maps the `HeadBucket` result to a status:
+| Property         | Type           | Purpose                                                                                    |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                       |
+| `capability`     | string         | Capability of the platform probe; `bucket head` for `s3`.                                  |
+| `failure_reason` | string or null | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
 
-| `HeadBucket` result                                  | `status`    |
-| ---------------------------------------------------- | ----------- |
-| HTTP `200`                                           | `healthy`   |
-| HTTP `404`                                           | `unhealthy` |
-| Another HTTP status, for example `403`               | `unknown`   |
-| A transport failure, a 10-second timeout or a cancel | `unknown`   |
+The `s3` probe maps the `HeadBucket` result to a status and a `failure_reason`. The first row that matches decides.
 
-A key that can only write can get `unknown` from a forbidden probe and still work. The server logs a reason for a failed probe, without key material.
+| `HeadBucket` result                     | `status`    | `failure_reason`   |
+| --------------------------------------- | ----------- | ------------------ |
+| A 10-second timeout or a cancel         | `unknown`   | `unclassified`     |
+| HTTP `200`                              | `healthy`   | `null`             |
+| HTTP `404`                              | `unhealthy` | `invalid_response` |
+| HTTP `401`                              | `unknown`   | `unauthorized`     |
+| HTTP `403`                              | `unknown`   | `forbidden`        |
+| HTTP `429`                              | `unknown`   | `rate_limited`     |
+| Another HTTP status                     | `unknown`   | `invalid_response` |
+| A transport failure with no HTTP status | `unknown`   | `unreachable`      |
+| Any other failure                       | `unknown`   | `unclassified`     |
+
+A key that can only write can get `unknown` from a forbidden probe and still work. The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`, without key material.
 
 #### platforms
 

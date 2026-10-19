@@ -73,7 +73,7 @@ Check the server:
 curl http://localhost:<port>/api/liveness
 ```
 
-A running server answers HTTP `200` with a JSON service map that starts with `{"status":"ok"`. See [healthchecks](../reference/gateway/healthcheck.md).
+A running server answers HTTP `200` with a JSON service map that starts with `{"status":"ok"`. See [liveness](../reference/gateway/liveness.md).
 
 The image also declares a container healthcheck. Every 30 s, Podman or Docker runs `kanthord gateway liveness` inside the container. That command sends no token. Podman runs the first check at the start of the container. That check can fail, because the server is not ready yet. Read the health status:
 

@@ -1,28 +1,28 @@
 # How healthchecks work
 
-A listening HTTP server does not prove that its database or other dependencies work. KanthorD's healthcheck collects component reports and returns a combined view. The [healthcheck reference](../reference/gateway/healthcheck.md) defines requests, response examples, status codes, and timeouts.
+A listening HTTP server does not prove that its database or other dependencies work. KanthorD's liveness read collects component reports and returns a combined view. The [liveness reference](../reference/gateway/liveness.md) defines requests, response examples, status codes, and timeouts. The [resource healthcheck](../reference/gateway/healthcheck.md) is a separate read that checks remote resources, such as repositories and credentials.
 
 ## From request to combined report
 
-1. **Register.** During construction, Server, Gateway, Project, and Worker each register a health callback with the shared `HealthRegistry`.
-2. **Collect.** A monitor requests `GET /api/healthcheck`. Once Gateway admits the request, the registry snapshots the registered callbacks and starts them concurrently.
+1. **Register.** During construction or start, each service registers a health callback with the shared `HealthRegistry`.
+2. **Collect.** A monitor requests `GET /api/liveness`. Once Gateway admits the request, the registry snapshots the registered callbacks and starts them concurrently.
 3. **Inspect.** Each service checks its own components and returns a component map. These are in-process calls, not HTTP requests to other services.
 4. **Respond.** The registry preserves every service's result. Gateway returns HTTP `200` only when at least one service reports and every component is healthy; otherwise it returns HTTP `503` with the complete report.
 
-The rightmost lifeline groups four independent service probes, not a single service. Gateway's HTTP handling and its component probe appear separately to distinguish their roles. The component checks are expanded in the next diagram.
+The rightmost lifeline groups the independent service probes, not a single service. Gateway's HTTP handling and its component probe appear separately to distinguish their roles. The component checks are expanded in the next diagram.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "labelBoxBkgColor": "#ececec", "labelBoxBorderColor": "#bfc0c0", "labelTextColor": "#2d3142", "loopTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "& { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
 sequenceDiagram
     accTitle: KanthorD healthcheck collection
-    accDescr: Gateway asks the shared health registry to collect concurrent reports from Server, Gateway, Project, and Worker, then returns a complete healthy or unhealthy response.
+    accDescr: Gateway asks the shared health registry to collect concurrent reports from every registered service, then returns a complete healthy or unhealthy response.
     autonumber
     participant M as Monitor
     participant G as Gateway endpoint
     participant R as HealthRegistry
-    participant S as Server / Gateway /<br/>Project / Worker
+    participant S as Registered<br/>services
 
-    M->>G: GET /api/healthcheck
+    M->>G: GET /api/liveness
     G->>R: check(request context)
     R->>R: Snapshot registered probes
     rect rgb(251, 234, 225)
@@ -37,7 +37,7 @@ sequenceDiagram
     alt Nonempty report, all components healthy
         G-->>M: HTTP 200<br/>{status: "ok", services: ...}
     else Any unavailable component or no services
-        G-->>M: HTTP 503 · gateway.healthcheck.unhealthy<br/>Complete map in error.details
+        G-->>M: HTTP 503 · gateway.liveness.unhealthy<br/>Complete map in error.details
     end
 ```
 
@@ -79,16 +79,22 @@ The registry also calls Gateway's probe independently to populate `gateway`. Thi
 
 ## Read the whole report
 
-The current composed server reports four groups:
+The current composed server reports ten groups:
 
-| Service   | Components                                                            | What the probe checks                                                                                                                          |
-| --------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `server`  | `gateway`, `store`, `log`                                             | Gateway's aggregate status, a SQLite query, and the log descriptor.                                                                            |
-| `gateway` | `listener`, `authentication`, `idempotency`, `registry`, `invocation` | Listener readiness, signing-key and denylist access, in-memory idempotency state, operation registry state, and invocation/store availability. |
-| `project` | `bindings`                                                            | Project Service lifecycle: started and not stopped.                                                                                            |
-| `worker`  | `registrations`                                                       | Worker Service lifecycle: started and not stopped.                                                                                             |
+| Service      | Components                                                            | What the probe checks                                                                                                                          |
+| ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server`     | `gateway`, `store`, `log`                                             | Gateway's aggregate status, a SQLite query, and the log descriptor.                                                                            |
+| `gateway`    | `listener`, `authentication`, `idempotency`, `registry`, `invocation` | Listener readiness, signing-key and denylist access, in-memory idempotency state, operation registry state, and invocation/store availability. |
+| `custody`    | `credential`                                                          | Custody Service lifecycle: started and not stopped.                                                                                            |
+| `scheduler`  | `queue`                                                               | Scheduler Service lifecycle: started and not stopped.                                                                                          |
+| `worker`     | `registrations`                                                       | Worker Service lifecycle: started and not stopped.                                                                                             |
+| `repository` | `toolchain`                                                           | The version commands of the required repository tools.                                                                                         |
+| `project`    | `bindings`                                                            | Project Service lifecycle: started and not stopped.                                                                                            |
+| `mission`    | `operations`                                                          | Mission Service lifecycle: started and not stopped.                                                                                            |
+| `intake`     | `events`                                                              | Intake Service dispatcher lifecycle: started and not stopped.                                                                                  |
+| `tracking`   | `store`                                                               | Tracking Service lifecycle and its SQLite store.                                                                                               |
 
-Project and Worker currently report lifecycle health, not end-to-end binding resolution, provider reachability, or remote worker-instance health. The endpoint does not poll remote worker applications or external providers.
+The domain services report lifecycle health, not end-to-end binding resolution, provider reachability, or remote worker-instance health. The endpoint does not poll remote worker applications or external providers. The [resource healthcheck](../reference/gateway/healthcheck.md) checks those resources.
 
 The server summary and Gateway details can observe slightly different moments because they run separate probes. Additional services must explicitly register their own health callbacks; registering an API operation alone does not add a health probe. An absent service is not an implicit healthy service.
 
