@@ -16,14 +16,12 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 | `gitlab`    | `gitlab.com`, `altssh.gitlab.com`       | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` |
 | `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` | `keyscan`: `ssh-keyscan -T 5 -t ed25519 -p <port> -- <host>` |
 
-| Host                                        | SSH port | `known_hosts` line   |
-| ------------------------------------------- | -------- | -------------------- |
-| `altssh.gitlab.com`, `altssh.bitbucket.org` | 443      | `[<host>]:443 <key>` |
-| every other host of the table above         | 22       | `<host> <key>`       |
+| Host                                                          | SSH port | `known_hosts` line   |
+| ------------------------------------------------------------- | -------- | -------------------- |
+| `ssh.github.com`, `altssh.gitlab.com`, `altssh.bitbucket.org` | 443      | `[<host>]:443 <key>` |
+| `github.com`, `gitlab.com`, `bitbucket.org`                   | 22       | `<host> <key>`       |
 
-`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. Use them when a network blocks the outbound port 22. The address keeps the form `git@<host>:<owner>/<repository>.git` and takes no port, for example `git@altssh.gitlab.com:acme/app.git`. Any other form, for example `ssh://git@altssh.gitlab.com:443/acme/app.git`, fails with `400 project.bindings.repository.address_invalid`. The scan, the `known_hosts` line and each git operation use the port of the table. The scan of `altssh.gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 443 -- altssh.gitlab.com`, and the scan of `gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 22 -- gitlab.com`. The `known_hosts` line of a host on port 443 takes the form `[<host>]:443`, because ssh looks up a host on a port other than 22 under that name. A line with the bare name does not match, and ssh refuses the host. The pin stores the bare host name, so `list`, `scan` and `pin` answer `host` without a port. For example, the `known_hosts` line of `altssh.gitlab.com` is `[altssh.gitlab.com]:443 ssh-ed25519 <base64>`.
-
-`ssh.github.com` also answers SSH on port 443. Today KanthorD connects to it on port 22, so a network that blocks the outbound port 22 has no GitHub path.
+`altssh.gitlab.com` and `altssh.bitbucket.org` answer SSH on port 443 only. `ssh.github.com` answers on port 22 and port 443, and KanthorD uses port 443. Use these three hosts when a network blocks the outbound port 22, for example `git@ssh.github.com:acme/app.git` for GitHub. The address keeps the form `git@<host>:<owner>/<repository>.git` and takes no port, for example `git@altssh.gitlab.com:acme/app.git`. Any other form, for example `ssh://git@altssh.gitlab.com:443/acme/app.git`, fails with `400 project.bindings.repository.address_invalid`. The `ssh-keyscan` scan, the `known_hosts` line and each git operation use the port of the table. The scan of `altssh.gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 443 -- altssh.gitlab.com`, and the scan of `gitlab.com` runs `ssh-keyscan -T 5 -t ed25519 -p 22 -- gitlab.com`. The `known_hosts` line of a host on port 443 takes the form `[<host>]:443`, because ssh looks up a host on a port other than 22 under that name. A line with the bare name does not match, and ssh refuses the host. The pin stores the bare host name, so `list`, `scan` and `pin` answer `host` without a port. For example, the `known_hosts` line of `altssh.gitlab.com` is `[altssh.gitlab.com]:443 ssh-ed25519 <base64>`. The key of `ssh.github.com` comes from the GitHub meta answer, and its line is `[ssh.github.com]:443 ssh-ed25519 <base64>`.
 
 ### list
 
@@ -35,7 +33,7 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 
 ### pin
 
-`pin` stores the key of a host after a human confirms its fingerprint:
+`pin` stores the key of a host after a human confirms its fingerprint. The GitHub hosts `github.com` and `ssh.github.com` are the exception. Their key comes over TLS from `api.github.com/meta`, so the dashboard pins them without a confirmation; see [Dashboard](#dashboard). Every other host follows these steps:
 
 1. Run `scan`, or read the fingerprint from the dashboard.
 2. Compare it with the fingerprint that the provider publishes.
@@ -47,13 +45,13 @@ The workbench agent has no tool for `pin`, so only a human confirms a host key. 
 
 ### A changed host key
 
-When a host presents a key other than its pin, ssh writes "REMOTE HOST IDENTIFICATION HAS CHANGED". A binding check then answers `failure_reason` `host_key_changed`. A changed key can mean an interception. Compare the published fingerprint of the provider before you pin again. KanthorD never pins a new key without a human.
+When a host presents a key other than its pin, ssh writes "REMOTE HOST IDENTIFICATION HAS CHANGED". A binding check then answers `failure_reason` `host_key_changed`. A changed key can mean an interception. Compare the published fingerprint of the provider before you pin again. KanthorD never pins a new key of a host other than `github.com` and `ssh.github.com` without a human. For these two GitHub hosts, `Pin again` in the dashboard pins the key of `api.github.com/meta` without a confirmation, because that answer arrives over TLS.
 
 ### Dashboard
 
 - The binding sheet pins `github.com` and `ssh.github.com` without a confirmation, because the GitHub meta answer arrives over TLS. It shows "Host key pinned from api.github.com" with the fingerprint.
 - For every other host, the binding sheet shows the scanned fingerprint, a link to the published fingerprints of the provider and `Confirm host key`. Save stays off until the pin exists.
-- Credentials > Git holds the `Host keys` panel: one row for each pin, with its host, fingerprint, source, pin time and `Pin again`. `Pin again` scans the host and shows the scanned and the pinned fingerprint before `Confirm host key`.
+- Credentials > Git holds the `Host keys` panel: one row for each pin, with its host, fingerprint, source, pin time and `Pin again`. `Pin again` scans the host and shows the scanned and the pinned fingerprint before `Confirm host key`. For `github.com` and `ssh.github.com`, `Pin again` pins the scanned key at once and shows "Host key of <host> pinned from api.github.com."
 
 ## Expected response
 
