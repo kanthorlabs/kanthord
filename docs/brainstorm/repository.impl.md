@@ -88,7 +88,7 @@ The component declares five operations beside its credential route group. Every 
 
 ### The dashboard of the SSH identity
 
-- Credentials > Repositories holds `Create SSH key`. The sheet asks for the name only.
+- Credentials > Git holds `Create SSH key`. The sheet asks for the name only.
 - After the create, the sheet shows the public key with Copy, the fingerprint, and these steps: "In the repository, open Settings > Deploy keys > Add deploy key. Paste the key. Select Allow write access."
 - The sheet states: "One deploy key serves one repository. Create one SSH key for each repository. An account SSH key serves every repository of the account and gives the server write access to all of them."
 - The row of an `ssh` record holds Verify and `Rotate key`, and no `Edit metadata`.

@@ -1137,11 +1137,26 @@ The import boundaries follow the public files.
 
 ### The credential sections of the dashboard
 
-- The dashboard holds one section for each component under the group Credentials: LLM, Repositories and Storage.
+These sections hold the dashboard rules of this page:
+
+- [The credential sections of the dashboard](#the-credential-sections-of-the-dashboard)
+- [The dashboard navigation](#the-dashboard-navigation)
+- [The dashboard onboarding](#the-dashboard-onboarding)
+- [The onboarding steps](#the-onboarding-steps)
+- [The return after a save](#the-return-after-a-save)
+- [The skip of the onboarding](#the-skip-of-the-onboarding)
+- [The project readiness panel](#the-project-readiness-panel)
+- [The dashboard toasts](#the-dashboard-toasts)
+
+The rules of the credential sections follow.
+
+- The dashboard holds one section for each component under the group Credentials: LLM, Git and Storage.
+- The sidebar item `Git` under the group Credentials opens `/repositories`. The breadcrumb of `/repositories` reads `Git`. The Git section holds the credentials of the `repository` component.
+- Each section screen shows one description line above its list. The line states what a credential of the section holds and what uses it.
 - A field that selects a credential names the section of the credential, for example `LLM credential` or `Storage credential`. In a section with two credential fields, each field names the platform, for example `SSH credential` and `GitHub credential`.
 - Each section reads only the route group of its component.
 - A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
-- The Repositories section holds `Create SSH key` and the `Host keys` panel. An `ssh` row holds Verify and `Rotate key`, and no `Edit metadata`. [repository.impl.md](repository.impl.md#the-dashboard-of-the-ssh-identity) holds the rules.
+- The Git section holds `Create SSH key` and the `Host keys` panel. An `ssh` row holds Verify and `Rotate key`, and no `Edit metadata`. [repository.impl.md](repository.impl.md#the-dashboard-of-the-ssh-identity) holds the rules.
 - Verify calls `<component>.credential.verify` for its record. It never reads `GET /api/healthcheck`.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
 - The create form renders one text input for each name of `metadata_fields`. The label is the name in Title Case, for example `Base URL` for `base_url` and `Account ID` for `account_id`.
@@ -1159,7 +1174,7 @@ The import boundaries follow the public files.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers no row action. The row still opens its detail.
 - An archived row shows its archive time, the latest `ended_at` of its revisions.
 - A credential row shows the newest live revision as `(v<revision>)` next to the credential name. An archived row shows no revision.
-- The detail of a Repositories record lists the bindings that name it. Each binding links to the Bindings tab of its project.
+- The detail of a Git credential lists the bindings that name it. Each binding links to the Bindings tab of its project.
 
 ## The dashboard navigation
 
@@ -1176,7 +1191,7 @@ The import boundaries follow the public files.
 - The Onboarding page guides a fresh install through the steps that come before the first task.
 - The path `/` shows the Onboarding page while a step is pending and the browser holds no skip mark. Otherwise `/` shows Overview.
 - The page reads its facts each time `/` opens. Until the first read ends, `/` shows a loading placeholder.
-- The page reads the LLM credentials, the agents, the repository credentials, the projects and the binding set of each project. An archived credential does not count.
+- The page reads the LLM credentials, the agents, the Git credentials, the projects and the binding set of each project. An archived credential does not count.
 - An agent is an agent of a hosted worker: a worker of the worker catalog with host `kanthord`. An agent is enabled when its enablement is in state `enabled`.
 - The target project of the two binding steps is the first project that holds a repository binding. With no such project, it is the first project of the list.
 
@@ -1184,15 +1199,17 @@ The import boundaries follow the public files.
 
 The page shows six steps in this order. In the Action column, the first rule that applies decides the action. The two binding steps use the target project of the rule above.
 
-| Step               | Done when                                                              | Action                                                                                                                                                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LLM credential     | An LLM credential that is not archived exists.                         | `New LLM credential` opens `/llm/new`.                                                                                                                                                                                                                        |
-| Enabled agents     | One agent or more is enabled.                                          | `Enable <agent>` opens `/agents/<agent>#enablement` for the first agent, in agent name order, that is not enabled. An agent of a worker that the target project binds comes before the other agents. With every agent enabled, `Open agents` opens `/agents`. |
-| SSH key            | A repository credential of platform `ssh` that is not archived exists. | `Open repositories` opens `/repositories`.                                                                                                                                                                                                                    |
-| Project            | One project or more exists.                                            | `New project` opens `/projects/new`.                                                                                                                                                                                                                          |
-| Repository binding | The target project holds a repository binding.                         | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                               |
-| Worker bindings    | The target project holds a worker binding.                             | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                               |
+| Step               | Done when                                                       | Action                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LLM credential     | An LLM credential that is not archived exists.                  | `New LLM credential` opens `/llm/new`.                                                                                                                                                                                                                                                                                                                         |
+| Enabled agents     | One agent or more is enabled.                                   | With every agent enabled, `Open agents` opens `/agents`. With an agent LLM credential, `Enable agents` opens `/llm/<credential>#enable-agents`. Otherwise `Enable <agent>` opens `/agents/<agent>#enablement` for the first agent, in agent name order, that is not enabled. An agent of a worker that the target project binds comes before the other agents. |
+| SSH key            | A Git credential of platform `ssh` that is not archived exists. | `Open Git credentials` opens `/repositories`.                                                                                                                                                                                                                                                                                                                  |
+| Project            | One project or more exists.                                     | `New project` opens `/projects/new`.                                                                                                                                                                                                                                                                                                                           |
+| Repository binding | The target project holds a repository binding.                  | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                                                                                                                                |
+| Worker bindings    | The target project holds a worker binding.                      | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                                                                                                                                |
 
+- An agent LLM credential is an LLM credential that is not archived and whose platform an agent provider accepts: `github-copilot`, `openai-codex`, `anthropic-subscription`, `anthropic`, `openai-compatible` or `openrouter`. `<credential>` is the first agent LLM credential in name order.
+- To use another agent LLM credential, the human opens its detail and selects `Enable agents`.
 - Each step shows one badge: `Done`, `Next` or `Open`. Each step shows its action, also when the step is done.
 - `Next` marks the first step that is not done and whose read succeeded. Every other step that is not done shows `Open`.
 - A step is pending when its read succeeded and it is not done. Only a pending step keeps `/` on the Onboarding page. A done step can become pending again, for example after the archive of the only LLM credential.
@@ -1210,10 +1227,14 @@ The page shows six steps in this order. In the Action column, the first rule tha
   - the save of the binding set on the Bindings tab, after the first binding write;
   - the enable of agents on the detail of an LLM credential.
 - A credential create sheet does not navigate. It returns the new credential to the form that opened it.
-- The switch of an enablement that exists does not navigate. For an agent with a disabled enablement, `Enable <agent>` opens the switch, and the human returns through the sidebar.
+- The fragment `#enable-agents` opens the `Enable agents` sheet of the LLM credential once. The detail then replaces its URL with the URL without the fragment and keeps the router state, and with it `return_to`.
+- The sheet lists every agent that is not enabled. An agent with no enablement starts switched on. An agent with a disabled enablement starts switched off, and the human switches it on.
+- The save replaces the agent providers and the fallback configurations of a disabled enablement with the agent provider of this credential. It then enables the agent.
+- When every switched-on agent ends enabled, the sheet closes and the dashboard opens `return_to`. Otherwise the sheet stays open and lists each agent that is not enabled.
+- The switch of an enablement that exists does not navigate. Without an agent LLM credential, `Enable <agent>` opens the agent page. For an agent with a disabled enablement, that page shows only the switch, and the human returns through the sidebar.
 - A tab switch on the project page drops the router state, and with it `return_to`.
 - A screen accepts `return_to` only as a path that starts with `/` and stays on the origin of the dashboard. For any other value, the screen keeps its usual behavior after the save. A crafted router state thus cannot send the human to a foreign site.
-- Today the SSH key step does not return. After the create on `/repositories/new`, the dashboard opens the detail of the new credential, `/repositories/<credential>`. The step text tells the human to open Overview, and the human returns through the sidebar.
+- Today the dashboard holds no `Create SSH key`, and the SSH key step does not return. SA1 of the SSH identity epic builds `Create SSH key` and removes the import from `~/.ssh/config`. Until then, the human creates the SSH key on `/repositories` with `Import from ~/.ssh/config`, and the dashboard stays on `/repositories`. The step text tells the human to open Overview, and the human returns through the sidebar.
 
 ### The skip of the onboarding
 
@@ -1227,21 +1248,31 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The project page shows the panel `Readiness` above its tabs. The panel states whether the project can run its first task.
 - Each item shows `Done` or `Open`, a detail line and one link, except `Project active`.
 
-| Item               | Done when                                                                                                     | Link                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Repository binding | The binding set holds a repository binding.                                                                   | `Open bindings` opens the Bindings tab.                                                                                          |
-| Worker bindings    | The binding set holds a worker binding.                                                                       | `Open bindings` opens the Bindings tab.                                                                                          |
-| Live instances     | One worker binding or more asks for an instance, and each of them holds a live instance.                      | `Open workers` opens `/workers?project=<project>`.                                                                               |
-| Enabled agents     | The project holds a worker binding, and each agent of a hosted worker that a worker binding names is enabled. | `Enable <agent>` opens `/agents/<agent>#enablement` for the first agent that is not enabled, else `Open agents` opens `/agents`. |
-| Plan import        | The mission holds one node or more.                                                                           | `Open mission` opens the Mission tab.                                                                                            |
-| Project active     | The project is not paused.                                                                                    | No link. The `Resume` button of the project page resumes it.                                                                     |
+| Item               | Done when                                                                                                     | Link                                                                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository binding | The binding set holds a repository binding.                                                                   | `Open bindings` opens the Bindings tab.                                                                                                                                                                                                                           |
+| Worker bindings    | The binding set holds a worker binding.                                                                       | `Open bindings` opens the Bindings tab.                                                                                                                                                                                                                           |
+| Live instances     | One worker binding or more asks for an instance, and each of them holds a live instance.                      | `Open workers` opens `/workers?project=<project>`.                                                                                                                                                                                                                |
+| Enabled agents     | The project holds a worker binding, and each agent of a hosted worker that a worker binding names is enabled. | With each named agent enabled, `Open agents` opens `/agents`. With an agent LLM credential, `Enable agents` opens `/llm/<credential>#enable-agents`. Otherwise `Enable <agent>` opens `/agents/<agent>#enablement` for the first named agent that is not enabled. |
+| Plan import        | The mission holds one node or more.                                                                           | `Open mission` opens the Mission tab.                                                                                                                                                                                                                             |
+| Project active     | The project is not paused.                                                                                    | No link. The `Resume` button of the project page resumes it.                                                                                                                                                                                                      |
 
 - A worker binding asks for an instance when its `instance_count` is above 0. A binding with `instance_count` 0 needs no instance. With no binding that asks for an instance, `Live instances` shows `Open` with the detail "No worker binding asks for an instance."
 - A live instance is registered, is not draining and carries the resource identity of the worker binding.
 - A project whose worker bindings name no agent of a hosted worker shows `Enabled agents` as `Done`.
-- The panel reads the binding set, the worker bindings, the worker instances, the agents, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change, for example a plan import or a new live instance, shows only after a browser reload or a new open of the project page. Until then the item keeps its old state, for example `Plan import` stays `Open`.
+- The panel reads the binding set, the worker bindings, the worker instances, the agents, the LLM credentials, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change, for example a plan import or a new live instance, shows only after a browser reload or a new open of the project page. Until then the item keeps its old state, for example `Plan import` stays `Open`.
 - A failed read shows in an alert with `Retry`. An item of that read shows `Open`. Its detail line does not state the failed read. It states an absence, for example "The project holds no repository binding."
-- The links of the panel pass no `return_to`.
+- The links of the panel pass no `return_to`. After the save of the `Enable agents` sheet, the human stays on the detail of the LLM credential.
+- The `Enable agents` sheet lists every agent that is not enabled, also an agent that no worker binding of the project names.
+- [The onboarding steps](#the-onboarding-steps) define an agent LLM credential. `<credential>` is the first agent LLM credential in name order.
+
+## The dashboard toasts
+
+- In a window less than 768 px wide, below the `md` breakpoint, a toast shows at the top centre, 64 px below the top edge of the window.
+- In a window 768 px wide or wider, from the `md` breakpoint, a toast shows at the top right, 64 px below the top edge of the window.
+- A top bar of one line is 56 px high. The 64 px keep a toast below that top bar and below the close button of a sheet, at 16 px to 48 px.
+- A toast shows at the top of the window, and the footer of a sheet is at the bottom. A toast thus does not cover the submit button of a sheet, for example `Enable agents` or `Save binding`.
+- The sign-in screen shows a toast at the top right at every width, with the default offset of the toast library.
 
 ## Unwired collaborations
 

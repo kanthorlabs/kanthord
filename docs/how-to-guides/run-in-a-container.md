@@ -148,7 +148,7 @@ Add the public key to GitHub as a deploy key or as an account SSH key. Use a dep
 
 Then, in the dashboard:
 
-1. Open **Credentials**, then **Repositories**, then **Import from ~/.ssh/config**.
+1. Open **Credentials**, then **Git**, then **Import from ~/.ssh/config**.
 2. Turn on the alias `github`, then select **Create 1 credential**. The new SSH credential has the name `github`.
 3. Open **Projects**, then **New project**. Enter a name, then select **Create project**.
 4. Open the **Bindings** tab. Select **Add** in the **Repositories** section.
