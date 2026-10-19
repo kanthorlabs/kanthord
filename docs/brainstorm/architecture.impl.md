@@ -1203,7 +1203,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 | ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | LLM credential     | An LLM credential that is not archived exists.                  | `New LLM credential` opens `/llm/new`.                                                                                                                                                                                                                                                                                                                         |
 | Enabled agents     | One agent or more is enabled.                                   | With every agent enabled, `Open agents` opens `/agents`. With an agent LLM credential, `Enable agents` opens `/llm/<credential>#enable-agents`. Otherwise `Enable <agent>` opens `/agents/<agent>#enablement` for the first agent, in agent name order, that is not enabled. An agent of a worker that the target project binds comes before the other agents. |
-| SSH key            | A Git credential of platform `ssh` that is not archived exists. | `Open Git credentials` opens `/repositories`.                                                                                                                                                                                                                                                                                                                  |
+| SSH key            | A Git credential of platform `ssh` that is not archived exists. | `Create SSH key` opens `/repositories#create-ssh-key`.                                                                                                                                                                                                                                                                                                         |
 | Project            | One project or more exists.                                     | `New project` opens `/projects/new`.                                                                                                                                                                                                                                                                                                                           |
 | Repository binding | The target project holds a repository binding.                  | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                                                                                                                                |
 | Worker bindings    | The target project holds a worker binding.                      | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                                                                                                                                |
@@ -1219,7 +1219,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 
 ### The return after a save
 
-- Each action passes the router state `{ return_to: "/" }`, except the action of the SSH key step.
+- Each action passes the router state `{ return_to: "/" }`. An action holds only its label and its path, and no step opts out of the return.
 - After a successful save, the opened screen navigates to `return_to` in place of its usual target. These saves honor `return_to`:
   - the create of a credential on its form screen, for example `/llm/new`, with a secret or with a sign-in, when the action passed `return_to`;
   - the create and the edit of a project;
@@ -1227,6 +1227,10 @@ The page shows six steps in this order. In the Action column, the first rule tha
   - the save of the binding set on the Bindings tab, after the first binding write;
   - the enable of agents on the detail of an LLM credential.
 - A credential create sheet does not navigate. It returns the new credential to the form that opened it.
+- The `Create SSH key` sheet that `New SSH credential` of the binding sheet opens does not navigate. Done selects the new key in the binding sheet, also when the project page holds `return_to`.
+- The fragment `#create-ssh-key` opens the `Create SSH key` sheet of the Git credentials one time. The list then replaces its URL with the URL without the fragment and keeps the router state, and with it `return_to`. Only `/repositories` opens the sheet for the fragment.
+- After the create, the sheet shows the public key and the deploy key steps. Done opens `return_to`. A close of the sheet after the create also opens `return_to`. Without `return_to`, Done closes the sheet and reloads the list.
+- A close of the sheet before the create keeps the human on `/repositories`. The router state keeps `return_to`, so a later `Create SSH key` on that page also returns to `/` after the create.
 - The fragment `#enable-agents` opens the `Enable agents` sheet of the LLM credential once. The detail then replaces its URL with the URL without the fragment and keeps the router state, and with it `return_to`.
 - The sheet lists every agent that is not enabled. An agent with no enablement starts switched on. An agent with a disabled enablement starts switched off, and the human switches it on.
 - The save replaces the agent providers and the fallback configurations of a disabled enablement with the agent provider of this credential. It then enables the agent.
@@ -1234,7 +1238,6 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The switch of an enablement that exists does not navigate. Without an agent LLM credential, `Enable <agent>` opens the agent page. For an agent with a disabled enablement, that page shows only the switch, and the human returns through the sidebar.
 - A tab switch on the project page drops the router state, and with it `return_to`.
 - A screen accepts `return_to` only as a path that starts with `/` and stays on the origin of the dashboard. For any other value, the screen keeps its usual behavior after the save. A crafted router state thus cannot send the human to a foreign site.
-- Today the dashboard holds no `Create SSH key`, and the SSH key step does not return. SA1 of the SSH identity epic builds `Create SSH key` and removes the import from `~/.ssh/config`. Until then, the human creates the SSH key on `/repositories` with `Import from ~/.ssh/config`, and the dashboard stays on `/repositories`. The step text tells the human to open Overview, and the human returns through the sidebar.
 
 ### The skip of the onboarding
 
