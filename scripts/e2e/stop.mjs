@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { client, mainCheckout, tokenOf } from "./api.mjs";
+import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { stopDevDaemon } from "./daemon.mjs";
+import { deleteRunDeployKeys } from "./ssh-identity.mjs";
 import { stopWorkers } from "./workers.mjs";
 
 const STOP_ENV = process.env.STOP ?? "";
@@ -14,6 +15,21 @@ const state = JSON.parse(
   readFileSync(join(MAIN, ".dev/e2e", run, "run.json"), "utf8"),
 );
 
+if (STOP_ENV === "daemon") {
+  const env = readEnvFile(resolve(MAIN, state.env_file));
+  if (!env[state.github_token_env])
+    throw new Error(`${state.env_file} lacks ${state.github_token_env}`);
+  const deleted = deleteRunDeployKeys({
+    repository: state.github,
+    token: env[state.github_token_env],
+    run,
+  });
+  console.log(
+    `e2e-stop: ${deleted.length} deploy key(s) of ${run} deleted from ${state.github}`,
+    deleted,
+  );
+}
+
 if (state.placement === "server") {
   if (STOP_ENV === "daemon") {
     await stopDevDaemon(state.endpoint, "e2e-stop");
@@ -24,7 +40,7 @@ if (state.placement === "server") {
     console.log(`e2e-stop: project ${project.id} paused`);
   }
 } else {
-  for (const instance of await stopWorkers(state.instances))
+  for (const instance of await stopWorkers(state.instances ?? []))
     console.log(
       `e2e-stop: ${instance.name} pid ${instance.pid} ${instance.result}`,
     );

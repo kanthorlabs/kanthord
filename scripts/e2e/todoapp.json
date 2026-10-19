@@ -5,8 +5,7 @@
   "repository_credentials": [
     {
       "name": "github-com",
-      "platform": "ssh",
-      "host": "github.com"
+      "platform": "ssh"
     },
     {
       "name": "kanthor-verify",

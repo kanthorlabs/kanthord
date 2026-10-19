@@ -140,8 +140,6 @@ After the first native-agent worker runs the acceptance path.
 
 ### Root repository
 
-- [ ] RULED 2026-10-19 by Ulrich (D4). `make e2e-start` creates the SSH key through the API and adds it as a write deploy key on `kanthorlabs/kanthord-verify` through `gh api`. `make e2e-stop STOP=daemon` deletes it. `E2E_GH_TOKEN` is a fine-grained token limited to `kanthorlabs/kanthord-verify` with "Administration: write". Package SR1 of the SSH identity epic builds it and records the token rule in `AGENTS.md`. Operator action: Ulrich updates the token. Remove this item when SR1 merges and Ulrich confirms the new token.
-
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
 - [x] Added 2026-10-12 from the harness-1 run. `make sync` pushes the root `main` directly in phase 8, and the `main` ruleset accepts a change only through a pull request. Decide whether `make sync` keeps a parent push.

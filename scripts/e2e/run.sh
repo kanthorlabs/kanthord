@@ -6,8 +6,9 @@ require_command curl
 DAEMON_WAIT_SECONDS=60
 LIVENESS="http://127.0.0.1:$ENGINE_PORT/api/liveness"
 DEV_LOG="$RUN_DIR/e2e/dev.log"
+MAIN=$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")
 
-[ -f "$ENGINE_DIR/.env.e2e" ] || die "$ENGINE_DIR/.env.e2e is missing"
+[ -f "$MAIN/engine/.env.e2e" ] || die "$MAIN/engine/.env.e2e is missing"
 
 require_command pnpm
 (cd "$ENGINE_DIR" && pnpm install --frozen-lockfile --reporter=silent) ||
