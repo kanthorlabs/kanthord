@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   addDeployKey,
@@ -6,6 +9,7 @@ import {
   deleteRunDeployKeys,
   deployKeyTitle,
   pinHostKey,
+  runGh,
   sshHostOf,
 } from "./ssh-identity.mjs";
 
@@ -203,4 +207,30 @@ test("refuses a deploy key call without a token or with a malformed repository",
     ),
   );
   assert.equal(calls.length, 0);
+});
+
+test("passes the token to gh only in its environment", () => {
+  const directory = mkdtempSync(join(tmpdir(), "kanthord-gh-"));
+  const path = process.env.PATH;
+  try {
+    const gh = join(directory, "gh");
+    writeFileSync(
+      gh,
+      '#!/bin/sh\nprintf "env=%s\\n" "$GH_TOKEN"\nprintf "arg=%s\\n" "$@"\n',
+    );
+    chmodSync(gh, 0o755);
+    process.env.PATH = `${directory}:${path}`;
+    const lines = runGh(["api", `repos/${REPOSITORY}/keys`], TOKEN)
+      .trim()
+      .split("\n");
+    assert.equal(lines[0], `env=${TOKEN}`);
+    assert.deepEqual(lines.slice(1), [
+      "arg=api",
+      `arg=repos/${REPOSITORY}/keys`,
+    ]);
+    assert.ok(!lines.slice(1).some((line) => line.includes(TOKEN)));
+  } finally {
+    process.env.PATH = path;
+    rmSync(directory, { recursive: true });
+  }
 });
