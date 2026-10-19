@@ -9,7 +9,7 @@ Run the published kanthord container image with Podman or Docker. The image cont
 - Podman or Docker on the host.
 - A browser on the same host.
 - A free host port for the dashboard, for example `8080`.
-- Host port `1455` free, for the OpenAI Codex sign-in of step 6.
+- Host port `1455` free, only for the **Browser** mode of the OpenAI Codex sign-in of step 6. Without that mode, remove `-p 127.0.0.1:1455:1455` from the command of step 3.
 - A GitHub repository that you can administer, for the deploy key of step 5.
 
 Run every command of this guide in a terminal on the host. `podman run` and `podman exec` run the `kanthord`, `sed`, `ls`, `rm` and `chmod` parts inside a container. Inside the container, `~` is `/var/lib/kanthord`, the volume.
@@ -28,7 +28,7 @@ Replace each placeholder with your value:
 | `<owner>`         | The GitHub owner of the repository, for example `acme`.                  |
 | `<repository>`    | The GitHub repository name, for example `app`.                           |
 | `<project id>`    | The **Identity** value on the project page, for example `project_01M5…`. |
-| `<binding name>`  | The name of a worker binding, for example `coder`. See step 8.           |
+| `<binding name>`  | The name of a worker binding, for example `coder-remote`. See step 8.    |
 | `<server URL>`    | The full URL that a worker host uses, for example `https://kd.acme.dev`. |
 
 ## 1. Get the image
@@ -111,6 +111,8 @@ The command prints `token: <jwt>`. It prints a token only to a terminal, so keep
 3. Paste the token into **JWT token**, then select **Login**.
 
 See [auth jwt generate](../reference/auth/jwt.md).
+
+For the first task, follow [From a fresh install to the first task](../tutorials/first-task.md) from its [step 2](../tutorials/first-task.md#2-read-the-onboarding-page). The Onboarding page of the dashboard replaces steps 5 and 6 of this guide. The tutorial links to them only for the screen details.
 
 ## 5. Connect a repository
 
@@ -224,9 +226,9 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 A worker binding with the placement `worker` runs its instances on a worker host, not in the container. Create the worker binding first:
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
-2. Enter a **Name**, for example `coder`.
+2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
 3. Choose the **Worker**, for example `coder@1`.
-4. Keep the **Placement** `worker`.
+4. Choose the **Placement** `worker`. The sheet shows `server` by default.
 5. Select **Save binding**.
 
 `<binding name>` is the name of this worker binding, not the name of the repository binding of step 5.

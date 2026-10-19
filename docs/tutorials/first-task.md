@@ -46,7 +46,7 @@ Do steps 1 to 4 of [Run kanthord in a container](../how-to-guides/run-in-a-conta
 3. [Start the server](../how-to-guides/run-in-a-container.md#3-start-the-server) with `podman run`. Set the `GIT_*` values to the author of the agent commits.
 4. [Sign in](../how-to-guides/run-in-a-container.md#4-sign-in) with a token from `auth jwt generate`.
 
-To check the start, run `podman logs kanthord`. The record "Gateway Service started" has the level `info` and the fields `bind` and `port`. In a container, `bind` is `::`.
+To check the start, run `podman logs kanthord`. The record "Gateway Service started" has the level `info`, that is `"level":30`, and the fields `bind` and `port`. In a container, `bind` is `::`.
 
 Do not do steps 5 and 6 of the guide now. The Onboarding page leads you through the same work, in the order that the steps need.
 
@@ -80,7 +80,7 @@ The agents call a model with this credential.
 1. On step 1, select **New LLM credential**. The **New credential** form opens.
 2. Enter a **Name**, for example `claude`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens.
 3. Choose the **Platform**. The list has three groups:
-   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` does not. A credential of another platform makes step 1 `Done`, but step 4 of this tutorial cannot use it.
+   - **Checked before save**: an API key platform. The form can check the key before the create. Of this group, only `anthropic`, `openrouter` and `openai-compatible` serve an agent. `openai` and `opencode-go` do not. A credential of another platform makes step 1 `Done`, but [4. Enable the agents](#4-enable-the-agents) cannot use it.
    - **Sign in with an account**: `openai-codex`, `anthropic-subscription` and `github-copilot`. The server stores the credential when the sign-in completes.
    - **Not checked before save**: the other platforms. An agent cannot use them.
 
