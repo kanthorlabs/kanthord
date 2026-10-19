@@ -30,7 +30,7 @@ The Gateway registers the routes in specificity order: at the first segment wher
 The Gateway Service owns the section `gateway`, and it declares the fields below.
 
 - `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts any IP address.
-- `kanthord config init --gateway-bind <address>` writes that address to `gateway.bind`. The container image binds `::`, which accepts IPv4 and IPv6.
+- `kanthord config init --gateway-bind <address>` writes that address to `gateway.bind`. The container image holds no configuration file and sets no bind address. A container binds `::`, which accepts IPv4 and IPv6, only after the operator runs `kanthord config init --gateway-bind ::` once, before the first start.
 - `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
 - `gateway.allowed_hosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `kanthord config init --gateway-allowed-host <host>` appends a host to that default. `tailscale serve` and a reverse proxy forward the original `Host` header. On port 443 that header carries no port, for example `mac.tailnet.ts.net`.
@@ -40,6 +40,17 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.auth.token_lifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
 - `gateway.auth.version` holds the version of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`. Every authentication field lives under `gateway.auth`.
 - `gateway.idempotency_ttl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
+
+## The start record
+
+After the listener opens, the Gateway Service writes one log record at level `info`. For a bind that is not loopback, the message is `Gateway Service started`.
+
+- The field `bind` holds the value of `gateway.bind`.
+- The field `port` holds the port of the open listener.
+- For a loopback bind, the message is `Gateway Service started. A loopback bind accepts connections from this host only.` A loopback bind is an address in `127.0.0.0/8`, `::1`, or the IPv4-mapped form of a `127.0.0.0/8` address.
+- The level stays `info` for every bind, because a loopback bind is the default and no failure.
+- A container with a loopback bind answers no connection that arrives through its published port. The record names the bind, so the operator finds that cause in the log.
+- The record goes to the operational log: standard error by default, which `podman logs` shows, or `kanthord.log` of the state directory with `log.destination: file`. A `log.level` above `info` hides the record.
 
 ## Access policy
 
@@ -284,7 +295,12 @@ A build of a client copies the directory instead of calling a running server.
 
 A middleware rejects a request whose `Host` header sits outside the configured allowlist before authentication. The middleware also rejects a request with no `Host` header.
 It does so because a browser page resolves a hostname to the loopback address.
-The rejection answers 403 `gateway.http.host_not_allowed`.
+The rejection answers 403 `gateway.http.host_not_allowed` with the message "Host is not allowed. Add it to gateway.allowed_hosts."
+
+- `details.host` holds the `Host` header in lower case, cut to 255 characters. It is `null` when the `Host` header is absent or empty.
+- `details.field` holds `gateway.allowed_hosts`, the configuration field that the operator extends.
+- The answer never lists the allowlist, so a caller outside the allowlist learns no allowed host.
+
 The Gateway passes the accepted `Host` header to the handler as `host` of the caller context. A direct invocation carries no `host`.
 `hono/cors` permits the configured origins, and it uses no credentialed mode.
 The server adds no CSRF middleware, because no cookie authenticates a request.
@@ -342,6 +358,18 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 
 `GET /api/liveness` carries the [liveness answer](gateway-service.md#health-report-and-liveness-answer).
 The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy.
+
+`kanthord gateway liveness` reads that route from the CLI.
+
+- It resolves the endpoint in the order of [the client configuration](architecture.impl.md#the-client-configuration), and it sends no token.
+- It checks the optional client configuration file before the request, also when `--endpoint` or `KANTHORD_ENDPOINT` supplies the endpoint. An invalid file fails the command with a local diagnostic, for example `cli.config.invalid`, while the server is healthy.
+- On HTTP 200 with an answer that passes the output schema, it prints the answer as one JSON line and exits 0.
+- A 200 answer that fails the schema prints `gateway.client.answer_invalid` and exits 1. Every other result also exits 1.
+- A declared failure, for example 503 `gateway.liveness.unhealthy`, prints `<code>: gateway liveness: request failed` to stderr, then the rows `status` and `details`.
+- A result with no usable HTTP answer fails with `cli.gateway.liveness.indeterminate`. Examples are a refused connection, a deadline and an answer with no error envelope.
+- The route timeout is 30 s, and the client deadline is 31 s. The command does no retry.
+- The [container healthcheck](architecture.impl.md#container-image) runs this command, because a supervisor holds no token.
+
 The server owns the shared `HealthRegistry` and passes it to the Gateway Service.
 Each service and shared component registers one map under its name: `server`, `gateway`, `custody`, `scheduler`, `worker`, `repository`, `project`, `mission` and `intake`.
 
@@ -371,7 +399,7 @@ Each probe receives a child `Context` with a deadline of 5 s, or the earlier cal
 The registry releases its timer and cancellation subscription on completion, failure or cancellation.
 Each owner cancels the work that its probe starts when the caller cancels.
 Caller cancellation cancels the collection and produces no success answer.
-The readiness middleware returns `503 NOT_READY` before the handler when the Gateway Service is not ready.
+The readiness middleware returns 503 `gateway.lifecycle.not_ready` before the handler when the Gateway Service is not ready.
 The health registry owns no service lifetime and starts or stops no service.
 
 ## The resource healthcheck report

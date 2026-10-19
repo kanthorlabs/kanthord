@@ -18,6 +18,7 @@ A human requests a health report and reads the entry for `openai-main` under the
 The internal component report that the [Gateway Service](gateway-service.md#health-report-and-liveness-answer) answers without authentication.
 
 A supervisor reads a liveness answer that reports a failure of the store component of the server.
+The container healthcheck runs `kanthord gateway liveness`. The command receives that liveness answer as HTTP 503 `gateway.liveness.unhealthy` and exits 1.
 
 ## logged-in account
 
