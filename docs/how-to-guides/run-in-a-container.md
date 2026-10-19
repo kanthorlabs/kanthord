@@ -41,7 +41,7 @@ cd kanthord
 git -c url."https://github.com/".insteadOf=git@kanthorlabs.github.com: submodule update --init -- engine apps
 ```
 
-The submodule addresses use the SSH host alias `kanthorlabs.github.com`. That alias exists only on the machine of the maintainer. The `-c` option replaces the alias with the public HTTPS address for this one command. It changes no git configuration.
+The submodule addresses use the SSH host alias `kanthorlabs.github.com`. That alias exists only on the machine of the maintainer. The `-c` option replaces the alias with the public HTTPS address for this one command. It writes no `insteadOf` rule. Repeat the option in each later submodule command.
 
 ## 2. Build the image
 
@@ -53,7 +53,7 @@ The build takes some minutes. It tags the image `kanthord:<version>` and `kantho
 
 ## 3. Create the configuration
 
-The image holds no configuration, and the server does not start without one. The default configuration also fails in a container: `curl` gets an empty reply, and the browser gets `403`. The two options below fix that.
+The image holds no configuration, and the server does not start without one. The default configuration also fails in a container: `curl` and the browser get an empty reply. With only `--gateway-bind ::`, a host port other than `31415` gets `403`. The two options below fix both.
 
 Create the configuration once, in a new volume `kanthord`:
 
@@ -74,7 +74,7 @@ The command prints `created: /var/lib/kanthord/config/kanthord/kanthord.yaml`. T
 podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges -v kanthord:/var/lib/kanthord -p 127.0.0.1:<port>:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="<name>" -e GIT_AUTHOR_EMAIL="<email>" -e GIT_COMMITTER_NAME="<name>" -e GIT_COMMITTER_EMAIL="<email>" kanthord
 ```
 
-- `--cap-drop=ALL` and `--security-opt=no-new-privileges` remove every Linux capability. The server runs as the user `kanthord` and needs none.
+- `--cap-drop=ALL` removes every Linux capability. `--security-opt=no-new-privileges` stops a process from gaining privileges. The server runs as the user `kanthord` and needs neither.
 - `-p 127.0.0.1:<port>:31415` publishes the dashboard and the API on the host loopback address only.
 - `-p 127.0.0.1:1455:1455` publishes the OpenAI Codex sign-in callback. See step 7.
 - The `GIT_*` variables set the identity of the commits that the agents make. Without them, a commit has the author `kanthord <kanthord@localhost>`. To change them later, remove the container with `podman rm -f kanthord`, then run this command again. The volume keeps the data.
@@ -127,10 +127,18 @@ The command creates these files in `/var/lib/kanthord/.ssh`:
 
 It prints the public key last. The command replaces `~/.ssh/config`, so do not run it a second time.
 
-Add the public key to GitHub. You have two choices:
+Check the host key of GitHub:
+
+```sh
+podman exec kanthord sh -c 'ssh-keygen -lf ~/.ssh/known_hosts'
+```
+
+Compare the `SHA256:` value with the `ED25519` fingerprint in [the SSH key fingerprints of GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints). If the values differ, remove `~/.ssh/known_hosts` and do not continue.
+
+Add the public key to GitHub as a deploy key or as an account SSH key. Use a deploy key, because it limits the server to one repository.
 
 - A deploy key gives access to one repository only. In the repository, open **Settings**, then **Deploy keys**, then **Add deploy key**. Paste the key, and select **Allow write access**. GitHub refuses a deploy key that another repository holds already. A second repository needs a second key and a second alias, for example `kanthord_github_lib` and `github-lib`. Append its `Host` block to `~/.ssh/config` with `>>`.
-- An account SSH key gives access to every repository of the account. Add it in the SSH key settings of the account.
+- An account SSH key gives access to every repository of the account. Add it in the SSH key settings of the account. An account key in the volume gives the server write access to every repository of the account.
 
 Then, in the dashboard:
 
@@ -139,13 +147,18 @@ Then, in the dashboard:
 3. Open **Projects**, then **New project**. Enter a name, then select **Create project**.
 4. Open the **Bindings** tab. Select **Add** in the **Repositories** section.
 5. Enter a binding name. Enter the address `git@github:<owner>/<repository>.git`. The address uses the alias `github`, not `github.com`.
-6. Choose the SSH credential `github`. Select **Verify**. Both lines show **Healthy**.
-7. Select **Save binding**.
+6. Choose the SSH credential `github`.
+7. Keep **Base branch** `main`, or enter the default branch of the repository.
+8. Select **Verify**. Both lines show **Healthy**.
+9. Select **Save binding**.
 
 ## 7. Sign in to OpenAI Codex
 
 1. Open **Credentials**, then **LLM**, then **New credential**.
-2. Choose the platform `openai-codex`, then select **Start sign-in**.
+2. Enter a **Name**, for example `codex`.
+3. Choose the platform `openai-codex`, then select **Start sign-in**.
+4. Select **Open sign-in page**, and sign in at the provider.
+5. The dashboard shows "Signed in. Custody stored codex." when the sign-in completes.
 
 In the **Browser** mode, the provider sends the browser back to `http://localhost:1455/auth/callback`. The published port 1455 carries that callback into the container.
 
@@ -153,7 +166,7 @@ In the **Browser** mode, the provider sends the browser back to `http://localhos
 - The Codex CLI uses the same port for its own sign-in. While the container runs, a Codex CLI sign-in on the same host fails. While a Codex CLI sign-in runs, the container start fails.
 - The **Browser** mode works only for a browser on the container host.
 
-When the callback page does not load, copy the address of that page. Paste it into **Code or Redirect URL** in the sign-in panel of the dashboard, then select **Send code**.
+When the callback page does not load, copy the address of that page. In the sign-in panel of the dashboard, select **The callback failed?**. Paste the address into **Code or Redirect URL**, then select **Send code**.
 
 When port 1455 is not free, or the browser is on another machine, choose **Headless (device code)**. That mode needs no port 1455. To free the port, remove the container with `podman rm -f kanthord`. Then run the command of step 4 again without `-p 127.0.0.1:1455:1455`.
 
@@ -192,20 +205,30 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 A worker binding with the placement `worker` runs its instances on a worker host, not in the container. Create the worker binding first:
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
-2. Keep the placement `worker`. Save the binding.
+2. Enter a **Name**, for example `coder`.
+3. Choose the **Worker**, for example `coder@1`.
+4. Keep the **Placement** `worker`.
+5. Select **Save binding**.
 
 `<binding name>` is the name of this worker binding, not the name of the repository binding of step 6.
 
 The worker host needs these items:
 
 - `bash`, `git` 2.40 or later and OpenSSH 9.0 or later.
-- The `kanthord` binary of the same version as the image. The releases page is empty, so build it on the worker host with `make release-build`. That build needs Node.js 24 and `make bootstrap`.
+- The `kanthord` binary of the same version as the image. The releases page is empty. For a Linux worker host of the same architecture as the container, copy the binary of the image: `podman cp kanthord:/usr/local/bin/kanthord .`. For another host, build the binary on that host. The build needs Node.js 24 and pnpm. Run the commands of step 1, then `pnpm install`, `pnpm --dir engine install`, `pnpm --dir apps install` and `make release-build`. The binary is then in `dist/`.
 - The same SSH alias `github`, the same key path `~/.ssh/kanthord_github` and the same `known_hosts` entry as the container.
 - A network path to the server. The container publishes the server on the host loopback address only. See [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md) or [Run kanthord on a VPS](run-on-a-vps.md). In those guides, write `<port>` in place of `31415` for the proxy target. Add the host part of `<server URL>` to the host allowlist with step 8, for example `kd.acme.dev`.
 - The `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` variables in the environment of `kanthord serve worker`. Without them, a commit has the author `kanthord <kanthord@localhost>`.
 - A machine token for the worker binding.
 
-Copy the SSH files to the current directory of the host:
+The copies of the private key and of the machine token are secrets. Make a private directory for them on the container host:
+
+```sh
+mkdir -m 700 kanthord-transfer
+cd kanthord-transfer
+```
+
+Copy the SSH files into it:
 
 ```sh
 podman cp kanthord:/var/lib/kanthord/.ssh/kanthord_github .
@@ -225,13 +248,25 @@ podman exec kanthord rm /var/lib/kanthord/<binding name>.cli.yaml
 
 The first command prints `created: <path>`. It needs no terminal, because it prints no token. The file holds `endpoint`, `token` and `client_secret`. The command refuses to replace an existing file with `system.files.publish_failed`, so remove the copy in the volume.
 
-On the worker host, put the file at `~/.config/kanthord/cli.yaml` with mode `0600`. When `XDG_CONFIG_HOME` is set, the path is `$XDG_CONFIG_HOME/kanthord/cli.yaml`. Then run `kanthord serve worker`. See [serve](../reference/serve.md) and [auth jwt generate](../reference/auth/jwt.md).
+On the worker host, put the file at `~/.config/kanthord/cli.yaml` with mode `0600`. When `XDG_CONFIG_HOME` is set, the path is `$XDG_CONFIG_HOME/kanthord/cli.yaml`. Then run `kanthord serve worker`.
+
+After the transfer, remove the copies from the container host:
+
+```sh
+rm kanthord_github ssh_config known_hosts <binding name>.cli.yaml
+cd ..
+rmdir kanthord-transfer
+```
+
+See [serve](../reference/serve.md) and [auth jwt generate](../reference/auth/jwt.md).
 
 ## Use a newer image
 
-`podman restart kanthord` keeps the old image. To run a newer image on the same volume:
+`podman restart kanthord` keeps the old image. To run a newer image on the same volume, run these commands in the clone of step 1:
 
 ```sh
+git pull
+git -c url."https://github.com/".insteadOf=git@kanthorlabs.github.com: submodule update --init -- engine apps
 make release-image
 podman stop kanthord
 podman run --rm -v kanthord:/var/lib/kanthord kanthord upgrade
@@ -242,13 +277,13 @@ Then run the command of step 4 again, with the same `GIT_*` values. See [upgrade
 
 ## Troubleshooting
 
-| Symptom                                                                                                      | Cause and fix                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The container stops at once, and `podman logs kanthord` shows `system.config.not_found`                      | The volume holds no configuration. Run step 3, then run `podman start kanthord`. The message names the command `kanthord config init` for a host install. In a container, use the `podman run` form of step 3. |
-| `curl` fails with `(52) Empty reply from server`, `(56) Connection reset by peer` or `(7) Failed to connect` | The server listens on `127.0.0.1` inside the container. Create the configuration with `--gateway-bind ::`. In an existing volume, use the `gateway.bind` example of step 8.                                    |
-| `403` with `gateway.http.host_not_allowed`, "Host is not allowed."                                           | The host and the port of the address are not in `gateway.allowed_hosts`. Add them with step 8. `config init` does not replace an existing file.                                                                |
-| `cli.output.terminal_required`                                                                               | `auth jwt generate` prints a token only to a terminal. Add `-t` to `podman exec`, as step 5 shows.                                                                                                             |
-| The import dialog shows "The SSH configuration is unreadable."                                               | The volume holds no `~/.ssh/config`. Run the command of step 6.                                                                                                                                                |
-| **Verify** shows **Address · Unhealthy**, and **Save binding** shows "Repository SSH read failed."           | GitHub refuses the key, or `known_hosts` has no GitHub entry. Add the public key to GitHub as step 6 shows. Run the `ssh-keyscan` line of step 6 again.                                                        |
-| "The address host does not match the SSH credential host."                                                   | The address uses `github.com`. Use the alias: `git@github:<owner>/<repository>.git`.                                                                                                                           |
-| `system.files.publish_failed` from `auth jwt generate --output`                                              | The file exists in the volume. Remove it with `podman exec kanthord rm <path>`, then run the command again.                                                                                                    |
+| Symptom                                                                                                                     | Cause and fix                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The container stops at once, and `podman logs kanthord` shows `system.config.not_found`                                     | The volume holds no configuration. Run step 3, then run `podman start kanthord`. The message names the command `kanthord config init` for a host install. In a container, use the `podman run` form of step 3. |
+| `curl` fails with `(52) Empty reply from server`, `(56) Connection reset by peer` or `(7) Failed to connect`                | The server listens on `127.0.0.1` inside the container. Create the configuration with `--gateway-bind ::`. In an existing volume, use the `gateway.bind` example of step 8.                                    |
+| `403` with `gateway.http.host_not_allowed`, "Host is not allowed."                                                          | The host and the port of the address are not in `gateway.allowed_hosts`. Add them with step 8. `config init` does not replace an existing file.                                                                |
+| `cli.output.terminal_required`                                                                                              | `auth jwt generate` prints a token only to a terminal. Add `-t` to `podman exec`, as step 5 shows.                                                                                                             |
+| The import dialog shows "The SSH configuration is unreadable."                                                              | The volume holds no `~/.ssh/config`. Run the command of step 6.                                                                                                                                                |
+| **Verify** shows **Address · Unhealthy**, and **Save binding** shows "Repository SSH read failed."                          | GitHub refuses the key, or `known_hosts` has no GitHub entry. Add the public key to GitHub as step 6 shows. Run the `ssh-keyscan` line of step 6 again.                                                        |
+| "The address host must equal the SSH credential host github." or "The address host does not match the SSH credential host." | The address uses `github.com`. Use the alias: `git@github:<owner>/<repository>.git`.                                                                                                                           |
+| `system.files.publish_failed` from `auth jwt generate --output`                                                             | The file exists in the volume. Remove it with `podman exec kanthord rm <path>`, then run the command again.                                                                                                    |
