@@ -230,7 +230,7 @@ KanthorD rejects a source that is larger than 32 KiB, that is not UTF-8, that ho
 The agent receives only the tools of its declaration. A tool outside the allowlist does not exist for the agent.
 
 - **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` run `rg` and `fd`. The worker and the server install pinned copies into `pi/bin/` of the state directory at startup and never take them from `PATH`.
-- **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key from the environment of each command, so a command cannot read the credentials of the agent. In a Worker execution, the timeout of each command is capped at the remaining budget and at 10 minutes.
+- **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key, `SSH_AUTH_SOCK` and `SSH_AGENT_PID` from the environment of each command, so a command cannot read the credentials of the agent or reach an SSH agent of the host user. During a network git operation of KanthorD on the same host, a command can still sign through the SSH agent socket of that operation, because it runs as the same user. In a Worker execution, the timeout of each command is capped at the remaining budget and at 10 minutes.
 - **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidence_id`, `asset_id` and `uri`.
 - **Operation tools** (Workbench only) expose KanthorD operations. Each call runs with the identity of the human who sent the last message. The [operation tool reference](../reference/workbench/tools.md) lists every tool.
 
@@ -242,13 +242,13 @@ An operation becomes a tool when it meets all of these conditions:
 
 The tool name is the operation id with each `.` replaced by `--`, for example `mission--node--create`.
 
-These ten human operations handle a secret, so the agent cannot call them:
+The agent cannot call these 13 human operations. Twelve of them handle a secret. `repository.host_key.pin` confirms the trust of an SSH host, and only a human confirms a host key.
 
 - `llm.credential.create`, `llm.credential.rotate`, `llm.credential.check`, `llm.credential.login_code`
-- `repository.credential.create`, `repository.credential.rotate`, `repository.credential.check`
+- `repository.credential.create`, `repository.credential.rotate`, `repository.credential.check`, `repository.credential.ssh_key_create`, `repository.credential.ssh_key_rotate`, `repository.host_key.pin`
 - `storage.credential.create`, `storage.credential.rotate`, `storage.credential.check`
 
-The agent therefore cannot create a credential, change a secret, or finish an OAuth login. A human does that in the dashboard or the CLI.
+The agent therefore cannot create a credential, change a secret, pin a host key, or finish an OAuth login. A human does that in the dashboard or the CLI.
 
 A Workbench operation tool that changes state waits for the human. The dashboard shows the pending call, and the human approves or rejects it. A rejection, an abort or the end of the run counts as a rejection. A read operation and a built-in tool run without approval. A Worker execution has no approval step, because no human is present.
 
