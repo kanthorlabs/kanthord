@@ -19,7 +19,7 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
 - An account at an LLM provider of one of these platforms: `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`. The dashboard enables an agent only with a credential of these six platforms.
 - A free host port for the dashboard, for example `8080`.
-- Host port `1455` free: the `podman run` command of guide step 3 publishes it. If you do not use `openai-codex`, remove `-p 127.0.0.1:1455:1455` from that command. The `anthropic-subscription` sign-in does not use port 1455.
+- Host port `1455` free: the `podman run` command of guide step 3 publishes it. Only the **Browser** mode of the `openai-codex` sign-in uses it. Without that mode, remove `-p 127.0.0.1:1455:1455` from that command. The `anthropic-subscription` sign-in does not use port 1455.
 
 ## The path at a glance
 
@@ -243,7 +243,7 @@ Import the file:
 
 The mission graph shows the node **Add a HEALTH.md file** with the intent `implement`. The readiness panel does not refresh after the import. Reload the page. The **Plan import** item then shows "The mission holds 1 node."
 
-An import replaces the whole mission. A later import retires each current node that it does not name by its `id`. To keep the current nodes and add new ones:
+An import replaces the whole mission. A later import retires each current node that it does not name by its `id`. A retired node leaves the mission, and a later import cannot name its `id` again. To keep the current nodes and add new ones:
 
 1. On the **Mission** tab, select **Export Markdown**. The browser saves a zip file. Each file in it holds the `id` of its node or task.
 2. Unpack the zip file. **Plan files** accepts `.md` files, or one `.json` mission export, not a zip file.

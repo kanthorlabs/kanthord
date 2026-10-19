@@ -235,7 +235,7 @@ A worker binding with the placement `worker` runs its instances in a separate `k
 
 `<binding name>` is the name of this worker binding, not the name of the repository binding of step 5.
 
-A machine token names one worker binding. One `kanthord serve worker` process serves the binding of its token only. [The first-task tutorial](../tutorials/first-task.md) needs two workers: `coder@1` and `reviewer@1`. To run both on worker hosts, add two worker bindings, for example `coder-remote` with `coder@1` and `reviewer-remote` with `reviewer@1`. Do the token steps below once for each binding. Run one `kanthord serve worker` process for each token. Two processes on one host need two client files. Give each process its own `XDG_CONFIG_HOME` and `XDG_STATE_HOME`.
+A machine token names one worker binding. One `kanthord serve worker` process serves the binding of its token only. [The first-task tutorial](../tutorials/first-task.md) needs two workers: `coder@1` and `reviewer@1`. To run both on worker hosts, add two worker bindings, for example `coder-remote` with `coder@1` and `reviewer-remote` with `reviewer@1`. Do the token steps below once for each binding. Run one `kanthord serve worker` process for each token. Two processes on one host need two client files. Give each process its own `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. A process reads its client file from `$XDG_CONFIG_HOME/kanthord/cli.yaml`, and keeps its workspaces in `$XDG_STATE_HOME/kanthord`.
 
 The worker host needs these items:
 
@@ -324,14 +324,14 @@ The command of item 3 does these things:
 
 - It mounts the server volume read-only at `/srv/kanthord`. `--config` reads the server configuration there, because the token needs the key of the server.
 - It mounts the new worker volume at `/var/lib/kanthord`.
-- `--output` with no path writes the default client file of the image. The image sets `XDG_CONFIG_HOME=/var/lib/kanthord/config`, so the file is `/var/lib/kanthord/config/kanthord/cli.yaml` in the worker volume, not `~/.config/kanthord/cli.yaml`. The file has mode `0600`.
+- `--output` with no path writes the default client file of the image. The image sets `XDG_CONFIG_HOME=/var/lib/kanthord/config`, so the file is `/var/lib/kanthord/config/kanthord/cli.yaml` in the worker volume, not `~/.config/kanthord/cli.yaml`. The client file follows `XDG_CONFIG_HOME`, not `~`. The file has mode `0600`.
 - `--endpoint http://kanthord:31415` writes the address of the server on the container network into the file. `serve worker` reads it there.
 
 The token stays in the worker volume, so no copy on the host needs removal.
 
 `podman logs kanthord-<binding name>` shows `Worker application ready` when the worker is registered. For two bindings, do items 3 and 4 once for each binding.
 
-`podman restart kanthord` keeps the network connection. After `podman rm` and a new `podman run` of the server, run `podman network connect kanthord-net kanthord` again. The worker refuses a server of another version with `worker.version.mismatch`. After [Use a newer image](#use-a-newer-image), remove each worker container with `podman rm -f kanthord-<binding name>`. Then run item 4 again with the new version.
+`podman restart kanthord` keeps the network connection. After `podman rm` and a new `podman run` of the server, run `podman network connect kanthord-net kanthord` again. The worker refuses a server of another version with `worker.version.mismatch`. After [Use a newer image](#use-a-newer-image), remove each worker container with `podman rm -f kanthord-<binding name>`. Then run item 4 again with the new version. The `podman pull` of that section already fetched the image, and the worker volume keeps its client file.
 
 ## Use a newer image
 
