@@ -27,6 +27,7 @@ The closed set of secret shapes is:
 - `api_key`
 - `oauth`
 - `s3_access_key`
+- `ssh_key`
 
 ## credential revision
 
@@ -81,3 +82,4 @@ An execution requests a GitHub read for another node, so the facility refuses it
 The encrypted transfer of execution credentials to the kanthord worker application that hosts the execution.
 An execution on `build-02` receives the credential of its effective agent provider.
 The application reports refreshed OAuth material and discards the credentials at execution end.
+An execution on `build-02` with the repository binding `kanthord-repo` also receives the SSH key of `kanthord-deploy`, so `build-02` holds no key file.

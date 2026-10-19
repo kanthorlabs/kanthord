@@ -25,6 +25,18 @@ For example, it opens a pull request, reads a pull request and lists the review 
 It derives the owner `kanthorlabs` and the repository `kanthord` from the repository binding.
 A caller supplies neither resource selector.
 
+## SSH identity
+
+The ed25519 key pair that one `ssh` record holds, and through which the server reaches a repository.
+Custody stores the private key, and the human adds the public key as a deploy key of one repository.
+`kanthord-deploy` holds the public key `ssh-ed25519 AAAAC3Nz... kanthord-kanthord-deploy`, and a clone of `git@github.com:kanthorlabs/kanthord.git` loads that key into a private agent.
+
+## host key pin
+
+The one ed25519 host key that the Repository component accepts for an SSH host.
+The pin of `github.com` comes from `api.github.com/meta`. The pin of `gitlab.com` waits until a human confirms the fingerprint that `ssh-keyscan` reads.
+A clone of `git@github.com:kanthorlabs/kanthord.git` fails with `host_key_changed` when the host presents another key.
+
 ## result class
 
 A result class identifies the outcome that a platform call reports when it does not succeed.
