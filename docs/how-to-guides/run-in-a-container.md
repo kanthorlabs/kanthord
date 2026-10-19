@@ -114,7 +114,7 @@ See [auth jwt generate](../reference/auth/jwt.md).
 
 ## 5. Connect a repository
 
-The server reads and pushes a repository over SSH. The server creates the SSH key and keeps the private key encrypted in its database. You copy only the public key. The server writes no file under `~/.ssh` and reads none.
+The server reads and pushes a repository over SSH. The server creates the SSH key and keeps the private key encrypted in its database. You copy only the public key. The server writes no file under `~/.ssh`, that is `/var/lib/kanthord/.ssh`, and reads none. A new volume holds no SSH file.
 
 Create the SSH key in the dashboard:
 
@@ -137,7 +137,7 @@ Then, in the dashboard:
 2. Open the **Bindings** tab. Select **Add** in the **Repositories** section.
 3. Enter a binding name in **Name**. Keep the **Platform** `GitHub`.
 4. The **Address** field starts with `git@github.com:`. Complete it as `git@github.com:<owner>/<repository>.git`.
-5. The sheet reads the host key of `github.com` from `api.github.com` and pins it. The row **Host key of github.com** shows **Pinned** and the fingerprint. On the first pin, it also shows "Host key pinned from api.github.com".
+5. The sheet reads the host key of `github.com` from `api.github.com` and pins it. The row **Host key of github.com** shows **Pinned** and the fingerprint. On the first pin, it also shows "Host key pinned from api.github.com". Check the fingerprint as the paragraph after this list shows.
 6. Choose the SSH credential that you created, for example `app`.
 7. Keep **Base branch** `main`, or enter the default branch of the repository.
 8. Select **Verify**. Both lines show **Healthy**: **Address · Healthy** and **SSH credential · Healthy**.
@@ -161,9 +161,9 @@ First run a newer image with [Use a newer image](#use-a-newer-image). Then do th
 
 Repeat steps 1 to 7 for each SSH credential and repository binding of the earlier setup, for example `github-lib`. If you added the old key as an account SSH key, delete it in the SSH key settings of the account.
 
-The rotation makes a new revision of the credential. The binding keeps the credential name, so the binding needs no other change. If step 3 is not done, the **Verify** of step 6 shows **Address · Unhealthy** with the hint "The repository host refused the SSH key."
+The rotation makes a new revision of the credential. The binding keeps the credential name, so the binding needs no other change. If repair step 3 is not done, the **Verify** of repair step 6 shows **Address · Unhealthy** with the hint "The repository host refused the SSH key."
 
-The old files stay in the volume. The server ignores them, but an agent tool process of the server can still read them. Remove them:
+The old files stay in the volume. The server ignores them, but an agent tool process of the server can still read them. After repair step 7, remove them:
 
 ```sh
 podman exec kanthord rm -r /var/lib/kanthord/.ssh
@@ -235,7 +235,7 @@ The worker host needs these items:
 
 - `bash`, `git` 2.40 or later, and the OpenSSH 9.0 or later client programs `ssh`, `ssh-agent` and `ssh-add`. `kanthord serve worker` checks them at its start. A missing program stops the start with `repository.connector.tool_missing`. A program below its minimum version stops the start with `repository.connector.tool_version`.
 - The `kanthord` binary of the same version as the image. Download `kanthord-<target>` and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases). `<target>` is `darwin-arm64`, `linux-x64` or `linux-arm64`. For the install steps, see [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md#1-install-the-binary) or [Run kanthord on a VPS](run-on-a-vps.md#1-install-the-binary). A Linux worker host of the same architecture as the container can also use the binary of the image: `podman cp kanthord:/usr/local/bin/kanthord .`.
-- No SSH key and no `~/.ssh` file. For each execution, the server hands the worker the SSH key of each repository binding and the pinned host key. The worker keeps the private key in memory only and writes it to no file. Run `kanthord serve worker` as a user with no `~/.ssh`. An agent tool process runs as that user and can read its SSH keys.
+- No SSH key, no `known_hosts` entry and no `~/.ssh` file. For each execution, the server hands the worker the SSH key of each repository binding and the pinned host key. The worker keeps the private key in memory only and writes it to no file. Run `kanthord serve worker` as a user with no `~/.ssh`. An agent tool process runs as that user and can read its SSH keys.
 - Core dumps off for `kanthord serve worker`, for example `ulimit -c 0` in its shell or `LimitCORE=0` in its systemd unit. Its memory holds the plaintext SSH key of each execution.
 - A network path to the repository host, `github.com` on port 22. The **Verify** of step 5 runs on the server, so it does not prove this path.
 - A temporary directory path of 75 bytes or fewer that holds only letters, digits, `/`, `.`, `_` and `-`. The worker reads `TMPDIR`, else `TMP` or `TEMP`, else it uses `/tmp`. For each git operation, the worker makes an SSH agent socket in that directory. The socket path adds 25 bytes, and its limit is 100 bytes. A longer path or another character fails every SSH operation with `repository.connector.ssh_agent_failed`.
@@ -286,6 +286,8 @@ podman rm kanthord
 Then run the command of step 3 again, with `<new version>` in place of `<version>` and the same `GIT_*` values. See [upgrade](../reference/upgrade.md).
 
 ## Troubleshooting
+
+In a **Verify** row, the value in parentheses is the `failure_reason` of the check answer. The dashboard shows the hint, not the value.
 
 | Symptom                                                                                                                                                                                           | Cause and fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
