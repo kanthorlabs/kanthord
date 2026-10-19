@@ -1166,7 +1166,82 @@ The import boundaries follow the public files.
 - The dashboard sidebar lists only a route that has a screen.
 - A planned screen joins the sidebar in the change that adds its route.
 - The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
-- A project-scoped screen waits for a project: Overview, Scheduler and Workers. Overview and Scheduler read every project and offer a project filter. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
+- A project-scoped screen waits until the server holds one project or more: Scheduler and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
+- Overview and Scheduler read every project and offer a project filter.
+- On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
+- The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
+
+## The dashboard onboarding
+
+- The Onboarding page guides a fresh install through the steps that come before the first task.
+- The path `/` shows the Onboarding page while a step is pending and the browser holds no skip mark. Otherwise `/` shows Overview.
+- The page reads its facts each time `/` opens. Until the first read ends, `/` shows a loading placeholder.
+- The page reads the LLM credentials, the agents, the repository credentials, the projects and the binding set of each project. An archived credential does not count.
+- An agent is an agent of a hosted worker: a worker of the worker catalog with host `kanthord`. An agent is enabled when its enablement is in state `enabled`.
+- The target project of the two binding steps is the first project that holds a repository binding. With no such project, it is the first project of the list.
+
+### The onboarding steps
+
+The page shows six steps in this order. In the Action column, the first rule that applies decides the action. The two binding steps use the target project of the rule above.
+
+| Step               | Done when                                                              | Action                                                                                                                                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LLM credential     | An LLM credential that is not archived exists.                         | `New LLM credential` opens `/llm/new`.                                                                                                                                                                                                                        |
+| Enabled agents     | One agent or more is enabled.                                          | `Enable <agent>` opens `/agents/<agent>#enablement` for the first agent, in agent name order, that is not enabled. An agent of a worker that the target project binds comes before the other agents. With every agent enabled, `Open agents` opens `/agents`. |
+| SSH key            | A repository credential of platform `ssh` that is not archived exists. | `Open repositories` opens `/repositories`.                                                                                                                                                                                                                    |
+| Project            | One project or more exists.                                            | `New project` opens `/projects/new`.                                                                                                                                                                                                                          |
+| Repository binding | The target project holds a repository binding.                         | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                               |
+| Worker bindings    | The target project holds a worker binding.                             | `Open bindings` opens `/projects/<project>?tab=bindings`. With no project, `New project` opens `/projects/new`.                                                                                                                                               |
+
+- Each step shows one badge: `Done`, `Next` or `Open`. Each step shows its action, also when the step is done.
+- `Next` marks the first step that is not done and whose read succeeded. Every other step that is not done shows `Open`.
+- A step is pending when its read succeeded and it is not done. Only a pending step keeps `/` on the Onboarding page. A done step can become pending again, for example after the archive of the only LLM credential.
+- A failed read shows in an alert with `Retry` on the Onboarding page. Each step that depends on that read shows `Open` and is not pending. The `Open` badge thus marks a pending step or a step with a failed read. The other steps keep their state.
+- A failed project list read affects the Project step and both binding steps. A failed binding set read of the target project affects both binding steps.
+- With no pending step, `/` shows Overview. The alert then does not show, because only the Onboarding page shows it.
+
+### The return after a save
+
+- Each action passes the router state `{ return_to: "/" }`, except the action of the SSH key step.
+- After a successful save, the opened screen navigates to `return_to` in place of its usual target. These saves honor `return_to`:
+  - the create of a credential on its form screen, for example `/llm/new`, with a secret or with a sign-in, when the action passed `return_to`;
+  - the create and the edit of a project;
+  - the create of an enablement on the agent page of an agent with no enablement;
+  - the save of the binding set on the Bindings tab, after the first binding write;
+  - the enable of agents on the detail of an LLM credential.
+- A credential create sheet does not navigate. It returns the new credential to the form that opened it.
+- The switch of an enablement that exists does not navigate. For an agent with a disabled enablement, `Enable <agent>` opens the switch, and the human returns through the sidebar.
+- A tab switch on the project page drops the router state, and with it `return_to`.
+- A screen accepts `return_to` only as a path that starts with `/` and stays on the origin of the dashboard. For any other value, the screen keeps its usual behavior after the save. A crafted router state thus cannot send the human to a foreign site.
+- Today the SSH key step does not return. After the create on `/repositories/new`, the dashboard opens the detail of the new credential, `/repositories/<credential>`. The step text tells the human to open Overview, and the human returns through the sidebar.
+
+### The skip of the onboarding
+
+- `Skip onboarding` writes the mark `kanthord.onboarding.skipped` to the `localStorage` of the browser. The mark holds for that browser profile only. The server stores no skip state.
+- With the mark, `/` shows Overview. While a step is pending, Overview shows the link `Resume onboarding`. The link removes the mark, and `/` shows the Onboarding page again.
+- The skip lets an install whose setup never completes reach Overview, for example an external harness with no enabled agent.
+- The page reads and writes the mark inside `try` and `catch`. When the storage throws, the page reads no mark. A skip then holds only while `/` stays open. A reload or a later open of `/` shows the Onboarding page again.
+
+### The project readiness panel
+
+- The project page shows the panel `Readiness` above its tabs. The panel states whether the project can run its first task.
+- Each item shows `Done` or `Open`, a detail line and one link, except `Project active`.
+
+| Item               | Done when                                                                                                     | Link                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Repository binding | The binding set holds a repository binding.                                                                   | `Open bindings` opens the Bindings tab.                                                                                          |
+| Worker bindings    | The binding set holds a worker binding.                                                                       | `Open bindings` opens the Bindings tab.                                                                                          |
+| Live instances     | One worker binding or more asks for an instance, and each of them holds a live instance.                      | `Open workers` opens `/workers?project=<project>`.                                                                               |
+| Enabled agents     | The project holds a worker binding, and each agent of a hosted worker that a worker binding names is enabled. | `Enable <agent>` opens `/agents/<agent>#enablement` for the first agent that is not enabled, else `Open agents` opens `/agents`. |
+| Plan import        | The mission holds one node or more.                                                                           | `Open mission` opens the Mission tab.                                                                                            |
+| Project active     | The project is not paused.                                                                                    | No link. The `Resume` button of the project page resumes it.                                                                     |
+
+- A worker binding asks for an instance when its `instance_count` is above 0. A binding with `instance_count` 0 needs no instance. With no binding that asks for an instance, `Live instances` shows `Open` with the detail "No worker binding asks for an instance."
+- A live instance is registered, is not draining and carries the resource identity of the worker binding.
+- A project whose worker bindings name no agent of a hosted worker shows `Enabled agents` as `Done`.
+- The panel reads the binding set, the worker bindings, the worker instances, the agents, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change, for example a plan import or a new live instance, shows only after a browser reload or a new open of the project page. Until then the item keeps its old state, for example `Plan import` stays `Open`.
+- A failed read shows in an alert with `Retry`. An item of that read shows `Open`. Its detail line does not state the failed read. It states an absence, for example "The project holds no repository binding."
+- The links of the panel pass no `return_to`.
 
 ## Unwired collaborations
 
