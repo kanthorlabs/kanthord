@@ -103,6 +103,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The state directory holds the log file under the `file` destination.
 - The server writes no file in the cache directory today.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
+- The agent directory of a network git operation is the one exception. It lives in the system temporary directory, because the agent socket path holds at most 100 bytes.
 
 ## The file index
 
@@ -117,6 +118,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
 - `workspaces/<node identity>/` of the state directory, with one checkout `checkouts/<binding name>/` for each repository binding, the workspace of a steps execution on an `implement` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution or of a steps execution on an `examine` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `kd-ssh-<deadline>-<random>/` of the system temporary directory, the private agent directory of one network git operation, a path template that [repository.impl.md](repository.impl.md#the-ssh-identity) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 
 ## The operational database
@@ -1079,6 +1081,7 @@ The import boundaries follow the public files.
 - The credential name stays unique on the server, because the `credential` table is one table.
 - The record lifecycle codes stay `credential.*`, because custody raises them. A platform rule of a component takes the prefix of that component, for example `llm.metadata.base_url_fixed`.
 - The request and answer bodies keep the fields of the custody record answer. A get adds the dependents list of its component.
+- The Repository component also declares the SSH key and host key operations of [repository.impl.md](repository.impl.md#operations). The static segment `ssh` takes precedence over `/:credential_name`, so custody refuses the name `ssh`.
 
 ### The record verify
 
@@ -1095,7 +1098,7 @@ The import boundaries follow the public files.
 - Its body is `{ platform, secret, metadata }`, the create body without `name`, and the component validates it with the schema of the create.
 - It answers the health entry `{ status, capability }`, the same type that Verify reads from the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
 - The component runs the check of the platform on the typed secret, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
-- A platform with `verifiable: false` or with the secret shape `oauth` answers 400 `credential.check.unsupported`.
+- A platform with `verifiable: false` or with the secret shape `oauth` or `ssh_key` answers 400 `credential.check.unsupported`.
 - It takes no mutation key. It logs no material and drops the secret after the call.
 - The static segment `check` takes precedence over `/:credential_name`, so custody refuses the name `check`.
 
@@ -1107,13 +1110,13 @@ The import boundaries follow the public files.
 - The answer is `{ items: [{ platform, secret_shape, login_modes, metadata_fields, verifiable }] }`.
 - `login_modes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
 - `metadata_fields` lists the required string fields of the metadata schema. `openai-compatible` answers `["base_url"]`, because `models` starts as `[]`.
-- `verifiable` is true when the validation of the platform makes a remote call.
+- `verifiable` is true when the validation of the platform makes a remote call. A local validation of the stored secret also makes it true, as the `ssh` validation does.
 
 ### The credential healthcheck
 
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline and concurrency bounds.
 - The platform validators of each component supply the probes.
-- A supported platform with no remote call reports `unknown`.
+- A supported platform with no remote call and no local validation of the stored secret reports `unknown`.
 - A forbidden probe proves no invalid credential.
 - The component records each probe against the credential store record and stores no check result.
 - A probe that reports `unknown` or `unhealthy` logs the failure reason without material.
@@ -1124,6 +1127,7 @@ The import boundaries follow the public files.
 - A field that selects a credential names the section of the credential, for example `LLM credential` or `Storage credential`. In a section with two credential fields, each field names the platform, for example `SSH credential` and `GitHub credential`.
 - Each section reads only the route group of its component.
 - A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
+- The Repositories section holds `Create SSH key` and the `Host keys` panel. An `ssh` row holds Verify and `Rotate key`, and no `Edit metadata`. [repository.impl.md](repository.impl.md#the-dashboard-of-the-ssh-identity) holds the rules.
 - Verify calls `<component>.credential.verify` for its record. It never reads `GET /api/healthcheck`.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
 - The create form renders one text input for each name of `metadata_fields`. The label is the name in Title Case, for example `Base URL` for `base_url` and `Account ID` for `account_id`.

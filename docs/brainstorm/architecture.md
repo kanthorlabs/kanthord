@@ -211,7 +211,7 @@ Every service that versions a resource follows these rules.
 - The Intake Service [hands an inbound event to the Mission Service](intake-service.md#handoff).
 - A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
-- An execution reaches a platform through the Intake Service, and its git transport uses the SSH configuration of its host.
+- An execution reaches a platform through the Intake Service, and its git transport uses the SSH identity that the credential handover carries.
 - An execution writes evidence to the Mission Service.
 - A reviewer execution reads the criterion and the evidence from the Mission Service.
 - The action performer reads the required external actions of the attempt and the request evidence of the node from the Mission Service.
