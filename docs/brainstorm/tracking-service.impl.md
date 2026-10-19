@@ -98,6 +98,7 @@ The design answers a reference to a deleted trace as expired. Today the store ke
 `tracking.text.get` answers `{ trace_id, text_id, content, created_at }`.
 `tracking.text.get` checks the trace first. A text of a deleted or unknown trace answers 404 `tracking.trace.not_found`. A text that a held trace does not hold answers 404 `tracking.text.not_found`.
 Today no sweep and no operation deletes a trace. The retention value and its start are an epic decision.
+When the retention sweep exists, the refusal of a late record reuses its predicate, so it needs no tombstone. Today no record meets that case.
 
 ## Capture and packaging
 
