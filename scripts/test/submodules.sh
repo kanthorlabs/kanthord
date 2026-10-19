@@ -132,6 +132,12 @@ ROOT="$sandbox/fresh" "$sandbox/fresh/scripts/repo/attach.sh"
 
 repair="$sandbox/repair"
 git -c protocol.file.allow=always clone --quiet --recurse-submodules "$sandbox/parent.git" "$repair"
+if (cd "$sandbox" && ROOT="$repair" "$repair/scripts/git/author.sh") 2>"$sandbox/author.log"; then
+	fail 'author accepted a root with no local identity'
+fi
+grep -q 'config user.name "<your name>"' "$sandbox/author.log" || fail 'author printed no name placeholder'
+grep -q 'config user.email "<your email>"' "$sandbox/author.log" || fail 'author printed no email placeholder'
+
 git -C "$repair" config user.name 'Fixture Operator'
 git -C "$repair" config user.email 'fixture@example.invalid'
 git -C "$repair/engine" ls-files -z | (cd "$repair/engine" && xargs -0 rm -f)
