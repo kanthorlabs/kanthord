@@ -1221,7 +1221,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The switch of an enablement that exists does not navigate. Without an agent LLM credential, `Enable <agent>` opens the agent page. For an agent with a disabled enablement, that page shows only the switch, and the human returns through the sidebar.
 - A tab switch on the project page drops the router state, and with it `return_to`.
 - A screen accepts `return_to` only as a path that starts with `/` and stays on the origin of the dashboard. For any other value, the screen keeps its usual behavior after the save. A crafted router state thus cannot send the human to a foreign site.
-- Today the dashboard holds no `Create SSH key`, and the SSH key step does not return. The human creates the SSH key on `/repositories` with `Import from ~/.ssh/config`, and the dashboard stays on `/repositories`. The step text tells the human to open Overview, and the human returns through the sidebar.
+- Today the dashboard holds no `Create SSH key`, and the SSH key step does not return. SA1 of the SSH identity epic builds `Create SSH key` and removes the import from `~/.ssh/config`. Until then, the human creates the SSH key on `/repositories` with `Import from ~/.ssh/config`, and the dashboard stays on `/repositories`. The step text tells the human to open Overview, and the human returns through the sidebar.
 
 ### The skip of the onboarding
 
