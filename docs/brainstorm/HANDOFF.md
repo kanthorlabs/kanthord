@@ -154,9 +154,9 @@ After the first native-agent worker runs the acceptance path.
     - Q11 confirms that no command edits an existing configuration file: [the command surface](architecture.impl.md#the-command-surface) and [the CLI configuration commands](architecture.impl.md#the-cli-configuration-commands).
     - D1a, the container how-to guide with the SSH shell steps, is READY. SD2 of the SSH identity epic moves the guide to the dashboard SSH key flow.
     - D3, the first-task tutorial, starts after P2.
-    - A3 builds the Q5 Onboarding page, the skip and the readiness panel in apps `#29`. A3b adds the return after the SSH key create. It waits on SA1 of the SSH identity epic.
+    - A3 builds the Q5 Onboarding page, the skip and the readiness panel in apps `#29`. A3b builds the return after the SSH key create in apps `#37`. The SSH key step action `Create SSH key` opens `/repositories#create-ssh-key`, and Done returns to `/`. [architecture.impl.md](architecture.impl.md#the-return-after-a-save) states the rules.
     - A7 builds the agents step change of P2 finding S1 in apps `#35`. With an agent LLM credential, the agents step opens `/llm/<credential>#enable-agents` with a return to `/`. The sheet lists an agent with a disabled enablement, and its save returns. The readiness panel opens the same path. [architecture.impl.md](architecture.impl.md#the-return-after-a-save) states the rules.
-    - Q8, the navigation labels. Ruled 2026-10-19 by Ulrich. The sidebar item Credentials > Repositories becomes Git, and the route stays `/repositories`. Each credential list screen shows one description line. The SSH key step action is `Open Git credentials`. A7 builds it in apps `#35`. [architecture.impl.md](architecture.impl.md#the-credential-sections-of-the-dashboard) states it.
+    - Q8, the navigation labels. Ruled 2026-10-19 by Ulrich. The sidebar item Credentials > Repositories becomes Git, and the route stays `/repositories`. Each credential list screen shows one description line. A7 builds it in apps `#35`. [architecture.impl.md](architecture.impl.md#the-credential-sections-of-the-dashboard) states it.
     - P1, P2 and P3 move the submodule pointers after layer 1, layer 2 and layer 3 of the plan of 2026-10-19.
   - Replaced by the plan of 2026-10-19:
     - Old B3, the first-start configuration in the image: by Q3.
