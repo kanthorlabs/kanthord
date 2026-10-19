@@ -30,6 +30,14 @@ Add the public key to the repository as a deploy key:
 
 One deploy key serves one repository. Create one SSH key for each repository. An account SSH key serves every repository of the account and gives the server write access to all of them.
 
+To connect a new repository, do these steps in order:
+
+1. Create the SSH key with `ssh-key-create`, or with Create SSH key in the dashboard.
+2. Add its public key as a deploy key with write access, as above.
+3. Pin the host key of the address host with [`host-key pin`](host-key.md#pin). The dashboard binding sheet pins `github.com` and `ssh.github.com` itself.
+4. Optional: run [`project binding check`](../project/binding.md#project-binding-check). Its `address` entry answers `healthy` when the host, the pin and the deploy key are correct.
+5. Save the repository binding with [`project binding apply`](../project/binding.md#project-binding-apply), with the address `git@<host>:<owner>/<repository>.git` and the credential name in `ssh_credential`.
+
 In the dashboard, open Credentials > Git and select Create SSH key. The sheet asks for the name only. It then shows the public key with Copy, the fingerprint and the deploy key steps.
 
 ### ssh-key-rotate
@@ -41,7 +49,7 @@ Every new operation uses the new key at once. Until the repository holds the new
 1. Rotate the key and copy the new public key.
 2. Add the new public key as a deploy key of each repository that a binding of the credential names. `get` lists the bindings.
 3. Verify each binding.
-4. Wait until the older revision shows `ended_at`.
+4. Wait until the older revision shows `ended_at`. It shows it at once when no live execution pins it, else at the first drain after the last pinning execution ends, for example a `get` of the credential.
 5. Delete the old deploy key at the repository host.
 
 To end a compromised key, rotate it, [revoke](credential.md#revoke) the older revision if it is still live, then delete its deploy key. A revoke of a revision that the rotation already drained answers `409 credential.revision.ended`.
@@ -67,7 +75,7 @@ Each network git operation runs its own SSH agent. Steps 2 to 8 run on the serve
 
 `-F none` stops the read of `~/.ssh/config` and `/etc/ssh/ssh_config`. ssh therefore reads no SSH configuration, no `~/.ssh/known_hosts` and no default key file of the host user. Every git child of KanthorD also runs without `SSH_AUTH_SOCK`, `SSH_AGENT_PID`, `GIT_SSH` and `GIT_SSH_COMMAND` of the host. KanthorD reads and writes no file under `~/.ssh`.
 
-A failure of steps 3 to 6 fails the operation with `repository.connector.ssh_agent_failed`. Its `step` field names the step, and its cause holds the text of the tool, never the key:
+A failure of steps 3 to 6 fails the operation with `repository.connector.ssh_agent_failed`. Its `step` field names the step, and its cause holds the text of the tool, never the key. A worker execution fails with this diagnostic. A binding operation reports only a `failure_reason`; see below.
 
 | `step`        | Cause                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------ |

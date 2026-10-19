@@ -34,7 +34,7 @@ Only the hosts of the SSH host sets have a pin. A host compares without regard t
 2. Compare it with the fingerprint that the provider publishes.
 3. Send the confirmed fingerprint to `pin`.
 
-The server reads the source again with a 10-second deadline. It pins only when the new read gives the confirmed fingerprint. Another fingerprint refuses the pin with `409 repository.host_key.changed`. One transaction deletes the earlier pin of the host and inserts the new one. No operation deletes a pin. The server logs the human identity, the host, the fingerprint and the source.
+The server reads the source again with a 10-second deadline. It pins only when the new read gives the confirmed fingerprint. Another fingerprint refuses the pin with `409 repository.host_key.changed`, and the earlier pin of the host stays. One transaction deletes the earlier pin of the host and inserts the new one. No operation deletes a pin. The server logs the human identity, the host, the fingerprint and the source.
 
 The workbench agent has no tool for `pin`, so only a human confirms a host key. The agent can call `list` and `scan`.
 
