@@ -6,12 +6,12 @@
 
 ## Repositories
 
-| Tooling alias | Submodule path | Purpose |
-| --- | --- | --- |
-| `engine` | `engine` | Node daemon. |
-| `apps` | `apps` | Dashboard and client applications. |
-| `webhook` | `platforms/webhook` | Standalone webhook log; currently documentation and deployment planning only. |
-| `homelab` | `platforms/homelab` | Public homelab setup: the nginx site and the kanthord container. |
+| Tooling alias | Submodule path      | Purpose                                                                       |
+| ------------- | ------------------- | ----------------------------------------------------------------------------- |
+| `engine`      | `engine`            | Node daemon.                                                                  |
+| `apps`        | `apps`              | Dashboard and client applications.                                            |
+| `webhook`     | `platforms/webhook` | Standalone webhook log; currently documentation and deployment planning only. |
+| `homelab`     | `platforms/homelab` | Public homelab setup: the nginx site and the kanthord container.              |
 
 ## Run KanthorD
 
