@@ -8,6 +8,12 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
+import {
+  addDeployKey,
+  createSshKey,
+  pinHostKey,
+  sshHostOf,
+} from "./ssh-identity.mjs";
 import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
 
 const [configPath, run, pausedFlag = "1", placement = "server"] =
@@ -32,6 +38,13 @@ const log = (msg, fields = {}) =>
 if (existsSync(runDir)) throw new Error(`${runDir} exists. Choose another RUN`);
 mkdirSync(runDir, { recursive: true, mode: PRIVATE_DIRECTORY });
 
+function writeRunState() {
+  writeFileSync(
+    join(runDir, "run.json"),
+    `${JSON.stringify(runState, null, 2)}\n`,
+  );
+}
+
 function kanthord(args) {
   return execFileSync(process.execPath, ["src/main.ts", ...args], {
     cwd: ENGINE,
@@ -49,21 +62,6 @@ const env = readEnvFile(resolve(MAIN, config.env_file));
 function secretOf(name) {
   if (!env[name]) throw new Error(`${config.env_file} lacks ${name}`);
   return env[name];
-}
-
-async function sshMetadata(host) {
-  const { items } = await api.get("/api/repository/credential/ssh/discover");
-  const alias = items.find((item) => item.host === host);
-  if (!alias || alias.state === "refused")
-    throw new Error(
-      `~/.ssh/config holds no usable Host ${host}: ${alias?.reason ?? "absent"}`,
-    );
-  return {
-    host,
-    hostname: alias.hostname,
-    port: alias.port,
-    identity_file: alias.identity_file,
-  };
 }
 
 for (const credential of config.credentials) {
@@ -94,22 +92,64 @@ for (const credential of config.credentials) {
   log("credential created", { name: credential.name });
 }
 
+const githubTokenEnv = config.repository_credentials.find(
+  (credential) => credential.name === config.repository.config.credential,
+).secret_env;
+const sshCredential = config.repository_credentials.find(
+  (credential) =>
+    credential.platform === "ssh" &&
+    credential.name === config.repository.config.ssh_credential,
+);
+if (!sshCredential)
+  throw new Error(
+    `repository_credentials holds no ssh entry ${config.repository.config.ssh_credential}`,
+  );
+const sshCredentialName = `${sshCredential.name}-${run}`;
+
 for (const credential of config.repository_credentials) {
+  if (credential.platform === "ssh") continue;
   if (await api.get(`/api/repository/credential/${credential.name}`)) {
     log("credential exists", { name: credential.name });
     continue;
   }
-  const record =
-    credential.platform === "ssh"
-      ? { metadata: await sshMetadata(credential.host), secret: {} }
-      : { metadata: null, secret: { key: secretOf(credential.secret_env) } };
   await api.post("/api/repository/credential", {
     name: credential.name,
     platform: credential.platform,
-    ...record,
+    metadata: null,
+    secret: { key: secretOf(credential.secret_env) },
   });
   log("credential created", { name: credential.name });
 }
+
+const sshKey = await createSshKey(api, sshCredentialName);
+log("SSH key created", {
+  name: sshCredentialName,
+  fingerprint: sshKey.fingerprint,
+});
+const sshHost = sshHostOf(config.repository.config.address);
+const pin = await pinHostKey(api, sshHost);
+log("host key pinned", { host: pin.host, fingerprint: pin.fingerprint });
+const deployKeyId = addDeployKey({
+  repository: config.repository.github,
+  token: secretOf(githubTokenEnv),
+  run,
+  publicKey: sshKey.public_key,
+});
+log("deploy key added", {
+  repository: config.repository.github,
+  id: deployKeyId,
+});
+const runState = {
+  run,
+  endpoint: config.endpoint,
+  env_file: config.env_file,
+  github_token_env: githubTokenEnv,
+  github: config.repository.github,
+  ssh_credential: sshCredentialName,
+  deploy_key_id: deployKeyId,
+  placement,
+};
+writeRunState();
 
 for (const [agent, enablement] of Object.entries(config.enablements)) {
   const current = await api.get(`/api/agent/enablement/${agent}`);
@@ -126,9 +166,6 @@ for (const [agent, enablement] of Object.entries(config.enablements)) {
   log("enablement set", { agent, ...enablement.default });
 }
 
-const githubTokenEnv = config.repository_credentials.find(
-  (credential) => credential.name === config.repository.config.credential,
-).secret_env;
 const ghEnv = { ...process.env, GH_TOKEN: secretOf(githubTokenEnv) };
 const fixture = execFileSync(
   "gh",
@@ -164,6 +201,7 @@ const bindings = {
     kind: "repository",
     config: {
       ...config.repository.config,
+      ssh_credential: sshCredentialName,
       strategy: {
         ...config.repository.config.strategy,
         base_branch: baseBranch,
@@ -233,18 +271,12 @@ await api.post(`/api/mission/${mission.id}/import`, {
 });
 log("plan imported", { mission: mission.id, files: snapshot.files.length });
 
-const runState = {
-  run,
-  endpoint: config.endpoint,
-  env_file: config.env_file,
-  github_token_env: githubTokenEnv,
-  github: config.repository.github,
+Object.assign(runState, {
   base_branch: baseBranch,
   fixture_commit: fixture,
   project_id: project.id,
   mission_id: mission.id,
-  placement,
-};
+});
 
 if (placement === "server") {
   log("workers managed by the daemon pool", {
@@ -281,10 +313,7 @@ if (placement === "server") {
   runState.instances = instances;
 }
 
-writeFileSync(
-  join(runDir, "run.json"),
-  `${JSON.stringify(runState, null, 2)}\n`,
-);
+writeRunState();
 log("ready", {
   run_dir: runDir,
   placement,
