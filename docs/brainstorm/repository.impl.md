@@ -191,7 +191,7 @@ The server also requires `ssh-keyscan`.
 It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 A spawn of `ssh-agent` or `ssh-add` that answers `ENOENT` is a missing tool. `ssh -V` keeps its version check.
 
-- The connector reaches each host of an SSH host set on port 22, except `altssh.bitbucket.org`. The address `git@<host>:<owner>/<repository>.git` carries no port, and `ssh -F none` sets none, so `ssh` uses port 22. The host key scan runs `ssh-keyscan -p 22`. `altssh.bitbucket.org` stays in the set, but it answers on port 443 only, so the connector cannot reach it.
+- The connector reaches each host of an SSH host set on port 22, except `altssh.gitlab.com` and `altssh.bitbucket.org`. The address `git@<host>:<owner>/<repository>.git` carries no port, and `ssh -F none` sets none, so `ssh` uses port 22. The host key scan runs `ssh-keyscan -p 22`. `altssh.gitlab.com` and `altssh.bitbucket.org` stay in the set, but they answer on port 443 only (probed 2026-10-19), so the connector cannot reach them.
 
 - Each network git function of the connector takes `ssh: SshAccess` and runs inside one `withSshAgent` call of [the SSH identity](#the-ssh-identity).
 - A network git operation whose address host holds no [pin](#host-keys) refuses with 409 `repository.host_key.unpinned` before any child process starts.

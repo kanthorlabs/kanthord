@@ -258,15 +258,15 @@ To run 3 instances of `coder@1` at the `worker` placement:
 
 1. Enable the agent `swe@1`, and add the worker binding as above, with `"placement": "worker"` or with no `placement`.
 2. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
-3. Start one `kanthord serve worker` process with each token. The host needs `bash`, `git` 2.40 or later and OpenSSH 9.0 or later. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+3. Start one `kanthord serve worker` process with each token. The host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
 
-A worker host needs the SSH setup of the server for each `ssh` credential of a repository binding. Before each clone, fetch and push, the worker runs `ssh -G -- <host>` and compares the `hostname`, `port` and `identity_file` with the metadata of the credential. The worker host needs:
+A worker host needs no SSH key, no SSH configuration and no `known_hosts` entry. The server keeps each [SSH key](../reference/repository/ssh-key.md) in custody. For each execution:
 
-- the same alias in its SSH configuration, so that `ssh -G -- <host>` resolves it, with `identitiesonly yes` and exactly one `identityfile`;
-- the key file at the identical `identity_file` path;
-- the `known_hosts` entry of the git host in `~/.ssh/known_hosts`.
+1. The [credential handover](../reference/worker/handover.md) carries the SSH key of each repository binding of the node, in the sealed envelope.
+2. The execution setup carries the [pinned host key](../reference/repository/host-key.md) of each repository address. An address host with no pin refuses the setup with `409 repository.host_key.unpinned`, and a host outside the SSH host set with `400 project.bindings.repository.address_invalid`. The execution then does not start.
+3. The worker keeps both in memory. Each clone, fetch and push starts a private SSH agent, loads the key, and ends the agent after the git command. The worker writes no private key file.
 
-A value that differs fails with `repository.credential.ssh_drift`. An alias that the host lacks fails with `repository.credential.ssh_identity_ambiguous`. See [credentials](../reference/repository/credential.md).
+The worker host must reach port 22 of each repository address host. No binding check proves that path from the worker host. The worker reads no file under `~/.ssh`, so a key or an alias in the SSH configuration of the host has no effect. A temporary directory path above 75 bytes makes every SSH operation fail; see [the temporary directory limit](../reference/repository/ssh-key.md#the-temporary-directory-limit).
 
 An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
 
