@@ -27,10 +27,10 @@ The component owns a dedicated platform validator for every platform of the Repo
 - `private_key` of the secret is the `openssh-key-v1` text. The `ssh` validator parses it: cipher `none`, one key, type `ssh-ed25519` and equal check integers.
 - `public_key` is `ssh-ed25519 <base64> kanthord-<credential name>`. `fingerprint` is `SHA256:<unpadded base64 of the SHA-256 of the key blob>`, the form of `ssh-keygen -l`. The server derives both fields.
 - `login_modes` of `ssh` is `[]`.
-- The private key exists in plaintext only in process memory, in the stdin pipe of `ssh-add` and inside the agent. Process memory reaches a disk only through a core dump, which [core dumps](#core-dumps) covers.
+- The private key exists in plaintext only in process memory, in the stdin pipe of `ssh-add` and inside the agent. Process memory reaches a disk only through a core dump. [Core dumps](#core-dumps) covers that path.
 - The `ssh` validation is a local check. It decrypts the newest live revision, parses the key, derives the public key and compares it with the stored `public_key`. It makes no remote call.
 - The record verify and the resource healthcheck of an `ssh` record run the `ssh` validation and report the capability `ssh identity`. A refusal answers `unhealthy` with `failure_reason: identity_unavailable`.
-- An `ssh` record names no host, so it has no remote target. The [binding check](project-service.impl.md#the-binding-check) owns the reachability of each binding and answers `key_refused`.
+- An `ssh` record names no host, so it has no remote target. The [binding check](project-service.impl.md#the-binding-check) owns the reachability of each binding. It answers `key_refused` when the remote refuses the key.
 - A generic create, rotate or metadata edit of `ssh` answers 400 `credential.entry.unsupported`. The pre-save check of `ssh` answers 400 `credential.check.unsupported`.
 - Tests cover the GitHub probe, the local `ssh` validation, the refusal of a platform of another component and the `bindings` list of a get.
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
@@ -237,7 +237,7 @@ ssh -F none -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o IdentityAgent=
 ```
 
 - A failure of steps 2 to 6 throws the `Diagnostic` `repository.connector.ssh_agent_failed`. Its cause holds the step and the stderr of the tool, never key material.
-- `-F none` stops the read of `~/.ssh/config` and `/etc/ssh/ssh_config`, and it stops the creation of `~/.ssh`.
+- `-F none` stops the read of the user and the system SSH configuration files, and it stops the creation of `~/.ssh`.
 - `IdentityFile=<dir>/id.pub` is required. With `IdentitiesOnly=yes` and no `IdentityFile`, ssh loads the default files `~/.ssh/id_*` and offers no agent key.
 - `GlobalKnownHostsFile=/dev/null` is required, because a version that reads `none` as a relative path reads a file of the repository checkout.
 - `GIT_SSH_COMMAND` overrides `core.sshCommand` of the checkout and nothing more. The [trust boundary](worker-service.impl.md#trust-boundary) covers the other paths through which a checkout runs code.
