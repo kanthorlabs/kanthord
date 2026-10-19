@@ -133,23 +133,57 @@ After the first native-agent worker runs the acceptance path.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
 - [x] Added 2026-10-12 from the harness-1 run. `make sync` pushes the root `main` directly in phase 8, and the `main` ruleset accepts a change only through a pull request. Decide whether `make sync` keeps a parent push.
   - Ruled 2026-10-16 by Ulrich: phase 8 pushes the parent to a branch `sync/<yymmdd-HHMM>` and opens a pull request with `gh pr create`. Phase 9 checks only the submodules. `AGENTS.md` records the rule.
-- [ ] Added 2026-10-19 from the first-day plan. The first-day plan of 2026-10-19 replaces the first-day plan of 2026-10-18 for its open rulings. The plan of 2026-10-18 merged its READY workstreams in root `#113`. Neither plan is versioned, so this item holds the map. "Old" names an item of the plan of 2026-10-18.
+- [ ] Added 2026-10-19 from the first-day plan. The first-day plan of 2026-10-19 replaces six open rulings of the plan of 2026-10-18. The READY workstreams of the plan of 2026-10-18 are merged, and root `#113` moved the pointers. "Old" names an item of the plan of 2026-10-18. Remove this item when each listed old ruling is ruled or moved to the HANDOFF section of its owning component.
+  - Sources, not versioned: `.dev/first-day-experiment/fix-plan.md` holds the plan of 2026-10-18. `.dev/first-day-2026-10-19/` holds `first-day-plan.md`, `first-day-findings.md` and `first-day-plan-review.md`.
+  - Labels of the plan of 2026-10-19:
+    - Q1 proposes an operation that creates an SSH key, its `config` alias and its `known_hosts` line on the server. It waits on Ulrich.
+    - Q2 proposes a nullable `failure_reason` enum on the shared health entry. It waits on Ulrich.
+    - Q4, first-start diagnostics, proposes the refused host in `gateway.http.host_not_allowed` and a `warn` start record for a loopback `gateway.bind`. It waits on Ulrich.
+    - Q5 proposes a setup checklist on Overview with no project, and a readiness panel on the project page. It waits on Ulrich.
+    - Q6 raises the first public release now and proposes the release after P3. It waits on Ulrich.
+    - Q14 proposes a `kanthord gateway liveness` command and a `HEALTHCHECK` in the image. It waits on Ulrich.
+    - Q3 and Q11 are confirmations of ruled pages. Q3 confirms the one-off `config init --gateway-bind ::` of [architecture.impl.md](architecture.impl.md#container-image).
+    - Q11 confirms that no command edits an existing configuration file: [the command surface](architecture.impl.md#the-command-surface) and [the CLI configuration commands](architecture.impl.md#the-cli-configuration-commands).
+    - D1a, the container how-to guide with the SSH shell steps, is READY. D1b moves the guide to the dashboard SSH key flow after P1.
+    - D3, the first-task tutorial, starts after P2.
+    - A3 builds the Q5 checklist and the readiness panel in `apps`. It waits on Q5.
+    - P1, P2 and P3 move the submodule pointers after layer 1, layer 2 and layer 3 of the plan of 2026-10-19.
   - Replaced by the plan of 2026-10-19:
-    - Old B3, the first-start configuration in the image: by Q3, a confirmation of `architecture.impl.md:57`.
-    - Old B4, the reason of an unhealthy repository address: by Q2, a nullable `failure_reason` enum on the shared health entry.
+    - Old B3, the first-start configuration in the image: by Q3.
+    - Old B4, the reason of an unhealthy repository address: by Q2.
     - Old S2, the details of `gateway.http.host_not_allowed`: by Q4.
-    - Old S3, a `warn` start record for a loopback `gateway.bind`: by Q4.
-    - Old S4, a configuration edit command: by Q11, a confirmation of `architecture.impl.md:650,894`.
-    - Old S6, the setup checklist on Overview: by Q5.
+    - Old S3, the `warn` start record for a loopback `gateway.bind`: by Q4.
+    - Old S4, a configuration edit command: by Q11.
+    - Old S6, the setup checklist on Overview: by Q5. Old A7, the dashboard workstream of old S6: by A3.
   - Continued by the plan of 2026-10-19:
-    - Old B1 and B2, the first public release and the first image push. Ruled 2026-10-18 by Ulrich: no release now; raise the release again after P1. Q6 continues the item.
-    - Old D2, the container how-to guide, and old D3, the first-node tutorial: by D1a, D1b and D3.
+    - Old B1 and B2, the first public release and the first image push to `docker.io/kanthorlabs/kanthord`: by Q6.
+      - Ruled 2026-10-18 by Ulrich: no release now. Raise the release again after the pointer move of root `#113` (old P1).
+      - Before the release, create the public Docker Hub repository `kanthorlabs/kanthord`. The version goes from `28.0.1` to `26.10.1` once.
+    - Old D2, the container how-to guide, and old D3, the first-node tutorial: by D1a, D1b and D3. The `jq` filter of old C-S1 and the polling loop of old C-S2 stay with those rulings.
   - Open old rulings that the plan of 2026-10-19 depends on:
-    - Old B5, the code `repository.credential.ssh_host_unresolved` for an SSH alias that is absent on a worker host. A key that the server creates does not reach a remote worker host. Old B5 and the Repository component item on worker host reachability own that gap.
-    - Old S25, the depth of the `ssh` credential verify: `repository.impl.md:26-28` and `architecture.impl.md:1097,1102` conflict. Until old S25 is ruled, Q2 keeps the `ssh` check at its current depth and maps an `ssh -G` refusal to `unclassified`.
-    - Old C-B1, the code `gateway.client.unreachable` for a refused connect. The new `gateway liveness` command follows the `gateway verify` pattern. A ruling of old C-B1 changes both commands together.
-    - Old C-S11, the command `repository credential create --from-ssh-alias`. The new `repository credential ssh-key-create` command answers the metadata only. A ruling of old C-S11 chains the record create.
-  - Open old rulings with no effect on the plan of 2026-10-19: B6 (details of `gateway.client.version_unavailable`), B7a (build commit in the version), B7b (claim release on worker shutdown, a B9 item), S14 (mode `0600` for a file with no secret), S20 (default `target` on resume), S22 (phase and last activity of an execution), C-B2 (check body equals create body), C-B3 (secret input), C-S1 (table output), C-S2 (node watch), C-S4 (shell completion), C-S6 (reason of a 401), C-S8 (remote message in the CLI), C-S10 (model list under `llm`), C-S12 (names in `changes`), C-S14 (mission id on the project) and C-S15 (one-step import).
+    - Old B5, the code `repository.credential.ssh_host_unresolved` for an SSH alias that is absent on a worker host. Q1 proposes a server-created SSH key, and that key does not reach a remote worker host. Old B5 and the Repository component item on worker host reachability own that gap.
+    - Old S25, the depth of the `ssh` credential verify. [The platform list](architecture.impl.md#the-platform-list) and [the credential healthcheck](architecture.impl.md#the-credential-healthcheck) conflict with [the platform validators](repository.impl.md#platform-validators). Until old S25 is ruled, Q2 keeps the `ssh` check at its current depth and maps an `ssh -G` refusal to `unclassified`.
+    - Old C-B1, the code `gateway.client.unreachable` for a refused connect. Q14 proposes a `gateway liveness` command that follows the `gateway verify` pattern. A ruling of old C-B1 changes both commands together.
+    - Old C-S8, the remote message in the CLI. Until old C-S8 is ruled, the CLI shows the Q4 `details.host` and `details.field` but not the hint in the message.
+    - Old C-S11, the command `repository credential create --from-ssh-alias`. Q1 proposes a `repository credential ssh-key-create` command that answers the metadata only. A ruling of old C-S11 chains the record create.
+  - Open old rulings with no effect on the plan of 2026-10-19. Old E2b, the engine CLI docs of C-B2, C-S10, C-S12, C-S14 and C-S15, stays with those rulings.
+    - Old S3, the fields `version`, `base_path` and `url` of the Gateway start record.
+    - Old B6, the details of `gateway.client.version_unavailable`.
+    - Old B7a, the build commit in the version.
+    - Old B7b, the claim release on worker shutdown, a B9 item.
+    - Old S14, mode `0600` for a file with no secret.
+    - Old S20, the default `target` on resume.
+    - Old S22, the phase and the last activity of an execution.
+    - Old C-B2, a check body equal to the create body.
+    - Old C-B3, the secret input.
+    - Old C-S1, the table output.
+    - Old C-S2, the node watch.
+    - Old C-S4, the shell completion.
+    - Old C-S6, the reason of a 401.
+    - Old C-S10, the model list under `llm`.
+    - Old C-S12, the names in `changes`.
+    - Old C-S14, the mission id on the project.
+    - Old C-S15, the one-step import.
 
 ### End-to-end run harness-1
 
