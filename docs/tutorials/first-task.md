@@ -169,7 +169,7 @@ Add the `coder` binding from Onboarding:
 3. Enter a **Name**: `coder`.
 4. Choose the **Worker** `coder@1`.
 5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Placement** then shows `server`. **Save binding** stays off until the agents load.
-6. Keep **Placement** `server` and **Instance count** `1`. The list also shows `container`, which is off, because this server runs in a container.
+6. Keep **Placement** `server` and **Instance count** `1`.
 7. Select **Save binding**.
 
 Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**. Onboarding counts one worker binding as enough, but the first task needs both. Add the `reviewer` binding now.
