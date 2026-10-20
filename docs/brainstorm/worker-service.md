@@ -147,7 +147,7 @@ At the `container` placement, the instance runs in one container on the server h
 A slot driver keeps the instance on the server host, and it gives the instance no machine credential and no endpoint.
 The instance ends when the server ends.
 A container instance mounts no path of the server host.
-The `container` placement is unavailable when the server runs in a container or when no container runtime of the server host answers.
+The `container` placement is unavailable when the server runs in a container, when no container runtime of the server host answers, or when the runtime cannot run the instance as a user without privilege.
 A worker binding of an external harness holds no placement, and it never holds a pool slot.
 For a worker binding at the `worker` placement, a human starts one `worker` application for each instance.
 The instances of one binding form its pool.

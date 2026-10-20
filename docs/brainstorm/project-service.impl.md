@@ -188,7 +188,7 @@ The refusal compares the stored placements.
 - The `placement` field of a worker binding of a worker that kanthord hosts is required, and it is `server`, `container` or `worker`. A write without it refuses with 400 `project.bindings.worker.placement_required` with `details: { binding }`.
 - The write stores `placement` as written. No reader falls back to a default.
 - A worker binding of an external harness reads `placement: null`.
-- No migration writes a placement. A stored revision of a hosted worker binding without `placement` stops the server start with `system.database.binding_placement_missing`, under [architecture.impl.md](architecture.impl.md#the-migration).
+- No migration writes a placement. The latest revision of a hosted worker binding without `placement` stops the server start with `system.database.binding_placement_missing`, under [architecture.impl.md](architecture.impl.md#the-migration).
 - Before the transaction, a write that adds a worker binding at the `container` placement reads `placementStatus("container")` through the Worker contract. An added binding is a binding name with no live binding, so a name that a project reuses after a removal is added.
 - The write refuses the added binding with 409 `project.bindings.worker.placement_unavailable` and `details: { binding, placement, reason }` when `reason` is `server_in_container`, `runtime_absent` or `runtime_rootful`.
 - The write accepts the added binding on `runtime_failed`, because the backoff of [the pool](worker-service.impl.md#the-pool) covers a stopped runtime.
@@ -416,7 +416,8 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
 - A test covers each `placement` value, the refusal of an absent field with `project.bindings.worker.placement_required`, the storage of the field as written, and `placement: null` of an external harness.
 - A test covers the refusal of a change with `project.bindings.worker.placement_changed` and the refusal of the field on an external harness.
-- A test covers `project.bindings.worker.placement_unavailable` for each of its three reasons on an added binding, the acceptance on `runtime_failed`, the acceptance of an edit of a live `container` binding, and a reused name that counts as added.
+- A test covers `project.bindings.worker.placement_unavailable` for each of its three reasons on an added binding.
+- A test covers the acceptance on `runtime_failed`, the acceptance of an edit of a live `container` binding, and a reused name that counts as added.
 - A test covers a removal, a removal by omission and a revision to `instance_count: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.

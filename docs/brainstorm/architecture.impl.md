@@ -654,6 +654,7 @@ A fatal error runs as below.
 - A command table holds one row for each command of the group. A row names the command, then the operation of the RESTful API that it calls with the access policy of that route, or the statement that the command runs locally and calls no route.
 - A command that names an operation which no route of the published contract serves is a defect.
 - `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.
+- `kanthord serve slot` is an internal mode of the `server` application, and no human runs it. It is no application.
 - `kanthord serve` starts the server directly. `kanthord serve server` is the explicit form.
 - `kanthord serve worker` starts a `worker` application.
 - `kanthord` with no command prints the help and exits with a non-zero status, so no invocation starts an application by default.
@@ -726,7 +727,8 @@ The public interfaces have three kinds.
 - Three entry adapters implement that interface.
 - The direct adapter runs inside the `server` application.
 - The HTTP adapter runs inside another application and calls the published route.
-- The port adapter runs inside a worker thread of the `server` application for a worker unit at the `server` placement, and inside `kanthord serve slot` for a worker unit at the `container` placement. Its other end enters the invocation chain with the bearer token of the HTTP route and with no forwarded identity. [The worker transport](worker-service.impl.md#the-worker-transport) rules it.
+- For a worker unit at the `server` placement, the port adapter runs inside a worker thread of the `server` application.
+- For a worker unit at the `container` placement, it runs inside `kanthord serve slot`. Its other end enters the invocation chain with the bearer token of the HTTP route and with no forwarded identity. [The worker transport](worker-service.impl.md#the-worker-transport) rules it.
 - All adapters enter one invocation chain with validation, the idempotency component, the access policy and the handler.
 - The direct adapter invokes no handler of its own.
 - The composition root of an application builds every client once.

@@ -329,6 +329,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - `PoolSlot` and `PoolTarget` hold `placement`. The group key stays `(project_id, resource_identity, generation)`, because the placement of a binding never changes.
 - `PlacementStatus` holds `placement`, `available`, `reason`, `detail` and `container_runtime`. `detail` holds the first line of the runtime answer, at most 200 bytes.
 - `PoolHost` offers `placementStatus(placement)`.
+- The Worker contract offers `placementStatus(placement)` to the Project Service. It answers the `check()` result of the pool host, and it runs outside every transaction.
 - A driver adds no pool state. The states stay pending, running, draining or stopping, exited, then ended, backoff or relaunch.
 - An async launch failure resolves `exited` with code 1. The pool host then follows the failure path of [The pool](#the-pool), so the backoff covers a stopped runtime, a failed pull and an absent image.
 - The `thread` driver answers `check()` with `available: true`, and its `prepare()` does nothing. [Isolation of a thread slot](#isolation-of-a-thread-slot) rules its instance.
@@ -339,7 +340,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 The pool host and the code of the worker unit keep these guarantees at every slot driver.
 
 - **G1.** The instance reaches kanthord only through its slot channel. No driver gives it a token or an endpoint.
-- **G2.** `client_secret` crosses the slot channel once at the start: in `workerData` for `thread`, in the `init` frame for `container`. It never enters an `env`, an argv, an image layer, a label or a file.
+- **G2.** The pool host gives `client_secret` to the instance once at the start: in `workerData` for `thread`, in the `init` frame of the slot channel for `container`. It never enters an `env`, an argv, an image layer, a label or a file.
 - **G3.** The `env` of the instance holds only the allowlist and the directory variables. It holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - **G4.** The instance ends when its slot channel closes.
 - **G5.** The instance runs the server package version. The worker unit checks the version at its start with `worker.version.mismatch`. A [HANDOFF](HANDOFF.md#worker-service) item owns the check before each new registration.
@@ -350,7 +351,7 @@ The pool host and the code of the worker unit keep these guarantees at every slo
 The OS-containment guarantees below bind the `container` driver.
 The `thread` driver keeps none of them for the agent tools and the verification commands, under [Trust boundary](#trust-boundary).
 
-- **C1.** The writable state of the instance is its slot volume and a `/tmp` tmpfs. The root file system is read-only.
+- **C1.** The root file system is read-only. The writable state of the instance is its slot volume and the tmpfs mounts of the runtime.
 - **C2.** No path of the server host is mounted: no configuration, data or state directory of the server, no `HOME` and no runtime socket.
 - **C3.** The instance holds its own PID namespace, so it cannot see or signal the server process.
 - **C4.** The instance holds no capability, `no-new-privileges` applies, and the core size is 0.
@@ -365,7 +366,14 @@ C1 to C6 leave two reaches open.
 Tests of the slot driver:
 
 - `worker-pool.test.ts` and `worker-thread.test.ts` pass against the `thread` driver. Only the `threadOf` accessor moves to the `thread` driver.
-- `pool-host.test.ts` runs the pool host against a fake driver. It covers the cap and the promote, the backoff from 1 s to 30 s and its reset, the drain and the resume, the stop deadline that calls `terminate()`, a launch throw as exit 1, and the end of a drained slot with no registration.
+- `pool-host.test.ts` runs the pool host against a fake driver. It covers these cases:
+  - the cap and the promote;
+  - the backoff from 1 s to 30 s and its reset;
+  - the drain and the resume;
+  - the stop deadline that calls `terminate()`;
+  - a launch throw as exit 1;
+  - the end of a drained slot with no registration;
+  - a binding of an external harness, which starts no slot.
 - A key test asserts the six keys of `SlotLaunch`, and that `SlotLaunch` holds no `master_key` and no token.
 
 ## Isolation of a thread slot
@@ -381,7 +389,7 @@ Tests of the slot driver:
 - The allowlist also holds `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
 - The `env` holds no other variable, so it holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - `HOME` is the value of the server user. The `thread` driver keeps no OS-containment guarantee, under [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
-- `childEnvironment` of `src/agent/environment.ts` removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID`, so an agent tool process at either placement holds no agent of the host user.
+- `childEnvironment` of `src/agent/environment.ts` removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID`, so an agent tool process at every placement holds no agent of the host user.
 - The worker unit keeps its workspaces, its transcripts, its `pi/` directory and its log under `state/kanthord/` of the slot root. Two slots share no workspace.
 - Each thread holds its own `process.env` and its own module instance of pi.
 - `loadPi` therefore sets `PI_OFFLINE` and `PI_CODING_AGENT_DIR` for its thread only. pi of that thread finds `rg` and `fd` in `pi/bin/` of the slot.
@@ -424,7 +432,7 @@ Tests of the slot driver:
 - The worker binding sheet of the dashboard reads the list when it opens. It turns `container` off when `available` is false, and it shows the text of the reason:
   - `server_in_container`: "Off. This server runs in a container, so it cannot start a container for each instance. Keep `server`."
   - `runtime_absent`: "Install Podman or Docker on the server host, then open this sheet again."
-  - `runtime_failed`: "`<detail>`. Start the container runtime, then open this sheet again."
+  - `runtime_failed`: "`<detail>`. Fix the container runtime of the server user, then open this sheet again."
   - `runtime_rootful`: "Docker runs as root on this host. Use rootless Podman or rootless Docker."
 - The description of **Placement** is: "`server` runs each instance as a thread of the server. `container` runs each instance in its own container on the server host. `worker` waits for a `kanthord serve worker` process with a machine token. The binding keeps this choice."
 
@@ -518,11 +526,11 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The thread starts with `stdout: true` and `stderr: true`, and `serve slot` pipes both streams to fd 2.
 - It ends with exit 1 and a diagnostic in these cases:
 
-| Code                         | Condition                                               |
-| ---------------------------- | ------------------------------------------------------- |
-| `worker.slot.init_absent`    | No `init` frame arrives within 10 s.                    |
-| `worker.slot.frame_invalid`  | A line on stdin is no valid frame.                      |
-| `worker.slot.channel_closed` | Stdin reaches its end, or no frame arrives within 15 s. |
+| Code                         | Condition                                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `worker.slot.init_absent`    | No `init` frame arrives within 10 s.                                                         |
+| `worker.slot.frame_invalid`  | A line on stdin is no valid frame, or the pool host reads an invalid line from the instance. |
+| `worker.slot.channel_closed` | Stdin reaches its end, or no frame arrives within 15 s.                                      |
 
 - A deadline timer defers the exit by one `setImmediate` and checks the time of the last frame again, so a pending frame after a host wake keeps the instance.
 - A `SIGTERM` or a `SIGINT` inside the container acts as the `stop` control.
@@ -554,8 +562,13 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 ### Tests of the container driver
 
 - Argv golden tests for Podman and Docker assert every option of the run command, and no `client_secret` and no `env` value in the argv.
-- Detection fixtures cover rootless Podman, a stopped Podman machine, a subordinate range of exactly 10001 uids, a range of 10000 uids, Docker Desktop, rootless Docker, rootful Docker, the `podman-docker` shim, a stopped Docker daemon and `/.dockerenv`.
-- Frame tests cover a round trip, a chunk split inside a UTF-8 sequence, two frames in one chunk, a refused line of 64 MiB plus 1 byte, and a refused unknown `kind`.
+- Detection fixtures cover these hosts:
+  - rootless Podman, a stopped Podman machine, a subordinate range of exactly 10001 uids and a range of 10000 uids;
+  - Docker Desktop, rootless Docker, rootful Docker, the `podman-docker` shim and a stopped Docker daemon;
+  - `/.dockerenv`.
+- Frame tests cover these cases:
+  - a round trip, a chunk split inside a UTF-8 sequence and two frames in one chunk;
+  - a refused line of 64 MiB plus 1 byte, and a refused unknown `kind`.
 - A conformance case sends an answer body that holds a `Date` and an `undefined` field over both port sides.
 - Child-process tests of `serve slot` cover `worker.slot.init_absent`, `worker.slot.channel_closed` at the end of stdin and at the frame deadline, and a `console.log` of the thread that never reaches fd 3.
 - A project test covers the 409 `project.bindings.worker.placement_unavailable` on an added binding, and the pass of an edit and of `runtime_failed`.
@@ -564,7 +577,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   2. `<runtime> inspect` shows no `client_secret` and no `KANTHORD_*` in the `env` or the command. It shows the read-only root file system, `CapDrop` `ALL` and `no-new-privileges`.
   3. A drain of an idle slot exits 0. No container of the slot remains after 10 s, and the slot volume remains.
   4. A stop exits within 5 s. `terminate()` ends an instance that ignores the stop within 5 s.
-  5. A launching process that receives `SIGKILL` leaves no container after 20 s.
+  5. A process that launches a slot and then receives `SIGKILL` leaves no container after 20 s.
   6. `prepare()` removes a container with the owner label, and keeps a container of another owner.
   7. A relaunch with the same `client_id` reads a file that the first run wrote into the slot volume.
   8. `stderr.log` on the host holds the record `Worker application ready`.
@@ -954,7 +967,7 @@ A tool is reached through the MCP server.
 - The three operations declare `mutation: false` under the [Gateway exemption](gateway-service.impl.md#idempotency-of-a-mutation), because an MCP client carries no `Idempotency-Key`. The bodies follow the MCP specification, and the tool schemas live in `tools/list`.
 - Each tool declares a required `execution_id` argument. Before every `tools/call`, the MCP server runs the same [execution proof component](architecture.impl.md#the-operation-and-its-two-entry-adapters) as the invocation chain. It passes the node, attempt and pinned revision of the proven claim to the tool, which reads none of them from the arguments.
 - A failed proof answers a JSON-RPC error whose `data` holds the shared error envelope with code `gateway.invocation.execution_proof_failed`. A refusal of the tool answers a tool result with `isError: true` and the envelope in its content.
-- Every client reaches the MCP server under the machine identity of its live registration, and the proof compares the registration for every client. A native agent at either placement has no other path.
+- Every client reaches the MCP server under the machine identity of its live registration, and the proof compares the registration for every client. A native agent at every placement has no other path.
 - Protocol messages such as `initialize` and `tools/list` need the live registration and no execution identity argument.
 - A tool runs under a session context. A disconnect ends the response stream only and cancels no accepted tool execution. The Gateway cancels the session contexts in shutdown phase 1.
 - The action performer derives the request key of its one write, and the Intake outbound request holds the idempotency of that key.
@@ -1032,7 +1045,6 @@ The host of every `worker` application sits inside it because that host holds it
 The host of a `server` application that runs a slot of the `server` placement sits inside it for the same reason. A worker thread is no containment boundary for the code that the repository supplies.
 Its child processes run with the rights of the server process.
 A tool process at the `server` placement can therefore read the configuration file, its `master_key` and the database files. It can open every credential and sign a JWT of the server. kanthord accepts this reach in v1.
-A file move, an `env` scrub or another `HOME` closes no part of it, because a tool process can read `/proc/<server pid>/environ` and `cmdline`.
 A slot of the `container` placement keeps C1 to C6 of [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
 The container is the boundary for the files of the server, and the memory of the instance stays inside the boundary, as at the `worker` placement.
 

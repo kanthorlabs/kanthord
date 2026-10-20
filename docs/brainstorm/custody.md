@@ -79,8 +79,8 @@ Custody grants no authority through possession of a credential reference.
 - One credential store serves the server and every placement. A human registers a credential once.
 - An instance at every [placement](worker-service.vocabulary.md#placement) receives its credentials only through the credential handover, and it reads no record of the credential store.
 - At the `server` and the `container` placements, the handover crosses only the slot channel on the server host.
-- The worker unit holds no `master_key`, no key that the server derives and no machine credential of the server.
-- A tool process at the `server` placement runs as the server OS user. It can read every credential, `master_key`, the JWT signing key and the database. kanthord accepts this reach in v1.
+- The worker unit holds no `master_key` and no machine credential of the server. A pool slot holds only the `client_secret` that the pool host derives for it.
+- A tool process at the `server` placement runs as the server OS user. It can read every credential, `master_key`, the JWT signing key and the database. kanthord accepts this reach in v1. See [Trust boundary](worker-service.impl.md#trust-boundary).
 - `container` is the contained placement. A tool process at the `container` placement reads no file of the server.
 - The handover also carries the SSH identity of each repository binding of the execution. A worker host therefore holds no SSH key of its own.
 - The handover lasts for the execution.
