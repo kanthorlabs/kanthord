@@ -321,7 +321,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
   - `exited` resolves once with `{ code, error }`, and it never rejects.
 - `SlotDriver` offers `placement`, `check()`, `prepare()` and `launch(launch)`.
   - `check()` answers a `PlacementStatus`, and it never throws.
-  - `prepare()` runs before the first launch. Only a successful `prepare()` counts. A failed `prepare()` runs again at the next launch.
+  - The pool host calls `prepare()` of each pool driver once at each start, before any launch, and does not wait for it. `prepare()` removes the runtime leftovers of the owner. Only a successful `prepare()` counts. A failed `prepare()` runs again before the next launch.
+  - The `thread` driver has no runtime leftover. The `container` driver removes the containers of the owner when a runtime answers. With no runtime, it does nothing and logs nothing.
   - A throw of `launch` counts as an exit with code 1.
 - `ThreadControl` of `src/apps/worker/thread-data.ts` takes the name `SlotControl`.
 - `src/worker/contract.ts` holds the enums `InstancePlacement` (`server`, `container`, `worker`), `PoolPlacement` (`server`, `container`), `PlacementIssue` and `ContainerRuntime` (`podman`, `docker`).

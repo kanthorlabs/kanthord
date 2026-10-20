@@ -194,6 +194,7 @@ A server stop cancels the live execution of each instance.
 An instance with a live execution keeps its registration, and an idle instance deregisters, as at a stop of a `worker` application.
 A server restart starts each instance again under the same client identity.
 An instance whose registration is still live resumes it, and its work pull returns its `running` execution.
+After the next start, a server crash leaves no runtime state of a pool slot. A `worker` application outlives the crash of the server and resumes its registration.
 
 An instance hosts at most one execution at a time.
 An instance holds at most one outstanding work pull or one execution.
