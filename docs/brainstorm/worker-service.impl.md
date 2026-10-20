@@ -459,7 +459,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision }`                          | 200 instance record                                                                                                                                  |
 | `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                | 200 `{ server_version, sealed }`                                                                                                                     |
 | `worker.instance.connect`   | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`            | 200 `{ connection_id, binding_version, sealed }`                                                                                                     |
-| `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id }`                              | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                        |
+| `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`             | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                        |
 | `worker.ssh.sign`           | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`            | 200 `{ nonce, ciphertext }`                                                                                                                          |
 
 - An instance record is `{ id, name, worker, revision, public_key, fingerprint, created_at, ended_at }`.
@@ -527,7 +527,7 @@ The connection:
 The current connection:
 
 - The server keeps in memory only the current `connection_id` of each instance and its last heartbeat. It remembers no ended connection.
-- A server start keeps no connection. A `connect`, a heartbeat or a `client` request whose `connection_id` arrives while the instance has no current connection makes that id current.
+- A server start keeps no connection. A `connect`, a heartbeat or a `client` request whose `connection_id` arrives while the instance has no current connection makes that id current. A heartbeat also sets its `connection_name` on a current connection that holds none.
 - When another id is current, `connect` and the heartbeat answer 409 `worker.instance.connection_superseded`. A `client` request answers 401 `gateway.jwt.connection_superseded`, under [gateway-service.impl.md](gateway-service.impl.md#the-jwt).
 - On 401 `gateway.jwt.connection_superseded`, the wrapper sends one heartbeat. A 409 answer ends the process as superseded. A success makes the connection current again, and the process continues.
 - A superseded process kills the tool process group of its execution through `killProcessGroup`, stops the worker unit and exits with status 3 and `worker.instance.superseded`. The diagnostic names the `connection_name` of the current connection.
