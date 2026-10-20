@@ -315,7 +315,6 @@ It does so because a browser page resolves a hostname to the loopback address.
 The middleware reads the matched route first, and it skips the check for a route of the policy `client`, `worker` or `public`.
 For a route of the policy `human_or_worker`, it skips the check only when the bearer verifies as kind `worker`. A human bearer keeps the check.
 A request that matches no route keeps the check, so a mistyped path still receives the configuration hint.
-Today the middleware checks the `Host` header of every request before the route match, and it skips no route.
 A browser page holds no machine token, and a `public` route answers no secret, so the skip opens no rebinding path.
 A worker instance on a container network therefore reaches the server under any `Host` name with no edit of `gateway.allowed_hosts`.
 The rejection answers 403 `gateway.http.host_not_allowed` with the message "Host is not allowed. Add it to gateway.allowed_hosts."

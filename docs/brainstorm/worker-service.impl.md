@@ -70,7 +70,6 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - It is no JWT claim.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
 - The Worker Service answers the client attribution of a runtime identity to the Scheduler Service in-process. The attribution is the `client_id` and the `client_name` of its `worker_registration` row, ended rows included. The human `worker.registration.get` still answers 404 for an ended registration.
-- Today the engine names the registration table `worker_instance`, the runtime identity `worker_instance_<ulid>` and the registration operations `worker.instance.*`. Layer 2 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) renames them.
 
 ## Registration heartbeat
 
@@ -205,7 +204,6 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 - A Reset key gives a new instance configuration. The operator replaces the file with `kanthord worker join --force` or replaces the env value.
 - A stateless host sets `KANTHORD_WORKER_CONFIG` at each start and needs no volume for the identity. With no data volume, a restart loses the workspaces, and a resumed execution prepares its workspace again from the node branch.
 - `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_WORKER_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT` from each child process. A tool that reads `/proc` still reads the initial environment of the process, under [Trust boundary](#trust-boundary).
-- Today `childEnvironment` removes the provider keys and `SSH_AUTH_SOCK`, and it removes no `KANTHORD_*` value.
 - The template unit `kanthord-worker@.service` is a systemd user unit. It runs `kanthord serve worker --instance %i` with `Restart=on-failure` and `RestartPreventExitStatus=3`, and it sets no `XDG_*_HOME`.
 - [architecture.impl.md](architecture.impl.md#the-command-surface) states the commands `kanthord worker join` and `kanthord worker instance`.
 - Tests cover each source, the conflict, the absence with its paths and an invalid value. They also cover a file name mismatch, another `--instance`, the file modes and the environment of a child process.
@@ -364,7 +362,6 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 - `WorkerTransport` of `src/apps/worker/transport.ts` is the one interface through which the worker unit reaches kanthord. It replaces `WorkerApi`.
 - It holds `gateway`, `worker`, `scheduler`, `mission` and `tracking`. Each is a `ServiceClient` of `src/kernel/operation.ts` over the operation map of its `contract.ts`.
 - `httpTransport(endpoint, bearer)` builds each client with `httpClient` of `src/gateway/client.ts`. `bearer` is a function that the transport calls at each request, so a renewed client token reaches the next request.
-- Today `httpTransport` takes one fixed token. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) adds the bearer function and a test of an execution across one renewal.
 - `portTransport(port)` builds each client over a `MessagePort`. It validates the input with the schema of the operation, as `httpClient` does. It holds no credential.
 - After a port close, `portTransport` refuses each new call at once as indeterminate.
 - The port carries the HTTP wire form. A call posts `{ call_id, operation_id, params, query, body, idempotency_key, traceparent, tracestate }`.
@@ -413,7 +410,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 ## Worker instances
 
 [worker-service.md](worker-service.md#worker-instances) states the rules of a worker instance.
-Today the engine holds no instance record, no instance exchange and no SSH signature relay. Layer 3 and layer 4 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) build them.
+Today the engine holds no SSH signature relay. Layer 4 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) builds it.
 
 ### The instance record
 
@@ -462,7 +459,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision }`                          | 200 instance record                                                                                                                                  |
 | `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                | 200 `{ server_version, sealed }`                                                                                                                     |
 | `worker.instance.connect`   | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`            | 200 `{ connection_id, binding_version, sealed }`                                                                                                     |
-| `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id }`                              | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                        |
+| `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`             | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                        |
 | `worker.ssh.sign`           | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`            | 200 `{ nonce, ciphertext }`                                                                                                                          |
 
 - An instance record is `{ id, name, worker, revision, public_key, fingerprint, created_at, ended_at }`.
@@ -530,7 +527,7 @@ The connection:
 The current connection:
 
 - The server keeps in memory only the current `connection_id` of each instance and its last heartbeat. It remembers no ended connection.
-- A server start keeps no connection. A `connect`, a heartbeat or a `client` request whose `connection_id` arrives while the instance has no current connection makes that id current.
+- A server start keeps no connection. A `connect`, a heartbeat or a `client` request whose `connection_id` arrives while the instance has no current connection makes that id current. A heartbeat also sets its `connection_name` on a current connection that holds none.
 - When another id is current, `connect` and the heartbeat answer 409 `worker.instance.connection_superseded`. A `client` request answers 401 `gateway.jwt.connection_superseded`, under [gateway-service.impl.md](gateway-service.impl.md#the-jwt).
 - On 401 `gateway.jwt.connection_superseded`, the wrapper sends one heartbeat. A 409 answer ends the process as superseded. A success makes the connection current again, and the process continues.
 - A superseded process kills the tool process group of its execution through `killProcessGroup`, stops the worker unit and exits with status 3 and `worker.instance.superseded`. The diagnostic names the `connection_name` of the current connection.
@@ -646,7 +643,7 @@ The pool host and the code of the worker unit keep these guarantees at every slo
 - **G2.** The pool host gives `client_secret` to the instance once at the start. The `thread` driver uses `workerData`, and the `container` driver uses the `init` frame of the slot channel. It never enters an `env`, an argv, an image layer, a label or a file.
 - **G3.** The `env` of the instance holds only the allowlist and the directory variables. It holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - **G4.** The instance ends when its slot channel closes.
-- **G5.** The instance runs the server package version. The worker unit checks the version at its start with `worker.version.mismatch`. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) adds the `server_version` check of each instance heartbeat.
+- **G5.** The instance runs the server package version. The worker unit checks the version at its start with `worker.version.mismatch`. The worker application also checks the `server_version` of each instance heartbeat.
 - **G6.** The instance ends within 5 s after `terminate()`, before the 10 s server watchdog.
 - **G7.** The instance output goes to `stderr.log` of the slot root. The server log holds no record of the worker unit.
 - **G8.** The slot channel never leaves the server host. On macOS it crosses only the local link between the runtime client and its VM.

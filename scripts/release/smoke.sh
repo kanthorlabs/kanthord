@@ -21,8 +21,10 @@ server.listen(0, "127.0.0.1", () => {
 endpoint="http://127.0.0.1:$port"
 expected_version=$(node -p "require('$ENGINE_DIR/package.json').version")
 server_pid=
+worker_pid=
 
 cleanup() {
+	[ -n "$worker_pid" ] && kill "$worker_pid" 2>/dev/null && wait "$worker_pid" 2>/dev/null
 	[ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null && wait "$server_pid" 2>/dev/null
 	return 0
 }
@@ -137,15 +139,47 @@ set -- "$XDG_STATE_HOME"/kanthord/workers/*/state/kanthord/kanthord.log
 [ -f "$1" ] || die "the slot thread wrote no log under $XDG_STATE_HOME/kanthord/workers"
 log "slot thread started inside the binary"
 
-if env -u KANTHORD_ENDPOINT "$binary" serve worker >"$home/worker.log" 2>&1; then
-	die "serve worker succeeded without a configuration. See $home/worker.log"
+if "$binary" serve worker --instance smoke >"$home/worker-absent.log" 2>&1; then
+	die "serve worker succeeded without an instance configuration. See $home/worker-absent.log"
 fi
-grep -q '^worker\.start\.client_secret_absent:' "$home/worker.log" ||
-	die "serve worker did not refuse the absent client_secret. See $home/worker.log"
-for tool in fd rg; do
-	"$XDG_STATE_HOME/kanthord/pi/bin/$tool" --version >/dev/null ||
-		die "serve worker did not install a working $tool in $XDG_STATE_HOME/kanthord/pi/bin. See $home/worker.log"
+grep -q '^worker\.start\.instance_config_absent:' "$home/worker-absent.log" ||
+	die "serve worker did not refuse the absent instance configuration. See $home/worker-absent.log"
+cli worker instance create smoke --worker coder@1 --output >/dev/null ||
+	die "worker instance create failed"
+[ -f "$XDG_CONFIG_HOME/kanthord/workers/smoke.yaml" ] ||
+	die "worker instance create wrote no instance file in $XDG_CONFIG_HOME/kanthord/workers"
+instance_project=$(cli project create --name smoke-instance | node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).id') ||
+	die "project create failed"
+cat >"$home/instance-bindings.json" <<'JSON'
+{"version":1,"bindings":{"laptop":{"kind":"worker","config":{"worker":"coder@1","placement":"worker","worker_instances":["smoke"]}}}}
+JSON
+cli project binding apply "$instance_project" --file "$home/instance-bindings.json" >/dev/null ||
+	die "project binding apply of the instance binding failed"
+cli project pause "$instance_project" >/dev/null || die "project pause failed"
+"$binary" serve worker --instance smoke >"$home/worker.log" 2>&1 &
+worker_pid=$!
+instance_ready=0
+for _ in $(seq 1 60); do
+	if cli worker registration list --project "$instance_project" |
+		node -e '
+const { items } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+process.exit(items.some((item) => item.instance === "smoke" && item.registered) ? 0 : 1);
+'; then
+		instance_ready=1
+		break
+	fi
+	kill -0 "$worker_pid" 2>/dev/null || break
+	sleep 0.5
 done
-log "pi tools kept by serve worker"
+[ "$instance_ready" = 1 ] || die "the worker instance did not register. See $home/worker.log"
+kill "$worker_pid"
+wait "$worker_pid" || die "serve worker did not exit 0 at SIGTERM. See $home/worker.log"
+worker_pid=
+log "worker instance registered and stopped"
+for tool in fd rg; do
+	"$XDG_DATA_HOME/kanthord/workers/smoke/pi/bin/$tool" --version >/dev/null ||
+		die "serve worker did not install a working $tool in $XDG_DATA_HOME/kanthord/workers/smoke/pi/bin. See $home/worker.log"
+done
+log "pi tools installed by serve worker"
 
 log "smoke passed for $binary"

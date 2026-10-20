@@ -228,7 +228,6 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - At the `server` and the `container` placements, a registration is admitted only from the client identity of a pool slot of its binding. A registration at a binding at the `worker` placement is admitted only from a derived client identity. The server derives it for a listed worker instance and that binding. Another client identity answers 409 `worker.registration.placement_mismatch`.
 - A Reset key of a worker instance ends every live registration of its old revision in its transaction. An archive of a worker instance ends every live registration of the instance in its transaction.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
-- Today the table holds no `instance_id`. Layer 3 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) adds it.
 
 ### Scheduler Service
 
