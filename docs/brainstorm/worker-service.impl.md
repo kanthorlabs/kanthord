@@ -414,7 +414,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`. `server` is the holder value of a server-held credential. The other three are static route segments.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived.
 - Only a Reset key creates a revision. `worker.instance.rotate` names `expected_revision`. In one transaction it inserts the next revision with the new public key and ends the old revision.
-- In the same transaction, the Reset key ends every registration of the old client identities through `endRegistrations` for each binding that lists the instance.
+- In the same transaction, the Reset key ends every live registration whose client identity derives from the old revision. Registrations of other instances of the same binding stay live.
 - Every worker token, connection and client token of the old revision fails its next request, because each carries the old `instance_id`.
 - The client identities of the instance change, because their derivation label holds the revision id.
 - Every credential copy sealed to the old fingerprint has no holder until a human enters its secret again, under [custody.impl.md](custody.impl.md).
