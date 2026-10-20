@@ -381,6 +381,9 @@ Tests of the slot driver:
 
 - The root of a slot is `workers/<client_id>/` of the state directory of the server, with mode `0700`. Every pool slot holds a slot root.
 - The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it.
+- The pool host removes the slot root and the slot volume of each slot of a removed binding after the last slot of that binding ends.
+- At each start, the pool host removes each slot root under `workers/` and each slot volume of the owner whose client identity belongs to no live binding at any slot number.
+- A lowered count keeps the slot root and the slot volume, because the client identity of the slot returns with a raised count.
 - The slot root of a `thread` slot holds `state/kanthord/kanthord.log` and `stderr.log`. The slot root of a `container` slot holds `stderr.log` only, and the [slot volume](#the-slot-volume) holds the state.
 - The rules below bind the `thread` driver.
 - The thread starts with its own `env` and never with `SHARE_ENV`.
@@ -452,7 +455,7 @@ Tests of the slot driver:
 - The owner value is the Crockford base32 form of the first 128 bits of `deriveKey(master_key, "worker/container-owner")`. Nothing stores it.
 - The container and its volume take the name `kanthord_slot_<client_id>`. Both carry the labels `io.kanthord.owner=<owner>` and `io.kanthord.client_id=<client_id>`.
 - `prepare()` runs `<runtime> ps --all --filter label=io.kanthord.owner=<owner> --format '{{.Names}}'`, then `<runtime> rm --force <name>` for each name.
-- `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes.
+- `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes. The start sweep of [Isolation of a thread slot](#isolation-of-a-thread-slot) removes the volume of a removed binding.
 - Each launch first runs `<runtime> rm --force kanthord_slot_<client_id>`. An answer that holds "no such container", in any case, counts as success.
 - The removal of the slot volume of a removed binding is a [HANDOFF](HANDOFF.md#worker-service) item.
 
