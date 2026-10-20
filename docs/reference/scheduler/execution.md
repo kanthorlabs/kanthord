@@ -22,6 +22,8 @@ Each `execution list` call reads one page. The CLI does not follow `next_cursor`
 
 The release body can carry a `stop`, which tells why the execution ended early. A `stop` requires `further_work: true`. A `stop` with a reason other than `budget_end` counts as a failure toward `mission.consecutive_failure_limit`. A `budget_end` stop counts toward `mission.further_work_limit`. A release without a `budget_end` stop resets that count. [ERD 2](../erd/02-execution.md) holds the exact count rules.
 
+A `stop` can also carry `detail`, the cause text of the stop. The worker sets it from the provider error text or from the text of a thrown error. It removes the secrets of the credential, bearer values, JWTs and long tokens, and cuts the text to 300 characters. A file path stays visible. `detail` is optional, a nonempty string of at most 300 characters, and changes no count.
+
 | `stop.reason`                                                                                     | `stop.code`                                                                     |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `budget_end`                                                                                      | `turns` or `wall_time`                                                          |
@@ -148,7 +150,7 @@ Every timestamp is a safe integer of Unix epoch milliseconds in UTC.
 | `ended_at`                   | timestamp or `null`                                | Time of the end; `null` while the execution has not ended.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `trace_id`                   | 32 lower-case hexadecimal characters, not all zero | Trace identity that the Scheduler mints at the claim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `root_span_id`               | 16 lower-case hexadecimal characters, not all zero | Root span identity that the Scheduler mints at the claim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `stop`                       | `{ reason, code }` or `null`                       | Stop of the release; `null` while the execution runs and after a release with no stop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `stop`                       | `{ reason, code, detail? }` or `null`              | Stop of the release; `null` while the execution runs and after a release with no stop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 Identity formats follow the [identity reference](../identities.md).
 
@@ -238,15 +240,15 @@ curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5
 
 ### `execution release`
 
-| Item                  | Value                                                                                                                                           |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                                                           |
-| Operation ID          | `scheduler.execution.release`                                                                                                                   |
-| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration                                         |
-| Timeout               | 30 seconds                                                                                                                                      |
-| Mutation              | Yes                                                                                                                                             |
-| Path/query parameters | `execution_id` (path, required); no query fields                                                                                                |
-| Request body          | Closed JSON object `{ "further_work": <boolean>, "stop": { "reason", "code" } \| null }`; `further_work` is required, `stop` defaults to `null` |
+| Item                  | Value                                                                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                                                                      |
+| Operation ID          | `scheduler.execution.release`                                                                                                                              |
+| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration                                                    |
+| Timeout               | 30 seconds                                                                                                                                                 |
+| Mutation              | Yes                                                                                                                                                        |
+| Path/query parameters | `execution_id` (path, required); no query fields                                                                                                           |
+| Request body          | Closed JSON object `{ "further_work": <boolean>, "stop": { "reason", "code", "detail"? } \| null }`; `further_work` is required, `stop` defaults to `null` |
 
 | Header            | Required | Purpose                                                      |
 | ----------------- | -------- | ------------------------------------------------------------ |

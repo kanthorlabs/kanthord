@@ -425,11 +425,15 @@ The provider answers 429 to a model call. The turn ends with `stopReason: "error
 ```json
 {
   "further_work": true,
-  "stop": { "reason": "provider_failed", "code": "rate_limited" }
+  "stop": {
+    "reason": "provider_failed",
+    "code": "rate_limited",
+    "detail": "429 Too Many Requests: rate limit exceeded"
+  }
 }
 ```
 
-The code `rate_limited` moves the agent to the next model of its fallback chain for the next execution. It does not count as a failure. The codes `bad_request` and `unauthorized` count, and after `mission.consecutive_failure_limit` failures in a row the node moves to `Paused`.
+The `detail` holds the provider error text, with the secrets removed and cut to 300 characters. The code `rate_limited` moves the agent to the next model of its fallback chain for the next execution. It does not count as a failure. The codes `bad_request` and `unauthorized` count, and after `mission.consecutive_failure_limit` failures in a row the node moves to `Paused`.
 
 ### The base moves during the run
 

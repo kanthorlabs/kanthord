@@ -75,7 +75,7 @@ The effective configuration is the head of a **fallback chain**. The fallback li
 4. A repeated failure on the same credential doubles the cooldown, up to one day. A release with no provider failure clears it, whatever model the execution used.
 5. When the credential of every entry cools down, the work pull answers "no work". No node blocks or pauses.
 
-A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. `kanthord agent cooldown list` shows the cooldowns, and `kanthord agent cooldown clear <credential>` clears one. The agent page of the dashboard is to show a cooldown badge on each cooling chain entry, with a Clear action. That page does not show them yet, so use the CLI.
+A busy provider therefore does not count as a failure of the node. The codes `bad_request` and `unauthorized` do not advance the chain: they point to a broken configuration, and they count toward the failure limit of the node. The **Cooldown** section of the LLM credential page in the dashboard shows the cooldown of that credential: its strike and its end time. The **Details** tab of an `Available` node names each agent chain of the project that cools down. `kanthord agent cooldown list` shows the cooldowns, and `kanthord agent cooldown clear <credential>` clears one. The dashboard has no Clear action, so use the CLI to clear a cooldown.
 
 ## From configuration to a running session
 
