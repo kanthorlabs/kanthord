@@ -1235,7 +1235,7 @@ The rules of the credential sections follow.
   3. The registrations of the instance: the activity and a link to the execution.
   4. Credentials: a row shows `<name> · <platform> (v<revision>)` and its health line. A copy sealed to an ended fingerprint shows `Re-enter: sealed to an ended key`.
   5. The danger zone: `Reset key` and `Archive`.
-- The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects. The notice reads "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.md](worker-service.vocabulary.md#trust-boundary) states the trust boundary.
+- The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects. The notice reads "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.vocabulary.md](worker-service.vocabulary.md#trust-boundary) states the trust boundary.
 - `Add credential` opens a sheet with the name, the platform, the metadata, the secret and `Also seal to`. `Also seal to` lists every live instance of every worker, grouped by worker. The save sends the secret and the list of holders, and the server seals one copy for each holder, under [llm.impl.md](llm.impl.md).
 - The rotate action opens a sheet with the new secret and `Also rotate on`, which lists every other holder of the name. The save sends one rotate request for each selected holder, each with the `expected_revision` of that holder.
 - `Sign in again` opens the sign-in panel of an OAuth platform for that holder, in copy-code or device-code mode only, under [llm.impl.md](llm.impl.md).
@@ -1246,7 +1246,9 @@ The rules of the credential sections follow.
 - `apps` holds no key generation and no fallback for a page outside a secure context.
 - Below the instance configuration, the sheet shows one copy block for each tab: `Linux (systemd)`, `macOS (foreground)`, `Container` and `Container on this host`. [The copy blocks](worker-service.impl.md#the-copy-blocks) hold the content of each block.
 - `Reset key` shows the blast radius from `worker.instance.get`: the bindings that list the instance, the connection, the live registrations and executions, and the credential copies. It states "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials." After the confirmation, it calls `worker.instance.rotate` with `endpoint`, and it shows the new `instance_configuration` once.
-- `Archive` shows the bindings that list the instance and stays disabled while one binding lists it.
+- `Archive` shows the bindings that list the instance and the live executions of its registrations, from `worker.instance.get`.
+- `Archive` stays disabled while one binding lists the instance or while a registration of the instance holds a live execution.
+- When the archive answers 409 `worker.instance.in_use`, the confirmation shows `details.bindings` and `details.executions`.
 - Each row action is a row button. A row wraps its buttons with `flex-wrap`.
 - At a width of 390 px, each page shows one column. Names and fingerprints use `break-all`. A sheet opens full screen, and the instance configuration block scrolls inside itself. No page scrolls horizontally.
 
