@@ -70,7 +70,7 @@ The check of the repository binding `app` exceeds its deadline and reports `unkn
 The grouping of a resource inside its owning service in the health report. The set is closed and holds two values.
 
 - **global**: a server-wide resource; a credential store record or an agent provider of a global enablement.
-- **project**: a binding, an inbound or a registered instance, under its project.
+- **project**: a binding, an inbound or a registration, under its project.
 
 ## actor
 
@@ -100,14 +100,14 @@ An application of kanthord that a user runs. The set is closed and it holds thre
 
 - **`cli`**, which operates the system on a terminal
 - **`server`**, which holds every service in one running process, serves the RESTful API and runs the worker instances of the `server` and `container` placements
-- **`worker`**, which runs worker instances and holds no service
+- **`worker`**, which runs one worker instance and holds no service
 
 `app` is the short form of `application`, and the two words name one term.
 The application view shows the applications. A service is not an application.
 
 - The `server` application holds the eight services and the worker instances of the `server` and `container` placements.
 - `kanthord serve slot` is an internal mode of the `server` application. It runs one instance of the `container` placement inside its container.
-- The `worker` application holds worker instances.
+- The `worker` application holds one worker instance. One `kanthord serve worker` process is one instance, and its instance configuration names it.
 - A service boundary separates authority inside the server, so it describes no application.
 
 ## server
@@ -155,6 +155,8 @@ What authenticates an operation on a resource that a project uses.
 
 - **a repository credential**, which the Intake Service uses for an execution and for the Mission Service
 - **a provider credential**, which the Worker Service uses
+
+A provider credential of a worker instance at the `worker` placement is a copy sealed to the key of that instance. [custody.md](custody.md) names the holder of a copy.
 
 The type of a credential is a separate matter, and no approved page closes that set.
 [project-service.md](project-service.md) names two types.

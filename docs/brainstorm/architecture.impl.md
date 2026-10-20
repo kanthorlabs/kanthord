@@ -28,6 +28,13 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The launcher uses only syntax that a runtime below the floor parses, so a rejection reaches a human instead of a syntax error.
 - Every supported launch route passes through the launcher. A route that runs a source entry directly is a development convenience and no supported route.
 
+## The HPKE dependency
+
+- `@hpke/core` at the exact version `1.9.0` is a dependency of `engine` only. The lockfile pins its dependency `@hpke/common` at `1.10.1`.
+- It runs RFC 9180 base mode with DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and AES-128-GCM on the native WebCrypto of Node.js.
+- `apps` holds no HPKE dependency. The dashboard seals nothing. The server seals a credential copy on a human path, under [llm.impl.md](llm.impl.md).
+- [custody.impl.md](custody.impl.md) owns the sealed object. [worker-service.impl.md](worker-service.impl.md#the-instance-exchange) owns the sealed answers of the instance exchange.
+
 ## Shipped assets
 
 - The single binary embeds every shipped asset as a `node:sea` asset: the shipped prompts, the OpenAPI files, the package manifest `package.json`, and the [pi tool binaries](worker-service.impl.md#pi-tool-binaries) of its target with their license files.
@@ -108,6 +115,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The configuration file uses the configuration directory.
 - A database uses the data directory, including the operational database used by the Gateway Service.
 - A log, a history, a session record and the workspace of an execution use the state directory.
+- A worker instance at the `worker` placement is the exception. Its worker unit keeps workspaces, transcripts and `pi/` under `workers/<instance name>/` of the data directory, and its log under `workers/<instance name>/` of the state directory. [The worker application](worker-service.impl.md#the-worker-application) rules the layout. A slot root of the `server` or the `container` placement keeps its own `XDG_*_HOME` and the layout of this section.
 - A rebuildable artifact uses the cache directory, because the deletion of that directory costs nothing.
 - The state directory holds the log file under the `file` destination.
 - The server writes no file in the cache directory today.
@@ -123,10 +131,12 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
+- `workers/<instance name>.yaml` of the configuration directory, the instance configuration file of a worker instance, a path template that [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares. `kanthord worker join` and `kanthord worker instance create --output` write it, and the server reads it never.
+- `workers/<instance name>/` of the data directory and of the state directory, the data and log directories of a worker instance at the `worker` placement, path templates that [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares.
 - `workbench/<agent name>/` of the state directory, the workbench directory of an agent, a path template that [workbench-service.impl.md](workbench-service.impl.md#workbench-session) declares.
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
-- `workspaces/<node identity>/` of the state directory, with one checkout `checkouts/<binding name>/` for each repository binding, the workspace of a steps execution on an `implement` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
-- `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution or of a steps execution on an `examine` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `workspaces/<node identity>/` of the state directory, or of `workers/<instance name>/` of the data directory at the `worker` placement, with one checkout `checkouts/<binding name>/` for each repository binding, the workspace of a steps execution on an `implement` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `workspaces/<execution identity>/` of the same directory, the workspace of an evaluation execution or of a steps execution on an `examine` node, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - `kd-ssh-<deadline>-<random>/` of the system temporary directory, the private SSH agent directory of one network git operation, a path template that [repository.impl.md](repository.impl.md#the-ssh-identity) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 
@@ -183,6 +193,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
   3. Start the server. The first start creates both files.
 - The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of the `master_key` of that file in the new database, so the same `master_key` stays valid.
 - RULED 2026-10-20 by Ulrich. No migration writes the `placement` of a worker binding. After the schema check, the start reads the latest revision of each worker binding of a worker that kanthord hosts. A revision without `placement` stops the start with `system.database.binding_placement_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
+- No migration writes `worker_instances`. After the schema check, the start reads the latest revision of each live worker binding at the `worker` placement. A revision without `worker_instances` stops the start with `system.database.binding_instances_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
 - Each store owns its runner and its own `migration` history table, keyed by service and version.
 - The operational store holds the history of the services that share it.
 - `tracking.db` holds the history of the Tracking Service alone, as [tracking-service.impl.md](tracking-service.impl.md) describes.
@@ -325,7 +336,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A secret field declares no usable default, so no default supplies a secret.
 - The file is the only source of a value, so it is the only source of a secret.
 - An absent secret field stops the start, so no other source supplies a secret silently.
-- One `master_key` serves one installation: one server. No client holds `master_key`; a `worker` application holds the client secret of its machine JWT. A `master_key` that two servers share is an unsupported configuration.
+- One `master_key` serves one installation: one server. No client holds `master_key`. A worker instance at the `worker` placement holds its private key in its instance configuration, and it holds the client secrets of its bindings in memory only. A `master_key` that two servers share is an unsupported configuration.
 
 ## The server writes no configuration file
 
@@ -620,12 +631,13 @@ A fatal error runs as below.
 
 - A secret of the server configuration, for example `master_key`, is a field of the configuration file and no row of a database. A credential secret is an encrypted row of [the credential table](#the-credential-table).
 - Every secret field carries `sensitive: true`, so `convict.toString()` masks it.
-- The client configuration file of a `worker` application holds `client_secret`, and the same masking, diagnostic and display rules apply to it.
+- The instance configuration of a worker instance holds `private_key`. The same masking, diagnostic and display rules apply to the instance configuration file and to `KANTHORD_WORKER_CONFIG`.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
 - A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
-- The `auth jwt generate` command of [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) holds that exception. It prints a token and a client secret only to terminal standard output and reads no terminal input.
-- The exception covers that token display alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
+- The `auth jwt generate` command of [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) holds that exception. It prints a token only to terminal standard output and reads no terminal input.
+- `kanthord worker instance create` without `--output` holds the second exception. It prints the instance configuration once, only to terminal standard output.
+- The exceptions cover those two displays alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
 - A changed `master_key` against an existing database refuses the start with `system.config.master_key_mismatch`, as [the master_key record](custody.impl.md#the-master_key-record) of custody rules. A new `master_key` starts with a new data directory, and a human obtains a newly generated token.
@@ -656,7 +668,7 @@ A fatal error runs as below.
 - `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.
 - `kanthord serve slot` is an internal mode of the `server` application, and no human runs it. It is no application.
 - `kanthord serve` starts the server directly. `kanthord serve server` is the explicit form.
-- `kanthord serve worker` starts a `worker` application.
+- `kanthord serve worker` starts a `worker` application: one worker instance. It takes `--instance <name>` with the file source, under [the worker application](worker-service.impl.md#the-worker-application).
 - `kanthord` with no command prints the help and exits with a non-zero status, so no invocation starts an application by default.
 - `serve` defaults its optional application operand to `server`.
 - The `cli` application is no operand of `serve`, because it holds every command that is no `serve`.
@@ -668,8 +680,9 @@ A fatal error runs as below.
 - A command of the group of a service or shared component that names an operation reaches the server through the RESTful API, which [gateway-service.md](gateway-service.md) rules.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
+- `kanthord worker join` and `kanthord worker instance create --output` are the only commands that write an instance configuration file. Each creates an absent file, and `--force` is the only overwrite. `kanthord worker join` reads the instance configuration from standard input, so no secret reaches the command line.
 - The `auth` group holds every authentication command, and a bare `kanthord auth` prints the help of the group. Its `jwt` group holds `generate` and `inspect`, and a bare `kanthord auth jwt` prints the help of the group.
-- The CLI provides `kanthord auth jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
+- The CLI provides `kanthord auth jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates the machine JWT of an external harness for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). It is the only issuance entry point of a human token and of the token of an external harness. The [instance exchange](worker-service.impl.md#the-instance-exchange) mints the machine JWTs of the `worker` placement. The Gateway Service sibling owns the claim validation and the token contract.
 - The CLI provides `kanthord auth jwt inspect [token]` to decode a JWT locally. It reads no server configuration, verifies no signature and calls no route.
 - The help of a command and the validation of its arguments need no running server.
 - `--config` belongs to `config`, `serve`, and the local `auth jwt generate` command. Service and shared component commands reject that option, because they use the client configuration. `auth jwt generate` resolves the path through the same option, environment and default order as the server.
@@ -689,7 +702,8 @@ A fatal error runs as below.
 - The CLI checks the mode of the file with `lstat` before it reads the file, and a wider mode and a symlink each stop the command.
 - An absent file is no failure, because the option, the environment and the default remain.
 - The audit set of the start holds no client configuration file, because the server reads that file never.
-- A `worker` application resolves its endpoint and its machine JWT through the same order, and [gateway-service.impl.md](gateway-service.impl.md) declares those values.
+- An external harness resolves its endpoint and its machine JWT through the same order, and [gateway-service.impl.md](gateway-service.impl.md) declares those values.
+- A `worker` application reads no client configuration file. It takes its endpoint from `--endpoint`, then `KANTHORD_ENDPOINT`, then `endpoint` of its instance configuration, under [the worker application](worker-service.impl.md#the-worker-application).
 
 ## The operation and its two entry adapters
 
@@ -1094,11 +1108,12 @@ The import boundaries follow the public files.
 - The LLM, Repository and Storage components each declare one credential route group in their own `contract.ts`.
 - The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credential_name`, `POST /api/<component>/credential/:credential_name/revision`, `PUT /api/<component>/credential/:credential_name/metadata`, `POST /api/<component>/credential/:credential_name/revision/:revision/revoke`, `POST /api/<component>/credential/:credential_name/archive`, `POST /api/<component>/credential/:credential_name/verify` and `POST /api/<component>/credential/check`.
 - The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`.
-- Every route uses the `human` access policy.
+- Every route uses the `human` access policy. The LLM routes that a worker instance calls are the exception, and [llm.impl.md](llm.impl.md) declares them with the `human_or_worker` or the `worker` policy.
+- An LLM credential row has a holder: `server` or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule, and a row of the Repository or the Storage component holds `server` only.
 - Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
 - A create of a platform of another component answers 400 `credential.platform.unsupported`.
 - A read or a write of a name whose platform belongs to another component answers 404 `credential.credential.not_found`.
-- The credential name stays unique on the server, because the `credential` table is one table.
+- A credential name names one platform on the server, because the `credential` table is one table. One name holds one copy for each holder, under [custody.impl.md](custody.impl.md).
 - The record lifecycle codes stay `credential.*`, because custody raises them. A platform rule of a component takes the prefix of that component, for example `llm.metadata.base_url_fixed`.
 - The request and answer bodies keep the fields of the custody record answer. A get adds the dependents list of its component.
 - The Repository component also declares the SSH key and host key operations of [repository.impl.md](repository.impl.md#operations). The static segment `ssh` takes precedence over `/:credential_name`, so custody refuses the name `ssh`.
@@ -1147,6 +1162,7 @@ These sections hold the dashboard rules of this page:
 
 - [The credential sections of the dashboard](#the-credential-sections-of-the-dashboard)
 - [The dashboard navigation](#the-dashboard-navigation)
+- [The worker pages](#the-worker-pages)
 - [The dashboard onboarding](#the-dashboard-onboarding)
 - [The onboarding steps](#the-onboarding-steps)
 - [The return after a save](#the-return-after-a-save)
@@ -1181,6 +1197,8 @@ The rules of the credential sections follow.
 - An archived row shows its archive time, the latest `ended_at` of its revisions.
 - A credential row shows the newest live revision as `(v<revision>)` next to the credential name. An archived row shows no revision.
 - The detail of a Git credential lists the bindings that name it. Each binding links to the Bindings tab of its project.
+- `/llm` lists the rows of the holder `server` only. Its description line also states "Instance credentials live on the worker pages."
+- The check icon of the create form and Verify act on a row of the holder `server` only. A copy of a worker instance skips the pre-save check and the provider check, under [llm.impl.md](llm.impl.md).
 
 ## The dashboard navigation
 
@@ -1191,6 +1209,37 @@ The rules of the credential sections follow.
 - Overview and Scheduler read every project and offer a project filter.
 - On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
 - The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
+- The sidebar item `Workers` of the group `Workforce` opens `/workers`. The worker page `/workers/:workerName` and the instance page `/workers/:workerName/instances/:instanceName` sit under it. Each name in the path is URL-encoded, as on `/agents/:agentName`. [The worker pages](#the-worker-pages) hold the rules.
+- The sign-in screens call a saved KanthorD address a server, for example `Saved servers` and `Sign in to a KanthorD server`. The word instance names only a worker instance on the screen.
+
+## The worker pages
+
+- `/workers` lists the worker catalog. Each card links to its worker page and shows the count of live registrations of the worker.
+- The worker page shows these sections, top to bottom:
+  1. The header: the worker name, the host badge, the declared node states, the declared intents and the resource budget.
+  2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, the short fingerprint, `Connected · <connection_name>` or `Not connected`, `Executing <project> · <node>` or `Idle`, and the binding count. A row shows a holder-mismatch badge when a listing binding lacks a copy for that instance. The section holds `Add instance`. The empty state reads "No instances. Add one to run this worker at the worker placement."
+  3. Bindings: the worker bindings of this worker in the current project, with the placement and, at `worker`, the listed instance names.
+  4. Live registrations of this worker in the current project.
+- A worker of an external harness shows sections 1, 3 and 4.
+- The instance page shows these sections, top to bottom:
+  1. The header: the name, `(v<revision>)`, the worker, the fingerprint and the connection line.
+  2. The bindings that list the instance, in every project, from `worker.instance.get`: the project, the binding, the state `serving` or `draining`, and a link to the binding.
+  3. The registrations of the instance: the activity and a link to the execution.
+  4. Credentials: a row shows `<name> · <platform> (v<revision>)` and its health line, or `Re-enter: sealed to an ended key` for a copy sealed to an ended fingerprint.
+  5. The danger zone: `Reset key` and `Archive`.
+- The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects: "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.md](worker-service.md#trust-boundary) states the trust boundary.
+- `Add credential` opens a sheet with the name, the platform, the metadata, the secret and `Also seal to`. `Also seal to` lists every live instance of every worker, grouped by worker. The save sends the secret and the list of holders, and the server seals one copy for each holder, under [llm.impl.md](llm.impl.md).
+- The rotate action opens a sheet with the new secret and `Also rotate on`, which lists every other holder of the name. The save sends one rotate request for each selected holder, each with the `expected_revision` of that holder.
+- `Sign in again` opens the sign-in panel of an OAuth platform for that holder, in copy-code or device-code mode only, under [llm.impl.md](llm.impl.md).
+- The `openai-compatible` copy of an instance gets no model prefill. The human types its model ids.
+- `Add instance` opens a sheet with the name and the address. The address defaults to the address of the dashboard. A loopback dashboard address leaves the field empty with a hint. When `worker.placement.list` reports `server_in_container`, the sheet fills `http://kanthord:31415`.
+- The sheet generates the X25519 key pair in the browser with WebCrypto, and it sends only the public key to `worker.instance.create`. It then shows the instance configuration once, in monospace with `break-all` and `Copy`, with a warning that it shows only once.
+- In a page outside a secure context, the sheet generates no key. It shows `kanthord worker instance create <name> --worker <worker> --output` for the instance host in place of the form.
+- Below the instance configuration, the sheet shows one copy block for each tab: `Linux (systemd)`, `macOS (foreground)`, `Container` and `Container on this host`. [The worker application](worker-service.impl.md#the-worker-application) holds the content of each block.
+- `Reset key` shows the blast radius from `worker.instance.get`: the bindings that list the instance, the connection, the live registrations and executions, and the credential copies. It states "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials." After the confirmation, it generates a new key pair and shows the new instance configuration once.
+- `Archive` shows the bindings that list the instance and stays disabled while one binding lists it.
+- Each row action is a row button. A row wraps its buttons with `flex-wrap`.
+- At a width of 390 px, each page shows one column. Names and fingerprints use `break-all`. A sheet opens full screen, and the instance configuration block scrolls inside itself. No page scrolls horizontally.
 
 ## The dashboard onboarding
 
@@ -1262,15 +1311,16 @@ The page shows six steps in this order. In the Action column, the first rule tha
 | ------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Repository binding | The binding set holds a repository binding.                                                                   | `Open bindings` opens the Bindings tab.                                                                                                                                                                                                                           |
 | Worker bindings    | The binding set holds a worker binding.                                                                       | `Open bindings` opens the Bindings tab.                                                                                                                                                                                                                           |
-| Live instances     | One worker binding or more asks for an instance, and each of them holds a live instance.                      | `Open workers` opens `/workers?project=<project>`.                                                                                                                                                                                                                |
+| Live registrations | One worker binding or more asks for an instance, and each of them holds a live registration.                  | `Open workers` opens `/workers?project=<project>`.                                                                                                                                                                                                                |
 | Enabled agents     | The project holds a worker binding, and each agent of a hosted worker that a worker binding names is enabled. | With each named agent enabled, `Open agents` opens `/agents`. With an agent LLM credential, `Enable agents` opens `/llm/<credential>#enable-agents`. Otherwise `Enable <agent>` opens `/agents/<agent>#enablement` for the first named agent that is not enabled. |
 | Plan import        | The mission holds one node or more.                                                                           | `Open mission` opens the Mission tab.                                                                                                                                                                                                                             |
 | Project active     | The project is not paused.                                                                                    | No link. The `Resume` button of the project page resumes it.                                                                                                                                                                                                      |
 
-- A worker binding asks for an instance when its `instance_count` is above 0. A binding with `instance_count` 0 needs no instance. With no binding that asks for an instance, `Live instances` shows `Open` with the detail "No worker binding asks for an instance."
-- A live instance is registered, is not draining and carries the resource identity of the worker binding.
+- A worker binding asks for an instance when its effective instance count is above 0: `instance_count` at the `server` and the `container` placements, and the length of `worker_instances` at the `worker` placement. A binding with a count of 0 needs no instance. With no binding that asks for an instance, `Live registrations` shows `Open` with the detail "No worker binding asks for an instance."
+- A live registration is not draining and carries the resource identity of the worker binding.
+- At the `worker` placement, a listed instance with no connection sets the detail "Instance <name> is not connected. Start kanthord serve worker with its configuration."
 - A project whose worker bindings name no agent of a hosted worker shows `Enabled agents` as `Done`.
-- The panel reads the binding set, the worker bindings, the worker instances, the agents, the LLM credentials, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change, for example a plan import or a new live instance, shows only after a browser reload or a new open of the project page. Until then the item keeps its old state, for example `Plan import` stays `Open`.
+- The panel reads the binding set, the worker bindings, the registrations, the worker instance records, the agents, the LLM credentials, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change, for example a plan import or a new live registration, shows only after a browser reload or a new open of the project page. Until then the item keeps its old state, for example `Plan import` stays `Open`.
 - A failed read shows in an alert with `Retry`. An item of that read shows `Open`. Its detail line does not state the failed read. It states an absence, for example "The project holds no repository binding."
 - The links of the panel pass no `return_to`. After the save of the `Enable agents` sheet, the human stays on the detail of the LLM credential.
 - The `Enable agents` sheet lists every agent that is not enabled, also an agent that no worker binding of the project names.
