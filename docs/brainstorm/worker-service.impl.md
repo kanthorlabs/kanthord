@@ -19,6 +19,7 @@ The adapter obtains the runtime from the [model connector](llm.impl.md#the-model
 The first version supports a native agent at every placement through the same [worker unit](#the-worker-unit-and-its-wrappers), and no proxy exists.
 The hosting application gives pi its own directories.
 Before the first import of `@earendil-works/pi-coding-agent`, it sets `PI_OFFLINE=1` and sets `PI_CODING_AGENT_DIR` to `pi/` of the state directory, so pi downloads no tool binary.
+At the `worker` placement, that directory is `pi/` of the data directory of the instance, `$XDG_DATA_HOME/kanthord/workers/<name>/pi/`.
 The worker installs the [pi tool binaries](#pi-tool-binaries) into `pi/bin/`, the directory that pi searches before `PATH`.
 The adapter persists no settings file in that directory or in `~/.pi`.
 The [Agent implementation](agent.impl.md#session-file) rules the session file.
@@ -40,7 +41,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - The single binary embeds each binary of its target as the asset `pi-tools/bin/<tool>`, and each license file as `pi-tools/licenses/<tool>/<file>`.
 - The worker unit and the server both install the tools at startup, because a workbench session of the server also runs the pi tools `grep` and `find`. The server installs them after it creates the state directory and before it opens a service.
 - Each reads the binary from the embedded asset inside the single binary, and from `.pi-tools/<host target>/` in a development checkout.
-- It checks `binary_sha256`. Then it writes the binary to `pi/bin/<tool>` of the state directory with mode `0755`, through a temporary file and a rename. It skips a binary whose file already has that digest. It writes the license files to `pi/bin/licenses/<tool>/`.
+- It checks `binary_sha256`. Then it writes the binary to `pi/bin/<tool>` of the state directory with mode `0755`, through a temporary file and a rename. At the `worker` placement, it uses `pi/bin/` of the data directory of the instance. It skips a binary whose file already has that digest. It writes the license files to `pi/bin/licenses/<tool>/`.
 - Then it runs `<tool> --version` from `pi/bin/`. A missing source, a host target outside the manifest, a digest mismatch or a failed run stops the start of the worker or of the server with `worker.start.tool_missing`.
 - `pnpm run pi-tools:update <tool> <version>` of the engine rewrites the entry of one tool for the three targets with fresh digests. The root target `make pi-tools-update TOOL=<tool> VERSION=<version>` runs it. It refuses a release younger than the `minimumReleaseAge` of `pnpm-workspace.yaml`, 4320 minutes.
 - A test compares the tool set of the pi tool manager with the tools of the manifest. A pi version bump that adds or removes a tool fails it.
@@ -200,9 +201,93 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 - A Reset key gives a new instance configuration. The operator replaces the file with `kanthord worker join --force` or replaces the env value.
 - A stateless host sets `KANTHORD_WORKER_CONFIG` at each start and needs no volume for the identity. With no data volume, a restart loses the workspaces, and a resumed execution prepares its workspace again from the node branch.
 - `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_WORKER_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT` from each child process. A tool that reads `/proc` still reads the initial environment of the process, under [Trust boundary](#trust-boundary).
+- Today `childEnvironment` removes the provider keys and `SSH_AUTH_SOCK`, and it removes no `KANTHORD_*` value.
 - The template unit `kanthord-worker@.service` is a systemd user unit. It runs `kanthord serve worker --instance %i` with `Restart=on-failure` and `RestartPreventExitStatus=3`, and it sets no `XDG_*_HOME`.
 - [architecture.impl.md](architecture.impl.md#the-command-surface) states the commands `kanthord worker join` and `kanthord worker instance`.
 - Tests cover each source, the conflict, the absence with its paths, an invalid value, a file name mismatch, another `--instance`, the file modes and the environment of a child process.
+
+### The copy blocks
+
+The Add instance sheet and the Reset key result show one copy block for each host kind, under [The worker pages](architecture.impl.md#the-worker-pages).
+No block puts the instance configuration on a command line. `<name>` is the instance name, and `<version>` is the server version.
+
+`Linux (systemd)` runs the instance as a systemd user unit:
+
+1. Install the binary of the server version, and check it against `SHA256SUMS` of the release:
+
+   ```sh
+   sha256sum --ignore-missing -c SHA256SUMS
+   sudo install -m 755 kanthord-linux-<arch> /usr/local/bin/kanthord
+   ```
+
+2. Let the user units of the user run without a login session:
+
+   ```sh
+   loginctl enable-linger
+   ```
+
+3. Write the instance file. `kanthord worker join` reads the instance configuration from standard input. Paste the value, then press `Ctrl-D`:
+
+   ```sh
+   kanthord worker join
+   ```
+
+4. Write the template unit `~/.config/systemd/user/kanthord-worker@.service`:
+
+   ```ini
+   [Unit]
+   Description=KanthorD worker instance %i
+   After=network-online.target
+
+   [Service]
+   ExecStart=/usr/local/bin/kanthord serve worker --instance %i
+   Restart=on-failure
+   RestartPreventExitStatus=3
+
+   [Install]
+   WantedBy=default.target
+   ```
+
+5. Start the instance, and start it again at each boot:
+
+   ```sh
+   systemctl --user daemon-reload
+   systemctl --user enable --now kanthord-worker@<name>
+   ```
+
+`macOS (foreground)` runs the instance in a terminal. macOS has no systemd user unit, so nothing restarts the process.
+
+1. Install the binary of the server version, and check it with `shasum -a 256 --ignore-missing -c SHA256SUMS`.
+2. Run `kanthord worker join`, paste the value and press `Ctrl-D`.
+3. Run `kanthord serve worker --instance <name>`. Keep the terminal open.
+
+`Container` runs the instance on a container platform with no writable configuration:
+
+- Store the instance configuration as a secret of the platform, and expose it to the container as the env value `KANTHORD_WORKER_CONFIG`.
+- Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
+- Run one replica. A second replica supersedes the first, under [The instance exchange](#the-instance-exchange).
+- Publish no port. The instance opens every connection to the server.
+
+`Container on this host` runs the instance in a Podman container beside the server container `kanthord`. The sheet fills the endpoint `http://kanthord:31415`.
+
+1. Put both containers on one network:
+
+   ```sh
+   podman network create kanthord
+   podman network connect kanthord kanthord
+   ```
+
+2. Store the instance configuration as a Podman secret. `podman secret create` reads it from standard input. Paste the value, then press `Ctrl-D`:
+
+   ```sh
+   podman secret create kanthord-worker-<name> -
+   ```
+
+3. Start the instance:
+
+   ```sh
+   podman run -d --name kanthord-worker-<name> --network kanthord --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG docker.io/kanthorlabs/kanthord:<version> serve worker
+   ```
 
 ## The worker unit and its wrappers
 
@@ -345,7 +430,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | Operation                   | Route                                               | Policy                                    | Input                                            | Answer                                                                                                                                               |
 | --------------------------- | --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `worker.instance.create`    | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, public_key?, endpoint? }`       | 200 instance record                                                                                                                                  |
-| `worker.instance.list`      | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived` | items: instance record, `connection`, `binding_count`                                                                                                |
+| `worker.instance.list`      | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived` | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                             |
 | `worker.instance.get`       | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                             | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current }]` |
 | `worker.instance.rotate`    | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`  | 200 instance record                                                                                                                                  |
 | `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision }`                          | 200 instance record                                                                                                                                  |
@@ -356,11 +441,12 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 
 - An instance record is `{ id, name, worker, revision, public_key, fingerprint, created_at, ended_at }`.
 - `worker.instance.create` and `worker.instance.rotate` take `public_key` or `endpoint`, never both and never neither. Another input answers 400 `worker.instance.key_invalid`.
-- With `public_key`, the server stores that key. The CLI `kanthord worker instance create --output` and `rotate --output` on the instance host generate the key pair locally and send only `public_key`.
+- With `public_key`, the server stores that key. The CLI commands `kanthord worker instance create` and `rotate` generate the key pair on their host and send only `public_key`.
 - With `endpoint`, the server generates the X25519 key pair and stores only the public key. The dashboard path sends `endpoint`.
 - The answer then adds `instance_configuration`, the configuration value of [The instance configuration](#the-instance-configuration), once. The answer carries `Cache-Control: no-store`.
 - The server keeps no copy of the private key. It clears the key buffer in a `finally` block after the answer, also after a failure.
 - `connection` is `{ connection_name, connected_at, last_heartbeat_at }`, or null when the instance holds no current connection.
+- `holder_mismatch` is true when a binding that lists the instance names a credential with no live copy sealed to the current fingerprint of the instance. The worker page shows its badge from it.
 - `bindings` lists the bindings of every project that list the instance. The dashboard reads the cross-project bindings of an instance from it.
 - No answer holds a secret except the sealed objects and `instance_configuration`.
 - [gateway-service.impl.md](gateway-service.impl.md#access-policy) rules the access policies `worker` and `public`.
@@ -534,7 +620,7 @@ The pool host and the code of the worker unit keep these guarantees at every slo
 - **G2.** The pool host gives `client_secret` to the instance once at the start: in `workerData` for `thread`, in the `init` frame of the slot channel for `container`. It never enters an `env`, an argv, an image layer, a label or a file.
 - **G3.** The `env` of the instance holds only the allowlist and the directory variables. It holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - **G4.** The instance ends when its slot channel closes.
-- **G5.** The instance runs the server package version. The worker unit checks the version at its start with `worker.version.mismatch`. A [HANDOFF](HANDOFF.md#worker-service) item owns the check before each new registration.
+- **G5.** The instance runs the server package version. The worker unit checks the version at its start with `worker.version.mismatch`. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) adds the `server_version` check of each instance heartbeat.
 - **G6.** The instance ends within 5 s after `terminate()`, before the 10 s server watchdog.
 - **G7.** The instance output goes to `stderr.log` of the slot root. The server log holds no record of the worker unit.
 - **G8.** The slot channel never leaves the server host. On macOS it crosses only the local link between the runtime client and its VM.
@@ -1321,11 +1407,12 @@ These declarations match the error table of `engine/docs/cli/worker.md`.
 ## Instance CLI validation
 
 `kanthord worker join` and `kanthord worker instance create --output` write the instance file. They refuse locally with the following codes.
+`kanthord serve worker` also exits 1 with `worker.instance.config_invalid`, under [The instance configuration](#the-instance-configuration).
 
-| HTTP  | Code                             | Condition                                                                                       |
-| ----- | -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| local | `cli.worker.join.config_exists`  | The instance file of the name exists, and `--force` is absent. `--force` is the only overwrite. |
-| local | `worker.instance.config_invalid` | The instance configuration fails the configuration schema.                                      |
+| HTTP  | Code                             | Condition                                                                                                                                                         |
+| ----- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| local | `cli.worker.join.config_exists`  | The instance file of the name exists, and `--force` is absent. `--force` is the only overwrite.                                                                   |
+| local | `worker.instance.config_invalid` | The instance configuration fails the configuration schema, the file name differs from `name`, or the `--instance` of `kanthord serve worker` differs from `name`. |
 
 ## Handover CLI validation
 
