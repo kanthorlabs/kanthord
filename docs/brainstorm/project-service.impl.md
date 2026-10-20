@@ -177,9 +177,8 @@ The refusal compares the stored placements.
 - Each name names a live [worker instance](overview.vocabulary.md#worker-instance) record. An unknown or archived name refuses the write with 400 `project.bindings.worker.instance_unknown` and `details: { binding, instance }`.
 - Each instance belongs to the worker of the binding. An instance of another worker refuses the write with 400 `project.bindings.worker.instance_worker_mismatch` and `details: { binding, instance, worker }`.
 - The Project Service reads the instance records through the Worker contract inside the write transaction.
-- The list may change in any revision. `placement` never changes.
+- Any revision can change the list. `placement` never changes.
 - The [holder rule](agent.impl.md#agent-configuration-validation) of the credential copies runs under Agent configuration validation for each listed instance.
-- The latest revision of a live `worker` placement binding without `worker_instances` stops the server start with `system.database.binding_instances_missing`, under [architecture.impl.md](architecture.impl.md#the-migration).
 - The `tags` field is a list of unique strings, and an absent field reads as `[]`. Each item matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. A nonlist value, a repeated item or an item that violates the form refuses the write with 400 `project.bindings.worker.tags_invalid` and `details: { binding, tag }`.
 - Every worker binding holds `tags`, the binding of an external harness included.
 - An effective instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
@@ -237,7 +236,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 ## Worker binding configuration
 
 - A worker binding holds `instance_count`, or `worker_instances` at the `worker` placement, `placement` for a worker that kanthord hosts, optional `tags`, optional `resource_budget` and optional per-agent entries.
-- The effective instance count is `instance_count`, or the length of `worker_instances` at the `worker` placement. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count, the Gateway verification and the dashboard read one value.
+- The effective instance count is `instance_count`, or the length of `worker_instances` at the `worker` placement. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count and the Gateway verification read one value. [The worker pages](architecture.impl.md#the-worker-pages) state the rule of the dashboard.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
@@ -252,6 +251,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 - The Project Service offers `bindingsNaming(tx, credentialName)` to custody through its `contract.ts`.
 - It answers every binding revision that names the credential, when that revision is the latest revision of its binding and no tombstone, or when no tombstone follows it and the Mission collaboration `liveNodesPinning(tx, bindingId)` answers a node.
 - A binding edit that names another credential is permitted, so an older revision of the same binding can hold the dependency.
+- The Project Service offers `bindingsListingInstance(tx, instanceName, credentialName)` to custody through its `contract.ts`. It answers every worker binding whose latest revision is no tombstone, lists the instance in `worker_instances` and names the credential in its agent configuration.
 - Tests assert that a credential of a pinned older revision is a dependent, and that a rebind of every pinning node frees it once no open attempt pins the older revision, as a terminal state of every pinning node does.
 
 ## The resolution of a binding
@@ -435,7 +435,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the refusal of a change with `project.bindings.worker.placement_changed` and the refusal of the field on an external harness.
 - A test covers `project.bindings.worker.placement_unavailable` for each of its three reasons on an added binding.
 - A test covers the acceptance on `runtime_failed`, the acceptance of an edit of a live `container` binding, and a reused name that counts as added.
-- A test covers each refusal of `worker_instances`: `instances_required`, `instances_invalid`, `instance_unknown`, `instance_worker_mismatch` and `field_forbidden` in both directions. It covers the effective count of `workerBindingOf` and the start refusal `system.database.binding_instances_missing`.
+- A test covers each refusal of `worker_instances`: `instances_required`, `instances_invalid`, `instance_unknown`, `instance_worker_mismatch` and `field_forbidden` in both directions. It covers the effective count of `workerBindingOf`.
 - A test covers a removal of an instance from `worker_instances`. It asserts that no registration ends in the write and that the `binding_version` of the removed and the kept instances increases.
 - A test covers a removal, a removal by omission and a revision to `instance_count: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.

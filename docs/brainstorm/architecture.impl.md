@@ -193,7 +193,6 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
   3. Start the server. The first start creates both files.
 - The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of the `master_key` of that file in the new database, so the same `master_key` stays valid.
 - RULED 2026-10-20 by Ulrich. No migration writes the `placement` of a worker binding. After the schema check, the start reads the latest revision of each worker binding of a worker that kanthord hosts. A revision without `placement` stops the start with `system.database.binding_placement_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
-- No migration writes `worker_instances`. After the schema check, the start reads the latest revision of each live worker binding at the `worker` placement. A revision without `worker_instances` stops the start with `system.database.binding_instances_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
 - Each store owns its runner and its own `migration` history table, keyed by service and version.
 - The operational store holds the history of the services that share it.
 - `tracking.db` holds the history of the Tracking Service alone, as [tracking-service.impl.md](tracking-service.impl.md) describes.
@@ -725,7 +724,7 @@ The public interfaces have three kinds.
 - The Project Service offers `entriesOfAgent(tx, agentName)` for entries of every binding whose worker references the agent.
 - The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement through the Agent component.
 - The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. A removal or an unavailability of a worker binding and the end of its live registrations commit in the transaction of the binding-set write.
-- The Project Service offers `bindingsNaming(tx, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential archive and its dependency check are atomic, so both run in the transaction of the archive.
+- The Project Service offers `bindingsNaming(tx, credentialName)` and `bindingsListingInstance(tx, instanceName, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential archive and its dependency check are atomic, so both run in the transaction of the archive.
 - The Scheduler Service offers `unmatchedClaims(tx, projectId)` to the Mission Service and the Project Service. A node write and a binding-set write read it before and after the change in one `BEGIN IMMEDIATE` transaction, so the write never adds an unmatched pair of a node and a claimable state.
 - The Mission Service offers `claimFacts(tx, nodeId)` and `claimFactsOf(tx, projectId)`, and the Project Service offers `workerBindingsOf(tx, projectId)`, to the Scheduler Service. [The match](scheduler-service.impl.md#the-match) of the Scheduler Service lists their invariants.
 - These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
@@ -1215,6 +1214,7 @@ The rules of the credential sections follow.
 ## The worker pages
 
 - `/workers` lists the worker catalog. Each card links to its worker page and shows the count of live registrations of the worker.
+- The dashboard reads the expected instance count of a worker binding as `worker_instances.length` at the `worker` placement, and as `instance_count` at every other placement. Today `binding-instances.ts` of `apps` reads `config.instance_count` only.
 - The worker page shows these sections, top to bottom:
   1. The header: the worker name, the host badge, the declared node states, the declared intents and the resource budget.
   2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, the short fingerprint, `Connected · <connection_name>` or `Not connected`, `Executing <project> · <node>` or `Idle`, and the binding count. A row shows a holder-mismatch badge when a listing binding lacks a copy for that instance. The section holds `Add instance`. The empty state reads "No instances. Add one to run this worker at the worker placement."

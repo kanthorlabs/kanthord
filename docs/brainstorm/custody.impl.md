@@ -36,7 +36,7 @@ A mechanism here never overrides a rule there.
 - An archive checks every dependent, including agent providers, in the transaction of the commit.
 - An archive calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
 - An archive calls the Intake collaboration `inboundsNaming(tx, credentialName)` in that transaction. It answers every inbound that names the credential.
-- These dependents apply to the group of the holder `server`. An archive of an instance copy calls the Project collaboration that answers the worker bindings that list the instance and whose agent configuration names the credential.
+- These dependents apply to the group of the holder `server`. An archive of an instance copy calls the Project collaboration `bindingsListingInstance(tx, instanceName, credentialName)` in that transaction. It answers every worker binding that lists the instance and whose agent configuration names the credential.
 - An archive sets `ended_at` on every live revision of the group and keeps the rows, because an execution record references them.
 - A group with no live revision is archived. A drain and a revoke never end the newest live revision, so only an archive produces that state.
 - An archive is final. An archived group takes no rotation, metadata edit or second archive, answers 409 `credential.credential.archived`, and stays taken.
@@ -79,7 +79,10 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 ### Rules of an instance copy
 
 - An instance copy whose `sealed_to` is not the current fingerprint of its holder has no holder. The holder rule, the handover and the health of the instance refuse it.
-- `release()` refuses a row whose holder is not `server` with 409 `credential.credential.held_by_instance`. One choke point covers the verify, the pre-save check, the provider check, the model check, the model list and a workbench session.
+- Custody decrypts a stored secret only through one private open function `openSecret(row)`. It refuses a row whose holder is not `server` with 409 `credential.credential.held_by_instance` before the decrypt.
+- Every decrypt path calls `openSecret`: `release`, `releaseWorkbench`, the resource check of `resourceInventory`, `resourceCheck` and `verify`, `checkMaterial` and `updateMetadata`.
+- The refusal therefore covers the verify, the pre-save check, the provider check, the model check, the model list and a workbench session.
+- Today `src/custody/service.ts` calls `decrypt` of `envelope.ts` directly in five places: `capturedResourceCheck`, `release`, `releaseWorkbench`, `checkMaterial` and `updateMetadata`.
 - A record answer adds `holder`, `sealed_to` and `sealed_current`. `sealed_current` is true when `sealed_to` equals the current fingerprint of the holder, and it is true for `server`.
 
 ## Suitability

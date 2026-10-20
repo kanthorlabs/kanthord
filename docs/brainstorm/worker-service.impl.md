@@ -331,6 +331,8 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - Every credential copy sealed to the old fingerprint has no holder until a human enters its secret again, under [custody.impl.md](custody.impl.md).
 - An archive ends the live revision for good. It names `expected_revision`.
 - The archive refuses while a binding that is no tombstone lists the instance, with 409 `worker.instance.in_use` and `details.bindings`.
+- The archive also refuses while a registration of the instance is the claimant of an execution with a null `ended_at`, with 409 `worker.instance.in_use` and `details.executions`. A draining execution therefore ends before the archive.
+- In the same transaction, the archive ends every live registration whose `instance_id` names a revision of the instance.
 - In the same transaction, the archive calls the custody collaboration `archiveHeld(tx, holder)`, which archives every live credential row of the instance.
 - The confirmations of Reset key and Archive read `worker.instance.get`. They list the bindings that list the instance, the connection, the live registrations and executions, and the credential copies.
 - The Reset key confirmation states: "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials."
@@ -366,19 +368,19 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 
 ### Error codes of an instance
 
-| HTTP | Code                                    | Condition                                                                                                                      |
-| ---- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 409  | `worker.instance.name_conflict`         | The name is taken, by a live or an archived instance.                                                                          |
-| 400  | `worker.instance.name_invalid`          | The name breaks the form or is reserved.                                                                                       |
-| 400  | `worker.instance.worker_invalid`        | The worker is unknown or is a worker of an external harness.                                                                   |
-| 400  | `worker.instance.key_invalid`           | The key is no base64url 32-byte value, all its bytes are zero, or the input holds both `public_key` and `endpoint` or neither. |
-| 409  | `worker.instance.key_conflict`          | A row of any instance holds the fingerprint.                                                                                   |
-| 404  | `worker.instance.not_found`             | The name is unknown, or the `instance_id` is unknown or ended.                                                                 |
-| 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                                                                  |
-| 409  | `worker.instance.archived`              | A write names an archived instance.                                                                                            |
-| 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists. `details.bindings` lists them.                                              |
-| 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                             |
-| 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                              |
+| HTTP | Code                                    | Condition                                                                                                                                               |
+| ---- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 409  | `worker.instance.name_conflict`         | The name is taken, by a live or an archived instance.                                                                                                   |
+| 400  | `worker.instance.name_invalid`          | The name breaks the form or is reserved.                                                                                                                |
+| 400  | `worker.instance.worker_invalid`        | The worker is unknown or is a worker of an external harness.                                                                                            |
+| 400  | `worker.instance.key_invalid`           | The key is no base64url 32-byte value, all its bytes are zero, or the input holds both `public_key` and `endpoint` or neither.                          |
+| 409  | `worker.instance.key_conflict`          | A row of any instance holds the fingerprint.                                                                                                            |
+| 404  | `worker.instance.not_found`             | The name is unknown, or the `instance_id` is unknown or ended.                                                                                          |
+| 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                                                                                           |
+| 409  | `worker.instance.archived`              | A write names an archived instance.                                                                                                                     |
+| 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists, or whose registration holds a live execution. `details.bindings` or `details.executions` lists them. |
+| 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                                                      |
+| 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                                                       |
 
 The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`.
 

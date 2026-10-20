@@ -324,7 +324,7 @@ The server stores no private key.
 - Each credential that the instance uses is a copy that the instance holds, sealed to its public key. The server stores only the ciphertext. [custody.md](custody.md) rules the holder of a credential.
 - An OAuth sign-in for an instance runs on the instance, in copy-code or device-code mode only, under [llm.md](llm.md).
 - A Reset key gives the instance a new key pair and a new revision. Every token, connection and registration of the old revision ends. Every credential copy sealed to the old key has no holder until a human enters its secret again.
-- An archive ends the instance for good. The server refuses it while a binding lists the instance. An archived name stays taken.
+- An archive ends the instance for good, and it ends every registration of the instance. The server refuses it while a binding lists the instance or an execution of the instance is live. An archived name stays taken.
 
 [worker-service.impl.md](worker-service.impl.md#worker-instances) states the record, the operations and the exchange.
 

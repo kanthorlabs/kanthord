@@ -240,7 +240,9 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The additional authenticated data of the envelope is the row identity and the platform.
 - Revision 1 of a `(name, holder)` group holds the cooldown of that copy in `available_at` and `strikes`. A rotation inserts the next revision with no hold and copies none. The Agent component reads and writes the hold through the Custody port `CredentialHolds`.
 - An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision of the group and keeps the rows. A group with no live revision is archived, and an archive is final. The archive of a worker instance archives every live group of that holder in its transaction.
+- The dependents above apply to a group of the holder `server`. The dependents of a group of an instance holder are the worker bindings that list the instance and whose agent configuration names the credential. The Project Service answers them through `bindingsListingInstance`.
 - A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
+- Today `credential` holds no `holder` and no `sealed_to`, and its unique index is `(name, revision)`. Layer 5 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) builds both columns and the index `(name, holder, revision)`.
 
 ### Repository component
 
@@ -273,8 +275,9 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `name` takes the binding-name form. A taken name answers 409 `worker.instance.name_conflict`, an archived name included. The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`.
 - `worker` names a catalog worker that kanthord hosts. The Worker Service validates the name form, the worker and the key form before the write. `name` and `worker` never change.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived, and an archive is final.
-- Only a key reset inserts a revision. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
-- An archive ends the live revision. It is refused while a worker binding that is no tombstone lists the instance, with 409 `worker.instance.in_use`.
+- Only a Reset key inserts a revision. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
+- An archive ends the live revision and every live registration of the instance. It is refused while a worker binding that is no tombstone lists the instance, or while a registration of the instance holds a live execution, with 409 `worker.instance.in_use`.
+- Today the engine holds no table of this form. Its table `worker_instance` holds the per-binding registration. Layer 2 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) renames it to `worker_registration`, and layer 3 builds this table.
 
 ### Agent component
 
