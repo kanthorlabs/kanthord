@@ -63,7 +63,7 @@ It describes no mechanism of another service.
 - The Gateway Service authenticates a machine.
 - An external harness receives its expiring credential only from a human, through an explicit local generation command.
 - That credential is the only credential of the external harness.
-- A [worker instance](worker-service.vocabulary.md#worker-instance) at the `worker` placement holds one private key. That key is its only machine credential.
+- A [worker instance](overview.vocabulary.md#worker-instance) at the `worker` placement holds one private key. That key is its only machine credential.
 - The instance exchanges proof of the key for a [worker token](gateway-service.vocabulary.md#worker-token), and then for one credential for each worker binding that lists the instance. The [instance exchange](worker-service.impl.md#the-instance-exchange) owns the steps.
 - For an instance at the `server` or the `container` [placement](worker-service.vocabulary.md#placement), the `server` application mints a machine credential in memory for each call.
 - That credential names the client identity of the [pool slot](worker-service.vocabulary.md#pool-slot). It reaches no file, no container and no worker unit.

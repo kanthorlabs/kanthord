@@ -1227,7 +1227,7 @@ The rules of the credential sections follow.
   3. The registrations of the instance: the activity and a link to the execution.
   4. Credentials: a row shows `<name> · <platform> (v<revision>)` and its health line, or `Re-enter: sealed to an ended key` for a copy sealed to an ended fingerprint.
   5. The danger zone: `Reset key` and `Archive`.
-- The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects: "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.md](worker-service.md#trust-boundary) states the trust boundary.
+- The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects: "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.md](worker-service.vocabulary.md#trust-boundary) states the trust boundary.
 - `Add credential` opens a sheet with the name, the platform, the metadata, the secret and `Also seal to`. `Also seal to` lists every live instance of every worker, grouped by worker. The save sends the secret and the list of holders, and the server seals one copy for each holder, under [llm.impl.md](llm.impl.md).
 - The rotate action opens a sheet with the new secret and `Also rotate on`, which lists every other holder of the name. The save sends one rotate request for each selected holder, each with the `expected_revision` of that holder.
 - `Sign in again` opens the sign-in panel of an OAuth platform for that holder, in copy-code or device-code mode only, under [llm.impl.md](llm.impl.md).

@@ -606,7 +606,8 @@ It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /ap
 It forwards `POST /api/worker/instance/token`, `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat` and `POST /api/worker/ssh/sign` for a worker instance at the `worker` placement.
 It forwards the LLM credential routes that a worker token calls, which [llm.impl.md](llm.impl.md) lists.
 It forwards the registered work-pull, claim inspection, release and MCP paths for an instance outside the host of the server.
-It forwards no other path. A worker instance at the `worker` placement reads no OpenAPI route, because it compares `server_version` from the worker token answer and the heartbeat answer.
+It forwards `GET /api/openapi.yaml`, because the worker unit reads the server package version there at its start, at every placement.
+It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
 An instance presents a JWT on every request, so the ingress provides confidentiality for registration, heartbeat, work-pull and MCP traffic.
 A credential handover uses encryption under keys derived from the client secret.

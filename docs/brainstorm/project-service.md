@@ -84,7 +84,7 @@ A worker binding names one worker.
 The worker that a worker binding names never changes. A project removes the binding and adds another one instead.
 
 - A worker binding holds its instance count.
-- At the `worker` placement, a worker binding names its registered [worker instances](worker-service.vocabulary.md#worker-instance) in `worker_instances` in place of an instance count. The length of that list is its instance count.
+- At the `worker` placement, a worker binding names its registered [worker instances](overview.vocabulary.md#worker-instance) in `worker_instances` in place of an instance count. The length of that list is its instance count.
 - Each listed instance belongs to the worker of the binding. One instance can serve worker bindings of several projects.
 - An instance count of 0 makes the binding unavailable.
 - A worker binding of a worker that kanthord hosts holds its [placement](worker-service.vocabulary.md#placement): `server`, `container` or `worker`. Every write of the binding states it.

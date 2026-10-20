@@ -174,7 +174,7 @@ The refusal compares the stored placements.
 - A worker binding at the `worker` placement holds `worker_instances` in place of `instance_count`. A binding at the `server` or the `container` placement and a binding of an external harness hold `instance_count`. The other field refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`.
 - `worker_instances` is required at the `worker` placement. A write without it refuses with 400 `project.bindings.worker.instances_required` and `details: { binding }`.
 - `worker_instances` is a list of 0 to 64 unique instance names. Another shape, a list above 64 names or a repeated name refuses the write with 400 `project.bindings.worker.instances_invalid` and `details: { binding, instance }`.
-- Each name names a live [worker instance](worker-service.vocabulary.md#worker-instance) record. An unknown or archived name refuses the write with 400 `project.bindings.worker.instance_unknown` and `details: { binding, instance }`.
+- Each name names a live [worker instance](overview.vocabulary.md#worker-instance) record. An unknown or archived name refuses the write with 400 `project.bindings.worker.instance_unknown` and `details: { binding, instance }`.
 - Each instance belongs to the worker of the binding. An instance of another worker refuses the write with 400 `project.bindings.worker.instance_worker_mismatch` and `details: { binding, instance, worker }`.
 - The Project Service reads the instance records through the Worker contract inside the write transaction.
 - The list may change in any revision. `placement` never changes.
