@@ -10,6 +10,8 @@ Start an application and keep it running until cancellation, a shutdown signal, 
 
 Startup opens the operational log and SQLite store, applies every migration to a new database, and binds the listener. A configuration version or a pending migration stops the start; run [upgrade](upgrade.md). A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`; install the matching binary or restore the backups. A database schema that differs from its migration text stops the start with `system.database.migration.schema_mismatch`; run the [reset procedure](upgrade.md#reset-a-pre-release-database). A `master_key` that does not match an existing database stops the start with `system.config.master_key_mismatch`; restore the configuration file that created the database, or the matching database backup. The first start records the `master_key` of a new database. Startup issues no JWT and requires no terminal. Obtain human or machine tokens explicitly with [JWT generation](auth/jwt.md). The default listener is `127.0.0.1:31415`. Startup also installs the pinned `rg` and `fd` into `pi/bin/` of the state directory for the pi tools of a workbench session; a tool that cannot be installed or run stops the start with `worker.start.tool_missing`. The server host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent`, `ssh-add` and `ssh-keyscan`. A missing tool stops the start with `repository.connector.tool_missing`, and an older tool with `repository.connector.tool_version`. The server keeps each SSH key in custody and needs no file under `~/.ssh`; see [SSH keys](repository/ssh-key.md).
 
+A worker binding of a worker that kanthord hosts without `placement` stops the start with `system.database.binding_placement_missing`; run the [reset procedure](upgrade.md#reset-a-pre-release-database). At the `container` placement, the server starts one container for each worker instance from the image `<worker.container_image>:<server version>`. The server setting `worker.container_image` holds an image name with no tag and no digest, and its default is `docker.io/kanthorlabs/kanthord`. A value with a tag or a digest stops the start with `system.config.invalid_field`. When the container runtime is unavailable at the start, the server logs `worker.pool.driver_unavailable` and still starts, and the slots start again with a backoff when the runtime recovers. See [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md) and [worker placements](worker/placement.md).
+
 Each network git operation of the server or a worker creates its SSH agent socket in the temporary directory of the host. A temporary directory path above 75 bytes makes every SSH operation fail with `repository.connector.ssh_agent_failed`, step `socket_path`. Set `TMPDIR` to a short path such as `/tmp`; see [the temporary directory limit](repository/ssh-key.md#the-temporary-directory-limit).
 
 `SIGINT` and `SIGTERM` initiate graceful shutdown with a 10-second bound. Shutdown stops admission, cancels waiting work and streams, drains in-flight work, and releases server resources. `SIGHUP` reopens the log; reopen failure initiates shutdown. Use [liveness](gateway/liveness.md) to inspect the running server.
@@ -22,6 +24,14 @@ The worker host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with
 
 `SIGINT`, `SIGTERM`, or cancellation stops the pull loop and deregisters the worker instance. A stop during a live execution cancels that execution and fails with `worker.stop.execution_live`.
 
+### Slot (internal)
+
+`kanthord serve slot` is the command of a slot container at the `container` placement. The server starts it. A human never runs it, `--help` does not list it, and it takes no option.
+
+The command reads the frames of the slot channel from standard input, one JSON object for each line. The first frame is `init`. The command writes frames to file descriptor 3 only, and every other output goes to standard error. A `control` frame or a `SIGTERM` or `SIGINT` stops the worker thread, and a thread that does not exit within 5 seconds after a signal is ended. When the thread exits, the command exits with the exit code of the thread.
+
+A signal before the `init` frame exits `0`. The command exits `1` with a diagnostic of the [CLI diagnostics](errors.md#cli-diagnostics) when no `init` frame arrives within 10 seconds, when a line is no valid frame or the first frame is not `init`, and when standard input ends or no frame arrives within 15 seconds. A deadline of 5 seconds after a signal exits `1` with no code. A failed write to file descriptor 3 ends the command with `worker.slot.channel_closed`.
+
 ## Expected response
 
 This is a long-running process, not a JSON-returning command. A clean run exits `0`; failure exits `1`.
@@ -32,6 +42,8 @@ This is a long-running process, not a JSON-returning command. A clean run exits 
 | Worker operational log | `Worker application ready` with the runtime identity confirms that the version matched and the registration succeeded. |
 | Exit code `0`          | Application completed a clean run and shutdown.                                                                        |
 | Exit code `1`          | Startup or runtime failed; a [diagnostic](errors.md#cli-diagnostics) identifies the failure.                           |
+
+The internal `serve slot` exits `0` or `1` as described in its section.
 
 A pi tool that cannot be installed or run reports `worker.start.tool_missing` on the server and on the worker. A worker version-read failure reports `worker.version.unavailable`; a mismatch reports `worker.version.mismatch`.
 
@@ -54,7 +66,7 @@ kanthord serve worker --endpoint http://127.0.0.1:31415 --token '<machine-jwt>'
 
 | Argument / option  | Applies to  | Default / resolution                                                  | Purpose                                                                |
 | ------------------ | ----------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `[application]`    | `serve`     | `server`; supported choices are `server` and `worker`                 | Selects the application to start.                                      |
+| `[application]`    | `serve`     | `server`; supported choices are `server` and `worker`                 | Selects the application to start. The internal `slot` is no choice.    |
 | `--config <path>`  | Server only | `KANTHORD_CONFIG` → XDG/default server configuration path             | Server configuration; see [path precedence](config/init.md#cli-shape). |
 | `--endpoint <url>` | Worker only | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL for the version check and every worker call.           |
 | `--token <jwt>`    | Worker only | `KANTHORD_TOKEN` → client-file token                                  | Machine credential for registration, heartbeat, and work pull.         |

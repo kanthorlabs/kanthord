@@ -68,7 +68,7 @@ KillMode=mixed
 WantedBy=multi-user.target
 ```
 
-`KillMode=mixed` sends the stop signal to the server process only. The server then stops each worker instance itself.
+`KillMode=mixed` sends the stop signal to the server process only. The server then stops each worker instance itself. To run worker instances in containers on this server, see [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
 
 Start the server:
 

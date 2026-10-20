@@ -421,6 +421,7 @@ Tests of the slot driver:
 - The driver keeps the newest answer for 10 s and reuses it. A launch with no answer yet waits for one.
 - The driver uses the runtime of the newest available answer.
 - The runtime CLI runs with the full server `env`, because Podman reads `HOME`, `XDG_RUNTIME_DIR`, `XDG_DATA_HOME` and `CONTAINER_HOST`, and Docker reads `DOCKER_HOST` and `DOCKER_CONTEXT`. Only the named `--env` variables reach the container.
+- A server with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME` loses the Podman machine connection, because Podman keeps the connection list under those directories. The check then answers `runtime_failed`.
 - `check()` runs outside every transaction.
 
 ### The placement list
@@ -534,6 +535,10 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 
 - A deadline timer defers the exit by one `setImmediate` and checks the time of the last frame again, so a pending frame after a host wake keeps the instance.
 - A `SIGTERM` or a `SIGINT` inside the container acts as the `stop` control.
+- A frame that arrives before `init` and is not `init` ends the instance with `worker.slot.frame_invalid`.
+- A signal before `init` exits 0, because no thread runs yet.
+- The `stop` on the signal path has a 5 s deadline. When the thread does not exit, `serve slot` ends the thread and exits 1 with no error code.
+- A failed write to fd 3 ends the instance with `worker.slot.channel_closed`.
 - When the thread exits, `serve slot` flushes fd 3 and exits with the exit code of the thread.
 - When PID 1 exits, the runtime kills every process of the container. G4 therefore holds when the runtime keeps stdin open after the client dies.
 
@@ -641,7 +646,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   - a body above the limit with 413 `gateway.request.body_too_large`;
   - a body with a duplicate member, and a body that is no JSON value;
   - a body on an operation with no body, and a numeric query value;
-  - a registration of a client identity that is no pool slot on a binding at the `server` placement, with 409 `worker.instance.placement_mismatch`.
+  - a registration of a client identity that is no pool slot on a binding at the `server` or `container` placement, with 409 `worker.instance.placement_mismatch`.
 
 ## The execution setup
 
