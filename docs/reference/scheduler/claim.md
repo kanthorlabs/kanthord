@@ -22,7 +22,7 @@ The API returns HTTP `200` with one [`ExecutionRecord`](execution.md#executionre
   "claimant": {
     "worker_binding_id": "binding_01JZ8PZ5N6P7Q8R9S0T1V2W3X4",
     "resource_identity": "<resource-identity>",
-    "runtime_identity": "worker_instance_01JZ8R0Y1Z2A3B4C5D6E7F8G9H",
+    "runtime_identity": "worker_registration_01JZ8R0Y1Z2A3B4C5D6E7F8G9H",
     "client_id": "client_identity_01JZ8QZW2X3Y4Z5A6B7C8D9E0F",
     "name": "Worker display name"
   },

@@ -1,10 +1,10 @@
-# Register a worker instance
+# Create a worker registration
 
 [Reference index](../README.md)
 
 ## Function description
 
-Register a worker instance using an existing machine bearer JWT and receive its runtime identity, not another JWT. The API and `kanthord worker register` create no human account, client identity, or worker definition.
+Create a worker registration with an existing machine bearer JWT and receive its runtime identity, not another JWT. The API and `kanthord worker register` create no human account, client identity, or worker definition.
 
 Generate the credential locally with [`kanthord auth jwt generate --project <project id> --binding <binding name>`](../auth/jwt.md). Its business claims are `kind: "client"`, `sub`, `name`, `project_id`, and `resource_identity`. Gateway verifies the token and resolves the worker binding in its project. Registration adds no claim to the JWT and issues no token.
 
@@ -37,8 +37,8 @@ The CLI adds the retry key, writes one JSON line to stdout, and exits `0` (shown
 
 | Property            | Type                  | Surface     | Purpose                                                                       |
 | ------------------- | --------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `runtime_identity`  | string                | API and CLI | Runtime identity of the registered worker instance; not a JWT.                |
-| `resource_identity` | string                | API and CLI | Worker binding of the instance, as `worker:kanthord:<binding name>`.          |
+| `runtime_identity`  | string                | API and CLI | Runtime identity of the worker registration; not a JWT.                       |
+| `resource_identity` | string                | API and CLI | Worker binding of the registration, as `worker:kanthord:<binding name>`.      |
 | `worker_name`       | string                | API and CLI | Name of the worker definition that the binding selects.                       |
 | `idempotency_key`   | canonical ULID string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
 
@@ -48,14 +48,14 @@ Neither response contains a token or expiry. The CLI saves no credential or endp
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                        | Meaning                                                                                                                                                                                              |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized` | Missing, invalid, or expired token, a human token, or a token with a `binding` claim. Also a machine token whose binding is absent, removed, set to zero instances, or removed after token issuance. |
-| `400 gateway.idempotency.invalid_key`     | Missing or malformed idempotency key, checked after authentication.                                                                                                                                  |
-| `409 gateway.idempotency.conflict`        | Conflicting reuse of an idempotency key.                                                                                                                                                             |
-| `409 gateway.registration.stale`          | The recorded registration has ended; replay does not recreate the instance.                                                                                                                          |
-| `409 worker.instance.placement_mismatch`  | The binding is at the `server` or the `container` placement, and the client identity is not a pool slot of that binding.                                                                             |
-| `409 worker.instance.slot_unavailable`    | The binding is absent or removed, or every instance slot of the binding is in use.                                                                                                                   |
+| HTTP status / code                           | Meaning                                                                                                                                                                                              |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`    | Missing, invalid, or expired token, a human token, or a token with a `binding` claim. Also a machine token whose binding is absent, removed, set to zero instances, or removed after token issuance. |
+| `400 gateway.idempotency.invalid_key`        | Missing or malformed idempotency key, checked after authentication.                                                                                                                                  |
+| `409 gateway.idempotency.conflict`           | Conflicting reuse of an idempotency key.                                                                                                                                                             |
+| `409 gateway.registration.stale`             | The recorded registration has ended; replay does not recreate the registration.                                                                                                                      |
+| `409 worker.registration.placement_mismatch` | The binding is at the `server` or the `container` placement, and the client identity is not a pool slot of that binding.                                                                             |
+| `409 worker.registration.slot_unavailable`   | The binding is absent or removed, or every instance slot of the binding is in use.                                                                                                                   |
 
 A declared failure makes the CLI exit `1` and print `<code>: worker register: request failed` and the rows `status` and `idempotency_key`, without credentials. A transport failure, timeout, or malformed response exits `1` with `cli.worker.register.indeterminate`, the message `worker register: the result is unknown; retry with the same idempotency key` and the row `idempotency_key`. Reuse the same key and machine token after an indeterminate result; there is no automatic retry.
 

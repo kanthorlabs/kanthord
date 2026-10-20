@@ -149,25 +149,25 @@ function watchWorkers() {
   }
 }
 
-async function watchInstances(quiet) {
+async function watchRegistrations(quiet) {
   const page = await api.get(
-    `/api/worker/instance?project_id=${state.project_id}`,
+    `/api/worker/registration?project_id=${state.project_id}`,
   );
-  for (const inst of page?.items ?? []) {
-    const id = inst.runtime_identity;
-    const label = `placement=${inst.placement} activity=${inst.activity} draining=${inst.draining} resource=${inst.resource_identity} worker=${inst.worker_name}`;
+  for (const registration of page?.items ?? []) {
+    const id = registration.runtime_identity;
+    const label = `placement=${registration.placement} activity=${registration.activity} draining=${registration.draining} resource=${registration.resource_identity} worker=${registration.worker_name}`;
     const before = runtimeStates.get(id);
     if (!quiet && before !== label)
-      console.log(`${now()} instance ${id}: ${before ?? "-"} -> ${label}`);
+      console.log(`${now()} registration ${id}: ${before ?? "-"} -> ${label}`);
     runtimeStates.set(id, label);
   }
   const listed = new Set(
-    (page?.items ?? []).map((inst) => inst.runtime_identity),
+    (page?.items ?? []).map((registration) => registration.runtime_identity),
   );
   for (const id of [...runtimeStates.keys()]) {
     if (listed.has(id)) continue;
     runtimeStates.delete(id);
-    if (!quiet) console.log(`${now()} instance ${id} -> gone`);
+    if (!quiet) console.log(`${now()} registration ${id} -> gone`);
   }
 }
 
@@ -205,7 +205,7 @@ for (let tick = 0; ; tick++) {
     await watchExecutions(tick === 0);
     if (isServerManaged(state.placement)) {
       if (state.placement === "container") watchImage();
-      await watchInstances(tick === 0);
+      await watchRegistrations(tick === 0);
     } else {
       watchWorkers();
     }
