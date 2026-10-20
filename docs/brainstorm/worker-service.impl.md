@@ -732,6 +732,7 @@ The carrier of that attribution is an epic decision.
 - The worker keeps the last 4 KiB of the combined stdout and stderr of each item. The output is not evidence. The task revision carries the output of the last item that ran.
 - An agent turn that ends with a provider error stops the execution with `provider_failed`. pi retries a transient error before the turn ends.
 - The stop code names the provider failure: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
+- The stop `detail` holds the cause text: the error text of a provider error reply, or `<error name>: <message>` of an error that a prompt to the agent session throws, with the reason `operation_failed`. `redactReason` removes the credential secrets read at the open and at the stop, bearer values, JWTs and tokens of 32 or more characters, keeps a file path, and cuts the text to 300 characters. Other stops carry no `detail`.
 - A task revision after a failed verification that changes no file twice in a row stops the execution with `no_progress`. The second unchanged revision runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.

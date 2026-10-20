@@ -270,13 +270,13 @@ When the node is `Completed`, open the repository on GitHub. The branch `kanthor
 A node can also stop in two other states:
 
 - `Blocked`: the assessment is `undetermined`, or the attempt got its third `criterion-not-met`. The **Attempts** tab shows the rationale of each assessment. Fix the cause, then select **Unblock** on the **Details** tab of the node sheet.
-- `Paused`: three executions in a row failed, or three executions in a row ended at their budget with no task done. A provider failure with the code `rate_limited`, `quota_exhausted` or `unavailable` does not count as a failed execution. See [Provider failures](#provider-failures). The **Attempts** tab shows the stop of each execution. Fix the cause, then select **Resume** on the **Details** tab of the node sheet.
+- `Paused`: three executions in a row failed, or three executions in a row ended at their budget with no task done. A provider failure with the code `rate_limited`, `quota_exhausted` or `unavailable` does not count as a failed execution. See [Provider failures](#provider-failures). The **Records** list of each attempt on the **Attempts** tab shows the stop and the **Cause:** of each execution. Fix the cause, then select **Resume** on the **Details** tab of the node sheet.
 
 [How a worker works](../explanation/worker.md#the-life-of-an-implement-node) explains every state and the limits.
 
 ### Provider failures
 
-When the provider of the model fails a call, the execution ends with a provider failure. Each attempt on the **Attempts** tab shows the end of its last execution, for example **Last execution ended 2026-10-20 03:28 UTC: Provider failed: rate limited**. The line **Cause:** below it holds the provider error text, for example `OAuth auth derivation failed for anthropic: Cannot find module '...'`. The worker removes the secrets and cuts the text to 300 characters. The **Scheduler** page and the **Overview** item of a `Paused` node show the same cause.
+When the provider of the model fails a call, the execution ends with a provider failure. Each attempt on the **Attempts** tab shows the end of its last execution, for example **Last execution ended 2026-10-20 03:28 UTC: Provider failed: unavailable**. The line **Cause:** below it holds the provider error text, for example `OAuth auth derivation failed for anthropic: Cannot find module '...'`. The worker removes the secrets and cuts the text to 300 characters. The **Records** list of the attempt shows the stop and the cause of each earlier execution. The **Scheduler** page and the **Overview** item of a `Paused` node show the same cause. An error of the agent session, for example a failed OAuth refresh, shows as **Operation failed** with a **Cause:** line.
 
 | Code              | Effect                                                                    |
 | ----------------- | ------------------------------------------------------------------------- |
@@ -294,8 +294,8 @@ An `unauthorized` or `bad_request` failure counts as a failed execution. Three f
 
 The dashboard shows a cooldown in three places:
 
-- The **Cooldown** section of the LLM credential page shows "Strike <n>. Claims skip this credential until <time>." After the end, it shows "No live cooldown. Strike <n> stays until a release without a provider failure."
-- The **Details** tab of an `Available` node shows "An agent chain of this project cools down." with each cooling agent and its end time.
+- The **Cooldown** section of the LLM credential page shows "Strike <n>. Claims skip this credential until <time>." After the end, it shows "No live cooldown. Strike <n> stays until a release without a provider failure." After a clear, or after a release without a provider failure, it shows "No cooldown. Claims can use this credential." The page does not refresh by itself, so reload it to see the current hold.
+- The **Details** tab of an `Available` node shows "An agent chain of this project cools down." with each agent whose every model cools down, and the end time.
 - While every model of an agent cools down, **Overview** shows "<agent> in <binding> of <project>: every model cools down until <time>." With a project chosen in the project filter, the sentence has no "of <project>".
 
 The dashboard does not clear a cooldown. To list or clear a cooldown, use the CLI with the human token of [guide step 4](../how-to-guides/run-in-a-container.md#4-sign-in):

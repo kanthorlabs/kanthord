@@ -57,7 +57,7 @@ A rotation and a revoke end every older live revision that no live execution pin
 
 ### Cooldowns
 
-A provider failure with the code `rate_limited`, `unavailable` or `quota_exhausted` puts the credential into a cooldown. The credential answer carries no cooldown. Read it with [`agent cooldown list`](../agent/cooldown.md). The **Cooldown** section of the LLM credential page in the dashboard shows the same hold.
+A provider failure with the code `rate_limited`, `unavailable` or `quota_exhausted` puts the credential into a cooldown. The credential answer carries no cooldown. Read it with [`agent cooldown list`](../agent/cooldown.md). The **Cooldown** section of the LLM credential page in the dashboard shows the same hold. Clear it with [`agent cooldown clear`](../agent/cooldown.md#cooldown-clear).
 
 ### Commands
 
