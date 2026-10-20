@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
+import { requireContainerImageFile } from "./dev-config.mjs";
 import {
   mergedProviders,
   requireEnablementCredentials,
@@ -20,16 +21,24 @@ import {
   sshCredentialNameOf,
   sshHostOf,
 } from "./ssh-identity.mjs";
+import { imageIdField } from "./images.mjs";
+import { isServerManaged, PLACEMENTS } from "./placement.mjs";
 import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
 
-const [configPath, run, pausedFlag = "1", placement = "server"] =
+const [configPath, run, pausedFlag = "1", placement = "server", devConfig] =
   process.argv.slice(2);
 if (!configPath || !run) throw new Error("usage: start.mjs <config> <run>");
 const paused = pausedFlag !== "0";
 if (!/^[a-z0-9][a-z0-9-]*$/.test(run))
   throw new Error("RUN holds lower-case letters, digits and hyphens");
-if (placement !== "server" && placement !== "worker")
-  throw new Error(`PLACEMENT must be server or worker, got ${placement}`);
+if (!PLACEMENTS.includes(placement))
+  throw new Error(
+    `PLACEMENT must be ${PLACEMENTS.join(", ")}, got ${placement}`,
+  );
+if (placement === "container") {
+  if (!devConfig) throw new Error("container placement needs the dev config");
+  requireContainerImageFile(devConfig);
+}
 
 const PRIVATE_DIRECTORY = 0o700;
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "../..");
@@ -149,6 +158,7 @@ const runState = {
   ssh_credential: sshCredentialName,
   deploy_key_id: null,
   placement,
+  ...imageIdField(placement, ROOT),
 };
 writeRunState();
 runState.deploy_key_id = addDeployKey({
@@ -286,7 +296,7 @@ Object.assign(runState, {
   mission_id: mission.id,
 });
 
-if (placement === "server") {
+if (isServerManaged(placement)) {
   log("workers managed by the daemon pool", {
     bindings: config.workers.map((worker) => worker.binding),
   });

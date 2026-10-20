@@ -4,6 +4,9 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { mainCheckout } from "./api.mjs";
 import { stopDevDaemon } from "./daemon.mjs";
+import { buildDevImages } from "./images.mjs";
+import { isServerManaged } from "./placement.mjs";
+import { restartServerManaged } from "./restart-steps.mjs";
 import { spawnWorker, stopWorkers } from "./workers.mjs";
 
 const DAEMON_WAIT_S = 60;
@@ -36,10 +39,22 @@ async function startDaemon(devLog) {
   );
 }
 
-if (state.placement === "server") {
+function saveState(next) {
+  writeFileSync(stateFile, `${JSON.stringify(next, null, 2)}\n`);
+}
+
+if (isServerManaged(state.placement)) {
   const devLog = join(MAIN, ".dev/e2e/dev.log");
-  await stopDevDaemon(state.endpoint, "e2e-restart");
-  await startDaemon(devLog);
+  await restartServerManaged(state, {
+    buildImages: () => {
+      const imageId = buildDevImages(ROOT);
+      console.log(`e2e-restart: slot images rebuilt, image ${imageId}`);
+      return imageId;
+    },
+    saveState,
+    stopDaemon: () => stopDevDaemon(state.endpoint, "e2e-restart"),
+    startDaemon: () => startDaemon(devLog),
+  });
   console.log("e2e-restart: daemon ready");
 } else {
   for (const instance of await stopWorkers(state.instances))
@@ -55,5 +70,5 @@ if (state.placement === "server") {
     console.log(`e2e-restart: ${instance.name} started pid ${pid}`);
     return { ...instance, pid };
   });
-  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+  saveState(state);
 }

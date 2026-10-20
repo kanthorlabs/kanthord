@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { runCheck, shouldPause, pendingCheckAction } from "./check.mjs";
+import { isServerManaged } from "./placement.mjs";
 
 const [run] = process.argv.slice(2);
 if (!run) throw new Error("usage: watch.mjs <run>");
@@ -29,6 +30,7 @@ const prs = new Map();
 const down = new Set();
 const runtimeStates = new Map();
 let projectState;
+let shownImageId;
 let checkRunning = false;
 let checkPending = false;
 const COMPLETED_STATE = "Completed";
@@ -123,6 +125,15 @@ async function watchExecutions(quiet) {
   }
 }
 
+function watchImage() {
+  const { image_id: imageId } = JSON.parse(
+    readFileSync(join(runDir, "run.json"), "utf8"),
+  );
+  if (imageId === shownImageId) return;
+  console.log(`${now()} image ${imageId}`);
+  shownImageId = imageId;
+}
+
 function watchWorkers() {
   const { instances } = JSON.parse(
     readFileSync(join(runDir, "run.json"), "utf8"),
@@ -192,7 +203,8 @@ for (let tick = 0; ; tick++) {
     await watchProject();
     await watchNodes(tick === 0);
     await watchExecutions(tick === 0);
-    if (state.placement === "server") {
+    if (isServerManaged(state.placement)) {
+      if (state.placement === "container") watchImage();
       await watchInstances(tick === 0);
     } else {
       watchWorkers();

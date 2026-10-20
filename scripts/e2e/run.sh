@@ -15,6 +15,12 @@ require_command pnpm
 	die "the engine dependencies do not match engine/pnpm-lock.yaml"
 (cd "$ENGINE_DIR" && pnpm run pi-tools:fetch) || die "the pi tools fetch failed"
 
+if [ "${PLACEMENT:-server}" = container ]; then
+	require_command node
+	node "$ROOT/scripts/e2e/dev-config-check.mjs" "$(engine_config_file)" || exit 1
+	"$ROOT/scripts/e2e/images.sh" build >/dev/null || exit 1
+fi
+
 live() {
 	curl -fsS -o /dev/null --max-time 2 "$LIVENESS" 2>/dev/null
 }
