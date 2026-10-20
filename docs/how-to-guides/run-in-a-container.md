@@ -346,6 +346,21 @@ podman rm kanthord
 
 Then run the command of step 3 again, with `<new version>` in place of `<version>` and the same `GIT_*` values. See [upgrade](../reference/upgrade.md).
 
+If a worker runs in a container on the same host, do these steps too. See [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
+
+1. Connect the new server container to the network. `podman rm kanthord` removed the old connection.
+
+   ```sh
+   podman network connect kanthord-net kanthord
+   ```
+
+2. For each worker, remove its container and start it again with the new version. The worker refuses a server of another version with `worker.version.mismatch`. The worker volume keeps its client file.
+
+   ```sh
+   podman rm -f kanthord-<binding name>
+   podman run -d --name kanthord-<binding name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord-<binding name>:/var/lib/kanthord -e GIT_AUTHOR_NAME="<name>" -e GIT_AUTHOR_EMAIL="<email>" -e GIT_COMMITTER_NAME="<name>" -e GIT_COMMITTER_EMAIL="<email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   ```
+
 ## Troubleshooting
 
 In a **Verify** row, the value in parentheses is the `failure_reason` of the check answer. The dashboard shows the hint, not the value.
