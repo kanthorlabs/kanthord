@@ -109,6 +109,10 @@ A node that needs macOS names the tag `platform.macos` in its `tags` list. Only 
 
 Apply the tags before the import. An import that adds a node that no worker binding of the project matches fails with `mission.node.tags_unmatched`. See [project bindings](../reference/project/binding.md).
 
+## Run worker instances in containers
+
+To run each worker instance in its own container on this Mac, see [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
+
 ## Stop sharing the server
 
 ```sh
