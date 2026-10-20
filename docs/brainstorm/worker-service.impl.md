@@ -308,7 +308,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - It creates the slot root and appends the instance output to `stderr.log`.
 - It creates the `MessageChannel` of the slot channel, serves `port1` with `servePort` and mints the machine JWT of each call.
 - It derives the `client_secret` of the slot.
-- It writes `worker.pool.slot_limit`, `worker.pool.instance_failed` and `worker.pool.driver_unavailable`.
+- It writes `worker.pool.slot_limit`, `worker.pool.instance_failed`, `worker.pool.driver_unavailable` and `worker.pool.cleanup_failed`.
 - A slot driver starts one instance, connects the instance end of the slot channel, forwards a control, ends the instance by force, reports the exit and reports its availability.
 - `src/apps/server/slot-driver.ts` declares `SlotDriver`, `SlotLaunch`, `SlotInstance` and `SlotExit`.
 - `SlotLaunch` holds exactly `slot`, `channel`, `client_secret`, `root`, `output` and `environment`.
@@ -384,6 +384,8 @@ Tests of the slot driver:
 - The pool host removes the slot root and the slot volume of each slot of a removed binding after the last slot of that binding ends.
 - At each start, the pool host removes each slot root under `workers/` and each slot volume of the owner whose client identity belongs to no live binding at any slot number.
 - A lowered count keeps the slot root and the slot volume, because the client identity of the slot returns with a raised count.
+- A failed removal or sweep writes `worker.pool.cleanup_failed` with the slot root or the volume name and `err` to the server log. It blocks no start and no launch.
+- A removed binding at count 0 has no slot that ends. The next start sweep removes its slot roots and slot volumes.
 - The slot root of a `thread` slot holds `state/kanthord/kanthord.log` and `stderr.log`. The slot root of a `container` slot holds `stderr.log` only, and the [slot volume](#the-slot-volume) holds the state.
 - The rules below bind the `thread` driver.
 - The thread starts with its own `env` and never with `SHARE_ENV`.
