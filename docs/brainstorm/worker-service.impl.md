@@ -496,13 +496,13 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The slot channel is the stdin and the stdout of the runtime client. Each line holds one UTF-8 JSON object. `JSON.stringify` writes no raw newline.
 - The frames are below.
 
-| Direction         | Frame                                        | Rule                         |
-| ----------------- | -------------------------------------------- | ---------------------------- |
-| server → instance | `{"kind":"init","client_secret":"…"}`        | first frame, exactly once    |
-| server → instance | `{"kind":"port","message":{…}}`              | one port answer              |
+| Direction         | Frame                                          | Rule                      |
+| ----------------- | ---------------------------------------------- | ------------------------- |
+| server → instance | `{"kind":"init","client_secret":"…"}`          | first frame, exactly once |
+| server → instance | `{"kind":"port","message":{…}}`                | one port answer           |
 | server → instance | `{"kind":"control","control":"drain"\|"stop"}` | the drain or stop control |
-| server → instance | `{"kind":"ping"}`                            | every 5 s                    |
-| instance → server | `{"kind":"port","message":{…}}`              | one port call or cancel      |
+| server → instance | `{"kind":"ping"}`                              | every 5 s                 |
+| instance → server | `{"kind":"port","message":{…}}`                | one port call or cancel   |
 
 - `src/apps/worker/frames.ts` holds the strict zod schemas of the frames and `bridgePort(port, readable, writable, options)`.
 - The bridge checks only the frame envelope. `servePort` and `portCaller` check the message, as over a thread port.
@@ -518,11 +518,11 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The thread starts with `stdout: true` and `stderr: true`, and `serve slot` pipes both streams to fd 2.
 - It ends with exit 1 and a diagnostic in these cases:
 
-| Code                         | Condition                                                   |
-| ---------------------------- | ----------------------------------------------------------- |
-| `worker.slot.init_absent`    | No `init` frame arrives within 10 s.                        |
-| `worker.slot.frame_invalid`  | A line on stdin is no valid frame.                          |
-| `worker.slot.channel_closed` | Stdin reaches its end, or no frame arrives within 15 s.     |
+| Code                         | Condition                                               |
+| ---------------------------- | ------------------------------------------------------- |
+| `worker.slot.init_absent`    | No `init` frame arrives within 10 s.                    |
+| `worker.slot.frame_invalid`  | A line on stdin is no valid frame.                      |
+| `worker.slot.channel_closed` | Stdin reaches its end, or no frame arrives within 15 s. |
 
 - A deadline timer defers the exit by one `setImmediate` and checks the time of the last frame again, so a pending frame after a host wake keeps the instance.
 - A `SIGTERM` or a `SIGINT` inside the container acts as the `stop` control.
