@@ -45,6 +45,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] RULED 2026-10-20 by Ulrich (Group B, S2 of the build item). A credential copy stays sealed to the long-lived instance key. Reset key and a rotation of each copy replace it. KanthorD has no ephemeral key for each handover, because the server holds no plaintext of an instance copy.
 - [ ] RULED 2026-10-20 by Ulrich (Group B, S3 of the build item). Throughput grows by instances. One instance runs one execution at a time (R3), and KanthorD has no concurrency inside one instance.
 - [ ] RULED 2026-10-20 by Ulrich (Group B, S5 of the build item). A worker instance writes no clock-skew log record. `worker.clock.skew` and the `server_time` field of the `worker.instance.token` answer do not exist.
+- [ ] RULED 2026-10-20 by Ulrich (Group B, e2e reset cost). Ulrich accepts one OAuth sign-in for each dev instance after each database reset. The `worker` e2e run stops and prints one sign-in command for each dev instance without a live copy.
 - [ ] POSTPONED 2026-10-05 by Ulrich until Ulrich holds an active OpenCode Go subscription. Verify the success case of the `opencode-go` check with `deepseek-v4-flash` through the scratchpad e2e call. The e2e key answers 403 "An active OpenCode Go subscription is required" today, so only the refusal case is verified. The model membership check of the Worker configuration also reads the `models` metadata through `compatibleMetadataSchema` in `worker/contract.ts`, and it moves with the same decision.
 
 ### Repository component
