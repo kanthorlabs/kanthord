@@ -976,7 +976,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The line is `<host> <key>` for port 22 and `[<host>]:<port> <key>` for another port. The answer holds no key.
 - The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
 - `ssh_public_key` is the OpenSSH public key of the SSH credential of the binding. The answer holds no private key.
-- `ssh_public_key` is the `public_key` metadata of the revision that the execution pins for that credential name, else of the newest live revision. The read creates no pin.
+- `ssh_public_key` is the `public_key` metadata of the revision that the execution pins for that credential name, else of the newest live revision. The read creates no pin. A revision without that metadata answers 409 `repository.credential.ssh_key_legacy`.
 - The worker matches each entry of `repositories` to its `ssh_identities` entry of the handover by `binding_id`. It derives the public key from the private key and the SSH port from the address with `RepositoryComponent.sshPortOfAddress`, and builds `SshAccess` in memory.
 - When the handover holds no SSH identity for a repository binding, the worker builds `SshAccess` over the [SSH signature relay](#the-ssh-signature-relay) for that binding. The choice reads the handover, not the placement.
 - The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
@@ -1079,7 +1079,7 @@ The relay serves only the `worker` placement, and the `server` and `container` p
 - It answers `SSH_AGENT_FAILURE` to a sign request for another key and to each failure of the relay. git then fails with `repository.connector.git_failed`.
 - It closes a connection on a frame of 0 bytes or of more than 262,144 bytes.
 - OpenSSH sends the extension `session-bind@openssh.com` first. The answer `SSH_AGENT_FAILURE` to it is not fatal, and OpenSSH continues with the sign request.
-- The socket ends with its git operation.
+- The socket ends with its git operation. The end cancels each relay call in flight.
 - `worker.ssh.sign` is a `client` secret mutation of `unary` lifetime that requires a live execution.
 - Its body is `{ execution_id, nonce, ciphertext }`. The plaintext is `{ binding_id, data, flags }`.
 - `data` is the base64 of at most 8,192 bytes. `flags` is an unsigned 32-bit value. The body permits at most 16,384 bytes.
