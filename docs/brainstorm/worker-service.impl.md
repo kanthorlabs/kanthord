@@ -212,7 +212,7 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 
 ### The copy blocks
 
-The Add instance sheet and the Reset key result show one copy block for each host kind, under [The worker pages](architecture.impl.md#the-worker-pages).
+The Add instance sheet and the Reset key result show the one copy block of the host kind that the human selects, under [The worker pages](architecture.impl.md#the-worker-pages).
 No block puts the instance configuration on a command line. `<name>` is the instance name, and `<version>` is the server version.
 
 `Linux (systemd)` runs the instance as a systemd user unit:
