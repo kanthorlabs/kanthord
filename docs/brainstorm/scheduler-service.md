@@ -13,7 +13,7 @@ It describes no mechanism of another service.
 
 ## Topology and work queue
 
-The [architecture](architecture.md#container-diagram) defines the deployment target.
+The [architecture](architecture.md#application-diagram) defines the deployment target.
 One Scheduler Service serves every project of the server.
 It starts and stops with the server.
 It holds a bounded pool of scheduling processors.

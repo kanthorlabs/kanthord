@@ -74,7 +74,7 @@ The grouping of a resource inside its owning service in the health report. The s
 
 ## actor
 
-The container view shows the actors around the server. The set is closed and it holds two values.
+The application view shows the actors around the server. The set is closed and it holds two values.
 
 - **a human**
 - **an external harness**
@@ -83,7 +83,7 @@ The container view shows the actors around the server. The set is closed and it 
 
 ## external system
 
-The container view shows the external systems around the server.
+The application view shows the external systems around the server.
 The set is closed and it holds three values.
 
 - **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the server
@@ -99,10 +99,16 @@ The Slack workspace `kanthorlabs` is a source on a messaging platform.
 An application of kanthord that a user runs. The set is closed and it holds three values.
 
 - **`cli`**, which operates the system on a terminal
-- **`server`**, which holds every service in one running process, serves the RESTful API and runs the worker instances of the `server` placement
+- **`server`**, which holds every service in one running process, serves the RESTful API and runs the worker instances of the `server` and `container` placements
 - **`worker`**, which runs worker instances and holds no service
 
 `app` is the short form of `application`, and the two words name one term.
+The application view shows the applications. A service is not an application.
+
+- The `server` application holds the eight services and the worker instances of the `server` and `container` placements.
+- `kanthord serve slot` is an internal mode of the `server` application. It runs one instance of the `container` placement inside its container.
+- The `worker` application holds worker instances.
+- A service boundary separates authority inside the server, so it describes no application.
 
 ## server
 
@@ -173,15 +179,6 @@ The name `github-copilot` is an LLM platform, so a shared prefix decides no owne
 
 The part of a shared component that declares the secret shape, the metadata schema and the validation of one platform.
 The platform validator of `github` in the Repository component accepts `api_key` and validates a record with `GET https://api.github.com/rate_limit`.
-
-## container
-
-What the container view shows. A service is not a container.
-
-- The `server` application is a container, and it holds the eight services and the worker instances of the `server` placement.
-- The `cli` application is a container.
-- The `worker` application is a container, and it holds worker instances.
-- A service boundary separates authority inside the server, so it describes no container.
 
 ## revision
 

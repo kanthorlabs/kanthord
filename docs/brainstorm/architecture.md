@@ -10,13 +10,13 @@ This document describes the top level of kanthord.
 It names the services, their responsibilities and their relations.
 It describes no mechanism inside a service.
 
-## Container diagram
+## Application diagram
 
-The container view shows the three [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
+The application view shows the three [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
 The `server` application runs the eight services.
 The `cli` application operates the system on a terminal.
 The `worker` application runs worker instances.
-The eight services are logical boundaries inside the server, not separate containers.
+The eight services are logical boundaries inside the server, not separate applications.
 The design targets one server on one host.
 A `worker` application runs on the host of the server or on another host.
 
