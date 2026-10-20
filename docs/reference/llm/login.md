@@ -17,11 +17,11 @@ The flow has three commands:
 `login --holder <instance>` runs the flow on a worker instance, not on the server. The new credential is the copy of that holder. The default holder is `server`.
 
 - The instance must hold a current connection: its last heartbeat is at most 60 seconds old. Start `kanthord serve worker --instance <instance>` first.
-- The instance takes the session at its next heartbeat, at most 15 seconds later. While a session is pending, the instance sends a heartbeat every 2 seconds.
+- The instance receives the session in its next heartbeat answer, at most 15 seconds later. While a session is pending, the instance sends a heartbeat every 2 seconds.
 - `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use `device` mode. An instance session never uses `browser` mode.
 - The instance reports the address and the code. The human submits the `code#state` value with `login-code`, and the value reaches the instance in its next heartbeat.
 - The instance seals the OAuth tokens to its own key. The server stores only the sealed copy as revision 1 of the instance holder, with `sealed_to` set to the instance key fingerprint. The server never holds the plaintext tokens.
-- The instance refreshes its own copy during an execution and reports the refreshed copy sealed.
+- The instance refreshes its own copy in an execution and reports the refreshed copy sealed.
 
 ### Platforms and modes
 
@@ -128,21 +128,21 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line:
 
 API failures use the shared [error envelope](../errors.md#api-failures). The shared gateway failures of the [credential page](credential.md#failures) also apply: authentication, request validation, body limit, media type, timeout, and the idempotency failures of `login` and `login-code`.
 
-| HTTP status / code                          | Commands                     | Meaning                                                                              |
-| ------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
-| `400 credential.platform.unsupported`       | `login`                      | The platform is not an LLM platform.                                                 |
-| `400 credential.entry.unsupported`          | `login`                      | The platform has the secret shape `api_key`; use `llm credential create`.            |
-| `400 credential.input.invalid`              | `login`                      | Invalid or reserved name, or a `mode` other than `browser`, `device` or `copy_code`. |
-| `400 credential.login.browser_unavailable`  | `login`                      | `browser` mode through a non-loopback `Host`, or for an instance holder.             |
-| `400 llm.credential.instance_unknown`       | `login`                      | `holder` names no live worker instance.                                              |
-| `409 credential.login.instance_unavailable` | `login`                      | The instance holds no current connection.                                            |
-| `409 credential.name.conflict`              | `login`                      | The name is taken. `details.id` holds the identity of its newest revision.           |
-| `409 credential.login.pending`              | `login`                      | The human already has a `pending` session for this platform.                         |
-| `503 credential.login.failed`               | `login`                      | The flow failed before an address.                                                   |
-| `503 llm.lifecycle.stopped`                 | `login`                      | The LLM component stopped and accepts no login.                                      |
-| `504 gateway.invocation.timeout`            | `login`                      | The platform supplied no address within the 30-second timeout.                       |
-| `404 credential.login.not_found`            | `login-code`, `login-status` | The session is unknown, or a restart lost it.                                        |
-| `409 credential.login.value_not_awaited`    | `login-code`                 | The session does not await a value, or the session is no longer `pending`.           |
+| HTTP status / code                          | Commands                     | Meaning                                                                                                                                                                            |
+| ------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `400 credential.platform.unsupported`       | `login`                      | The platform is not an LLM platform.                                                                                                                                               |
+| `400 credential.entry.unsupported`          | `login`                      | The platform has the secret shape `api_key`; use `llm credential create`.                                                                                                          |
+| `400 credential.input.invalid`              | `login`                      | Invalid or reserved name, or a `mode` other than `browser`, `device` or `copy_code`.                                                                                               |
+| `400 credential.login.browser_unavailable`  | `login`                      | `browser` mode through a non-loopback `Host`, or for an instance holder.                                                                                                           |
+| `400 llm.credential.instance_unknown`       | `login`                      | `holder` names no live worker instance.                                                                                                                                            |
+| `409 credential.login.instance_unavailable` | `login`                      | The instance holds no current connection.                                                                                                                                          |
+| `409 credential.name.conflict`              | `login`                      | The name is taken. `details.id` holds the identity of its newest revision.                                                                                                         |
+| `409 credential.login.pending`              | `login`                      | The human already has a `pending` session for this platform.                                                                                                                       |
+| `503 credential.login.failed`               | `login`                      | The flow failed before an address.                                                                                                                                                 |
+| `503 llm.lifecycle.stopped`                 | `login`                      | The LLM component stopped and accepts no login.                                                                                                                                    |
+| `504 gateway.invocation.timeout`            | `login`                      | The platform supplied no address within the 30-second timeout. For an instance holder, the 30 seconds include the wait for the next heartbeat of the instance.                     |
+| `404 credential.login.not_found`            | `login-code`, `login-status` | The session is unknown, or a restart lost it.                                                                                                                                      |
+| `409 credential.login.value_not_awaited`    | `login-code`                 | The session does not await a value, or the session is no longer `pending`. An instance session takes one value, in `copy_code` mode only, after the instance reported the address. |
 
 A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. For `login` and `login-code`, the CLI prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. A transport failure, timeout or malformed response exits `1` with `cli.llm.credential.login.indeterminate`, `cli.llm.credential.login_code.indeterminate` or `cli.llm.credential.login_status.indeterminate`.
 
@@ -164,7 +164,7 @@ Local CLI failures exit `1` before a request:
 | `login-status` | `GET /api/llm/credential/login/:session_id`         | `llm.credential.login_status` | No       | No body    |
 | none           | `POST /api/llm/credential/login/:session_id/report` | `llm.credential.login_report` | Yes      | 64 KiB     |
 
-Every command uses human access and has a 30-second timeout. `llm.credential.login_report` uses `worker` access: only the worker instance of the session calls it, and it answers `204`.
+Every command uses human access and has a 30-second timeout. `llm.credential.login_report` uses `worker` access: only the worker instance of the session calls it, and it answers `204`. Its failures are `404 credential.login.not_found` for an unknown, ended or expired session or a session of another instance, and `400 credential.input.invalid` for a `completed` report without `sealed`, another report with `sealed`, an address that is no `https:` URL, or a second address. A refused write fails the session with its code, for example `400 credential.sealed.invalid`.
 
 | Header            | Required              | Purpose                                                            |
 | ----------------- | --------------------- | ------------------------------------------------------------------ |
