@@ -959,10 +959,12 @@ It proves that a reviewer execution takes no agent file of the workspace.
 
 The relay lets a worker unit authenticate a git operation with an SSH key that only the server holds.
 The worker unit uses it for each repository binding whose SSH identity the handover does not carry.
+The relay serves only the `worker` placement, and the `server` and `container` placements keep `ssh_identities` in the handover.
 
 - The worker unit serves a private agent socket for one git operation, in `TMPDIR` under the path rule of the [Repository implementation](repository.impl.md#the-ssh-identity).
 - The socket answers `SSH_AGENTC_REQUEST_IDENTITIES` with `ssh_public_key` of the execution setup.
 - It relays `SSH_AGENTC_SIGN_REQUEST` to `worker.ssh.sign`, and it answers `SSH_AGENT_FAILURE` to every other message.
+- OpenSSH sends the extension `session-bind@openssh.com` first. The answer `SSH_AGENT_FAILURE` to it is not fatal, and OpenSSH continues with the sign request.
 - The socket ends with its git operation.
 - `worker.ssh.sign` is a `client` secret mutation of `unary` lifetime that requires a live execution.
 - Its body is `{ execution_id, nonce, ciphertext }`. The plaintext is `{ binding_id, data, flags }`.
@@ -977,7 +979,8 @@ The worker unit uses it for each repository binding whose SSH identity the hando
 - The server signs with ed25519 and drops the key material. It logs the execution, the binding, the credential, `client_id` and `instance_id`.
 - During a live claim, the holder of the client token and the `client_secret` can authenticate as the deploy key. The reach ends with the claim.
 - Tests cover the socket protocol, each refusal reason, another binding, an execution with no live claim and a replay with 409.
-- A live push and fetch run through the relay against `test-sshd.ts`.
+- Plain `git` and OpenSSH push and fetch through the relay against `src/repository/test-sshd.ts`, and once against the live repository host.
+- The tests check that the repository key type is ed25519, or that the relay supports the sign flags `rsa-sha2-256` and `rsa-sha2-512`.
 
 ## Evidence upload
 

@@ -155,7 +155,8 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
      - Until layer 5, the agent configuration of a `worker` binding with a native worker is invalid with `agent.configuration.credential_holder_mismatch`, so no claim follows.
      - Verify: Gateway tests for each `gateway.jwt.*` code; a Reset key ends the tokens and the registrations in one transaction; a second process supersedes the first, and the first exits with status 3; a server restart keeps the registrations of a live instance; an auth-version increment exits with `worker.instance.secret_changed`, and the restart resumes a `running` execution of a fake unit; an execution passes one token renewal; two pulls of one instance on two bindings commit one claim; a heartbeat with another `server_version` stops the unit; a live instance on `127.0.0.1` registers two bindings of two paused projects.
   4. Build the SSH signature relay: `worker.ssh.sign` with both methods, the agent socket of one git operation, and `ssh_public_key` in the execution setup.
-     - Verify: socket protocol tests; the refusal of a payload that is no user authentication, of a host-key mismatch, of another binding and of no live claim; a replay answers 409; a live push and fetch through the relay against `test-sshd.ts`, with a test harness that holds a fixture claim.
+     - Verify: socket protocol tests; the refusal of a payload that is no user authentication, of a host-key mismatch, of another binding and of no live claim; a replay answers 409.
+     - Verify: plain `git` and OpenSSH push and fetch through the relay against `engine/src/repository/test-sshd.ts`, with a test harness that holds a fixture claim, and once live. The answer `SSH_AGENT_FAILURE` to `session-bind@openssh.com` is not fatal. The repository key type is ed25519, or the relay supports the sign flags `rsa-sha2-256` and `rsa-sha2-512`.
   5. Build the instance-held API-key credentials: `holder`, `sealed_to` and the new unique index, the server seal on the human paths, the local seal of the CLI on the instance host, the policy `human_or_worker`, the sealed handover items and refresh reports, and `credential.credential.held_by_instance`.
      - Build the holder rule in place of the layer 3 refusal, the copy of the claimant, the reason `held_elsewhere` and `archiveHeld`.
      - Verify: the RFC 9180 A.1 vectors; a holder mismatch at the write and at the resolution; a fake unit opens a sealed handover item.
@@ -173,8 +174,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
      - Verify: vitest; `ego-browser` at desktop and at 390 px; the first day on a LAN host, on a stateless container and on a same-host container, with a stopwatch log of each action.
   8. Build the instance credential health: `credential_version`, `llm.credential.report` with `models`, and the health line.
      - Verify: a bad key shows `unhealthy` with the instance and the time; a server restart shows `unknown` until the next report.
-  - Open Issues:
-    - S1 - status:OPEN - action:YES - relay at the other placements - The SSH signature relay serves only the `worker` placement. The `server` and `container` placements keep `ssh_identities`. - fix:add "POSTPONED 2026-10-20 by Ulrich until …" for the relay at `server` and `container`, after a ruling. - why:the design proposed the postponement, and Ulrich did not rule it.
+  - Open Issues: none.
 - [ ] POSTPONED 2026-10-20 by Ulrich until the next container e2e run. Sleep the Mac for 5 minutes during an execution at `placement: container`. Raise the frame deadline to 30 s when the slots restart after the wake.
 - [ ] Added 2026-10-20 from the Group A rulings. Decide the resource limits of a `container` slot: memory, CPU and pids. A cgroup limit needs cgroup v2 delegation on a rootless host. [The run command](worker-service.impl.md#the-run-command) holds no limit today.
 
