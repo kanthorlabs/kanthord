@@ -342,10 +342,10 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 
 | Operation                   | Route                                               | Policy                                    | Input                                            | Answer                                                                                                                                               |
 | --------------------------- | --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker.instance.create`    | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, public_key }`                   | 200 instance record                                                                                                                                  |
+| `worker.instance.create`    | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, public_key?, endpoint? }`       | 200 instance record                                                                                                                                  |
 | `worker.instance.list`      | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived` | items: instance record, `connection`, `binding_count`                                                                                                |
 | `worker.instance.get`       | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                             | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current }]` |
-| `worker.instance.rotate`    | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key, expected_revision }`              | 200 instance record                                                                                                                                  |
+| `worker.instance.rotate`    | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`  | 200 instance record                                                                                                                                  |
 | `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision }`                          | 200 instance record                                                                                                                                  |
 | `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                | 200 `{ server_version, sealed }`                                                                                                                     |
 | `worker.instance.connect`   | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`            | 200 `{ connection_id, binding_version, sealed }`                                                                                                     |
@@ -353,27 +353,32 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `worker.ssh.sign`           | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`            | 200 `{ nonce, ciphertext }`                                                                                                                          |
 
 - An instance record is `{ id, name, worker, revision, public_key, fingerprint, created_at, ended_at }`.
+- `worker.instance.create` and `worker.instance.rotate` take `public_key` or `endpoint`, never both and never neither. Another input answers 400 `worker.instance.key_invalid`.
+- With `public_key`, the server stores that key. The CLI `kanthord worker instance create --output` and `rotate --output` on the instance host generate the key pair locally and send only `public_key`.
+- With `endpoint`, the server generates the X25519 key pair and stores only the public key. The dashboard path sends `endpoint`.
+- The answer then adds `instance_configuration`, the configuration value of [The instance configuration](#the-instance-configuration), once. The answer carries `Cache-Control: no-store`.
+- The server keeps no copy of the private key. It clears the key buffer in a `finally` block after the answer, also after a failure.
 - `connection` is `{ connection_name, connected_at, last_heartbeat_at }`, or null when the instance holds no current connection.
 - `bindings` lists the bindings of every project that list the instance. The dashboard reads the cross-project bindings of an instance from it.
-- No answer holds a secret except the sealed objects.
+- No answer holds a secret except the sealed objects and `instance_configuration`.
 - [gateway-service.impl.md](gateway-service.impl.md#access-policy) rules the access policies `worker` and `public`.
-- Tests cover each operation, each refusal of the error table and the absence of a secret in each answer.
+- Tests cover each operation, each refusal of the error table and the absence of a secret in each other answer. A test checks `Cache-Control: no-store` on an answer with `instance_configuration`.
 
 ### Error codes of an instance
 
-| HTTP | Code                                    | Condition                                                                         |
-| ---- | --------------------------------------- | --------------------------------------------------------------------------------- |
-| 409  | `worker.instance.name_conflict`         | The name is taken, by a live or an archived instance.                             |
-| 400  | `worker.instance.name_invalid`          | The name breaks the form or is reserved.                                          |
-| 400  | `worker.instance.worker_invalid`        | The worker is unknown or is a worker of an external harness.                      |
-| 400  | `worker.instance.key_invalid`           | The key is no base64url 32-byte value, or all its bytes are zero.                 |
-| 409  | `worker.instance.key_conflict`          | A row of any instance holds the fingerprint.                                      |
-| 404  | `worker.instance.not_found`             | The name is unknown, or the `instance_id` is unknown or ended.                    |
-| 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                     |
-| 409  | `worker.instance.archived`              | A write names an archived instance.                                               |
-| 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists. `details.bindings` lists them. |
-| 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                |
-| 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                 |
+| HTTP | Code                                    | Condition                                                                                                                      |
+| ---- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 409  | `worker.instance.name_conflict`         | The name is taken, by a live or an archived instance.                                                                          |
+| 400  | `worker.instance.name_invalid`          | The name breaks the form or is reserved.                                                                                       |
+| 400  | `worker.instance.worker_invalid`        | The worker is unknown or is a worker of an external harness.                                                                   |
+| 400  | `worker.instance.key_invalid`           | The key is no base64url 32-byte value, all its bytes are zero, or the input holds both `public_key` and `endpoint` or neither. |
+| 409  | `worker.instance.key_conflict`          | A row of any instance holds the fingerprint.                                                                                   |
+| 404  | `worker.instance.not_found`             | The name is unknown, or the `instance_id` is unknown or ended.                                                                 |
+| 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                                                                  |
+| 409  | `worker.instance.archived`              | A write names an archived instance.                                                                                            |
+| 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists. `details.bindings` lists them.                                              |
+| 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                             |
+| 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                              |
 
 The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`.
 

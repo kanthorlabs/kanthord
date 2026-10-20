@@ -313,7 +313,7 @@ A human adds an instance once on the server, on the details page of its worker.
 The Worker Service holds an [instance record](worker-service.vocabulary.md#instance-record) for it: a name, one worker, a revision and one X25519 public key.
 The name and the worker never change.
 A worker binding at the `worker` placement lists only instances of its worker, under [the binding rules](project-service.md#execution-configuration-and-instance-count).
-The private key never reaches the server.
+The server stores no private key.
 
 - The instance keeps its id and its private key in its [instance configuration](worker-service.vocabulary.md#instance-configuration). The configuration lives in the instance file under the configuration directory, or in the env value `KANTHORD_WORKER_CONFIG` on a host without a writable configuration.
 - The instance keeps its state in its own data directory. Two instances on one host hold two data directories.
