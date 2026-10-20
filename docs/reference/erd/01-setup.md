@@ -277,7 +277,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived, and an archive is final.
 - Only a Reset key inserts a revision. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
 - An archive ends the live revision and every live registration of the instance. It is refused with 409 `worker.instance.in_use` while a worker binding that is no tombstone lists the instance. It is also refused while a registration of the instance holds a live execution.
-- Today the engine holds no table of this form. Its table `worker_instance` holds the per-binding registration. Layer 2 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) renames it to `worker_registration`, and layer 3 builds this table.
+- Today the engine holds no table of this form. Its table `worker_registration` holds the per-binding registration. Layer 3 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) builds this table.
 
 ### Agent component
 

@@ -12,7 +12,7 @@ The Scheduler processes a pull in this order:
 
 1. When the runtime identity holds a live execution, the pull returns that execution as `claimed`. It creates no second execution.
 2. When the project is [paused](../project/project.md#project-pause), the pull admits no claim. The claim creates no execution and moves no job.
-3. When the instance healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, or an invalid agent configuration of a server-hosted worker.
+3. When the registration healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, or an invalid agent configuration of a server-hosted worker.
 4. When the binding group already runs as many executions as its instance count, the pull admits no claim.
 5. Otherwise, the Scheduler reads the project queue in queue order. It skips each job whose node the claimant does not admit through the match. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
 
@@ -50,7 +50,7 @@ The API returns HTTP `200` with one of two objects.
     "claimant": {
       "worker_binding_id": "binding_01JZ8PZ5N6P7Q8R9S0T1V2W3X4",
       "resource_identity": "<resource-identity>",
-      "runtime_identity": "worker_instance_01JZ8R0Y1Z2A3B4C5D6E7F8G9H",
+      "runtime_identity": "worker_registration_01JZ8R0Y1Z2A3B4C5D6E7F8G9H",
       "client_id": "client_identity_01JZ8QZW2X3Y4Z5A6B7C8D9E0F",
       "name": "Worker display name"
     },
@@ -139,10 +139,10 @@ A declared API failure makes the CLI exit `1`. The diagnostic starts with the er
 | Path/query parameters | None                                                          |
 | Request body          | Closed JSON object; see the table below                       |
 
-| Body field          | Type                     | Requirement                                                         |
-| ------------------- | ------------------------ | ------------------------------------------------------------------- |
-| `resource_identity` | nonempty string          | Required. Must equal the resource identity of the machine identity. |
-| `runtime_identity`  | `worker_instance_<ulid>` | Required. Must equal the runtime identity of the live registration. |
+| Body field          | Type                         | Requirement                                                         |
+| ------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `resource_identity` | nonempty string              | Required. Must equal the resource identity of the machine identity. |
+| `runtime_identity`  | `worker_registration_<ulid>` | Required. Must equal the runtime identity of the live registration. |
 
 | Header            | Required | Purpose                                                                  |
 | ----------------- | -------- | ------------------------------------------------------------------------ |

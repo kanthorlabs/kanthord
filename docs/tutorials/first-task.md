@@ -190,16 +190,16 @@ Add both bindings before the import. The import refuses a node when no worker bi
 
 The project page shows the **Readiness** panel above the tabs. Each item shows `Done` or `Open`, and an open item has a link to its fix.
 
-| Item               | `Done` when                                                             |
-| ------------------ | ----------------------------------------------------------------------- |
-| Repository binding | The project holds a repository binding.                                 |
-| Worker bindings    | The project holds a worker binding.                                     |
-| Live instances     | Each worker binding with an instance count above 0 has a live instance. |
-| Enabled agents     | Every agent of the worker bindings is enabled.                          |
-| Plan import        | The mission holds a node.                                               |
-| Project active     | The project is not paused.                                              |
+| Item               | `Done` when                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| Repository binding | The project holds a repository binding.                                     |
+| Worker bindings    | The project holds a worker binding.                                         |
+| Live registrations | Each worker binding with an instance count above 0 has a live registration. |
+| Enabled agents     | Every agent of the worker bindings is enabled.                              |
+| Plan import        | The mission holds a node.                                                   |
+| Project active     | The project is not paused.                                                  |
 
-Every item is now `Done`, except **Plan import**. The server starts the instances after the save of each binding. When **Live instances** shows `Open`, reload the page after a few seconds.
+Every item is now `Done`, except **Plan import**. The server starts the instances after the save of each binding. When **Live registrations** shows `Open`, reload the page after a few seconds.
 
 ## 10. Import the plan
 
@@ -320,7 +320,7 @@ See [Agent cooldowns](../reference/agent/cooldown.md).
 | The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                                                              | A verification fails on every run. At the `server` placement, each verification runs inside the container, and the image holds no Node.js, for example for `npm test`. Use a command that the container can run, as the sample plan of step 10 does, or add the toolchain with [Add a toolchain to the worker image](../how-to-guides/add-a-toolchain-to-the-worker-image.md). |
 | The **Attempts** tab shows **Provider failed: rate limited**, **quota exhausted** or **unavailable**, and the node stays `Available` or `Waiting` | The LLM credential has a cooldown. The **Cooldown** section of the credential page shows its end time. The node does not pause. It runs again when the cooldown ends. The **Cause:** line names the provider error. See [Provider failures](#provider-failures).                                                                                                               |
 | The **Attempts** tab shows **Provider failed: unauthorized** or **bad request**                                                                   | The provider refused the call. The **Cause:** line names the refusal. Each such execution counts as a failed execution, and three in a row pause the node. For a refused API key, select **Rotate secret** on the credential page.                                                                                                                                             |
-| **Live instances** stays `Open`                                                                                                                   | Select **Open workers** on the item. The Workers page shows the instances of the project.                                                                                                                                                                                                                                                                                      |
+| **Live registrations** stays `Open`                                                                                                               | Select **Open workers** on the item. The Workers page shows the live registrations of the project.                                                                                                                                                                                                                                                                             |
 
 ## Read next
 
