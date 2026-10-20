@@ -57,7 +57,7 @@ The API returns HTTP `200` with one instance record. The CLI writes the same obj
 | `resource_identity` | string  | Worker binding, `worker:kanthord:<binding-name>`.                                |
 | `worker_name`       | string  | Supplied worker of the binding, for example `coder@1`.                           |
 | `host`              | string  | `kanthord` or `external-harness`.                                                |
-| `placement`         | string  | `worker` or `server`; present only when `host` is `kanthord`.                    |
+| `placement`         | string  | `server`, `container` or `worker`; present only when `host` is `kanthord`.       |
 | `client_id`         | string  | Machine client identity that owns the registration, `client_identity_<ulid>`.    |
 | `name`              | string  | Display name of the machine client, 1 to 64 characters.                          |
 | `activity`          | string  | `idle`, `pulling` or `executing`.                                                |

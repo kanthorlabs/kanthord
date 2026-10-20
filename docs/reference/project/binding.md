@@ -115,16 +115,30 @@ Only a `pull_request` action holds `landing`. A `merge_push` action with `landin
 
 **Worker**
 
-| Field             | Type    | Rule                                                                                                                                                                                                                                  |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker`          | string  | Required. Name of a declared worker.                                                                                                                                                                                                  |
-| `instance_count`  | integer | Required. From `0` to `64`. The value `0` disables the group.                                                                                                                                                                         |
-| `placement`       | string  | Optional. `server` or `worker`; an absent field means `worker`. Refused for a worker that declares no agent. A later write cannot change the effective placement. At `server`, the server runs one thread for each unit of the count. |
-| `resource_budget` | object  | Optional. Positive integers `turns` and `wall_time_ms`. Refused for a worker that declares no agent.                                                                                                                                  |
-| `tags`            | array   | Optional. A list of unique tags. Each tag matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. An absent field reads as `[]`. A change of `tags` stores the next revision.                                     |
-| `entries`         | array   | Optional. Items `{ "agent", "agent_provider"?, "model_identifier"?, "reasoning_effort"?, "fallback_configurations"? }`. Each `agent` is unique and declared by the worker. Refused for a worker that declares no agent.               |
+| Field             | Type    | Rule                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `worker`          | string  | Required. Name of a declared worker.                                                                                                                                                                                                                                                                                                                          |
+| `instance_count`  | integer | Required. From `0` to `64`. The value `0` disables the group.                                                                                                                                                                                                                                                                                                 |
+| `placement`       | string  | Required for a worker that declares an agent: `server`, `container` or `worker`. A write without it fails with `project.bindings.worker.placement_required`. A worker that declares no agent refuses the field, and its binding reads `placement: null`. A later write cannot change the placement. No reader applies a default. See [Placement](#placement). |
+| `resource_budget` | object  | Optional. Positive integers `turns` and `wall_time_ms`. Refused for a worker that declares no agent.                                                                                                                                                                                                                                                          |
+| `tags`            | array   | Optional. A list of unique tags. Each tag matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. An absent field reads as `[]`. A change of `tags` stores the next revision.                                                                                                                                                             |
+| `entries`         | array   | Optional. Items `{ "agent", "agent_provider"?, "model_identifier"?, "reasoning_effort"?, "fallback_configurations"? }`. Each `agent` is unique and declared by the worker. Refused for a worker that declares no agent.                                                                                                                                       |
 
 The Agent Service validates the effective configuration of each agent of the worker.
+
+#### Placement
+
+The placement states where the server runs the instances of the group. [Worker placements](../worker/placement.md) lists the availability of each value.
+
+| Value       | Where the instances run                                                                                                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server`    | The server runs one thread for each unit of the count.                                                                                                                                                                     |
+| `container` | The server runs one container for each unit of the count, on its own host, with Podman or Docker. [Isolate worker instances in containers](../../how-to-guides/isolate-worker-instances-in-containers.md) shows the steps. |
+| `worker`    | A `kanthord serve worker` process with a machine token hosts each instance.                                                                                                                                                |
+
+A write that adds a `container` binding first reads the placement list. It fails with `project.bindings.worker.placement_unavailable` when the `reason` of `container` is `server_in_container`, `runtime_absent` or `runtime_rootful`. A binding name with no live binding counts as added, so a name that a project reuses after a removal is added. The write passes on `runtime_failed`, because a stopped runtime recovers. An edit of a live `container` binding passes, so a human can lower its count to `0` while the runtime is down.
+
+A stored worker binding that declares an agent and holds no `placement` stops the server start with `system.database.binding_placement_missing`. See [Upgrade](../upgrade.md#reset-a-pre-release-database).
 
 A tag states a fact of the host of the instances, for example `platform.macos`. The Scheduler match admits a node for a worker binding only when the tags of the binding include every tag of the node. The match compares exact strings and reads no version, no range and no operator. Before and after its change, the apply reads the pairs of a node and a claimable state that no current worker binding covers. An apply that adds such a pair fails with `project.bindings.worker.node_unmatched`. A pair that exists before the apply refuses no apply. Configure the worker bindings of a project before the first import.
 
@@ -159,7 +173,11 @@ Every operation returns HTTP `200`. The CLI writes one JSON line to stdout and e
       "kind": "worker",
       "resource_identity": "worker:kanthord:builder",
       "revision": 2,
-      "config": { "worker": "<worker-name>", "instance_count": 2 },
+      "config": {
+        "worker": "<worker-name>",
+        "instance_count": 2,
+        "placement": "server"
+      },
       "created_at": 1759900000000,
       "removed_at": null
     }
@@ -193,7 +211,11 @@ The response is one binding record with the fields of the list items.
   "bindings": {
     "builder": {
       "kind": "worker",
-      "config": { "worker": "<worker-name>", "instance_count": 2 }
+      "config": {
+        "worker": "<worker-name>",
+        "instance_count": 2,
+        "placement": "server"
+      }
     }
   }
 }
@@ -218,7 +240,11 @@ The response is one binding record with the fields of the list items.
       "kind": "worker",
       "resource_identity": "worker:kanthord:builder",
       "revision": 3,
-      "config": { "worker": "<worker-name>", "instance_count": 3 },
+      "config": {
+        "worker": "<worker-name>",
+        "instance_count": 3,
+        "placement": "server"
+      },
       "created_at": 1759900100000,
       "removed_at": null
     }
@@ -352,7 +378,9 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `409 project.binding_set.version_conflict`                 | `apply`                                                                 | The submitted version is not current. `details.binding_set_version` holds the current version.                                                                                                                                                             |
 | `400 project.bindings.duplicate_resource`                  | `apply`                                                                 | Two submitted bindings have the same resource identity.                                                                                                                                                                                                    |
 | `409 project.bindings.worker.resource_changed`             | `apply`                                                                 | A submitted worker binding changes its `worker` value.                                                                                                                                                                                                     |
-| `409 project.bindings.worker.placement_changed`            | `apply`                                                                 | A submitted worker binding changes its effective `placement`.                                                                                                                                                                                              |
+| `400 project.bindings.worker.placement_required`           | `apply`                                                                 | A worker binding that declares an agent states no `placement`. `details` holds `binding`.                                                                                                                                                                  |
+| `409 project.bindings.worker.placement_changed`            | `apply`                                                                 | A submitted worker binding changes its `placement`.                                                                                                                                                                                                        |
+| `409 project.bindings.worker.placement_unavailable`        | `apply`                                                                 | An added `container` binding meets a server that cannot run containers. `details` holds `binding`, `placement` and `reason`, one of `server_in_container`, `runtime_absent` or `runtime_rootful`.                                                          |
 | `400 project.bindings.worker.instance_count_range`         | `apply`                                                                 | `instance_count` is outside `0` to `64`.                                                                                                                                                                                                                   |
 | `400 project.bindings.worker.field_forbidden`              | `apply`                                                                 | `entries`, `resource_budget` or `placement` is set for a worker that declares no agent. `details` holds `binding` and `field`.                                                                                                                             |
 | `400 project.bindings.worker.agent_unknown`                | `apply`                                                                 | An entry names an agent that the worker does not declare.                                                                                                                                                                                                  |
@@ -496,7 +524,11 @@ An example `bindings.json`:
     },
     "builder": {
       "kind": "worker",
-      "config": { "worker": "<worker-name>", "instance_count": 2 }
+      "config": {
+        "worker": "<worker-name>",
+        "instance_count": 2,
+        "placement": "server"
+      }
     },
     "artifacts": {
       "kind": "storage",
