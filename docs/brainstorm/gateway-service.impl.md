@@ -153,7 +153,7 @@ Verification runs in this order.
 - `kind`.
 - The per-kind rules.
 - For `worker`, the Worker Service answers whether `sub` names a live instance revision. An ended or archived revision answers 401 `gateway.jwt.instance_ended`.
-- For `client`, the Project Service answers whether the group `(project_id, resource_identity)` exists, whether its latest row is no tombstone and holds an effective instance count of 1 or more, and whether `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
+- For `client`, the Project Service answers three checks. The group `(project_id, resource_identity)` exists. Its latest row is no tombstone and holds an effective instance count of 1 or more. `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
 - For a `client` JWT of a binding at `placement: worker`, the Worker Service then checks in this order:
   1. `instance_id` and `connection_id` are present, else 401 `gateway.jwt.instance_required`.
   2. `instance_id` names a live instance revision, else 401 `gateway.jwt.instance_ended`.
@@ -315,6 +315,7 @@ It does so because a browser page resolves a hostname to the loopback address.
 The middleware reads the matched route first, and it skips the check for a route of the policy `client`, `worker` or `public`.
 For a route of the policy `human_or_worker`, it skips the check only when the bearer verifies as kind `worker`. A human bearer keeps the check.
 A request that matches no route keeps the check, so a mistyped path still receives the configuration hint.
+Today the middleware checks the `Host` header of every request before the route match, and it skips no route.
 A browser page holds no machine token, and a `public` route answers no secret, so the skip opens no rebinding path.
 A worker instance on a container network therefore reaches the server under any `Host` name with no edit of `gateway.allowed_hosts`.
 The rejection answers 403 `gateway.http.host_not_allowed` with the message "Host is not allowed. Add it to gateway.allowed_hosts."
@@ -604,7 +605,9 @@ The operator supplies the tunnel or the reverse proxy, and the server starts non
 The ingress forwards the path group `/hooks/*` for a delivery.
 It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential` and `DELETE /api/worker/registration/:runtime_identity` for a worker instance.
 It forwards `POST /api/worker/instance/token`, `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat` and `POST /api/worker/ssh/sign` for a worker instance at the `worker` placement.
-It forwards the LLM credential routes that a worker token calls, which [llm.impl.md](llm.impl.md) lists.
+It forwards the LLM credential routes that a worker token calls, under [llm.impl.md](llm.impl.md#instance-copies).
+These routes are `POST /api/llm/credential` of `create`, `POST /api/llm/credential/:credential_name/revision` of `rotate`, `GET /api/llm/credential` of `list` and `GET /api/llm/credential/:credential_name` of `get`.
+They also include `POST /api/llm/credential/:credential_name/report` of `report` and `POST /api/llm/credential/login/:session_id/report` of `login_report`.
 It forwards the registered work-pull, claim inspection, release and MCP paths for an instance outside the host of the server.
 It forwards `GET /api/openapi.yaml`, because the worker unit reads the server package version there at its start, at every placement.
 It forwards no other path.
@@ -654,7 +657,7 @@ The environment carries the endpoint and token values.
 
 The registration of an external harness presents the machine JWT that this order resolves, and it saves nothing in the client configuration file.
 Human verification accepts a human JWT alone, and a machine JWT fails it with HTTP 401.
-A client sends the `Host` header of its endpoint, so an endpoint outside `gateway.allowed_hosts` fails the check of the host allowlist.
+A client sends the `Host` header of its endpoint. On a human route, an endpoint outside `gateway.allowed_hosts` fails the check of the [host allowlist](#host-and-origin).
 A client appends the operation path to the path of its endpoint, so an endpoint such as `https://homelab.kanthorlabs.com/s/kanthord` keeps its prefix.
 
 ## The dashboard sign-in
