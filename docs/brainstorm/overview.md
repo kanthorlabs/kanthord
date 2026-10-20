@@ -62,6 +62,7 @@ A specific agent or a human participant supplies the WHO and takes responsibilit
 
 A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
+At the `worker` placement, the worker binding lists the registered worker instances that serve it.
 A worker instance claims a node in a node state that its worker declares, and it executes that node.
 The claim also needs a worker that declares the intent of the node and a worker binding whose tags include every tag of the node.
 The instance produces an execution object each time it takes a node.
@@ -114,7 +115,7 @@ An external harness supports ongoing integration and maintenance with an existin
 
 An external harness supplies its HOW through its own orchestration skill, usually named `/work`.
 It reaches the node and task model of kanthord through the CLI or the API.
-An external harness is a worker that the harness hosts: a human starts its program, and the kanthord extension of that program registers a worker instance of a worker binding of the project under its client identity.
+An external harness is a worker that the harness hosts: a human starts its program, and the kanthord extension of that program registers under a worker binding of the project with its client identity.
 Its instances acquire work through the work pull, like every worker instance, and its worker declares `Available`, `Waiting` and `External.Requested`, so an instance of it can carry out the steps of a node, evaluate it and request its external actions, through separate claims.
 The node content is its only input, and kanthord configures no agent, no prompt and no tool of an external harness.
 Its method can adapt dynamically to the capabilities and availability of its agents.

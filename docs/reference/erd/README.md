@@ -14,12 +14,12 @@ An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs
 
 The schema has four functional views. Their order is the order of delivery.
 
-| View                                             | Scope                                                                                                    | Tables of the owners                                    |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Repository, Project, Agent, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md)              | Instances, executions, attempts, evidence and its assets, assessments, outcomes and proposals.           | Worker, Scheduler, Mission                              |
-| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                          | Intake                                                  |
-| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                              | Tracking                                                |
+| View                                             | Scope                                                                                                                      | Tables of the owners                                            |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, worker instances, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Repository, Worker, Project, Agent, Mission, Scheduler |
+| [ERD 2: Execution](02-execution.md)              | Registrations, executions, attempts, evidence and its assets, assessments, outcomes and proposals.                         | Worker, Scheduler, Mission                                      |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                                            | Intake                                                          |
+| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records and telemetry texts.                                                                                | Tracking                                                        |
 
 A view holds the canonical definition of each of its tables.
 Another view shows that table as a stub: its key only, the color of its owner and a dashed border.
@@ -37,11 +37,12 @@ flowchart TB
             r1["Repository: host key"]
             p1["Project: project, binding, binding revision"]
             a1["Agent: agent enablement, prompt settings"]
+            w1["Worker: instance"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job"]
         end
         subgraph v2["ERD 2: Execution"]
-            w2["Worker: instance"]
+            w2["Worker: registration"]
             s2["Scheduler: execution"]
             m2["Mission: attempt, evidence, evidence asset, assessment, outcome, proposal"]
         end
@@ -55,7 +56,8 @@ flowchart TB
         end
     end
 
-    w2 -.->|instance of binding| p1
+    w2 -.->|registration of binding| p1
+    w2 -.->|registration of instance| w1
     s2 -.->|claim of node| m1
     s2 -.->|claim of binding| p1
     s2 -.->|execution pins credential revision| c1
@@ -83,7 +85,7 @@ flowchart TB
     class c1 custody
     class r1 repository
     class p1 project
-    class w2 worker
+    class w1,w2 worker
     class a1 agent
     class m1,m2 mission
     class s1,s2 scheduler

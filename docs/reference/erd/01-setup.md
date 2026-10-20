@@ -8,7 +8,7 @@ title: "ERD 1: Environment and planning"
 
 This view holds the tables that set up an environment and write a plan.
 After this group, a human creates a project, stores credentials and pins SSH host keys.
-The human also binds repositories, a storage bucket and workers, enables agents and imports the mission plan.
+The human also adds worker instances, binds repositories, a storage bucket and workers, enables agents and imports the mission plan.
 No execution runs yet.
 
 The [README](README.md) holds the conventions, the colors and the map of every group.
@@ -44,6 +44,19 @@ erDiagram
         integer ended_at "Unix ms, null while live"
         integer available_at "Unix ms, end of the cooldown of the name, revision 1 only, else null"
         integer strikes "failures of the name in a row, revision 1 only, default 0"
+        text holder "server or a worker instance name, group key with name"
+        text sealed_to "fingerprint of the instance key, null for server"
+    }
+
+    worker_instance {
+        text id PK "worker_instance_ + ULID, one revision"
+        text name "binding-name form, group key, never changes"
+        text worker "catalog worker that kanthord hosts, never changes"
+        integer revision "unique with name, starts at 1"
+        text public_key "base64url, 32-byte X25519 public key"
+        text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key"
+        integer created_at "Unix ms"
+        integer ended_at "Unix ms, null while live"
     }
 
     repository_host_key {
@@ -147,6 +160,8 @@ erDiagram
     project_binding }o..o| credential : "ref in config JSON, no FK"
     project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
     agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
+    project_binding }o..o{ worker_instance : "ref by name in config.worker_instances JSON, no FK"
+    credential }o..o| worker_instance : "ref holder by name, no FK"
 
     project_project ||..|| mission_mission : "ref, no FK, createMission"
     mission_mission ||..o{ mission_node : "FK mission_id"
@@ -163,6 +178,7 @@ erDiagram
     classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
+    classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
 
@@ -170,6 +186,7 @@ erDiagram
     class repository_host_key repository
     class project_project,project_binding project
     class agent_enablement,agent_prompt agent
+    class worker_instance worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job scheduler
 ```
@@ -186,6 +203,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `repository_host_key`   | Repository component | Ruled: [host keys](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#host-keys).                                                                                                                                                               |
 | `project_project`       | Project Service      | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
 | `project_binding`       | Project Service      | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store).                                                                                                                                          |
+| `worker_instance`       | Worker Service       | Ruled: [worker instances](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/worker-service.impl.md#worker-instances).                                                                                                                                             |
 | `agent_prompt`          | Agent component      | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings).                                                                                                                                                        |
 | `agent_enablement`      | Agent component      | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
 | `mission_mission`       | Mission Service      | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas).                                                                                                                     |
@@ -199,6 +217,8 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 - A solid line is an identifying relationship: the primary key of the child contains the primary key of the parent. A dashed line is a non-identifying relationship.
 - `project_binding` holds one row for each revision. The group `(project_id, resource_identity)` is one binding, and its latest row states the binding. A record pins one row by `id`.
 - `agent_enablement` holds one row for each revision. The group `agent_name` is one enablement, and its latest row states the enablement.
+- `credential` holds one row for each revision. The group `(name, holder)` is one copy of a credential, and each copy keeps its own revisions.
+- `worker_instance` holds one row for each revision. The group `name` is one worker instance, and its live revision states the instance.
 - `mission_node_revision` holds one row for each content revision of a node. The current revision of a node is its row with the greatest `revision`, and the primary key `(node_id, revision)` serves that lookup. A task has no row of its own.
 - No pair of tables references each other, so no key is deferred. `foreign_keys` is `ON`, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
 
@@ -208,15 +228,18 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 ### Custody
 
-- `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name.conflict`.
-- The write keeps one `platform` for every row of a name. The newest live revision is the greatest `revision` of the name with a null `ended_at`.
+- `credential` holds one row for each revision. `(name, holder, revision)` has a unique index, and a create of a taken `(name, holder)` group answers 409 `credential.name.conflict`.
+- `holder` is never null. It holds `server` or the name of a live worker instance. `sealed_to` is null for `server` and holds the fingerprint of the instance key that sealed the secret otherwise. Custody validates the fingerprint form, and the LLM component validates the instance.
+- Only an LLM platform takes a holder other than `server`. Another platform with an instance holder answers 400 `credential.sealed.invalid`.
+- The write keeps one `platform` for every row of a name over every holder. A create of an existing name with another platform answers 409 `credential.name.platform_conflict`. The newest live revision of a group is the greatest `revision` of `(name, holder)` with a null `ended_at`.
+- The plaintext under the envelope of an instance row is the sealed object `{ alg, enc, ciphertext }`: HPKE base mode to the instance key. The server cannot open it. A row sealed to a fingerprint that is no live revision of its instance has no holder.
 - A rotation inserts the next revision and, in the same transaction, drains every older live revision that no live execution pins. A drain or a revoke sets `ended_at`. Custody refuses a revoke of the newest live revision.
 - The secret shape and the `metadata` schema depend on `platform`, as the platform validators of the [LLM](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/llm.impl.md#platform-validators), [Repository](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#platform-validators) and [Storage](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/storage.impl.md#platform-validators) components state.
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
 - The `base_url` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
 - The additional authenticated data of the envelope is the row identity and the platform.
-- Revision 1 of a name holds the cooldown of the name in `available_at` and `strikes`. A rotation inserts the next revision with no hold and copies none. The Agent component reads and writes the hold through the Custody port `CredentialHolds`.
-- An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision and keeps the rows. A name with no live revision is archived, and an archive is final.
+- Revision 1 of a `(name, holder)` group holds the cooldown of that copy in `available_at` and `strikes`. A rotation inserts the next revision with no hold and copies none. The Agent component reads and writes the hold through the Custody port `CredentialHolds`.
+- An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision of the group and keeps the rows. A group with no live revision is archived, and an archive is final. The archive of a worker instance archives every live group of that holder in its transaction.
 - A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
 
 ### Repository component
@@ -233,7 +256,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - Every kind holds a `resource_identity`: `repository:github:<owner>/<name>`, `worker:kanthord:<binding name>` and `storage:s3:<endpoint host>/<bucket>`. Its first part is the binding kind, and no column holds the kind. A read derives the kind from that part.
 - The write refuses a name that another current binding of the project holds. A partial index cannot select the latest row of a group, so the write checks this rule.
 - A row is immutable. A configuration change inserts the next revision of its group.
-- A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `instance_count: 0` for a worker binding.
+- A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or for a worker binding `instance_count: 0`, or `worker_instances: []` at `placement: worker`.
 - A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, and a tombstone after the pinned row refuses the use.
 - Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store) rules.
 - The binding-set version is 1 plus the number of `project_binding` rows of the project. A write that names another version is refused. A write equal to the stored set inserts no row and keeps the version.
@@ -241,7 +264,17 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A write derives `resource_identity` from the configuration of the binding. A human never enters it.
 - A write compares each submitted binding with the current binding of the same name. An unchanged configuration inserts no row. A changed configuration of the same resource inserts the next revision of the group. A changed resource inserts a tombstone in the old group and revision 1 of the new group. A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again. A name that the submission omits takes a tombstone, and its rows stay.
 - A write refuses a change of the worker of an existing worker binding under the same name.
+- The `config` of a worker binding at `placement: worker` holds `worker_instances`, a list of 0 to 64 unique names of live instances of its worker, and no `instance_count`. At another placement it holds `instance_count` and no `worker_instances`. The length of `worker_instances` is the instance count of the binding.
 - `config` holds the configuration of its kind: [repository](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#repository-configuration--proposed-fields), [worker](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
+
+### Worker Service
+
+- `worker_instance` holds one row for each revision. `id` is the primary key, `(name, revision)` has a unique index, and `fingerprint` has a unique index over every row.
+- `name` takes the binding-name form. A taken name answers 409 `worker.instance.name_conflict`, an archived name included. The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`.
+- `worker` names a catalog worker that kanthord hosts. The Worker Service validates the name form, the worker and the key form before the write. `name` and `worker` never change.
+- The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived, and an archive is final.
+- Only a key reset inserts a revision. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
+- An archive ends the live revision. It is refused while a worker binding that is no tombstone lists the instance, with 409 `worker.instance.in_use`.
 
 ### Agent component
 
@@ -327,5 +360,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `project_binding.config`           | `agent_enablement.agent_name`      | Reference through the catalog agents of the worker, no FK.                                                                                      |
 | `project_binding.config`           | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK.                                                                                           |
 | `agent_enablement.agent_providers` | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                               |
+| `project_binding.config`           | `worker_instance.name`             | Reference in `worker_instances` JSON by name, no FK.                                                                                            |
+| `credential.holder`                | `worker_instance.name`             | Reference by name, no FK. `server` names no row.                                                                                                |
 | `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                               |
 | `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                               |
