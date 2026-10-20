@@ -84,6 +84,8 @@ help:
 	@echo "e2e"
 	@echo "  e2e              Start everything for an e2e run in one step. RUN=name"
 	@echo "                   (todoapp-<yymmdd-HHMM>). PLACEMENT=server|worker|container (default server)."
+	@echo "                   PLACEMENT=worker refuses: the worker placement e2e returns in layer 6"
+	@echo "                   of Group B, OAuth on the worker instance."
 	@echo "                   It installs the engine dependencies, starts make dev in the background"
 	@echo "                   when the daemon is down, then runs e2e-start."
 	@echo "                   PLACEMENT=container refuses a dev config without"

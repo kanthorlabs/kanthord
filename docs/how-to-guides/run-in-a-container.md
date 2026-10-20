@@ -225,6 +225,8 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 
 ## 8. Run a worker on another host
 
+The `worker` placement waits for the worker instance, which a later version adds. Until then, the server refuses a new binding at the `worker` placement with `project.bindings.worker.placement_unavailable` and the reason `instances_absent`. It refuses the registration of a worker at that placement with `worker.instance.placement_mismatch`. Its credential handover answers `custody.handover.holder_refused`, because the server hands no server-held credential to that placement. Use the `server` placement. The steps of this section apply to a binding that exists from an earlier version.
+
 A worker binding with the placement `worker` runs its instances in a separate `kanthord serve worker` process, not in the server container. Create the worker binding first:
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
