@@ -70,7 +70,6 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - It is no JWT claim.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
 - The Worker Service answers the client attribution of a runtime identity to the Scheduler Service in-process. The attribution is the `client_id` and the `client_name` of its `worker_registration` row, ended rows included. The human `worker.registration.get` still answers 404 for an ended registration.
-- Today the engine names the registration table `worker_instance`, the runtime identity `worker_instance_<ulid>` and the registration operations `worker.instance.*`. Layer 2 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) renames them.
 
 ## Registration heartbeat
 
