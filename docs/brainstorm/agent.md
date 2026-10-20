@@ -42,7 +42,12 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A human enables an agent before use.
 - An absent or disabled enablement denies use.
 - An enablement holds one or more named agent providers and the default configuration that a human selects.
-- Each agent provider pairs a provider with a credential store record.
+- Each agent provider pairs a provider with a credential name.
+- A credential name holds one copy for each [holder](custody.vocabulary.md#holder). A consumer resolves the copy of its own holder.
+- The holder of a consumer is each [worker instance](worker-service.md#worker-instances) that a `worker` placement binding lists in `worker_instances`. It is `server` for a `server` or a `container` binding and for a workbench session.
+- For each holder of a consumer, every agent provider of the chain names a credential with a live copy of that holder. The chain covers the head and every fallback. That copy is sealed to the current key of the holder.
+- This holder rule runs at enablement write, worker binding write and resolution. It refuses, and it never filters a chain entry.
+- Each copy of a credential passes the approved-model membership of its own metadata.
 - An agent session obtains the model runtime of an agent provider from the [LLM component](llm.md#model-connector).
 - Its name and its credential are each unique inside the enablement, and its provider never changes.
 - Another provider requires another agent provider.
@@ -102,8 +107,8 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ### Cooldown
 
-- A [cooldown](agent.vocabulary.md#cooldown) belongs to one credential. It cools every model of that credential.
-- `swe@1`, `re@1` and every project share that credential.
+- A [cooldown](agent.vocabulary.md#cooldown) belongs to one copy of a credential: a credential name and one holder. It cools every model of that copy.
+- `swe@1`, `re@1` and every project of one holder share that copy.
 - The duration is the base of the code, doubled for each strike after the first, up to the maximum.
 - A repeated advance on the same credential adds one strike.
 - A cooldown is live while its end time is later than the clock. An expired cooldown keeps its strikes until a release with no `provider_failed` stop.
@@ -112,7 +117,8 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ### Selection
 
-- The claim scans the chain of each native agent of the worker. It selects the first chain entry whose credential is not cooling.
+- The claim scans the chain of each native agent of the worker. It selects the first chain entry whose credential copy of the claimant holder is not cooling.
+- The holder of the claimant is the instance of its registration at the `worker` placement, and `server` at every other placement.
 - An earlier chain entry returns at the next claim after its cooldown expires.
 - When the credential of every entry of one agent is cooling, the claim answers no work.
 - That answer creates no block, no pause and no failed execution.

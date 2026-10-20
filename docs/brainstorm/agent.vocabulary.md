@@ -30,7 +30,7 @@ An absent record denies use like `disabled`.
 
 ## agent provider
 
-One named provider and credential pair inside an agent enablement.
+One named provider and credential pair inside an agent enablement. The credential is a credential name, and each consumer resolves the copy of its own holder.
 Its fields are `name`, `provider` and `credential`; it holds no model list.
 For example, `{ name: "openai-org", provider: "openai-compatible", credential: "openai-main" }` belongs to the `swe@1` enablement.
 The closed provider set is every [LLM platform](llm.vocabulary.md#llm-platform), for example `anthropic`, `openai-compatible` and `groq`.
@@ -78,10 +78,11 @@ Under `coder-main`, which names no tail, the chain is `gpt-6` at position 0 and 
 
 ## cooldown
 
-The hold that excludes every model of one credential from a selection until its end time `available_at`.
+The hold that excludes every model of one credential copy, a credential name and one holder, from a selection until its end time `available_at`.
 It counts `strikes`. The code of the failure is one of the closed set `rate_limited`, `quota_exhausted` or `unavailable`, and it sets the base duration.
 Execution 1 releases with `provider_failed` and code `rate_limited` on credential `openai-main` and model `gpt-6`.
 The cooldown of `openai-main` lasts 60 seconds, and the next claim of `swe@1` and `re@1` selects position 1 of the chain.
+The copy of `anthropic` for `box-coder` cools down, and a claim of `box-reviewer` still selects its own copy of `anthropic`.
 
 ## agent selection
 

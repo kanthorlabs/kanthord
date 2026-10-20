@@ -7,7 +7,7 @@ title: "ERD 2: Execution"
 ## Scope
 
 This view holds the tables that execute the work of a mission.
-After this group, worker instances pull work, a steps execution carries out the steps of a node, a reviewer execution evaluates it, and the Mission Service records the evidence, the assessments and the outcomes.
+After this group, worker instances register under worker bindings and pull work. A steps execution carries out the steps of a node, and a reviewer execution evaluates it. The Mission Service records the evidence, the assessments and the outcomes.
 A human uses the human controls of a node.
 
 The [README](README.md) holds the conventions, the colors and the map of every group.
@@ -24,11 +24,12 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Records without a table
 
-- The pool of a worker binding and the runtime fields of an instance record are runtime-only. A pool slot of a binding at the `server` or the `container` placement registers like any instance and holds a `worker_instance` row.
+- The pool of a worker binding and the runtime fields of a registration record are runtime-only. A pool slot of a binding at the `server` or the `container` placement registers like any worker instance and holds a `worker_registration` row.
+- The current connection of a worker instance at the `worker` placement and its last heartbeat live in memory. A server start keeps no connection.
 - The time of the last heartbeat is a monotonic-clock value in memory.
 - The MCP session `mcp_session_<ulid>` lives in memory and ends at the server stop.
 - The mutex of the action performer lives in memory.
-- A workspace is a directory of the state directory, not a row.
+- A workspace is a directory of the worker unit, not a row.
 - The credential handover is an API answer. The pin of a credential revision is the `credentials` list of `scheduler_execution`.
 - The currency of an assessment is computed at each read, not stored.
 - The closing event of an outcome is derived at each read, not stored.
@@ -45,13 +46,17 @@ erDiagram
     mission_node {
         text id PK "node_ + ULID, ERD 1"
     }
-
     worker_instance {
-        text id PK "worker_instance_ + ULID, runtime identity"
+        text id PK "worker_instance_ + ULID, ERD 1"
+    }
+
+    worker_registration {
+        text id PK "worker_registration_ + ULID, runtime identity"
         text project_id "from the machine JWT"
         text resource_identity "binding group key, from the machine JWT"
         text client_id "client_identity_ + ULID"
         text client_name "display name, 1-64 chars"
+        text instance_id "worker instance revision, null at server and container"
         integer registered_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -144,9 +149,10 @@ erDiagram
         integer created_at "Unix ms"
     }
 
-    project_binding }o..o{ worker_instance : "ref by (project_id, resource_identity), no FK"
+    project_binding }o..o{ worker_registration : "ref by (project_id, resource_identity), no FK"
+    worker_instance |o..o{ worker_registration : "ref instance_id to id, no FK"
     project_binding ||..o{ scheduler_execution : "ref worker_binding_id, no FK"
-    worker_instance |o..o{ scheduler_execution : "ref runtime_identity to id, no FK"
+    worker_registration |o..o{ scheduler_execution : "ref runtime_identity to id, no FK"
     mission_node ||..o{ scheduler_execution : "ref, no FK"
 
     mission_node ||--o{ mission_attempt : "FK node_id"
@@ -175,8 +181,9 @@ erDiagram
 
     class project_binding project
     class mission_node mission
-    class project_binding,mission_node stub
     class worker_instance worker
+    class project_binding,mission_node,worker_instance stub
+    class worker_registration worker
     class scheduler_execution scheduler
     class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal mission
 ```
@@ -185,7 +192,7 @@ erDiagram
 
 | Table                    | Owner             | Basis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker_instance`        | Worker Service    | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters).                                                                                                                                                                                                                   |
+| `worker_registration`    | Worker Service    | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters).                                                                                                                                                                                                                   |
 | `scheduler_execution`    | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts); [configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration) rules the fixed deadline, and [loss settlement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#loss-settlement) rules the loss declaration. |
 | `mission_attempt`        | Mission Service   | Derived from [the attempt](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). `opened_by` names the actor of the act that opens the attempt. `start_point` holds the `StartPoint` enum of code: attempt 1 records `base_branch`, and an unblock records the value that it names.                       |
 | `mission_evidence`       | Mission Service   | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention).                                                                                         |
@@ -207,33 +214,37 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Worker Service
 
-- `worker_instance` holds one row for each registration of an instance. `worker.register` inserts the row, and `id` is the runtime identity.
-- `worker_instance` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
+- `worker_registration` holds one row for each registration of a worker instance under one worker binding. `worker.register` inserts the row, and `id` is the runtime identity.
+- A worker instance at the `server` or the `container` placement, and an external harness program, hold one registration. A worker instance at the `worker` placement holds one registration for each worker binding that lists it, and `instance_id` holds its live revision. `instance_id` is null at every other placement.
+- `worker_registration` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
 - The live registrations of a worker binding are the rows of that group where `ended_at` is null.
-- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
+- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. At the `worker` placement, the instance count is the length of `worker_instances`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
 - `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
 - A registration ends at a deregistration, at a heartbeat expiry, and at a removal or unavailability of its worker binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
 - A registration of a client identity that holds a live row answers that row and inserts nothing.
-- `worker.instance.resume` first settles an expired unsettled execution in the same transaction. It clears `ended_at` of an ended registration only while that row is the claimant of a `running` execution, and it takes the slot again. No other act clears `ended_at`.
-- A registration at a binding at the `server` or the `container` placement is admitted only from the client identity of a pool slot of that binding. Another client identity answers 409 `worker.instance.placement_mismatch`.
+- `worker.registration.resume` first settles an expired unsettled execution in the same transaction. It clears `ended_at` of an ended registration only while that row is the claimant of a `running` execution, and it takes the slot again. No other act clears `ended_at`.
+- At the `server` and the `container` placements, a registration is admitted only from the client identity of a pool slot of its binding. A registration at a binding at the `worker` placement is admitted only from a derived client identity. The server derives it for a listed worker instance and that binding. Another client identity answers 409 `worker.registration.placement_mismatch`.
+- A Reset key of a worker instance ends every live registration of its old revision in its transaction. An archive of a worker instance ends every live registration of the instance in its transaction.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
+- Today the engine names this table `worker_instance`, and it holds no `instance_id`. Layer 2 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) renames it, and layer 3 adds `instance_id`.
 
 ### Scheduler Service
 
 - `scheduler_execution` has a partial unique index on `node_id` where `ended_at` is null, so a node holds at most one execution without a terminal write.
-- `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so an instance holds at most one execution without a terminal write.
+- `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so a registration holds at most one execution without a terminal write.
 - The live executions of a worker binding are the `running` rows of that group, whatever revision each row pins.
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
+- A worker instance runs one execution at a time over all its registrations. The claim transaction reads the registrations of the instance of the runtime identity of the work pull through the Worker Service. It admits no claim while one of them is the claimant of an execution with a null `ended_at` and a clock before `expired_at`.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
-- `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
+- `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names a registration of that worker binding. For a registered program, it equals `worker_registration.id`.
 - The claim admits a node only in a state that the worker of the binding declares, through the [match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match). The match has two conditions. The worker declares the intent of the node. The tags of the worker binding include every tag of the node. The intent and the tags of the node come from the revision that the claim pins. A worker name with no worker declaration gives no claimant. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
 - The claim transaction inserts the execution row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node.
 - `agent_selections` is `TEXT`, a JSON list that the claim writes once with the row. Each item is a pin: `agent_name`, `enablement_id` and `position`. The Scheduler rebuilds each selection from the worker binding row of `worker_binding_id` and the enablement revision that `enablement_id` names. It is `[]` for a worker with no native agent, and null reads as `[]`.
 - The Scheduler stores no node branch. It derives the node branch of an execution from `mission_attempt.start_point` through the Mission Service.
 - The claim selects, for each native agent of the worker, the first chain entry whose credential is not cooling. A credential cools while `credential.available_at` lies after the clock. When one agent has none, the claim inserts no row. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
-- A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction settles an expired unsettled execution of the pulling runtime identity, then reads its `running` row. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the instance selects new work.
+- A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction settles an expired unsettled execution of the runtime identity of the work pull, then reads its `running` row. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the registration selects new work.
 - The claim sets `expired_at = created_at + wall_time_ms + 1000 × scheduler.release_reserve`, under [Scheduler configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration). The effective `wall_time_ms` comes from the worker binding row that `worker_binding_id` pins. The deadline never moves, including at a registration resume. A later configuration change affects only later claims.
 - Every execution mutation repeats the full proof in its write transaction: the claimant, a null `ended_at` and time before `expired_at`. This includes release, evidence and assessment submissions, and every operation that requires a live execution. The transaction reads the clock once at its start, and a terminal write uses that reading as `ended_at`. Equality with `expired_at` is a loss. A failed check answers 409 `scheduler.execution.not_running`. The invocation-chain proof before the handler stays in place. Of two terminal writes, only one wins, and only the winner routes the Mission Service.
 - The Mission Service checks the release predicate of [the release admission](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-release-admission) in the release transaction, before the terminal write. A steps release with no further work requires a published evidence of the open attempt, submitted by the releasing execution, that holds for an `implement` node exactly one `repository` asset for each repository binding of the pinned revision and no other, and for an `examine` node one `produced` asset. A reviewer release requires a current passing assessment of the attempt and no eligible unrequested required action. A failed check answers 409 `mission.release.obligation_unmet` with `details.obligation` in `evidence`, `assessment` and `request`, and it changes no execution row, no node state and no job.
@@ -326,11 +337,12 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 | From                                                                  | To                                                | Kind                                                                                                                                         |
 | --------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker_instance.project_id`, `resource_identity`                     | `project_binding.project_id`, `resource_identity` | Reference to a binding group, from the machine JWT, no FK. It pins no revision.                                                              |
+| `worker_registration.project_id`, `resource_identity`                 | `project_binding.project_id`, `resource_identity` | Reference to a binding group, from the machine JWT, no FK. It pins no revision.                                                              |
+| `worker_registration.instance_id`                                     | `worker_instance.id`                              | Reference, no FK. A worker instance revision of [ERD 1](01-setup.md). Null at the `server` and the `container` placements.                   |
 | `scheduler_execution.worker_binding_id`                               | `project_binding.id`                              | Reference, no FK. The latest row of the group at the claim.                                                                                  |
 | `scheduler_execution.worker_binding_id`                               | `agent_enablement.agent_name`                     | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
 | `scheduler_execution.resource_identity`                               | `project_binding.resource_identity`               | Copy of the pinned row, no FK. It groups the rows of one binding across revisions.                                                           |
-| `scheduler_execution.runtime_identity`                                | `worker_instance.id`                              | Reference, no FK. A hosted instance has no row. The Worker Service answers the client attribution of a registered instance through it.       |
+| `scheduler_execution.runtime_identity`                                | `worker_registration.id`                          | Reference, no FK. A hosted program has no row. The Worker Service answers the client attribution of a registration through it.               |
 | `scheduler_execution.node_id`                                         | `mission_node.id`                                 | Reference, no FK.                                                                                                                            |
 | `scheduler_execution.agent_selections`                                | `agent_enablement.id` and the worker binding row  | Reference in JSON, no FK. Each pin names an enablement revision and a chain position. The pinned binding row holds the entry.                |
 | `scheduler_execution.credentials`                                     | `credential.id`                                   | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`.                                                      |

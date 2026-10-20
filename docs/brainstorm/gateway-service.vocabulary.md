@@ -44,13 +44,36 @@ An instance of the worker binding `claude-main` presents the JWT of the client i
 That JWT holds `sub` = `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`, `name` = `Claude Code on ulrich-mbp`, `kind` = `client`, `project_id` = the identity of the project, `resource_identity` = `worker:kanthord:claude-main`, and `iat`, `exp` and `jti`.
 The Gateway Service verifies that JWT and establishes the machine identity, which names the client identity, the worker binding `claude-main`, the project `Billing` and the runtime identity of its live registration.
 The Project Service receives that value, and it takes no association from the caller.
+The worker instance `box-coder` presents a [worker token](#worker-token). The Gateway Service establishes a machine identity of kind `worker` that names the instance revision and the instance name `box-coder`.
 
 ## client secret
 
-The secret that the server derives for one machine JWT and that the `worker` application holds in `cli.yaml`.
+The secret that the server derives for one `client` JWT. A worker instance at the `worker` placement receives it sealed in the connection answer and holds it in memory only.
 
-`kanthord auth jwt generate --project project_01J8Z3N5K7Q2W4E6R8T0Y2V4X5 --binding tdd-main` prints `token:         eyJhbGciOi...` and `client_secret: 3q2+7wAAAAC1...`.
-The worker of `tdd-main` derives the handover key from that client secret. No other worker opens its handover.
+The worker instance `box-coder` opens the connection answer and reads the client secret of its registration under the binding `coder`.
+It derives the handover key from that client secret. No other worker instance opens that handover.
+`kanthord auth jwt generate --project project_01J8Z3N5K7Q2W4E6R8T0Y2V4X5 --binding tdd-main` prints only `token: eyJhbGciOi...`, because an external harness takes no handover.
+
+## worker token
+
+The JWT of kind `worker` that names one worker instance revision. The instance receives it sealed to its public key, so only the holder of the private key opens it.
+
+The worker instance `box-coder` calls `worker.instance.token` with its `instance_id` and opens the sealed answer.
+It presents the worker token on `worker.instance.connect` and `worker.instance.heartbeat`.
+The token lives `WORKER_TOKEN_LIFETIME`, 3600 s, and it opens no work pull and no registration.
+
+A non-secret decoded worker payload:
+
+```json
+{
+  "sub": "worker_instance_01J8Z3N5K7Q2W4E6R8T0Y2V4XA",
+  "name": "box-coder",
+  "kind": "worker",
+  "iat": 1758700000,
+  "exp": 1758703600,
+  "jti": "01J8Z3N5K7Q2W4E6R8T0Y2V4XB"
+}
+```
 
 ## JWT claim set
 
@@ -84,6 +107,8 @@ A non-secret decoded machine payload:
 }
 ```
 
+A `client` JWT of a binding at `placement: worker` adds `instance_id` = `worker_instance_01J8Z3N5K7Q2W4E6R8T0Y2V4XA` and `connection_id` = `connection_01J8Z3N5K7Q2W4E6R8T0Y2V4XC`.
+
 A token with an `aud` claim or without `jti` fails verification.
 
 ## forwarding contract
@@ -92,4 +117,4 @@ The guarantee that the identity the Gateway Service passes to a downstream servi
 
 The Mission Service receives the human identity of `kanthorlabs`.
 It names that identity in its authorization call to the Project Service and does not re-authenticate `kanthorlabs`.
-The Project Service receives the machine identity of a registered instance, and it authenticates no machine of its own.
+The Project Service receives the machine identity of a registration, and it authenticates no machine of its own.

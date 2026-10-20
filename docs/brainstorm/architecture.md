@@ -15,10 +15,10 @@ It describes no mechanism inside a service.
 The application view shows the three [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
 The `server` application runs the eight services.
 The `cli` application operates the system on a terminal.
-The `worker` application runs worker instances.
+The `worker` application runs one worker instance.
 The eight services are logical boundaries inside the server, not separate applications.
 The design targets one server on one host.
-A `worker` application runs on the host of the server or on another host.
+A `worker` application runs on the host of the server or on another host. A human registers each of its instances once on the server.
 
 ## Services
 
@@ -138,7 +138,7 @@ The inventory has these owners.
 - [Project Service](project-service.md#resource-and-binding-model): a repository binding.
 - The [LLM](llm.md#resource-healthcheck), [Repository](repository.md#resource-healthcheck) and [Storage](storage.md#resource-healthcheck) components: a credential store record of their platforms.
 - [Intake Service](intake-service.md#inbounds): an inbound.
-- [Worker Service](worker-service.md#instances-and-hosting): a registered instance.
+- [Worker Service](worker-service.md#instances-and-hosting): a registration.
 - [Agent component](agent.md#agent-configuration): an agent provider.
 
 The store, the log and the host toolchain are internal components, not external resources.
@@ -193,7 +193,7 @@ Every service that versions a resource follows these rules.
 
 - An external harness reaches the Gateway Service through the API or the CLI.
 - An instance that an external harness hosts registers itself with the Worker Service and pulls work from the Scheduler Service through the Gateway Service.
-- An instance that a `worker` application runs registers itself with the Worker Service and pulls work from the Scheduler Service through the Gateway Service.
+- An instance that a `worker` application runs proves its key to the Worker Service. It registers itself under each worker binding that lists it, and it pulls work from the Scheduler Service through the Gateway Service.
 - An external harness reaches the MCP server of the Worker Service through the Gateway Service, and it invokes a configured repository action there.
 - The Worker Service performs that action.
 - A human reaches the Gateway Service through the API or the CLI.
@@ -212,15 +212,15 @@ Every service that versions a resource follows these rules.
 - The Intake Service [hands an inbound event to the Mission Service](intake-service.md#handoff).
 - A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
-- An execution reaches a platform through the Intake Service, and its git transport uses the SSH identity that the credential handover carries.
+- An execution reaches a platform through the Intake Service, and its git transport uses the SSH identity that the credential handover carries. At the `worker` placement, custody releases no SSH key, and the git transport uses the SSH signature relay of the Worker Service.
 - An execution writes evidence to the Mission Service.
 - A reviewer execution reads the criterion and the evidence from the Mission Service.
 - The action performer reads the required external actions of the attempt and the request evidence of the node from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.
-- The Worker Service resolves agent configuration through the Agent component and uses the selected credential through custody.
-- The Worker Service reaches a large language model provider.
+- The Worker Service resolves agent configuration through the Agent component and uses the selected credential through custody. At the `worker` placement, the selected credential is the copy that the worker instance holds, sealed to its key.
+- The Worker Service reaches a large language model provider. A worker instance calls its provider directly, and the server holds no proxy for it.
 - Every service writes telemetry to the Tracking Service.
 - An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the Gateway Service.
 - A human reads a trace from the Tracking Service through the Gateway Service.

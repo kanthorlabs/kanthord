@@ -63,7 +63,9 @@ Project `atlas` holds four worker bindings.
 name: macos-coder
 worker: coder@1
 placement: worker
-instance_count: 2
+worker_instances:
+  - mac-coder-1
+  - mac-coder-2
 tags:
   - platform.macos
   - toolchain.xcode
@@ -184,11 +186,13 @@ The record of the operation names the execution identity.
 
 ## client identity
 
-The identity of one worker instance, or of one program of an external harness, that registers. `kanthord auth jwt generate` generates it inside a machine JWT, and it holds no secret. It is never reused, and it never moves to another worker binding.
+The identity under which one worker instance, or one program of an external harness, registers under one worker binding. `kanthord auth jwt generate` generates it inside the machine JWT of an external harness. The server derives it for a pool slot and for a worker instance at the `worker` placement. It holds no secret. It is never reused, and it never moves to another worker binding.
 
 `ulrich` generates a machine JWT for worker binding `claude-main` of `claude-code@1` with `--project project_01K5ZN4M6Q8R0S2T4V6W8X0Y2Z --binding claude-main` and the name `Claude Code on ulrich-mbp`, and the command generates the client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` inside it.
 The program of `claude-code` presents that JWT, and the protected facility resolves the client identity to the worker binding `claude-main` and to its project.
 A second program of `claude-code` receives its own JWT and its own client identity, and both instances count against the instance count of `claude-main`.
+
+The worker instance `box-coder` serves the binding `coder` of project `atlas` and the binding `coder` of project `billing`. The server derives one client identity for each of the two bindings, and `box-coder` holds one registration under each.
 The external harness holds no credential of a resource.
 `project-service.md` names the execution identity of an execution and the client identity of an external harness.
 

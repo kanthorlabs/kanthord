@@ -269,6 +269,28 @@ ssh -F none -o Port=<port> -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o
 - Custody releases the key through the [protected facility](custody.impl.md#the-protected-facility) with the requested operation `ssh_identity`. The Project Service supplies the authorization function, because it owns the binding.
 - The holder builds `SshAccess` through `RepositoryComponent.sshAccessOf(tx, material, address)`. It parses the address, reads the pin of its host, parses the key, derives the public key and calls `material.drop()` in `finally`.
 
+### The relay agent
+
+At the `worker` placement, the worker unit runs a git operation through a relay agent in place of `withSshAgent`.
+It chooses the relay when the handover holds no SSH identity for a repository binding. The choice reads the data, not the placement.
+
+- The worker unit serves the agent socket itself, under the directory and path rules of steps 1 to 3 of [the SSH identity](#the-ssh-identity). The socket lives for one git operation.
+- `SshAccess` holds the public key from `ssh_public_key` of the `repositories` entry of the execution setup, and no private key.
+- The socket answers `SSH_AGENTC_REQUEST_IDENTITIES` with that public key.
+- It relays each `SSH_AGENTC_SIGN_REQUEST` to the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay) and answers the signature.
+- It answers `SSH_AGENT_FAILURE` to every other message.
+- `GIT_SSH_COMMAND` stays the command of [the SSH identity](#the-ssh-identity), with the socket path as `IdentityAgent`.
+
+### The signature check
+
+The server checks each relayed payload before it releases the key.
+
+- The payload is a user authentication request with the user name `git` and the method `publickey` or `publickey-hostbound-v00@openssh.com`.
+- The public key in the payload equals the public key of the `ssh` record of the binding.
+- For `publickey-hostbound-v00@openssh.com`, the server host key in the payload equals the [pinned host key](#host-keys) of the repository host.
+- Another payload answers 400 `worker.ssh.sign_refused` with `details.reason` `not_user_authentication`, `key_mismatch` or `host_key_mismatch`.
+- The server signs with the ed25519 key of the record and drops the material in `finally`, under [the release of a key](#the-release-of-a-key).
+
 ## Host keys
 
 The component pins one ed25519 [host key](repository.vocabulary.md#host-key-pin) for each SSH host.

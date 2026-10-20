@@ -40,7 +40,7 @@ The closed `connection` set is:
 
 ## login session
 
-One human attempt to obtain an OAuth credential on the server.
+One human attempt to obtain an OAuth credential for one holder. A session of the holder `server` runs on the server, and a session of a worker instance runs on that instance.
 Its closed state set is:
 
 - `pending`
@@ -54,6 +54,7 @@ Its closed mode set is:
 - `device`
 - `copy_code`
 
-A platform offers only the modes that it supports.
+A platform offers only the modes that it supports. A session of a worker instance offers only `device` and `copy_code`.
 Ulrich starts `copilot-login` in device mode and enters code `ABCD-1234` at `https://github.com/login/device`.
 The LLM component stores the credential through custody when the session completes.
+Ulrich starts `claude-sub` for `box-coder` in copy-code mode. `box-coder` seals the result to its own key, and the server stores only the ciphertext.
