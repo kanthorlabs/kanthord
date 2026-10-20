@@ -217,31 +217,34 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 
 `Linux (systemd)` runs the instance as a systemd user unit:
 
-1. Install the binary of the server version, and check it against `SHA256SUMS` of the release:
+1. Download `kanthord-linux-<arch>` and `SHA256SUMS` of the release `<version>` from the [releases page](https://github.com/kanthorlabs/kanthord/releases). `<arch>` is `x64` for an `x86_64` host and `arm64` for an `arm64` host.
+
+2. Check the download against `SHA256SUMS`, then install it:
 
    ```sh
    sha256sum --ignore-missing -c SHA256SUMS
    sudo install -m 755 kanthord-linux-<arch> /usr/local/bin/kanthord
    ```
 
-2. Let the user units of the user run without a login session:
+3. Let the user units of the user run without a login session:
 
    ```sh
    loginctl enable-linger
    ```
 
-3. Write the instance file. `kanthord worker join` reads the instance configuration from standard input. Paste the value, then press `Ctrl-D`:
+4. Write the instance file. `kanthord worker join` reads the instance configuration from standard input. Paste the value, then press `Ctrl-D`:
 
    ```sh
    kanthord worker join
    ```
 
-4. Write the template unit `~/.config/systemd/user/kanthord-worker@.service`:
+5. Create the directory of the user units, and write the template unit `kanthord-worker@.service`:
 
-   ```ini
+   ```sh
+   mkdir -p ~/.config/systemd/user
+   cat > ~/.config/systemd/user/kanthord-worker@.service <<'EOF'
    [Unit]
    Description=KanthorD worker instance %i
-   After=network-online.target
 
    [Service]
    ExecStart=/usr/local/bin/kanthord serve worker --instance %i
@@ -250,9 +253,10 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 
    [Install]
    WantedBy=default.target
+   EOF
    ```
 
-5. Start the instance, and start it again at each boot:
+6. Start the instance, and start it again at each boot:
 
    ```sh
    systemctl --user daemon-reload
@@ -261,9 +265,27 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 
 `macOS (foreground)` runs the instance in a terminal. macOS has no systemd user unit, so nothing restarts the process.
 
-1. Install the binary of the server version, and check it with `shasum -a 256 --ignore-missing -c SHA256SUMS`.
-2. Run `kanthord worker join`, paste the value and press `Ctrl-D`.
-3. Run `kanthord serve worker --instance <name>`. Keep the terminal open.
+1. Download `kanthord-darwin-arm64` and `SHA256SUMS` of the release `<version>` from the [releases page](https://github.com/kanthorlabs/kanthord/releases).
+
+2. Check the download against `SHA256SUMS`, remove the macOS quarantine flag, then install it. Without the `xattr` command, macOS refuses to start the binary.
+
+   ```sh
+   shasum -a 256 --ignore-missing -c SHA256SUMS
+   xattr -d com.apple.quarantine kanthord-darwin-arm64
+   sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord
+   ```
+
+3. Write the instance file. Paste the value, then press `Ctrl-D`:
+
+   ```sh
+   kanthord worker join
+   ```
+
+4. Start the instance. Keep the terminal open:
+
+   ```sh
+   kanthord serve worker --instance <name>
+   ```
 
 `Container` runs the instance on a container platform with no writable configuration:
 
