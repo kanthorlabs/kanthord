@@ -223,7 +223,7 @@ for (const worker of config.workers)
     config: {
       worker: worker.worker,
       instance_count: worker.instances,
-      ...(placement === "server" ? { placement: "server" } : {}),
+      placement,
     },
   };
 const bindingSet = await api.get(`/api/project/${project.id}/binding-set`);
