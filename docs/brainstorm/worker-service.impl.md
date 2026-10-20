@@ -490,6 +490,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                                                      |
 | 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                                                       |
 | 400  | `worker.ssh.sign_invalid`               | The sealed sign request does not open, or its plaintext does not match the schema.                                                                      |
+| 403  | `worker.ssh.placement_refused`          | The worker binding of the execution is not at the `worker` placement. `details.placement` names its placement.                                          |
 
 The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`.
 
@@ -1077,6 +1078,7 @@ The relay serves only the `worker` placement, and the `server` and `container` p
 - The socket answers `SSH_AGENTC_REQUEST_IDENTITIES` with `ssh_public_key` of the execution setup.
 - It relays `SSH_AGENTC_SIGN_REQUEST` to `worker.ssh.sign`, and it answers `SSH_AGENT_FAILURE` to every other message.
 - It answers `SSH_AGENT_FAILURE` to a sign request for another key and to each failure of the relay. git then fails with `repository.connector.git_failed`.
+- The socket records the last relay error. The cause of `repository.connector.git_failed` appends the line `ssh relay: <code>: <message>` and holds that error as its own cause.
 - It closes a connection on a frame of 0 bytes or of more than 262,144 bytes.
 - OpenSSH sends the extension `session-bind@openssh.com` first. The answer `SSH_AGENT_FAILURE` to it is not fatal, and OpenSSH continues with the sign request.
 - The socket ends with its git operation. The end cancels each relay call in flight.
@@ -1089,7 +1091,7 @@ The relay serves only the `worker` placement, and the `server` and `container` p
 - The AAD is the length-prefixed execution identity followed by the length-prefixed runtime identity.
 - A repeat of an idempotency key answers 409 with no answer.
 - A sealed request that does not open, or a plaintext that does not match the schema, answers 400 `worker.ssh.sign_invalid`.
-- The operation checks no placement. A pool slot of the `server` or the `container` placement with a live claim can also sign, and that slot already holds the key.
+- A worker binding of the execution that is not at the `worker` placement answers 403 `worker.ssh.placement_refused`, before the request opens. `details.placement` is `server`, `container` or `null`.
 - The server authorizes the `ssh_identity` grant for a repository binding of the pinned node revision, and it pins the credential revision, under [custody.impl.md](custody.impl.md#the-release-of-an-ssh-key).
 - The server signs only a user-authentication request for that key, with the user name `git` and the method `publickey` or `publickey-hostbound-v00@openssh.com`.
 - For the host-bound method, the server host key in the signed data equals the pinned host key of the repository host.
@@ -1097,7 +1099,7 @@ The relay serves only the `worker` placement, and the `server` and `container` p
 - The server signs with ed25519 and ignores `flags`. It drops the key material. It logs the execution, the binding, the credential, `client_id` and `instance_id`.
 - `src/repository/ssh-sign.ts` checks the payload and signs.
 - During a live claim, the holder of the client token and the `client_secret` can authenticate as the deploy key. The reach ends with the claim.
-- Tests cover the socket protocol, each refusal reason, another binding, an execution with no live claim and a replay with 409.
+- Tests cover the socket protocol, each refusal reason, another binding, another placement, an execution with no live claim and a replay with 409.
 - Plain `git` and OpenSSH push and fetch through the relay against `src/repository/test-sshd.ts`, and once against the live repository host.
 - The tests check that the repository key type is ed25519, or that the relay supports the sign flags `rsa-sha2-256` and `rsa-sha2-512`.
 
