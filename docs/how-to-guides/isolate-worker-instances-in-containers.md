@@ -4,7 +4,7 @@
 
 Run the instances of a worker binding at the `container` placement. The server then starts one container for each instance on its own host, with Podman or Docker.
 
-At the `server` placement, an agent command runs as the server user. It can read every credential of the server, `master_key` and the database. At the `container` placement, an agent command runs in the container of its instance. It reads no file of the server and cannot signal the server process. Each instance keeps its state in its own volume `kanthord_slot_<client_id>`.
+At the `server` placement, an agent command runs as the server user. It can read every credential of the server, `master_key` and the database. At the `container` placement, an agent command runs in the container of its instance. It reads no file of the server and cannot signal the server process. Each instance runs in the container `kanthord_slot_<client_id>` and keeps its state in its own volume `kanthord_slot_<client_id>`.
 
 The server must run as the kanthord binary on the host. A server inside a container cannot start containers, so `container` is off there. To install the binary, use [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md) or [Run kanthord on a VPS](run-on-a-vps.md).
 
@@ -55,7 +55,7 @@ Install the binary `kanthord-linux-x64` or `kanthord-linux-arm64` as [step 1 of 
 
 ### On a VPS with the service user
 
-The service user `kanthord` of [Run kanthord on a VPS](run-on-a-vps.md) is a system user. It has no subordinate uid range and no user session. Give it both:
+The service user `kanthord` of [Run kanthord on a VPS](run-on-a-vps.md) is a system user. It has no subordinate uid range and no user session, so Podman needs these four steps:
 
 1. Install Podman and the uid map tools:
 
@@ -69,14 +69,14 @@ The service user `kanthord` of [Run kanthord on a VPS](run-on-a-vps.md) is a sys
    sudo usermod --add-subuids 1000000-1065535 --add-subgids 1000000-1065535 kanthord
    ```
 
-2. Write `/var/lib/kanthord/.config/containers/containers.conf` as the user `kanthord`:
+2. Write `/var/lib/kanthord/.config/containers/containers.conf` as the user `kanthord`. The file replaces the systemd user session that the user lacks:
 
    ```sh
    sudo -u kanthord -H mkdir -p /var/lib/kanthord/.config/containers
    printf '[engine]\ncgroup_manager = "cgroupfs"\nevents_logger = "file"\n' | sudo -u kanthord -H tee /var/lib/kanthord/.config/containers/containers.conf
    ```
 
-3. Add these lines to the `[Service]` section of `/etc/systemd/system/kanthord.service`:
+3. Add these lines to the `[Service]` section of `/etc/systemd/system/kanthord.service`. `XDG_RUNTIME_DIR` gives Podman the runtime directory that a user session gives otherwise:
 
    ```ini
    RuntimeDirectory=kanthord
@@ -106,11 +106,11 @@ podman pull docker.io/kanthorlabs/kanthord:<version>
 
 On the VPS, run `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman pull docker.io/kanthorlabs/kanthord:<version>`.
 
-With a toolchain image, the server uses `worker.container_image` in place of `docker.io/kanthorlabs/kanthord`. Pull or build that image instead.
+The server adds its own version as the tag to the name in `worker.container_image`. With a toolchain image, the server uses that name in place of `docker.io/kanthorlabs/kanthord`. Build the image as the user that runs the server, and set the name as [step 4 of Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md#4-use-the-image-at-the-container-placement) shows. Then pull or build that image instead.
 
 ## 3. Check the placement
 
-In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows `container` on. When it is off, the sheet shows the reason. See [Troubleshooting](#troubleshooting).
+In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows `container` on. When it is off, the sheet shows the reason. Under `runtime_failed`, the sheet turns `container` off, but a save through the API still passes. See [Troubleshooting](#troubleshooting).
 
 ## 4. Add the worker binding
 
@@ -120,7 +120,7 @@ In the project, open the **Bindings** tab, and select **Add** in the **Workers**
 4. Choose the **Placement** `container`, and set the **Instance count**.
 5. Select **Save binding**.
 
-A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement), choose `container` in place of `worker` in step 3, and skip step 4.
+A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement). In that section, choose `container` in place of `worker` in its step 3, and skip its step 4.
 
 The **Workers** page shows each instance with `· container`. The runtime lists the containers of the server:
 
@@ -151,15 +151,15 @@ On the VPS, write `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman`
 
 ## Troubleshooting
 
-| Symptom                                                                                     | Cause and fix                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Save binding** fails with `project.bindings.worker.placement_unavailable`                 | The server cannot run containers. `error.details.reason` names the cause. See the rows below.                                                                                                                                            |
-| The sheet shows "Off. This server runs in a container…", or `reason: server_in_container`   | The server runs in a container. Install the binary on the host, or keep the `server` placement.                                                                                                                                          |
-| The sheet shows "Install Podman or Docker on the server host…", or `reason: runtime_absent` | No `podman` and no `docker` is on the `PATH` of the server. Do step 1, then restart the server.                                                                                                                                          |
-| The sheet shows "Cannot connect to Podman…", or `reason: runtime_failed` with that text     | The Podman machine is stopped. Run `podman machine start`. The instances start by themselves.                                                                                                                                            |
-| The sheet or `reason: runtime_failed` names the server user and the uid map                 | The user has no subordinate uid range that covers uid 10001 of the container. Do item 1 of [On a VPS with the service user](#on-a-vps-with-the-service-user).                                                                            |
-| The sheet shows "Docker runs as root on this host…", or `reason: runtime_rootful`           | Docker runs as root on this Linux host. Use rootless Podman or rootless Docker. A Linux VM runtime other than Docker Desktop, for example Rancher Desktop, gets this refusal too. Use Podman there.                                      |
-| `reason: runtime_failed` stays while `podman machine list` shows a running machine          | The server runs with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME`. The check runs with the full server environment and loses the Podman machine connection. Remove both variables from the server environment, then restart the server. |
-| An instance never shows on the **Workers** page                                             | Read `workers/<client_id>/stderr.log`. A failed pull shows there. Pull the image as the user of the server, then wait for the next start of the instance. The server tries again after a pause of up to 30 s.                            |
-| A node fails with a provider or storage error that names `127.0.0.1` or `localhost`         | The endpoint is on the host loopback address. See [Limits](#limits).                                                                                                                                                                     |
-| On a Mac, nodes fail at random during `npm ci`                                              | The Podman machine has too little memory. Set 8 GiB with step 1.                                                                                                                                                                         |
+| Symptom                                                                                     | Cause and fix                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Save binding** fails with `project.bindings.worker.placement_unavailable`                 | The server cannot run containers. `error.details.reason` names the cause: `server_in_container`, `runtime_absent` or `runtime_rootful`. The reason `runtime_failed` never refuses a save, because a stopped runtime recovers. See the rows below. |
+| The sheet shows "Off. This server runs in a container…", or `reason: server_in_container`   | The server runs in a container. Install the binary on the host, or keep the `server` placement.                                                                                                                                                   |
+| The sheet shows "Install Podman or Docker on the server host…", or `reason: runtime_absent` | No `podman` and no `docker` is on the `PATH` of the server. Do step 1, then restart the server.                                                                                                                                                   |
+| The sheet shows "Cannot connect to Podman…", or `reason: runtime_failed` with that text     | The Podman machine is stopped. Run `podman machine start`. The instances start by themselves.                                                                                                                                                     |
+| The sheet or `reason: runtime_failed` names the server user and the uid map                 | The user has no subordinate uid range that covers uid 10001 of the container. Do item 1 of [On a VPS with the service user](#on-a-vps-with-the-service-user).                                                                                     |
+| The sheet shows "Docker runs as root on this host…", or `reason: runtime_rootful`           | Docker runs as root on this Linux host. Use rootless Podman or rootless Docker. A Linux VM runtime other than Docker Desktop, for example Rancher Desktop, gets this refusal too. Use Podman there.                                               |
+| `reason: runtime_failed` stays while `podman machine list` shows a running machine          | The server runs with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME`. The check runs with the full server environment and loses the Podman machine connection. Remove both variables from the server environment, then restart the server.          |
+| An instance never shows on the **Workers** page                                             | Read `workers/<client_id>/stderr.log`. A failed pull shows there. Pull the image as the user of the server, then wait for the next start of the instance. The server tries again after a pause of up to 30 s.                                     |
+| A node fails with a provider or storage error that names `127.0.0.1` or `localhost`         | The endpoint is on the host loopback address. See [Limits](#limits).                                                                                                                                                                              |
+| On a Mac, nodes fail at random during `npm ci`                                              | The Podman machine has too little memory. Set 8 GiB with the commands of [On a Mac with Podman](#on-a-mac-with-podman).                                                                                                                           |
