@@ -548,6 +548,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `terminate()` runs `<runtime> kill --signal KILL kanthord_slot_<client_id>`. "no such container" counts as success. When the client still lives 2 s later, the driver sends `SIGKILL` to the client.
 - `exited` resolves at the exit of the client. Code 125 is a runtime error, for example a pull, name or mount failure. Code 126 or 127 means that the command cannot run. The pool host writes each one as `worker.pool.instance_failed` with `exit_code`, and `stderr.log` holds the runtime text.
 - A server crash closes the pipe ends of the server. The container then reads the end of stdin, and `serve slot` exits. When the client survives or dies with no end of stdin, the 15 s frame deadline ends the instance.
+- Under systemd, a crash can kill `conmon` with the instance. The runtime then keeps a container record with no process. No slot acts on a claim, so G5 holds.
 - At the next start, `prepare()` removes every container of the owner. The slot starts again with the same `client_id`, the same slot volume and the live registration, so the `running` execution resumes.
 - A systemd unit of the server sets `KillMode=mixed`. `systemctl stop` then sends `SIGTERM` to the server process only, and the pool host stops each instance with its `stop` frame.
 
