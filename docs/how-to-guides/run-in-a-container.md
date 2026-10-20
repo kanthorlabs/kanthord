@@ -235,6 +235,8 @@ A worker binding with the placement `worker` runs its instances in a separate `k
 
 `<binding name>` is the name of this worker binding, not the name of the repository binding of step 5.
 
+The **Placement** list also shows `container`, which is off, because this server runs in a container. That placement needs the kanthord binary on the host. See [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
+
 A machine token names one worker binding. One `kanthord serve worker` process serves the binding of its token only. [The first-task tutorial](../tutorials/first-task.md) needs two workers: `coder@1` and `reviewer@1`. To run both on worker hosts, add two worker bindings, for example `coder-remote` with `coder@1` and `reviewer-remote` with `reviewer@1`. Do the token steps below once for each binding. Run one `kanthord serve worker` process for each token. Two processes on one host need two client files. Give each process its own `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. A process reads its client file from `$XDG_CONFIG_HOME/kanthord/cli.yaml`, and keeps its workspaces in `$XDG_STATE_HOME/kanthord`.
 
 The worker host needs these items:
@@ -362,6 +364,8 @@ If a worker runs in a container on the same host, do these steps too. See [Run a
    ```
 
 For a worker on another host, install the `kanthord` binary of `<new version>` on that host. Then start `kanthord serve worker` again. See [upgrade](../reference/upgrade.md#other-state).
+
+If the server runs a toolchain image, build the image of `<new version>` first, and use it in the command of step 3. See [Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md).
 
 ## Troubleshooting
 
