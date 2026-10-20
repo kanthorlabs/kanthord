@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, tokenOf } from "./api.mjs";
+import { isServerManaged } from "./placement.mjs";
 
 const [run, binding, countStr] = process.argv.slice(2);
 if (!run || !binding || !countStr)
@@ -14,7 +15,7 @@ const MAIN = mainCheckout(ROOT);
 const runDir = join(MAIN, ".dev/e2e", run);
 const state = JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
 
-if (state.placement !== "server")
+if (!isServerManaged(state.placement))
   throw new Error(`e2e-scale refuses a run at placement ${state.placement}`);
 
 const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));

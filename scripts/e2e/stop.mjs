@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { stopDevDaemon } from "./daemon.mjs";
+import { isServerManaged } from "./placement.mjs";
 import { deleteRunDeployKeys } from "./ssh-identity.mjs";
+import {
+  containerRuntime,
+  requireNoOwnedContainers,
+} from "./slot-containers.mjs";
 import { stopWorkers } from "./workers.mjs";
 
 const STOP_ENV = process.env.STOP ?? "";
@@ -30,9 +35,13 @@ if (STOP_ENV === "daemon") {
   );
 }
 
-if (state.placement === "server") {
+if (isServerManaged(state.placement)) {
   if (STOP_ENV === "daemon") {
     await stopDevDaemon(state.endpoint, "e2e-stop");
+    if (state.placement === "container") {
+      await requireNoOwnedContainers(containerRuntime());
+      console.log("e2e-stop: no container with the owner label remains");
+    }
   } else {
     const runDir = join(MAIN, ".dev/e2e", run);
     const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));

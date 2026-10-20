@@ -12,7 +12,7 @@ HOMELAB := $(ROOT)/platforms/homelab
 export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
-.PHONY: help dev bootstrap release release-build release-smoke release-image \
+.PHONY: help dev bootstrap release release-build release-smoke release-smoke-container release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules test-container cleanup docs-tools \
 	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale e2e-check pi-tools-update
@@ -44,6 +44,12 @@ help:
 	@echo "                   Needs an official Node 24. OUTPUT=path writes another path"
 	@echo "  release-smoke    Start the binary in a disposable home and call the API"
 	@echo "                   BINARY=path tests another binary"
+	@echo "  release-smoke-container"
+	@echo "                   Build kanthord image into Podman, start the binary with"
+	@echo "                   worker.container_image localhost/kanthord, apply one container"
+	@echo "                   binding and check that a server stop leaves no slot container"
+	@echo "                   BINARY=path tests another binary. IMAGE_FROM=docker loads"
+	@echo "                   kanthord:<version> from docker instead of a Podman build"
 	@echo "  release-image    Build the container image kanthord:<version> with podman"
 	@echo "                   or docker. CONTAINER_ENGINE=docker selects one"
 	@echo "                   IMAGE=registry/name sets the image name"
@@ -77,14 +83,19 @@ help:
 	@echo ""
 	@echo "e2e"
 	@echo "  e2e              Start everything for an e2e run in one step. RUN=name"
-	@echo "                   (todoapp-<yymmdd-HHMM>). PLACEMENT=server|worker (default server)."
+	@echo "                   (todoapp-<yymmdd-HHMM>). PLACEMENT=server|worker|container (default server)."
 	@echo "                   It installs the engine dependencies, starts make dev in the background"
 	@echo "                   when the daemon is down, then runs e2e-start."
+	@echo "                   PLACEMENT=container refuses a dev config without"
+	@echo "                   worker.container_image: localhost/kanthord-dev-node, then builds"
+	@echo "                   localhost/kanthord-dev:<version> and its Node layer first."
 	@echo "                   GitHub calls use E2E_GH_TOKEN only. Dev log in .dev/e2e/dev.log"
 	@echo "  e2e-start        Start an e2e run against the daemon of make dev. RUN=name"
-	@echo "                   PLACEMENT=server|worker (default server)."
+	@echo "                   PLACEMENT=server|worker|container (default server)."
 	@echo "                   At server placement: writes placement into each worker binding,"
 	@echo "                   starts no worker processes; the daemon pool manages the instances."
+	@echo "                   At container placement: the same, with a container for each instance;"
+	@echo "                   run.json records the image id of localhost/kanthord-dev-node."
 	@echo "                   At worker placement: spawns a process for each instance."
 	@echo "                   It creates the LLM and repository credentials, the SSH key of the run,"
 	@echo "                   the github.com host key pin, a write deploy key, enablements,"
@@ -94,12 +105,16 @@ help:
 	@echo "                   so that no worker claims a node. PAUSED=0 keeps the project active."
 	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
 	@echo "  e2e-watch        Print project state changes, node changes, execution stops,"
-	@echo "                   instance changes (server) or worker exits (worker), and PRs. RUN=name"
-	@echo "  e2e-stop         At server placement: pause the project."
+	@echo "                   instance changes (server, container) or worker exits (worker), the image id"
+	@echo "                   (container), and PRs. RUN=name"
+	@echo "  e2e-stop         At server and container placement: pause the project."
 	@echo "                   STOP=daemon stops the daemon of make dev instead."
+	@echo "                   At container placement, it fails when a slot container remains."
 	@echo "                   At either placement, STOP=daemon deletes the deploy key of the run."
 	@echo "                   At worker placement: stop the worker processes. RUN=name"
 	@echo "  e2e-restart      At server placement: restart the daemon of make dev."
+	@echo "                   At container placement: rebuild both dev images, then the same."
+	@echo "                   A node --watch restart of make dev rebuilds no slot image."
 	@echo "                   At worker placement: restart the worker processes on the current"
 	@echo "                   engine code. RUN=name"
 	@echo "  e2e-resume       Resume the paused project of a run, so that workers claim nodes. RUN=name"
@@ -126,6 +141,8 @@ release-build:
 	@$(S)/release/build.sh
 release-smoke:
 	@$(S)/release/smoke.sh
+release-smoke-container:
+	@$(S)/release/smoke-container.sh
 release-image:
 	@$(S)/release/image.sh
 
