@@ -55,6 +55,10 @@ Each create, rotate and metadata update inserts the next revision number. The ne
 
 A rotation and a revoke end every older live revision that no live execution pins. A `get` and a `list` do the same drain before they answer. A metadata update keeps older revisions live until a drain or a revoke ends them.
 
+### Cooldowns
+
+A provider failure with the code `rate_limited`, `unavailable` or `quota_exhausted` puts the credential into a cooldown. The credential answer carries no cooldown. Read it with [`agent cooldown list`](../agent/cooldown.md). The **Cooldown** section of the LLM credential page in the dashboard shows the same hold. Clear it with [`agent cooldown clear`](../agent/cooldown.md#cooldown-clear).
+
 ### Commands
 
 - `list` returns one page of credentials in ascending name order. By default it leaves out archived credentials.

@@ -50,7 +50,7 @@ The terms below appear on every worker page. Each term has exactly one meaning.
 | Outcome              | The final record of an attempt. A successful outcome completes the node.                                                                                                                                                  |
 | Release              | The end of an execution that returns the node to the Mission Service, with `further_work: true` or `false`.                                                                                                               |
 | Budget               | The resource limit of one execution: 200 agent turns and 2 hours of wall time by default.                                                                                                                                 |
-| Stop                 | The reason in a release that the execution ended early, for example `{ "reason": "budget_end", "code": "turns" }`. A release with no stop has `stop: null`.                                                               |
+| Stop                 | The reason in a release that the execution ended early, for example `{ "reason": "budget_end", "code": "turns" }`. A stop can carry `detail`, the cause text. A release with no stop has `stop: null`.                    |
 | Revision instruction | A message from the worker to the agent that asks for more work on a task, for example after a failed verification. It is not a node revision.                                                                             |
 
 ## Who does what

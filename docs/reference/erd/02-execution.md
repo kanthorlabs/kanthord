@@ -72,7 +72,7 @@ erDiagram
         text root_span_id "Tracking protocol value"
         integer created_at "claim acceptance, Unix ms"
         integer ended_at "Unix ms, null before terminal write"
-        text stop "JSON reason and code of a stopped release, null otherwise"
+        text stop "JSON reason, code and optional detail of a stopped release, null otherwise"
     }
 
     mission_attempt {

@@ -150,7 +150,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The wrapper does not install the pi tools.
 - The worker unit checks `ssh-agent` and `ssh-add` for presence at its start. A spawn that answers `ENOENT` refuses the start with `repository.connector.tool_missing`.
 - The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
-- When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`.
+- When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`. When the stop has a cause text, the record also adds `detail`.
 - The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of the state directory with mode `0600`, and it keeps the newest 50 transcripts.
 - After the registration, the application logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
@@ -732,6 +732,7 @@ The carrier of that attribution is an epic decision.
 - The worker keeps the last 4 KiB of the combined stdout and stderr of each item. The output is not evidence. The task revision carries the output of the last item that ran.
 - An agent turn that ends with a provider error stops the execution with `provider_failed`. pi retries a transient error before the turn ends.
 - The stop code names the provider failure: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
+- The stop `detail` holds the cause text: the error text of a provider error reply, or `<error name>: <message>` of an error that a prompt to the agent session throws, with the reason `operation_failed`. `redactReason` removes the credential secrets read at the open and at the stop, bearer values, JWTs and tokens of 32 or more characters, keeps a file path, and cuts the text to 300 characters. Other stops carry no `detail`.
 - A task revision after a failed verification that changes no file twice in a row stops the execution with `no_progress`. The second unchanged revision runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
