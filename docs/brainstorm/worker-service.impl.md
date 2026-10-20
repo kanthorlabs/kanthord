@@ -646,7 +646,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   - a body above the limit with 413 `gateway.request.body_too_large`;
   - a body with a duplicate member, and a body that is no JSON value;
   - a body on an operation with no body, and a numeric query value;
-  - a registration of a client identity that is no pool slot on a binding at the `server` placement, with 409 `worker.instance.placement_mismatch`.
+  - a registration of a client identity that is no pool slot on a binding at the `server` or `container` placement, with 409 `worker.instance.placement_mismatch`.
 
 ## The execution setup
 

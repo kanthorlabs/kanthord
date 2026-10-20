@@ -147,6 +147,7 @@ test("feature pages share one response contract and API/CLI sections", () => {
       "worker/handover.md",
       "worker/heartbeat.md",
       "worker/instance.md",
+      "worker/placement.md",
       "worker/register.md",
       "worker/worker.md",
     ],
