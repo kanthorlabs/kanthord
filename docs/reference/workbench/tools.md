@@ -56,7 +56,7 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 | `llm--credential--archive` | `POST /api/llm/credential/:credential_name/archive` | Yes | Archive one copy of an LLM credential that no dependent names. The holder defaults to server. |
 | `llm--credential--get` | `GET /api/llm/credential/:credential_name` | No | Get one copy of an LLM credential, all its revisions and the agent providers that name it. The holder defaults to server for a human and to the instance of a worker token. |
 | `llm--credential--list` | `GET /api/llm/credential` | No | List the copies of LLM credentials with optional platform and holder filtering and pagination. A worker instance lists only its own copies. |
-| `llm--credential--login` | `POST /api/llm/credential/login` | Yes | Start an OAuth credential login session. |
+| `llm--credential--login` | `POST /api/llm/credential/login` | Yes | Start an OAuth credential login session. The holder defaults to server. A login of a worker instance runs on that instance in copy_code or device mode. |
 | `llm--credential--login_status` | `GET /api/llm/credential/login/:session_id` | No | Read the state of an OAuth login session. |
 | `llm--credential--platform_list` | `GET /api/llm/credential/platform` | No | List the LLM credential platforms. |
 | `llm--credential--revoke` | `POST /api/llm/credential/:credential_name/revision/:revision/revoke` | Yes | End an older revision of one copy of an LLM credential. The holder defaults to server. |
