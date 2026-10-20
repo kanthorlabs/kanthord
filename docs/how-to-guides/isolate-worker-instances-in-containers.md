@@ -147,7 +147,7 @@ On the VPS, write `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman`
 - An instance reaches the network through the default network of the runtime. It cannot reach `127.0.0.1` of the host. A provider, an OAuth endpoint or an S3 endpoint on the host loopback address, for example a local Ollama or MinIO, fails at the `container` placement. Use the `server` placement for such a binding.
 - An agent command still reaches the memory of its own instance and every network that the container reaches.
 - An agent command at the `server` placement on the same server reaches every container of the server through the runtime. Do not mix `server` bindings of untrusted repositories with `container` bindings on one server.
-- The volume `kanthord_slot_<client_id>` stays after you remove the binding. Remove it with `podman volume rm kanthord_slot_<client_id>` when the binding is gone. On the VPS, run `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman volume rm kanthord_slot_<client_id>`.
+- The server removes the volume `kanthord_slot_<client_id>` after you remove the binding and its last slot ends. A lowered count keeps the volume.
 
 ## Troubleshooting
 

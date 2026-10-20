@@ -308,7 +308,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - It creates the slot root and appends the instance output to `stderr.log`.
 - It creates the `MessageChannel` of the slot channel, serves `port1` with `servePort` and mints the machine JWT of each call.
 - It derives the `client_secret` of the slot.
-- It writes `worker.pool.slot_limit`, `worker.pool.instance_failed` and `worker.pool.driver_unavailable`.
+- It writes `worker.pool.slot_limit`, `worker.pool.instance_failed`, `worker.pool.driver_unavailable` and `worker.pool.cleanup_failed`.
 - A slot driver starts one instance, connects the instance end of the slot channel, forwards a control, ends the instance by force, reports the exit and reports its availability.
 - `src/apps/server/slot-driver.ts` declares `SlotDriver`, `SlotLaunch`, `SlotInstance` and `SlotExit`.
 - `SlotLaunch` holds exactly `slot`, `channel`, `client_secret`, `root`, `output` and `environment`.
@@ -321,7 +321,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
   - `exited` resolves once with `{ code, error }`, and it never rejects.
 - `SlotDriver` offers `placement`, `check()`, `prepare()` and `launch(launch)`.
   - `check()` answers a `PlacementStatus`, and it never throws.
-  - `prepare()` runs before the first launch. Only a successful `prepare()` counts. A failed `prepare()` runs again at the next launch.
+  - The pool host calls `prepare()` of each pool driver once at each start, before any launch, and does not wait for it. `prepare()` removes the runtime leftovers of the owner. Only a successful `prepare()` counts. A failed `prepare()` runs again before the next launch.
+  - The `thread` driver has no runtime leftover. The `container` driver removes the containers of the owner when a runtime answers. With no runtime, it does nothing and logs nothing.
   - A throw of `launch` counts as an exit with code 1.
 - `ThreadControl` of `src/apps/worker/thread-data.ts` takes the name `SlotControl`.
 - `src/worker/contract.ts` holds the enums `InstancePlacement` (`server`, `container`, `worker`), `PoolPlacement` (`server`, `container`), `PlacementIssue` and `ContainerRuntime` (`podman`, `docker`).
@@ -380,6 +381,11 @@ Tests of the slot driver:
 
 - The root of a slot is `workers/<client_id>/` of the state directory of the server, with mode `0700`. Every pool slot holds a slot root.
 - The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it.
+- The pool host removes the slot root and the slot volume of each slot of a removed binding after the last slot of that binding ends.
+- At each start, the pool host removes each slot root under `workers/` and each slot volume of the owner whose client identity belongs to no live binding at any slot number.
+- A lowered count keeps the slot root and the slot volume, because the client identity of the slot returns with a raised count.
+- A failed removal or sweep writes `worker.pool.cleanup_failed` with the slot root or the volume name and `err` to the server log. It blocks no start and no launch.
+- A removed binding at count 0 has no slot that ends. The next start sweep removes its slot roots and slot volumes.
 - The slot root of a `thread` slot holds `state/kanthord/kanthord.log` and `stderr.log`. The slot root of a `container` slot holds `stderr.log` only, and the [slot volume](#the-slot-volume) holds the state.
 - The rules below bind the `thread` driver.
 - The thread starts with its own `env` and never with `SHARE_ENV`.
@@ -451,7 +457,7 @@ Tests of the slot driver:
 - The owner value is the Crockford base32 form of the first 128 bits of `deriveKey(master_key, "worker/container-owner")`. Nothing stores it.
 - The container and its volume take the name `kanthord_slot_<client_id>`. Both carry the labels `io.kanthord.owner=<owner>` and `io.kanthord.client_id=<client_id>`.
 - `prepare()` runs `<runtime> ps --all --filter label=io.kanthord.owner=<owner> --format '{{.Names}}'`, then `<runtime> rm --force <name>` for each name.
-- `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes.
+- `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes. The start sweep of [Isolation of a thread slot](#isolation-of-a-thread-slot) removes the volume of a removed binding.
 - Each launch first runs `<runtime> rm --force kanthord_slot_<client_id>`. An answer that holds "no such container", in any case, counts as success.
 - The removal of the slot volume of a removed binding is a [HANDOFF](HANDOFF.md#worker-service) item.
 
@@ -548,6 +554,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `terminate()` runs `<runtime> kill --signal KILL kanthord_slot_<client_id>`. "no such container" counts as success. When the client still lives 2 s later, the driver sends `SIGKILL` to the client.
 - `exited` resolves at the exit of the client. Code 125 is a runtime error, for example a pull, name or mount failure. Code 126 or 127 means that the command cannot run. The pool host writes each one as `worker.pool.instance_failed` with `exit_code`, and `stderr.log` holds the runtime text.
 - A server crash closes the pipe ends of the server. The container then reads the end of stdin, and `serve slot` exits. When the client survives or dies with no end of stdin, the 15 s frame deadline ends the instance.
+- Under systemd, a crash can kill `conmon` with the instance. The runtime then keeps a container record with no process. No slot acts on a claim, so G5 holds.
 - At the next start, `prepare()` removes every container of the owner. The slot starts again with the same `client_id`, the same slot volume and the live registration, so the `running` execution resumes.
 - A systemd unit of the server sets `KillMode=mixed`. `systemctl stop` then sends `SIGTERM` to the server process only, and the pool host stops each instance with its `stop` frame.
 
