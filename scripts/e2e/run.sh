@@ -3,9 +3,6 @@ SCRIPT_NAME=e2e
 . "$(dirname "$0")/../lib/common.sh"
 require_command curl
 
-[ "${PLACEMENT:-server}" = worker ] &&
-	die "The worker placement e2e returns in layer 6 of Group B, OAuth on the worker instance."
-
 DAEMON_WAIT_SECONDS=60
 LIVENESS="http://127.0.0.1:$ENGINE_PORT/api/liveness"
 DEV_LOG="$RUN_DIR/e2e/dev.log"

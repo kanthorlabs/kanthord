@@ -4,6 +4,11 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { runCheck, shouldPause, pendingCheckAction } from "./check.mjs";
+import {
+  connectionChanges,
+  instanceHome,
+  runningProcess,
+} from "./instances.mjs";
 import { isServerManaged } from "./placement.mjs";
 
 const [run] = process.argv.slice(2);
@@ -15,7 +20,6 @@ const state = JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
 const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));
 const TICK_MS = 15000;
 const PR_EVERY_TICKS = 4;
-const PROCESS_ABSENT = "ESRCH";
 const now = () => new Date().toISOString().slice(11, 19);
 const githubToken = readEnvFile(resolve(MAIN, state.env_file))[
   state.github_token_env
@@ -29,21 +33,12 @@ const ended = new Set();
 const prs = new Map();
 const down = new Set();
 const runtimeStates = new Map();
+const connections = new Map();
 let projectState;
 let shownImageId;
 let checkRunning = false;
 let checkPending = false;
 const COMPLETED_STATE = "Completed";
-
-function alive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if (error.code === PROCESS_ABSENT) return false;
-    throw error;
-  }
-}
 
 async function pauseProject() {
   try {
@@ -139,7 +134,8 @@ function watchWorkers() {
     readFileSync(join(runDir, "run.json"), "utf8"),
   );
   for (const instance of instances) {
-    const up = alive(instance.pid);
+    const up =
+      runningProcess(instanceHome(MAIN, instance.name), instance.name) !== null;
     if (!up && !down.has(instance.name))
       console.log(
         `${now()} worker ${instance.name} EXITED (log ${instance.log})`,
@@ -147,6 +143,17 @@ function watchWorkers() {
     if (up) down.delete(instance.name);
     else down.add(instance.name);
   }
+}
+
+async function watchConnections(quiet) {
+  const { instances } = JSON.parse(
+    readFileSync(join(runDir, "run.json"), "utf8"),
+  );
+  const records = [];
+  for (const { name } of instances)
+    records.push([name, await api.get(`/api/worker/instance/${name}`)]);
+  for (const change of connectionChanges(connections, records))
+    if (!quiet) console.log(`${now()} ${change}`);
 }
 
 async function watchRegistrations(quiet) {
@@ -203,12 +210,12 @@ for (let tick = 0; ; tick++) {
     await watchProject();
     await watchNodes(tick === 0);
     await watchExecutions(tick === 0);
-    if (isServerManaged(state.placement)) {
-      if (state.placement === "container") watchImage();
-      await watchRegistrations(tick === 0);
-    } else {
+    if (state.placement === "container") watchImage();
+    if (!isServerManaged(state.placement)) {
       watchWorkers();
+      await watchConnections(tick === 0);
     }
+    await watchRegistrations(tick === 0);
     if (tick % PR_EVERY_TICKS === 0) watchPullRequests(tick === 0);
   } catch (error) {
     console.log(`${now()} watch error: ${error.message}`);

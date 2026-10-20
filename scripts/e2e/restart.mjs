@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { mainCheckout } from "./api.mjs";
 import { stopDevDaemon } from "./daemon.mjs";
 import { buildDevImages } from "./images.mjs";
+import { restartInstanceProcesses } from "./instances.mjs";
 import { isServerManaged } from "./placement.mjs";
 import { restartServerManaged } from "./restart-steps.mjs";
 import { spawnWorker, stopWorkers } from "./workers.mjs";
@@ -57,18 +58,21 @@ if (isServerManaged(state.placement)) {
   });
   console.log("e2e-restart: daemon ready");
 } else {
-  for (const instance of await stopWorkers(state.instances))
+  const { stopped, started } = await restartInstanceProcesses(
+    MAIN,
+    state.instances,
+    {
+      stop: stopWorkers,
+      spawn: (home, logFile, name) =>
+        spawnWorker(join(ROOT, "engine"), home, logFile, name),
+    },
+  );
+  for (const instance of stopped)
     console.log(
-      `e2e-restart: ${instance.name} pid ${instance.pid} ${instance.result}`,
+      `e2e-restart: ${instance.name}${instance.pid ? ` pid ${instance.pid}` : ""} ${instance.result}`,
     );
-  state.instances = state.instances.map((instance) => {
-    const pid = spawnWorker(
-      join(ROOT, "engine"),
-      join(runDir, instance.name),
-      instance.log,
-    );
-    console.log(`e2e-restart: ${instance.name} started pid ${pid}`);
-    return { ...instance, pid };
-  });
+  for (const instance of started)
+    console.log(`e2e-restart: ${instance.name} started pid ${instance.pid}`);
+  state.instances = started;
   saveState(state);
 }

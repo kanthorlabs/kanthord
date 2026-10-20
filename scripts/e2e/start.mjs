@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -22,8 +23,19 @@ import {
   sshHostOf,
 } from "./ssh-identity.mjs";
 import { imageIdField } from "./images.mjs";
+import {
+  configInstances,
+  enablementCredentials,
+  instanceCli,
+  prepareInstances,
+  runInstances,
+  hasSignInGaps,
+  signInGaps,
+  signInMessage,
+  workerBindingConfig,
+} from "./instances.mjs";
 import { isServerManaged, PLACEMENTS } from "./placement.mjs";
-import { spawnWorker, withoutKanthordClient } from "./workers.mjs";
+import { spawnWorker, stopWorkers, withoutKanthordClient } from "./workers.mjs";
 
 const [configPath, run, pausedFlag = "1", placement = "server", devConfig] =
   process.argv.slice(2);
@@ -81,7 +93,8 @@ function kanthord(args) {
 
 const humanFile = join(runDir, "human.cli.yaml");
 kanthord(["auth", "jwt", "generate", `e2e-${run}`, "--output", humanFile]);
-const api = client(config.endpoint, tokenOf(humanFile));
+const humanToken = tokenOf(humanFile);
+const api = client(config.endpoint, humanToken);
 log("human token issued", { file: humanFile });
 
 const env = readEnvFile(resolve(MAIN, config.env_file));
@@ -137,9 +150,32 @@ for (const credential of config.repository_credentials) {
   log("credential created", { name: credential.name });
 }
 
-requireEnablementCredentials(
-  await unsuitableEnablementCredentials(api, config.enablements, configPath),
-);
+let instances = [];
+if (isServerManaged(placement)) {
+  requireEnablementCredentials(
+    await unsuitableEnablementCredentials(api, config.enablements, configPath),
+  );
+} else {
+  instances = await prepareInstances(configInstances(config.workers), {
+    api,
+    cli: instanceCli(ENGINE, config.endpoint, humanToken),
+    main: MAIN,
+    spawn: (home, logFile, name) => spawnWorker(ENGINE, home, logFile, name),
+    stop: stopWorkers,
+  });
+  for (const { name, pid, result, started } of instances)
+    log("worker instance ready", { name, instance: result, pid, started });
+  const gaps = await signInGaps(
+    api,
+    instances,
+    enablementCredentials(config.enablements),
+  );
+  if (hasSignInGaps(gaps)) {
+    rmSync(runDir, { recursive: true, force: true });
+    console.error(signInMessage("e2e-start", gaps));
+    process.exit(1);
+  }
+}
 
 const sshKey = await createSshKey(api, sshCredentialName);
 log("SSH key created", {
@@ -158,6 +194,7 @@ const runState = {
   ssh_credential: sshCredentialName,
   deploy_key_id: null,
   placement,
+  config: configPath,
   ...imageIdField(placement, ROOT),
 };
 writeRunState();
@@ -230,11 +267,7 @@ const bindings = {
 for (const worker of config.workers)
   bindings[worker.binding] = {
     kind: "worker",
-    config: {
-      worker: worker.worker,
-      instance_count: worker.instances,
-      placement,
-    },
+    config: workerBindingConfig(worker, placement),
   };
 const bindingSet = await api.get(`/api/project/${project.id}/binding-set`);
 await api.put(`/api/project/${project.id}/binding-set`, {
@@ -296,40 +329,11 @@ Object.assign(runState, {
   mission_id: mission.id,
 });
 
-if (isServerManaged(placement)) {
+if (isServerManaged(placement))
   log("workers managed by the daemon pool", {
     bindings: config.workers.map((worker) => worker.binding),
   });
-} else {
-  const instances = [];
-  for (const worker of config.workers)
-    for (let index = 1; index <= worker.instances; index++) {
-      const name = `${worker.binding}-${index}`;
-      const home = join(runDir, name);
-      const cliFile = join(home, "config/kanthord/cli.yaml");
-      mkdirSync(dirname(cliFile), { recursive: true, mode: PRIVATE_DIRECTORY });
-      kanthord([
-        "auth",
-        "jwt",
-        "generate",
-        "--project",
-        project.id,
-        "--binding",
-        worker.binding,
-        "--name",
-        `e2e ${run} ${name}`,
-        "--output",
-        cliFile,
-        "--endpoint",
-        config.endpoint,
-      ]);
-      const logFile = join(runDir, `${name}.log`);
-      const pid = spawnWorker(ENGINE, home, logFile);
-      instances.push({ name, pid, log: logFile });
-      log("worker started", { name, pid });
-    }
-  runState.instances = instances;
-}
+else runState.instances = runInstances(instances);
 
 writeRunState();
 log("ready", {

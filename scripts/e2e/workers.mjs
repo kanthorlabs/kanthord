@@ -9,13 +9,22 @@ const PROCESS_ABSENT = "ESRCH";
 
 export function withoutKanthordClient(env) {
   const output = { ...env };
-  for (const name of ["KANTHORD_ENDPOINT", "KANTHORD_CONFIG", "KANTHORD_TOKEN"])
+  for (const name of [
+    "KANTHORD_ENDPOINT",
+    "KANTHORD_CONFIG",
+    "KANTHORD_TOKEN",
+    "KANTHORD_WORKER_CONFIG",
+  ])
     delete output[name];
   return output;
 }
 
-export function spawnWorker(engine, home, logFile) {
-  const child = spawn(process.execPath, ["src/main.ts", "serve", "worker"], {
+export function workerArguments(name) {
+  return ["src/main.ts", "serve", "worker", "--instance", name];
+}
+
+export function spawnWorker(engine, home, logFile, name) {
+  const child = spawn(process.execPath, workerArguments(name), {
     cwd: engine,
     detached: true,
     stdio: ["ignore", openSync(logFile, "a"), openSync(logFile, "a")],

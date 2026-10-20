@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { stopDevDaemon } from "./daemon.mjs";
+import { stopInstanceProcesses } from "./instances.mjs";
 import { isServerManaged } from "./placement.mjs";
 import { deleteRunDeployKeys } from "./ssh-identity.mjs";
 import {
@@ -49,8 +50,11 @@ if (isServerManaged(state.placement)) {
     console.log(`e2e-stop: project ${project.id} paused`);
   }
 } else {
-  for (const instance of await stopWorkers(state.instances ?? []))
+  const stopped = await stopInstanceProcesses(MAIN, state.instances, {
+    stop: stopWorkers,
+  });
+  for (const instance of stopped)
     console.log(
-      `e2e-stop: ${instance.name} pid ${instance.pid} ${instance.result}`,
+      `e2e-stop: ${instance.name}${instance.pid ? ` pid ${instance.pid}` : ""} ${instance.result}`,
     );
 }
