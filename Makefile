@@ -107,7 +107,7 @@ help:
 	@echo "                   so that no worker claims a node. PAUSED=0 keeps the project active."
 	@echo "                   CONFIG=path (scripts/e2e/todoapp.json). Files in .dev/e2e/<RUN>"
 	@echo "  e2e-watch        Print project state changes, node changes, execution stops,"
-	@echo "                   instance changes (server, container) or worker exits (worker), the image id"
+	@echo "                   registration changes (server, container) or worker exits (worker), the image id"
 	@echo "                   (container), and PRs. RUN=name"
 	@echo "  e2e-stop         At server and container placement: pause the project."
 	@echo "                   STOP=daemon stops the daemon of make dev instead."

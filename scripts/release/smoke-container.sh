@@ -133,7 +133,7 @@ cli project binding apply "$project_id" --file "$home/bindings.json" >/dev/null 
 
 slot_ready=0
 for _ in $(seq 1 240); do
-	if cli worker instance list --project "$project_id" |
+	if cli worker registration list --project "$project_id" |
 		node -e '
 const { items } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
 process.exit(items.some((item) => item.placement === "container" && item.draining === false) ? 0 : 1);
