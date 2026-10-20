@@ -151,7 +151,6 @@ The instance healthcheck stays out of every human inspection command under [work
   The guard counts the executions of those runtime identities whose `ended_at` is null and whose `expired_at` is later than now, the predicate of `countRunningOfGroup`.
   A count above zero answers `{ kind: "no-work" }`, and the claim inserts no execution and changes no node.
   The claim transactions of the server serialize, so a second claim of one instance never commits, also when a pull abort arrives late.
-  Today `claimOnce` holds no instance guard. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) builds it.
   An expired, unsettled execution blocks no other registration of its instance.
   Tests cover two pulls of one instance on two bindings that commit one claim. They also cover an expired execution that blocks nothing and a registration with no instance.
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, the pinned selections rebuilt from the pins.
