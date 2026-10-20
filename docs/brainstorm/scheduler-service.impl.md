@@ -153,7 +153,7 @@ The instance healthcheck stays out of every human inspection command under [work
   The claim transactions of the server serialize, so a second claim of one instance never commits, also when a pull abort arrives late.
   Today `claimOnce` holds no instance guard. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) builds it.
   An expired, unsettled execution blocks no other registration of its instance.
-  Tests cover two pulls of one instance on two bindings that commit one claim, an expired execution that blocks nothing, and a registration with no instance.
+  Tests cover two pulls of one instance on two bindings that commit one claim. They also cover an expired execution that blocks nothing and a registration with no instance.
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, the pinned selections rebuilt from the pins.
 - The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
 - Custody and the execution setup of the Worker Service read the pinned selection and never the live chain.

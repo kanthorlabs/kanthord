@@ -388,7 +388,7 @@ The trust boundary is the containment that the operator provides.
 The Worker Service runs the tool of an agent and the verifications of a node inside it.
 The term names no closed set.
 The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
-At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance, and so every project that the same instance serves.
+At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance. They therefore reach every project that the same instance serves.
 At the `server` placement, they reach every resource of the server.
 At the `container` placement, they reach the slot volume, the network and their own instance, and no file of the server.
 

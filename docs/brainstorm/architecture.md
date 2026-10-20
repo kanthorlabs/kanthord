@@ -193,7 +193,7 @@ Every service that versions a resource follows these rules.
 
 - An external harness reaches the Gateway Service through the API or the CLI.
 - An instance that an external harness hosts registers itself with the Worker Service and pulls work from the Scheduler Service through the Gateway Service.
-- An instance that a `worker` application runs proves its key to the Worker Service, registers itself under each worker binding that lists it, and pulls work from the Scheduler Service through the Gateway Service.
+- An instance that a `worker` application runs proves its key to the Worker Service. It registers itself under each worker binding that lists it, and it pulls work from the Scheduler Service through the Gateway Service.
 - An external harness reaches the MCP server of the Worker Service through the Gateway Service, and it invokes a configured repository action there.
 - The Worker Service performs that action.
 - A human reaches the Gateway Service through the API or the CLI.

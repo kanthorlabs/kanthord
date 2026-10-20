@@ -141,7 +141,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ## The chain view
 
 - `chain` is a list of `{ position, level, agent_provider, provider, credential, model_identifier, reasoning_effort, cooldown }`. Position 0 is the head.
-- `cooldown` is `null` or `{ strikes, available_at }`. It reads the hold of the copy of the `server` holder in `agent.get`, and the hold of the copy of each holder of the binding in a project view. It shows the hold with the latest `available_at`. Every chain entry of one credential shows the same `cooldown`.
+- `cooldown` is `null` or `{ strikes, available_at }`. In `agent.get`, it reads the hold of the copy of the `server` holder. In a project view, it reads the hold of the copy of each holder of the binding. It shows the hold with the latest `available_at`. Every chain entry of one credential shows the same `cooldown`.
   - A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats it as free.
 - `active_position` is the position of the first chain entry whose `cooldown` is `null` or whose `available_at` is not later than the clock reading. It is `null` when every chain entry has a live cooldown.
 - `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", available_at }` when `active_position` is `null`. `available_at` is the earliest `available_at` of the chain.
@@ -152,7 +152,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 ## The agent cooldown
 
-- The cooldown of a credential copy lives on the row of revision 1 of its `(name, holder)` group, in the columns `credential.available_at` and `credential.strikes` of [ERD 1](../reference/erd/01-setup.md). No table `agent_cooldown` exists.
+- The cooldown of a credential copy lives on the row of revision 1 of its `(name, holder)` group. The columns are `credential.available_at` and `credential.strikes` of [ERD 1](../reference/erd/01-setup.md). No table `agent_cooldown` exists.
 - `available_at` is the Unix millisecond end of the hold, and it is null while no hold exists. `strikes` is a non-negative integer, 0 while no hold exists.
 - A hold cools every model of the credential. No model identifier and no execution identity enter the hold.
 - The duration is `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. `available_at` is the clock reading of the transaction plus the duration.
@@ -172,7 +172,7 @@ The Agent component owns these keys of the section `agent`.
 ### The release write
 
 - The Scheduler Service calls the Agent component in the release transaction of an execution. The call carries the pinned selection of each agent of the execution and the `stop`.
-- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` holds the credential copy of each pinned selection: the `(name, holder)` group of the row that the execution pins. A copy that two selections share is held once.
+- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` holds the credential copy of each pinned selection. That copy is the `(name, holder)` group of the row that the execution pins. A copy that two selections share is held once.
 - The hold adds 1 to `strikes`, so the first failure sets `strikes` to 1, and it sets `available_at`.
 - A `stop` with the reason `provider_failed` and the code `bad_request` or `unauthorized` holds no credential and releases no credential.
 - A release with no `stop`, or with a `stop` whose reason is not `provider_failed`, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
@@ -240,7 +240,7 @@ The Agent component owns these keys of the section `agent`.
 - Tests cover override allowlists, model catalogs, established reasoning levels and all five effective-configuration fields.
 - Tests assert schema draft, required properties, absent defaults, absent options and the whole-configuration description.
 - Tests cover transactional changes and removals, dependency lists, snapshot reads and recorded revisions.
-- Tests cover the holder rule at enablement write, binding write and resolution: a missing copy, a copy sealed to an ended fingerprint, a fallback entry without a copy, and the copy that a claim of each holder resolves.
+- Tests cover the holder rule at enablement write, binding write and resolution. The cases are a missing copy, a copy sealed to an ended fingerprint and a fallback entry without a copy. A test checks the copy that a claim of each holder resolves.
 - Tests cover the metadata provider build, per-model base URLs, zero costs and absent environment keys.
 - Tests cover every provider-check answer, status, deadline and the absence of raw keys.
 - Tests cover healthcheck grouping, attribution, report-only behaviour and no inference call.

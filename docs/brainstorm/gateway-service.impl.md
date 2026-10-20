@@ -64,7 +64,7 @@ The policy value lives in the operation registry, so one declaration drives the 
 ## Identity on the wire
 
 One `Authorization` header carries one scheme.
-`Bearer` carries the JWT of a human and the JWT of a machine, and the `kind` claim of the token states which one: `human`, `client` or `worker`.
+`Bearer` carries the JWT of a human and the JWT of a machine. The `kind` claim of the token states which one: `human`, `client` or `worker`.
 A machine presents its JWT on every request, including the registration route, and no request presents another credential.
 
 ## Human authentication
@@ -186,7 +186,7 @@ A worker instance at the `worker` placement takes a new worker token and connect
 [architecture.impl.md](architecture.impl.md) declares this top-level command and its configuration path resolution.
 It uses the signing-key derivation and token contract above, with the configured lifetime.
 Without `--project` and `--binding` it generates a human JWT with the selected username as `sub`.
-With `--project` and `--binding` it generates a `client` JWT for an external harness, with a fresh client identity as `sub`, the project as `project_id` and `worker:kanthord:<binding name>` as `resource_identity`, and it rejects a `username` argument.
+With `--project` and `--binding` it generates a `client` JWT for an external harness, and it rejects a `username` argument. The JWT holds a fresh client identity as `sub`, the project as `project_id` and `worker:kanthord:<binding name>` as `resource_identity`.
 The token holds no `instance_id`, so the Gateway Service refuses it on a binding at `placement: worker`.
 The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` fails with `cli.auth.jwt.binding_without_project`. `--project` without `--binding` fails with `cli.auth.jwt.project_without_binding`. A `--project` value that is not a canonical `project_<ulid>` identity fails with `gateway.authentication.invalid_project`.
 Mint one machine token for each concurrent external harness program. A program reuses its token across restarts while the token is valid.
@@ -453,7 +453,7 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - A project-scoped resource name of the Project Service is its binding name.
 - An Intake Service resource name is its inbound identity.
 - A global resource name of the Agent component is `<agent name>/<provider name>` for an agent provider.
-- A project-scoped resource name of the Worker Service is `<worker binding name>/<runtime identity>` for a registration. Its target is `registration:<runtime identity>`. The Worker Service takes the project name and the binding name from the Project Service through the binding read of the registration, and reads no Project table.
+- A project-scoped resource name of the Worker Service is `<worker binding name>/<runtime identity>` for a registration. Its target is `registration:<runtime identity>`. The Worker Service takes the project name and the binding name from the Project Service through the binding read of the registration. It reads no Project table.
 - Each name segment uses percent encoding, including any literal `/` or `%`, so distinct names remain distinct.
 - No entry name, capability or error detail holds secret material or a private endpoint URL with credentials.
 
@@ -591,7 +591,7 @@ It covers an expired token and a token signed under an earlier `gateway.auth.ver
 It covers an increment of `gateway.auth.version`, and it asserts that a credential store record stays readable.
 It covers a work pull of a machine identity whose registration ended, and it asserts the refusal.
 It covers each code `gateway.jwt.instance_required`, `instance_ended`, `connection_superseded` and `instance_not_listed`, and a `client` JWT with `instance_id` on a binding of another placement.
-It covers the Host check: a `client`, `worker` or `public` route under an unlisted `Host` passes, a `human_or_worker` route passes with a worker token and fails with a human token, and an unmatched route fails.
+It covers the Host check. A `client`, `worker` or `public` route under an unlisted `Host` passes, and an unmatched route fails. A `human_or_worker` route passes with a worker token and fails with a human token.
 It emits the directory from the registry and compares it with the committed directory, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
 The implementation epic assesses their removal.

@@ -115,7 +115,7 @@ An external harness supports ongoing integration and maintenance with an existin
 
 An external harness supplies its HOW through its own orchestration skill, usually named `/work`.
 It reaches the node and task model of kanthord through the CLI or the API.
-An external harness is a worker that the harness hosts: a human starts its program, and the kanthord extension of that program registers under a worker binding of the project with its client identity.
+An external harness is a worker that the harness hosts. A human starts its program, and the kanthord extension of that program registers under a worker binding of the project with its client identity.
 Its instances acquire work through the work pull, like every worker instance, and its worker declares `Available`, `Waiting` and `External.Requested`, so an instance of it can carry out the steps of a node, evaluate it and request its external actions, through separate claims.
 The node content is its only input, and kanthord configures no agent, no prompt and no tool of an external harness.
 Its method can adapt dynamically to the capabilities and availability of its agents.

@@ -11,7 +11,7 @@ A mechanism here never overrides a rule there.
 ## The credential store record
 
 - Custody owns the shared `credential` table and the [credential envelope](architecture.impl.md#the-credential-table).
-- A row holds `id`, `name`, `platform`, `holder`, `sealed_to`, `revision`, `secret`, `metadata`, `created_at`, `ended_at`, `available_at` and `strikes`, and one row is one revision of one copy of a credential.
+- A row holds `id`, `name`, `platform`, `holder`, `sealed_to`, `revision`, `secret`, `metadata`, `created_at`, `ended_at`, `available_at` and `strikes`. One row is one revision of one copy of a credential.
 - The encrypted columns represent `secret`; no plaintext secret persists.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
@@ -185,7 +185,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
 - The payload is canonical JSON. It holds the credential of the pinned agent selection of the execution and the SSH identities of the execution.
 - `custody.handover` takes the placement of the pinned worker binding and the instance of the identity, and it chooses each item from those values.
-- At the `server` and the `container` placements, its sole item is `{ credential_id, provider_id, credential }`: the record identity, the pi adapter id and the pi-ai credential of a row of the holder `server`.
+- At the `server` and the `container` placements, its sole item is `{ credential_id, provider_id, credential }`. These are the record identity, the pi adapter id and the pi-ai credential of a row of the holder `server`.
 - At the `worker` placement, its sole item is `{ credential_id, provider_id, sealed }`: the sealed object of the copy of the instance of the identity. The server never opens it.
 - At the `worker` placement, an item of the holder `server` answers 403 `custody.handover.holder_refused` with `details.reason` `server_held`. An item of another holder, or a copy sealed to a fingerprint that is not current, answers the same code with `reason` `held_elsewhere`.
 - The payload holds `ssh_identities: [{ binding_id, credential_id, private_key }]` beside `items`, one entry for each repository binding of the pinned node revision, at the `server` and the `container` placements. An execution with no repository binding holds `[]`.
@@ -260,9 +260,9 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, and the metadata copy and replacement at rotation.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover a handover with an SSH entry, an execution with no repository binding, and a report with the credential type `ssh_key`.
-- Tests cover the sealed object against the test vectors of RFC 9180 appendix A.1, the seal of a human entry for two holders in one transaction, a sealed entry of an instance, and each refusal of `credential.sealed.invalid`.
+- Tests cover the sealed object against the test vectors of RFC 9180 appendix A.1. They cover the seal of a human entry for two holders in one transaction. They also cover a sealed entry of an instance and each refusal of `credential.sealed.invalid`.
 - Tests cover `credential.name.platform_conflict`, a hold of one copy that leaves the other copies free, and `archiveHeld`.
-- Tests assert that `release()` refuses an instance copy, and that a handover at the `worker` placement refuses a server-held item, an item of another holder and an item sealed to an ended fingerprint, and answers `ssh_identities: []`.
+- Tests assert that `release()` refuses an instance copy. At the `worker` placement, a handover refuses a server-held item, an item of another holder and an item sealed to an ended fingerprint. The handover answers `ssh_identities: []`.
 - Tests assert that a generic create, rotate, metadata edit and check of `ssh` refuse. Tests assert that a generated create logs no key, and that the database file holds no key text.
 - Tests cover each requester kind of `ssh_identity`, a fabricated grant and a consumed grant.
 - Tests assert that `release` refuses a consumed grant, a fabricated grant and an inbound operation under another service identity, and that `drop()` clears the buffer after a success and after a failure.

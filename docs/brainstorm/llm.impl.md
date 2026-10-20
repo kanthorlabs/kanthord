@@ -252,6 +252,6 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.
-- Tests cover a human create for several holders, a sealed create of an instance, each refusal of an instance caller, `llm.credential.instance_unknown` and an `openai-compatible` instance copy with typed model ids.
+- Tests cover a human create for several holders, a sealed create of an instance and each refusal of an instance caller. They also cover `llm.credential.instance_unknown` and an `openai-compatible` instance copy with typed model ids.
 - Tests cover an instance login in each allowed mode with a fake pi-ai flow, a refused browser mode, `credential.login.instance_unavailable` and an expiry that stores nothing.
 - Tests cover `llm.credential.report`, the healthcheck of an instance copy with no release, and `unknown` after a server restart.

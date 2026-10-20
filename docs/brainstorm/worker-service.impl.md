@@ -69,7 +69,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The machine identity of [gateway-service.impl.md](gateway-service.impl.md#the-forwarding-contract) names it for a live registration.
 - It is no JWT claim.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
-- The Worker Service answers the client attribution of a runtime identity to the Scheduler Service in-process: the `client_id` and the `client_name` of its `worker_registration` row, ended rows included. The human `worker.registration.get` still answers 404 for an ended registration.
+- The Worker Service answers the client attribution of a runtime identity to the Scheduler Service in-process. The attribution is the `client_id` and the `client_name` of its `worker_registration` row, ended rows included. The human `worker.registration.get` still answers 404 for an ended registration.
 - Today the engine names the registration table `worker_instance`, the runtime identity `worker_instance_<ulid>` and the registration operations `worker.instance.*`. Layer 2 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) renames them.
 
 ## Registration heartbeat
@@ -102,8 +102,12 @@ Their design, and the packaging of the `/work` orchestration skill that they car
   An unknown name answers 404 `worker.catalog.not_found`.
 - `worker.registration.list` is `GET /api/worker/registration` with optional `project_id`, `resource_identity`, `limit` and `cursor`. `project_id` is a `project_<ulid>` and `resource_identity` is `worker:kanthord:<binding name>`. `resource_identity` requires `project_id`, and a binding that the project does not hold answers 400 `worker.registration.binding_unknown`. The answer pages live registration records by runtime identity descending. It is a live inventory and no history.
 - `worker.registration.get` is `GET /api/worker/registration/:runtime_identity`. An unknown or ended registration answers 404 `worker.registration.not_found`.
-- A registration record holds `runtime_identity`, `project_id`, `resource_identity`, `worker_name`, `host`, `placement` (`server`, `container` or `worker`) for a kanthord host from the placement of the binding, `client_id` and `name` for a registered instance, `instance` (the instance name at the `worker` placement, else null), `activity` (`idle`, `pulling` or `executing`), `draining` (from the [pool](#the-pool): true for a slot that drains), `execution_id` while executing, and `registered`. It holds no JWT.
-- The dashboard shows the placement of a pool slot registration as the text `· server` or `· container` in the row description, and `draining` as an outline badge. A registration at the `worker` placement shows `· instance <name>`. A registration of an external harness shows neither.
+- A registration record holds `runtime_identity`, `project_id`, `resource_identity`, `worker_name`, `host`, `placement`, `client_id`, `name`, `instance`, `activity`, `draining`, `execution_id` and `registered`. It holds no JWT.
+  - `placement` is `server`, `container` or `worker` for a kanthord host, from the placement of the binding.
+  - `client_id` and `name` name a registered instance. `instance` is the instance name at the `worker` placement, else null.
+  - `activity` is `idle`, `pulling` or `executing`. `execution_id` holds a value while the registration executes.
+  - `draining` comes from the [pool](#the-pool). It is true for a slot that drains.
+- The dashboard shows the placement of a pool slot registration as the text `· server` or `· container` in the row description. It shows `draining` as an outline badge. A registration at the `worker` placement shows `· instance <name>`. A registration of an external harness shows neither.
 - The dashboard calls these rows live registrations.
 - The reads change no registration, no pool, no configuration and no scheduling state, and they infer no dead process from silence.
 - The instance healthcheck runs before a work pull and before a claim commits, not through a human inspection command. A disabled enablement shows in `agent get`; a missing enablement refuses the binding write under [configuration validation](agent.impl.md#agent-configuration-validation). The health report covers registration liveness.
@@ -180,7 +184,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - A 10-second watchdog applies only when no execution is live and no registration waits for its answer.
 - `SIGHUP` reopens nothing.
 - B9 owns shutdown during a live execution or a registration with no answer, and a stop deadline in those cases.
-- Tests cover the option resolution, the refusal of `--token` and `--config`, the startup order, each startup failure, the ready records, deregistration before exit, a failed deregistration, the abort of the outstanding work pulls at a stop and the watchdog of a settled state.
+- Tests cover the option resolution, the refusal of `--token` and `--config`, the startup order, each startup failure and the ready records. They also cover deregistration before exit and a failed deregistration. They cover the abort of the outstanding work pulls at a stop and the watchdog of a settled state.
 - A test covers a claim answer with an unknown field. It asserts one pull, the exit with `gateway.client.answer_invalid`, no deregistration, and a restart that resumes the same claim and completes the handover.
 
 ### The instance configuration
@@ -204,7 +208,7 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 - Today `childEnvironment` removes the provider keys and `SSH_AUTH_SOCK`, and it removes no `KANTHORD_*` value.
 - The template unit `kanthord-worker@.service` is a systemd user unit. It runs `kanthord serve worker --instance %i` with `Restart=on-failure` and `RestartPreventExitStatus=3`, and it sets no `XDG_*_HOME`.
 - [architecture.impl.md](architecture.impl.md#the-command-surface) states the commands `kanthord worker join` and `kanthord worker instance`.
-- Tests cover each source, the conflict, the absence with its paths, an invalid value, a file name mismatch, another `--instance`, the file modes and the environment of a child process.
+- Tests cover each source, the conflict, the absence with its paths and an invalid value. They also cover a file name mismatch, another `--instance`, the file modes and the environment of a child process.
 
 ### The copy blocks
 
@@ -379,7 +383,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 - It holds the name `server slot <n>` and a lifetime of 60 s (`SLOT_TOKEN_LIFETIME`). It reaches no file and no thread.
 - The Gateway authenticates that JWT through `Authentication.authenticate` and `resolveMachine`, as an HTTP bearer token.
 - The binding resolution, the tombstone check of `iat`, the registration match, the access policy, the registration requirement and the execution proof apply unchanged.
-- `worker.register` of a binding at the `server` or the `container` placement checks that the client identity of the caller is a current pool slot of that binding.
+- At the `server` and the `container` placements, `worker.register` checks that the client identity of the caller is a current pool slot of the binding.
 - A current pool slot is every slot in the pool state of the binding, a slot that drains included.
 - The pool check `isSlot` compares the project, the binding and the generation.
 - Another client identity answers 409 `worker.registration.placement_mismatch`.
@@ -498,7 +502,7 @@ The connection:
 - `client_secret` is `deriveClientSecret(master_key, auth_version, client_id)`, as for a pool slot. `master_key` never leaves the server.
 - Each `token` is a `client` JWT with the claims `instance_id` and `connection_id`. Its lifetime is `WORKER_TOKEN_LIFETIME`.
 - A binding that drops the instance from `worker_instances` stays in the answer with `state: draining` while the instance holds a live registration of it. The worker unit ends the execution of that binding, deregisters, and the entry leaves the next answer.
-- `worker.register` at the `worker` placement checks that the client identity of the caller is the derived identity of a listed instance for that binding, as `isSlot` checks a pool slot. Another identity answers 409 `worker.registration.placement_mismatch`.
+- At the `worker` placement, `worker.register` checks that the client identity of the caller is the derived identity of a listed instance for that binding. `isSlot` makes the same check for a pool slot. Another identity answers 409 `worker.registration.placement_mismatch`.
 - `register` returns the live registration of a client identity before the count check, so a restart resumes the same runtime identity.
 
 The current connection:
@@ -509,7 +513,7 @@ The current connection:
 - On 401 `gateway.jwt.connection_superseded`, the wrapper sends one heartbeat. A 409 answer ends the process as superseded. A success makes the connection current again, and the process continues.
 - A superseded process kills the tool process group of its execution through `killProcessGroup`, stops the worker unit and exits with status 3 and `worker.instance.superseded`. The diagnostic names the `connection_name` of the current connection.
 - The template unit sets `RestartPreventExitStatus=3`, so systemd does not restart a superseded process. A restart loop on a container platform means two deployments of one instance configuration.
-- Between a supersede and the next heartbeat of the old process, up to one heartbeat interval, two processes can act in the same workspace of one host.
+- Two processes can act in the same workspace of one host between a supersede and the next heartbeat of the old process. That time is at most one heartbeat interval.
 
 The heartbeat and the renewal:
 
@@ -585,7 +589,7 @@ Tests:
 - It creates the `MessageChannel` of the slot channel, serves `port1` with `servePort` and mints the machine JWT of each call.
 - It derives the `client_secret` of the slot.
 - It writes `worker.pool.slot_limit`, `worker.pool.instance_failed`, `worker.pool.driver_unavailable` and `worker.pool.cleanup_failed`.
-- A slot driver starts one instance, connects the instance end of the slot channel, forwards a control, ends the instance by force, reports the exit and reports its availability.
+- A slot driver starts one instance and connects the instance end of the slot channel. It forwards a control, ends the instance by force, reports the exit and reports its availability.
 - `src/apps/server/slot-driver.ts` declares `SlotDriver`, `SlotLaunch`, `SlotInstance` and `SlotExit`.
 - `SlotLaunch` holds exactly `slot`, `channel`, `client_secret`, `root`, `output` and `environment`.
   - `slot` is the `PoolSlot`, and `slot.placement` selects the driver.
@@ -617,7 +621,7 @@ Tests:
 The pool host and the code of the worker unit keep these guarantees at every slot driver.
 
 - **G1.** The instance reaches kanthord only through its slot channel. No driver gives it a token or an endpoint.
-- **G2.** The pool host gives `client_secret` to the instance once at the start: in `workerData` for `thread`, in the `init` frame of the slot channel for `container`. It never enters an `env`, an argv, an image layer, a label or a file.
+- **G2.** The pool host gives `client_secret` to the instance once at the start. The `thread` driver uses `workerData`, and the `container` driver uses the `init` frame of the slot channel. It never enters an `env`, an argv, an image layer, a label or a file.
 - **G3.** The `env` of the instance holds only the allowlist and the directory variables. It holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - **G4.** The instance ends when its slot channel closes.
 - **G5.** The instance runs the server package version. The worker unit checks the version at its start with `worker.version.mismatch`. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) adds the `server_version` check of each instance heartbeat.
@@ -637,7 +641,7 @@ The `thread` driver keeps none of them for the agent tools and the verification 
 
 C1 to C6 leave two reaches open.
 
-- A tool process reaches the memory of its own instance, so it reaches the `client_secret` of the slot and the handover of the live execution, as at the `worker` placement. It reaches every network that the container reaches.
+- A tool process reaches the memory of its own instance. It therefore reaches the `client_secret` of the slot and the handover of the live execution, as at the `worker` placement. It reaches every network that the container reaches.
 - A tool at the `server` placement on the same server reaches every `container` slot through the container runtime.
 
 Tests of the slot driver:
@@ -657,8 +661,8 @@ Tests of the slot driver:
 
 - The root of a slot is `workers/<client_id>/` of the state directory of the server, with mode `0700`. Every pool slot holds a slot root.
 - The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it.
-- The pool host removes the slot root and the slot volume of each slot of a removed binding after the last slot of that binding ends.
-- At each start, the pool host removes each slot root under `workers/` and each slot volume of the owner whose client identity belongs to no live binding at any slot number.
+- After the last slot of a removed binding ends, the pool host removes the slot root and the slot volume of each slot.
+- At each start, the pool host removes slot roots under `workers/` and slot volumes of the owner. It removes only those whose client identity belongs to no live binding at any slot number.
 - A lowered count keeps the slot root and the slot volume, because the client identity of the slot returns with a raised count.
 - A failed removal or sweep writes `worker.pool.cleanup_failed` with the slot root or the volume name and `err` to the server log. It blocks no start and no launch.
 - A removed binding at count 0 has no slot that ends. The next start sweep removes its slot roots and slot volumes.
@@ -815,7 +819,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 | `worker.slot.frame_invalid`  | A line on stdin is no valid frame, or the pool host reads an invalid line from the instance. |
 | `worker.slot.channel_closed` | Stdin reaches its end, or no frame arrives within 15 s.                                      |
 
-- A deadline timer defers the exit by one `setImmediate` and checks the time of the last frame again, so a pending frame after a host wake keeps the instance.
+- A deadline timer defers the exit by one `setImmediate` and checks the time of the last frame again. A pending frame after a host wake therefore keeps the instance.
 - A `SIGTERM` or a `SIGINT` inside the container acts as the `stop` control.
 - A frame that arrives before `init` and is not `init` ends the instance with `worker.slot.frame_invalid`.
 - A signal before `init` exits 0, because no thread runs yet.
@@ -826,7 +830,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 
 ### Stop, terminate and server crash
 
-- `control("stop")` sends the `stop` frame. The worker unit stops under its rules, the thread exits, `serve slot` exits, the container ends, `--rm` removes it, and the client exits with the code of the container.
+- `control("stop")` sends the `stop` frame. The worker unit stops under its rules, the thread exits and `serve slot` exits. The container ends, `--rm` removes it, and the client exits with the code of the container.
 - `terminate()` runs `<runtime> kill --signal KILL kanthord_slot_<client_id>`. "no such container" counts as success. When the client still lives 2 s later, the driver sends `SIGKILL` to the client.
 - `exited` resolves at the exit of the client. Code 125 is a runtime error, for example a pull, name or mount failure. Code 126 or 127 means that the command cannot run. The pool host writes each one as `worker.pool.instance_failed` with `exit_code`, and `stderr.log` holds the runtime text.
 - A server crash closes the pipe ends of the server. The container then reads the end of stdin, and `serve slot` exits. When the client survives or dies with no end of stdin, the 15 s frame deadline ends the instance.
@@ -858,7 +862,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   - a round trip, a chunk split inside a UTF-8 sequence and two frames in one chunk;
   - a refused line of 64 MiB plus 1 byte, and a refused unknown `kind`.
 - A conformance case sends an answer body that holds a `Date` and an `undefined` field over both port sides.
-- Child-process tests of `serve slot` cover `worker.slot.init_absent`, `worker.slot.channel_closed` at the end of stdin and at the frame deadline, and a `console.log` of the thread that never reaches fd 3.
+- Child-process tests of `serve slot` cover `worker.slot.init_absent`, and `worker.slot.channel_closed` at the end of stdin and at the frame deadline. A test checks that a `console.log` of the thread never reaches fd 3.
 - A project test covers the 409 `project.bindings.worker.placement_unavailable` on an added binding, and the pass of an edit and of `runtime_failed`.
 - `make test-container` runs the driver against a live runtime on Linux rootless Podman and on the macOS Podman machine. It runs in a pull-request workflow on `ubuntu-24.04` with rootless Podman. It asserts these criteria:
   1. A launch registers within 120 s, the first pull included, with `placement: container`.
@@ -1029,17 +1033,17 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - It decrypts the envelope with the handover key that it derives from its own `client_secret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - The payload also carries `ssh_identities`, the SSH key of each repository binding of the execution, under [custody.impl.md](custody.impl.md#the-credential-handover). The worker takes the handover before the execution setup.
 - A handover item is `{ credential_id, provider_id, credential }` for a server-held credential, at the `server` and the `container` placements only. It is `{ credential_id, provider_id, sealed }` for a copy that an instance holds.
-- At the `worker` placement, custody refuses each server-held item and each item of another holder with 403 `custody.handover.holder_refused`, and `ssh_identities` is `[]`. [custody.impl.md](custody.impl.md#the-credential-handover) rules the refusal.
+- At the `worker` placement, custody refuses each server-held item and each item of another holder with 403 `custody.handover.holder_refused`. `ssh_identities` is `[]`. [custody.impl.md](custody.impl.md#the-credential-handover) rules the refusal.
 - The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it, and it opens the item with the instance private key. An item that does not open ends the execution with `worker.handover.credential_open_failed`.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204.
-- The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential, or `{ credential_id, digest, sealed }` for an instance copy. For an instance copy, the worker unit seals the refreshed credential to the instance key through `sealed_credentials`, and `digest` is the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
+- The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential, or `{ credential_id, digest, sealed }` for an instance copy. For an instance copy, the worker unit seals the refreshed credential to the instance key through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
 - The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `execution_id` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - A platform action runs through the action performer of the server.
 - The `worker` application takes the `client_secret` of each binding from the sealed connection answer of [The instance exchange](#the-instance-exchange). It reads no `client_secret` from a file, an environment variable or an option.
 - The `worker` application holds no `master_key`.
-- At the `server` and the `container` placements, the pool host derives the `client_secret` of the slot, and the slot driver delivers it to the instance once at the start. The `thread` driver puts it in `workerData`. The `container` driver sends it in the `init` frame. The worker unit holds no `master_key`.
+- At the `server` and the `container` placements, the pool host derives the `client_secret` of the slot. The slot driver delivers it to the instance once at the start. The `thread` driver puts it in `workerData`. The `container` driver sends it in the `init` frame. The worker unit holds no `master_key`.
 - A `client_secret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
 - A handover envelope that the handover key does not open ends the execution with `worker.handover.decryption_failed`.
 
@@ -1361,13 +1365,13 @@ Tests stop a steps execution with each reason and assert the checkpoint commit, 
 ## Trust boundary
 
 The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the server.
-The host of every `worker` application sits inside it because that host holds the instance key, the `client_secret` of each binding that lists it and the credentials of its executions.
+The host of every `worker` application sits inside it. That host holds the instance key, the `client_secret` of each binding that lists the instance and the credentials of its executions.
 At the `worker` placement, one instance is one trust boundary over every project that it serves, under [worker-service.md](worker-service.md#instances-and-hosting).
 The host of a `server` application that runs a slot of the `server` placement sits inside it for the same reason. A worker thread is no containment boundary for the code that the repository supplies.
 Its child processes run with the rights of the server process.
 A tool process at the `server` placement can therefore read the configuration file, its `master_key` and the database files. It can open every credential and sign a JWT of the server. kanthord accepts this reach in v1.
 A slot of the `container` placement keeps C1 to C6 of [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
-The container is the boundary for the files of the server, and the memory of the instance stays inside the boundary, as at the `worker` placement.
+The container is the boundary for the files of the server. The memory of the instance stays inside the boundary, as at the `worker` placement.
 
 During a network git operation, a process of the same host user can sign through the SSH agent socket of that operation.
 A checkout that an LLM agent writes can run code during a git operation through `.git/hooks`, `core.hooksPath`, `core.fsmonitor`, `url.<base>.insteadOf` or `protocol.<name>.allow`.

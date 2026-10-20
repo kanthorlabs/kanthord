@@ -90,7 +90,7 @@ Custody grants no authority through possession of a credential reference.
 - An instance at every [placement](worker-service.vocabulary.md#placement) receives its credentials only through the credential handover, and it reads no record of the credential store.
 - At the `server` and the `container` placements, the handover crosses only the slot channel on the server host.
 - Custody never releases a server-held credential, LLM or SSH, to an identity of the `worker` placement, on any network.
-- At the `worker` placement, the handover carries only the copies of the instance of the identity, sealed to the key of that instance, and no SSH key.
+- At the `worker` placement, the handover carries only the copies of the instance of the identity, sealed to the key of that instance. It carries no SSH key.
 - The git operations of the `worker` placement sign through the [SSH signature relay](repository.md#repository-connector), so no SSH key leaves the server.
 - kanthord has no server-side LLM proxy. A worker instance calls its provider directly.
 - Custody refuses a release on the server of an instance copy, because the server cannot open it.

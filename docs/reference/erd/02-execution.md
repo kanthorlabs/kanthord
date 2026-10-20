@@ -7,7 +7,7 @@ title: "ERD 2: Execution"
 ## Scope
 
 This view holds the tables that execute the work of a mission.
-After this group, worker instances register under worker bindings and pull work, a steps execution carries out the steps of a node, a reviewer execution evaluates it, and the Mission Service records the evidence, the assessments and the outcomes.
+After this group, worker instances register under worker bindings and pull work. A steps execution carries out the steps of a node, and a reviewer execution evaluates it. The Mission Service records the evidence, the assessments and the outcomes.
 A human uses the human controls of a node.
 
 The [README](README.md) holds the conventions, the colors and the map of every group.
@@ -225,7 +225,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A registration ends at a deregistration, at a heartbeat expiry, and at a removal or unavailability of its worker binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
 - A registration of a client identity that holds a live row answers that row and inserts nothing.
 - `worker.registration.resume` first settles an expired unsettled execution in the same transaction. It clears `ended_at` of an ended registration only while that row is the claimant of a `running` execution, and it takes the slot again. No other act clears `ended_at`.
-- A registration at a binding at the `server` or the `container` placement is admitted only from the client identity of a pool slot of that binding. A registration at a binding at the `worker` placement is admitted only from the client identity that the server derives for a listed worker instance and that binding. Another client identity answers 409 `worker.registration.placement_mismatch`.
+- At the `server` and the `container` placements, a registration is admitted only from the client identity of a pool slot of its binding. A registration at a binding at the `worker` placement is admitted only from a derived client identity. The server derives it for a listed worker instance and that binding. Another client identity answers 409 `worker.registration.placement_mismatch`.
 - A Reset key of a worker instance ends every live registration of its old revision in its transaction. An archive of a worker instance ends every live registration of the instance in its transaction.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
 - Today the engine names this table `worker_instance`, and it holds no `instance_id`. Layer 2 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) renames it, and layer 3 adds `instance_id`.

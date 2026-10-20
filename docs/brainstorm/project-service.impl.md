@@ -55,7 +55,7 @@ The constraints are below.
 - A binding name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - A new binding takes revision 1.
 - A tombstone is the next revision of a group with `removed_at` set and the last configuration copied.
-- A disablement is the next revision with `available: false`, or with an effective instance count of 0 for a worker binding: `instance_count: 0`, or `worker_instances: []` at the `worker` placement.
+- A disablement is the next revision with `available: false`, or with an effective instance count of 0 for a worker binding. That count is `instance_count: 0`, or `worker_instances: []` at the `worker` placement.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](architecture.impl.md).
 
@@ -129,12 +129,12 @@ The outcomes of the comparison by binding name are below.
 - A name that the submission omits takes a tombstone, and the transaction keeps its rows.
 - A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set inserts no row and keeps the version.
-- A worker group whose latest row after the edit is a tombstone or holds an effective instance count of 0 ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
+- After the edit, the latest row of a worker group can be a tombstone or hold an effective instance count of 0. The edit then ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
 - At the `worker` placement, a name that the edit removes from `worker_instances` is a lowered count. The write ends no registration of that instance. The connection answer of the instance marks the binding `draining`, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
 - The transaction reads `unmatchedClaims(tx, projectId)` of the [Scheduler Service](scheduler-service.impl.md#the-match) before and after its inserts. A pair that the after-read holds and the before-read lacks refuses the write with 409 `project.bindings.worker.node_unmatched` and `details: { node_ids }`. The refusal writes no row.
 - After the commit of a binding-set write, the Project Service calls the Worker contract method `bindingsChanged(projectId)`.
 - The Worker Service then reconciles the [pool](worker-service.impl.md#the-pool) of each binding at the `server` or the `container` placement.
-- For a changed binding at the `worker` placement, `bindingsChanged(projectId)` also increments the `binding_version` of each instance of the old list and of the new list of `worker_instances`. A removed instance thus learns its `draining` state at its next heartbeat.
+- For a changed binding at the `worker` placement, `bindingsChanged(projectId)` also increments the `binding_version` of each instance. It covers the old list and the new list of `worker_instances`. A removed instance thus learns its `draining` state at its next heartbeat.
 
 The binding set has one read route and one write route, and both serve the whole set.
 
@@ -235,7 +235,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 ## Worker binding configuration
 
-- A worker binding holds `instance_count`, or `worker_instances` at the `worker` placement, `placement` for a worker that kanthord hosts, optional `tags`, optional `resource_budget` and optional per-agent entries.
+- A worker binding holds `instance_count`, or `worker_instances` at the `worker` placement. It holds `placement` for a worker that kanthord hosts, optional `tags`, optional `resource_budget` and optional per-agent entries.
 - The effective instance count is `instance_count`, or the length of `worker_instances` at the `worker` placement. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count and the Gateway verification read one value. [The worker pages](architecture.impl.md#the-worker-pages) state the rule of the dashboard.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
@@ -348,7 +348,7 @@ The Project Service holds no table of client identities and no secret of a clien
 [gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and is available.
 The JWT names one binding group by `project_id` and `resource_identity`, and no revision.
 The answer reads the latest row of that group. It refuses a disabled or removed binding, and a token whose `iat` is before the latest tombstone of the group.
-At the `worker` placement, the server derives the client identity of an instance for a binding from `master_key` with the label `worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). No database holds it. A new binding generation or a new instance revision changes it.
+At the `worker` placement, the server derives the client identity of an instance for a binding from `master_key`. The label is `worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). No database holds it. A new binding generation or a new instance revision changes it.
 
 ## The binding screen of the dashboard
 
@@ -358,7 +358,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - A list row of a paused project shows the badge `Paused`.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a worker binding holds a `Tags` field with one tag per line. The row of a worker binding shows one badge for each tag.
-- At the `worker` placement, the form of a worker binding holds an `Instances` multi-select of the live instances of the selected worker in place of the count. It preselects the only instance when exactly one exists. It holds the link `Add instance` to the worker page.
+- At the `worker` placement, the form of a worker binding holds an `Instances` multi-select in place of the count. It lists the live instances of the selected worker. It preselects the only instance when exactly one exists. It holds the link `Add instance` to the worker page.
 - The form shows the cross-project notice of [the worker pages](architecture.impl.md#the-worker-pages) when a selected instance serves bindings of another project.
 - The form states "A replacement instance starts after a removed instance ends its execution." when the draft removes an instance.
 - The row of a worker binding at the `worker` placement shows `· worker · <instance names>`, for example `· worker · box-coder, box-coder-2`. A registration row shows `· instance <name>`.
@@ -431,7 +431,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
-- A test covers each `placement` value, the refusal of an absent field with `project.bindings.worker.placement_required`, the storage of the field as written, and `placement: null` of an external harness.
+- A test covers each `placement` value and the refusal of an absent field with `project.bindings.worker.placement_required`. It covers the storage of the field as written and `placement: null` of an external harness.
 - A test covers the refusal of a change with `project.bindings.worker.placement_changed` and the refusal of the field on an external harness.
 - A test covers `project.bindings.worker.placement_unavailable` for each of its three reasons on an added binding.
 - A test covers the acceptance on `runtime_failed`, the acceptance of an edit of a live `container` binding, and a reused name that counts as added.
