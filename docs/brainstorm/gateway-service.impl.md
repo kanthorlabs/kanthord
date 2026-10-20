@@ -81,8 +81,8 @@ The response contains no raw JWT, signing key or token metadata (`iat`, `exp`, `
 ## Worker-instance registration
 
 Every instance that registers presents its machine JWT as a bearer token on `POST /api/worker/register`, and the request holds an empty body.
-An instance at the `server` placement presents it through the port transport.
-The port side mints it in memory for each call under [the machine identity of a server-placement instance](worker-service.impl.md#the-machine-identity-of-a-server-placement-instance).
+An instance at the `server` or the `container` placement presents it through the port transport.
+The port side mints it in memory for each call under [the machine identity of a pool slot](worker-service.impl.md#the-machine-identity-of-a-pool-slot).
 The operation ID is `worker.register`, and the Worker Service owns its operation declaration and scoped OpenAPI file.
 This operation creates a live worker-instance registration, not a human account, client identity or worker definition.
 That route declares the client access policy, and the verification of the JWT section authenticates it.

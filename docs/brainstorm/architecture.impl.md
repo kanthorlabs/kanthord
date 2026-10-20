@@ -182,6 +182,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
   2. Delete `kanthord.db` and `tracking.db` of the data directory, with their `-wal` and `-shm` files.
   3. Start the server. The first start creates both files.
 - The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of the `master_key` of that file in the new database, so the same `master_key` stays valid.
+- RULED 2026-10-20 by Ulrich. No migration writes the `placement` of a worker binding. After the schema check, the start reads the latest revision of each worker binding of a worker that kanthord hosts. A revision without `placement` stops the start with `system.database.binding_placement_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
 - Each store owns its runner and its own `migration` history table, keyed by service and version.
 - The operational store holds the history of the services that share it.
 - `tracking.db` holds the history of the Tracking Service alone, as [tracking-service.impl.md](tracking-service.impl.md) describes.
@@ -417,6 +418,8 @@ This sibling declares the fields below.
 - `agent.cooldown.quota_exhausted_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
 - `agent.cooldown.max_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
 - `worker.heartbeat_window`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `worker.server_slot_limit`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `worker.container_image`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `scheduler.stop_backoff`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `mission.consecutive_failure_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
@@ -512,6 +515,7 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Validate the migration history. Apply the migrations only to a database that records no migration, and stop on a pending migration of any other database.
+- Check that each hosted worker binding holds a placement, under [the migration](#the-migration).
 - Verify [the master_key record](custody.impl.md#the-master_key-record) of custody, and record it on a database without one.
 - Register the routes of every service, which [gateway-service.impl.md](gateway-service.impl.md) owns.
 - Open the listener.
@@ -650,6 +654,7 @@ A fatal error runs as below.
 - A command table holds one row for each command of the group. A row names the command, then the operation of the RESTful API that it calls with the access policy of that route, or the statement that the command runs locally and calls no route.
 - A command that names an operation which no route of the published contract serves is a defect.
 - `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.
+- `kanthord serve slot` is an internal mode of the `server` application, and no human runs it. It is no application.
 - `kanthord serve` starts the server directly. `kanthord serve server` is the explicit form.
 - `kanthord serve worker` starts a `worker` application.
 - `kanthord` with no command prints the help and exits with a non-zero status, so no invocation starts an application by default.
@@ -722,7 +727,8 @@ The public interfaces have three kinds.
 - Three entry adapters implement that interface.
 - The direct adapter runs inside the `server` application.
 - The HTTP adapter runs inside another application and calls the published route.
-- The port adapter runs inside a worker thread of the `server` application, for a worker unit at the `server` placement. Its other end enters the invocation chain with the bearer token of the HTTP route and with no forwarded identity. [The worker transport](worker-service.impl.md#the-worker-transport) rules it.
+- For a worker unit at the `server` placement, the port adapter runs inside a worker thread of the `server` application.
+- For a worker unit at the `container` placement, it runs inside `kanthord serve slot`. Its other end enters the invocation chain with the bearer token of the HTTP route and with no forwarded identity. [The worker transport](worker-service.impl.md#the-worker-transport) rules it.
 - All adapters enter one invocation chain with validation, the idempotency component, the access policy and the handler.
 - The direct adapter invokes no handler of its own.
 - The composition root of an application builds every client once.

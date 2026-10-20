@@ -30,25 +30,29 @@ The set is closed and it holds two values.
 
 ## placement
 
-The placement of an instance is the application of kanthord that runs it.
+The placement of an instance states where kanthord runs it and which application starts it.
 A worker binding of a worker that kanthord hosts states the placement of all its instances.
-The set is closed and it holds two values.
+The set is closed and it holds three values.
 
-- **`server`**, which runs the instance in a worker thread of the `server` application
-- **`worker`**, which runs the instance inside a `worker` application
+- **`server`**, a [pool slot](#pool-slot) that the `server` application runs as a thread through the `thread` [slot driver](#slot-driver)
+- **`container`**, a pool slot that the `server` application runs in a container on its own host through the `container` slot driver
+- **`worker`**, an instance inside a `worker` application
 
-Both placements run the same [worker unit](#worker-unit) inside the same worker boundary.
-The placement changes the [placement wrapper](#placement-wrapper) and the [worker transport](#worker-transport) only.
+Every placement runs the same [worker unit](#worker-unit) inside the same worker boundary.
+The placement changes the [placement wrapper](#placement-wrapper), the slot driver and the [worker transport](#worker-transport) only.
 Worker binding `coder-main` holds `placement: server` and instance count 2, so the `server` application runs two instances of `coder@1`.
+Worker binding `coder-box` holds `placement: container` and instance count 2, so the server runs two containers of `coder@1`.
 Worker binding `coder-remote` holds `placement: worker`, so each instance of `coder@1` runs in its own `kanthord serve worker` process.
-An instance that an external harness hosts holds no placement, because kanthord runs it never.
+An instance that an external harness hosts holds no placement, because kanthord runs it never. Its binding reads `placement: null`.
+At the `server` placement, an agent tool runs as the server OS user. It can read every credential, `master_key`, the JWT signing key and the database of the server.
+`container` is the contained placement. A tool there reads no file of the server.
 
 ## worker unit
 
 The worker unit is the application code that hosts one instance.
 It owns the registration, the heartbeat, the work pulls and the executions of the instance.
 It also owns the workspace, the pi tools, the transcripts and the log of the instance.
-It is the same code at both placements, and it holds no branch on its placement.
+It is the same code at every placement, and it holds no branch on its placement.
 The instance of `coder-main` and the instance of `coder-remote` run the same worker unit.
 
 ## placement wrapper
@@ -58,7 +62,7 @@ It gives the worker unit its transport, its directories, its environment and its
 The set is closed and it holds two values.
 
 - **`worker` wrapper**, the `kanthord serve worker` process, which reads `cli.yaml` and builds the HTTP transport
-- **`server` wrapper**, the pool host of the `server` application, which starts one worker thread for each started pool slot
+- **`server` wrapper**, the pool host of the `server` application, which starts the instance of each started pool slot through its slot driver
 
 ## worker transport
 
@@ -68,7 +72,7 @@ The invocation chain refuses each operation that the machine identity of the ins
 The set is closed and it holds two values.
 
 - **HTTP transport**, which sends each call to the RESTful API with the machine JWT of the instance
-- **port transport**, which sends each call over the message port of a worker thread to the Gateway invocation chain
+- **port transport**, which sends each call over the message port of the [slot channel](#slot-channel) of a pool slot to the Gateway invocation chain
 
 Both transports reach the same invocation chain, so a call answers the same result and the same refusal on both.
 The instance of `coder-main` calls `scheduler.work.pull` over the port transport.
@@ -266,11 +270,60 @@ The second instance keeps its pull outstanding and starts no other pull.
 
 ## pool slot
 
-A pool slot is one unit of the instance count of a worker binding at the `server` placement.
+A pool slot is one unit of the instance count of a worker binding at the `server` or the `container` placement.
 A slot holds a slot number from 0 to 63 and one client identity.
 The client identity stays the same across server restarts, and a new binding generation gets new ones.
 Worker binding `coder-main` with instance count 2 holds slots 0 and 1.
 A raise of the count to 3 adds slot 2.
+
+## slot driver
+
+The slot driver is the part of the `server` wrapper that starts and ends the instance of one pool slot.
+The set is closed and it holds two values.
+
+- **`thread`**, which serves the `server` placement with a `node:worker_threads` thread of the server process
+- **`container`**, which serves the `container` placement with one OCI container on the server host
+
+The placement value selects the slot driver, so no configuration key names a driver.
+Worker binding `coder-main` at `placement: server` with instance count 2 runs two threads through the `thread` driver.
+Worker binding `coder-box` at `placement: container` with instance count 2 runs the containers `kanthord_slot_<client_id>` of slots 0 and 1 through the `container` driver.
+
+## slot channel
+
+The slot channel is the private channel between the pool host and the instance of one pool slot.
+It never leaves the server host.
+The `thread` driver uses a message port.
+The `container` driver uses the attached stdio of the container runtime, with one JSON frame for each line.
+The set of frame kinds is closed and it holds four values.
+
+- **`init`**, which carries the `client_secret` of the slot, first and once
+- **`port`**, which carries one port message unchanged
+- **`control`**, which carries `drain` or `stop`
+- **`ping`**, which the pool host sends every 5 s
+
+Slot 0 of `coder-box` receives the `init` frame, then sends its registration as a `port` frame.
+The server answers it with a `port` frame.
+
+## slot volume
+
+The slot volume is the named volume `kanthord_slot_<client_id>` that holds the state of a `container` slot.
+It holds the workspaces, the transcripts, the `pi/` directory and the log of the instance.
+Slot 0 of `coder-box` writes its workspace into its slot volume.
+A relaunch of slot 0 under the same client identity mounts the same volume and resumes its `running` execution.
+
+## placement status
+
+The placement status states whether the server can run instances at one placement now.
+It holds `placement`, `available`, `reason`, `detail` and `container_runtime`.
+`reason` is null for an available placement. Its set is closed and it holds four values.
+
+- **`server_in_container`**, the server itself runs in a container
+- **`runtime_absent`**, no `podman` and no `docker` resolves on the `PATH` of the server
+- **`runtime_failed`**, no container runtime answers its check
+- **`runtime_rootful`**, the runtime runs as root on Linux and the server user is not root
+
+`container_runtime` is `podman`, `docker` or null.
+The server of the first-day tutorial runs in Podman, so `container` reads `available: false` with `reason: server_in_container`.
 
 ## compatibility declarations
 
@@ -302,7 +355,9 @@ The trust boundary is the containment that the operator provides.
 The Worker Service runs the tool of an agent and the verifications of a node inside it.
 The term names no closed set.
 The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
-They run inside the boundary and reach no resource of another project.
+At the `worker` placement on a host of its own, they reach no resource of another project.
+At the `server` placement, they reach every resource of the server.
+At the `container` placement, they reach the slot volume, the network and their own instance, and no file of the server.
 
 ## workspace
 

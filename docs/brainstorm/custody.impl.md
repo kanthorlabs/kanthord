@@ -136,7 +136,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The view reads the revision that the execution pins.
 - `modify()` serializes on the pinned revision and writes the pi-ai result in place.
 - The view refuses `delete()`.
-- At every placement, the view reads the decrypted handover. The worker unit at the `server` placement reads no custody record directly.
+- At every placement, the view reads the decrypted handover. The worker unit at the `server` or the `container` placement reads no custody record directly.
 - Custody drops the view at execution end.
 - A workbench view reads the newest live revision and pins no revision.
 
@@ -152,6 +152,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
 - The worker application holds the client secret of its machine JWT and derives the same two keys. Custody derives the client secret again from the verified `sub`.
+- At the `server` and the `container` placements, the envelope crosses only the slot channel on the server host. A `container` instance receives its client secret in the `init` frame of [the slot channel](worker-service.impl.md#the-slot-channel-of-a-container).
 - A valid tag proves the sender and the direction, because only the server and that one worker hold the client secret.
 - A refresh report carries the digest of the credential value that it replaces. Custody writes the new value in place only when the stored value has that digest, in the same transaction, so a replayed earlier report writes nothing.
 - The client secret protects the handover and the refresh report alone. Registration, the work pull and the MCP calls stay bearer-only.
