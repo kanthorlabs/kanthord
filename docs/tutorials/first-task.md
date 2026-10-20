@@ -276,7 +276,7 @@ A node can also stop in two other states:
 
 ### Provider failures
 
-When the provider of the model fails a call, the execution ends with a provider failure. Each attempt on the **Attempts** tab shows the end of its last execution, for example **Last execution ended 2026-10-20 03:28 UTC: Provider failed: unavailable**. The line **Cause:** below it holds the provider error text, for example `OAuth auth derivation failed for anthropic: Cannot find module '...'`. The worker removes the secrets and cuts the text to 300 characters. The **Records** list of the attempt shows the stop and the cause of each earlier execution. The **Scheduler** page and the **Overview** item of a `Paused` node show the same cause. An error of the agent session, for example a failed OAuth refresh, shows as **Operation failed** with a **Cause:** line.
+When the provider of the model fails a call, the execution ends with a provider failure. Each attempt on the **Attempts** tab shows the end of its last execution, for example **Last execution ended 2026-10-20 03:28 UTC: Provider failed: unavailable**. The label writes the code in words, for example `rate_limited` as **rate limited**. When the last execution was lost, the line ends with **lost**. When it ended with no stop, the line ends with **no stop**. The line **Cause:** below it holds the provider error text, for example `OAuth auth derivation failed for anthropic: Cannot find module '...'` for the code `unavailable`. The worker removes the secrets and cuts the text to 300 characters. The **Records** list of the attempt shows the stop and the cause of each earlier execution. The **Scheduler** page and the **Overview** item of a `Paused` node show the same cause. An error that the agent session throws before the provider answers, for example `No API key found`, is no provider failure. It shows as **Operation failed** with a **Cause:** line.
 
 | Code              | Effect                                                                    |
 | ----------------- | ------------------------------------------------------------------------- |
@@ -288,7 +288,7 @@ When the provider of the model fails a call, the execution ends with a provider 
 
 A cooldown does not pause the node. The node returns to `Available`, or to `Waiting` for a review. No agent selects a model of the credential until the cooldown ends. The tutorial has one LLM credential, so the node waits for the end of the cooldown.
 
-Each further cooldown of the same credential doubles the duration, up to 24 hours. For `rate_limited`, the durations are 60, 120, 240, 480 and 960 s. The doubling counts every cooldown of the credential, whatever its code. A release with no provider failure on the credential resets the doubling.
+Each further cooldown of the same credential doubles the duration, up to 24 hours. For `rate_limited`, the durations are 60, 120, 240, 480 and 960 s. The doubling counts every cooldown of the credential, whatever its code. A release with no provider failure on the credential resets the doubling. A `provider_failed` stop with `unauthorized` or `bad_request` neither starts nor resets a cooldown.
 
 An `unauthorized` or `bad_request` failure counts as a failed execution. Three failed executions in a row pause the node. A `rate_limited`, `quota_exhausted` or `unavailable` failure between them does not reset the count. For a refused API key, select **Rotate secret** on the credential page.
 
