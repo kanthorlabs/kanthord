@@ -337,6 +337,8 @@ The token stays in the worker volume, so no copy on the host needs removal.
 
 ## Use a newer image
 
+If the server runs a toolchain image, build the image of `<new version>` first, and use it in the command of step 3. See [Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md).
+
 `podman restart kanthord` keeps the old image. To run a newer image on the same volume, write the new version in place of `<new version>`:
 
 ```sh
@@ -364,8 +366,6 @@ If a worker runs in a container on the same host, do these steps too. See [Run a
    ```
 
 For a worker on another host, install the `kanthord` binary of `<new version>` on that host. Then start `kanthord serve worker` again. See [upgrade](../reference/upgrade.md#other-state).
-
-If the server runs a toolchain image, build the image of `<new version>` first, and use it in the command of step 3. See [Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md).
 
 ## Troubleshooting
 

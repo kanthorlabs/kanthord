@@ -69,18 +69,22 @@ The command prints the Node.js version, for example `v24.15.0`.
 
 ## 4. Use the image at the `container` placement
 
-1. In `kanthord.yaml` of the server, set the image name in the `worker` section. Write no tag:
+1. In the configuration file of the server, set the image name in the `worker` section. The file is `~/.config/kanthord/kanthord.yaml` on a Mac, and `/var/lib/kanthord/.config/kanthord/kanthord.yaml` on the VPS. Write no tag:
 
    ```yaml
    worker:
      container_image: localhost/kanthord-node
    ```
 
-2. Run `kanthord config validate`, then restart the server.
+2. Run `kanthord config validate`, then restart the server. On the VPS, run `sudo -u kanthord -H kanthord config validate`, then `sudo systemctl restart kanthord`.
 
 The server adds its own version as the tag, so it starts `localhost/kanthord-node:<version>`. A value with a tag or a digest fails with `system.config.invalid_field`.
 
-Build the image as the same user that runs the server. Podman keeps one image store for each user.
+Build the image as the same user that runs the server. Podman keeps one image store for each user. On the VPS, make the build directory under `/var/lib/kanthord`, so the user `kanthord` can read it. Then build:
+
+```sh
+sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman build --build-arg VERSION=<version> -t localhost/kanthord-node:<version> <directory>
+```
 
 ## After an upgrade
 
