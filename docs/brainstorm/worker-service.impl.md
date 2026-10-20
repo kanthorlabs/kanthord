@@ -318,10 +318,11 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 [worker-service.md](worker-service.md#instances-and-hosting) requires one worker unit inside one worker boundary at every placement.
 
 - `src/apps/worker/unit.ts` holds `WorkerUnit`, the worker unit.
-- It takes `{ bindings, directories, env, log, sealed_credentials?, model_runtime_factory?, repository_transport?, resume_pull_wait_ms?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
+- It takes `{ bindings, directories, env, log, instance_key?, model_runtime_factory?, repository_transport?, resume_pull_wait_ms?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
 - `bindings` is a list of `{ transport, client_secret }`, one entry for each registration of the instance. A pool slot passes a list of one entry.
 - `directories` is `{ data, log }`. The data directory holds `workspaces/`, `transcripts/` and `pi/`.
-- `sealed_credentials` is `{ open(sealed), seal(credential) }` over the instance key. The `worker` wrapper passes it, and the `server` wrapper passes none.
+- `instance_key` is `{ holder, sealed_to, public_key, private_key() }` of the instance. `private_key()` answers a new buffer that the caller clears after each open. The `worker` wrapper passes it, and the `server` wrapper passes none.
+- The handover of the worker unit opens a sealed item with `openSealedCopy` of [the custody client](custody.impl.md#the-credential-handover), and it seals each refreshed credential to its own key. Without `instance_key`, or with a key that does not open it, a sealed item fails the handover with `worker.handover.sealed_unopened`.
 - The `server` wrapper passes `state/kanthord/` of the slot root for both. The `worker` wrapper passes the data directory and the log directory of [The worker application](#the-worker-application).
 - The worker unit registers each entry. Every request of a registration renews its heartbeat, and an idle registration sends a heartbeat inside the heartbeat window.
 - While idle, the worker unit keeps one outstanding work pull on each registration. When one pull answers a claim, it aborts the other pulls and starts no pull until the execution ends.

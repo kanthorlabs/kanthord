@@ -128,7 +128,10 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Under a [worker token](gateway-service.vocabulary.md#worker-token), `create` takes `{ name, platform, metadata, holder, sealed, sealed_to }`, and `rotate` takes `{ expected_revision, holder, sealed, sealed_to }`. `holder` equals the instance of the token.
 - A body holds exactly one of `secret` and `sealed` with `sealed_to`. A human body with `sealed`, a worker body with `secret`, or a body with both answers 400 `credential.input.invalid`.
 - A `holder` that names no live instance answers 400 `llm.credential.instance_unknown`.
-- A worker caller acts only on the copies of its own instance. Another holder, a metadata edit, a revoke, an archive or a login answers 403 `llm.credential.instance_forbidden`.
+- A worker caller acts only on the copies of its own instance. Another holder answers 403 `llm.credential.instance_forbidden`.
+- A metadata edit, a revoke, an archive and a login declare `human`. The Gateway answers a worker token on them with 401 `gateway.authentication.unauthorized`.
+- A human create or rotate that seals for an instance reads the keys in one transaction, seals outside it, and commits in a second transaction. The commit checks `sealed_to` against the current fingerprint again, and a key rotation in between answers 400 `credential.sealed.invalid`.
+- A human create with several holders answers the copy of the first holder.
 - `list` and `get` declare `human_or_worker`. A worker caller reads only the copies of its own instance. A human `list` takes the optional query `holder`.
 - `get`, `metadata`, `revoke`, `archive`, `login`, `login_code` and `login_status` take the query or body field `holder`, which defaults to `server`.
 - Each record answer adds `holder`, `sealed_to` and `sealed_current`.
