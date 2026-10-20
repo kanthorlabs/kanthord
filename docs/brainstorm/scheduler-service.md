@@ -194,8 +194,11 @@ Only the orchestrator of the external harness communicates with kanthord, and it
 The declared states give the capability to take a state and no continuity: the Scheduler serves a node to the first compatible pull, and no rule prefers the binding whose instance executed the steps of the node.
 
 The [Project Service](project-service.md#execution-configuration-and-instance-count) owns the instance count of a worker binding.
+At the `worker` placement, the count is the length of `worker_instances` of the binding.
 The Scheduler admits a claim only while the live executions of the claimant are fewer than its count.
-It admits no claim for an instance that holds a live execution.
+It admits no claim for an instance that holds a live execution under any of its registrations.
+An instance at the `worker` placement holds one registration for each binding that lists it, so this rule spans bindings and projects.
+The Worker Service answers the registrations of an instance, and the Scheduler counts their executions inside the claim.
 The Scheduler counts executions per claimant; the Worker Service owns how an instance hosts an execution.
 An ordinary claim debits no other budget.
 The [Mission Service](mission-service.md#attempt) owns the two acts that open an attempt: a first claim and a human unblock.

@@ -36,13 +36,13 @@ The set is closed and it holds three values.
 
 - **`server`**, a [pool slot](#pool-slot) that the `server` application runs as a thread through the `thread` [slot driver](#slot-driver)
 - **`container`**, a pool slot that the `server` application runs in a container on its own host through the `container` slot driver
-- **`worker`**, an instance inside a `worker` application
+- **`worker`**, a [worker instance](overview.vocabulary.md#worker-instance) inside a `kanthord serve worker` process, which a human adds once as an [instance record](#instance-record)
 
 Every placement runs the same [worker unit](#worker-unit) inside the same worker boundary.
 The placement changes the [placement wrapper](#placement-wrapper), the slot driver and the [worker transport](#worker-transport) only.
 Worker binding `coder-main` holds `placement: server` and instance count 2, so the `server` application runs two instances of `coder@1`.
 Worker binding `coder-box` holds `placement: container` and instance count 2, so the server runs two containers of `coder@1`.
-Worker binding `coder-remote` holds `placement: worker`, so each instance of `coder@1` runs in its own `kanthord serve worker` process.
+Worker binding `coder-remote` holds `placement: worker` and `worker_instances: [box-coder]`, so the instance `box-coder` of `coder@1` runs in its own `kanthord serve worker` process.
 An instance that an external harness hosts holds no placement, because kanthord runs it never. Its binding reads `placement: null`.
 At the `server` placement, an agent tool runs as the server OS user. It can read every credential, `master_key`, the JWT signing key and the database of the server.
 `container` is the contained placement. A tool there reads no file of the server.
@@ -50,7 +50,7 @@ At the `server` placement, an agent tool runs as the server OS user. It can read
 ## worker unit
 
 The worker unit is the application code that hosts one instance.
-It owns the registration, the heartbeat, the work pulls and the executions of the instance.
+It owns the registrations, the heartbeat, the work pulls and the executions of the instance.
 It also owns the workspace, the pi tools, the transcripts and the log of the instance.
 It is the same code at every placement, and it holds no branch on its placement.
 The instance of `coder-main` and the instance of `coder-remote` run the same worker unit.
@@ -61,7 +61,7 @@ The placement wrapper is the code that starts a worker unit at one placement.
 It gives the worker unit its transport, its directories, its environment and its client secret.
 The set is closed and it holds two values.
 
-- **`worker` wrapper**, the `kanthord serve worker` process, which reads `cli.yaml` and builds the HTTP transport
+- **`worker` wrapper**, the `kanthord serve worker` process, which reads the [instance configuration](#instance-configuration), holds the [connection](#connection) and builds one HTTP transport for each registration
 - **`server` wrapper**, the pool host of the `server` application, which starts the instance of each started pool slot through its slot driver
 
 ## worker transport
@@ -239,12 +239,43 @@ It exposes no direct platform write.
 
 ## runtime identity
 
-The runtime identity is the identity that the Worker Service mints for a worker instance and that names its worker binding.
+The runtime identity is the identity that the Worker Service mints for a [registration](#registration) and that names its worker binding.
 Worker binding `coder-main` holds the `server` placement and instance count 2.
 The `server` application starts two instances, and each one registers and receives its runtime identity.
 A server restart starts the two instances again under the same two client identities.
 A registration that is still live resumes with its runtime identity.
 A revision of `coder-main` that changes the model identifier of its entry replaces no instance.
+
+## registration
+
+A registration is the admission of a worker instance under one worker binding.
+It holds the runtime identity and the client identity of that admission.
+The term names no closed set.
+An instance at the `server` or the `container` placement and an instance of an external harness hold one registration.
+An instance at the `worker` placement holds one registration for each binding that lists it.
+The instance `box-coder` is listed by `coder` of project A and `coder` of project B, so it holds two registrations.
+
+## instance record
+
+The instance record is the durable server record of one worker instance at the `worker` placement.
+It holds a name, one worker, a revision and one X25519 public key.
+The term names no closed set.
+A human adds `box-coder` of `coder@1` once on the details page of `coder@1`.
+A Reset key gives `box-coder` revision 2 with a new public key, and every token of revision 1 fails.
+
+## instance configuration
+
+The instance configuration is the name, the endpoint, the instance id and the private key of one worker instance.
+It lives in the instance file `workers/<name>.yaml` of the configuration directory, or in the env value `KANTHORD_WORKER_CONFIG`.
+The term names no closed set.
+The Add instance sheet shows the instance configuration of `box-coder` once. `kanthord worker join` on the host writes it to `workers/box-coder.yaml`.
+
+## connection
+
+A connection is one live `kanthord serve worker` process of a worker instance.
+The server keeps the current connection of each instance in memory, and a new connection supersedes the previous one.
+The term names no closed set.
+A second process of `box-coder` connects, so the first process stops its tools and exits with status 3.
 
 ## heartbeat
 
@@ -260,11 +291,13 @@ The `claude-code` instance of worker binding `claude-main` pulls work every 60 s
 While it runs a 20-minute MCP tool call, it sends an explicit heartbeat request.
 When the laptop of Ulrich sleeps, no heartbeat arrives inside the window, and the registration ends.
 A restart of `claude-code` therefore registers again.
+The instance heartbeat of a [connection](#connection) is another signal. It keeps the connection current and renews no registration.
 
 ## pool
 
 The pool is the instances of one worker binding.
 The pool of worker binding `coder-main` holds two instances.
+The pool of a binding at the `worker` placement is its listed instances.
 Both are idle, both pull, and the Scheduler serves "Add password reset" to the first pull.
 The second instance keeps its pull outstanding and starts no other pull.
 
@@ -355,7 +388,7 @@ The trust boundary is the containment that the operator provides.
 The Worker Service runs the tool of an agent and the verifications of a node inside it.
 The term names no closed set.
 The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
-At the `worker` placement on a host of its own, they reach no resource of another project.
+At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance, and so every project that the same instance serves.
 At the `server` placement, they reach every resource of the server.
 At the `container` placement, they reach the slot volume, the network and their own instance, and no file of the server.
 

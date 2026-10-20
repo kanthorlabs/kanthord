@@ -118,7 +118,7 @@ The instance healthcheck stays out of every human inspection command under [work
 - A work pull is idempotent by the runtime identity.
   Before admission, the claim transaction applies [loss settlement](#loss-settlement), then reads the `running` execution of the pulling runtime identity.
   When one exists, the pull answers `{ kind: "claimed", execution }` with the current row and selects nothing.
-  The rule that an instance holds at most one outstanding pull or one live execution refuses no such pull.
+  The rule that a registration holds at most one outstanding pull and an instance holds at most one live execution refuses no such pull.
   Two concurrent pulls of one runtime identity serialize in the claim transaction, and the second answers the execution of the first.
   After the execution ends, a pull selects new work.
   A worker restart recovers its live registration, and a server restart ends no registration.
@@ -145,6 +145,15 @@ The instance healthcheck stays out of every human inspection command under [work
 - The Scheduler Service declares the collaboration `projectPaused(tx, projectId)` in its `contract.ts` as the dependency `projects`. The Project Service implements it, and `apps/server/index.ts` wires it.
 - After that read, the claim reads `projectPaused`. A paused project answers `{ kind: "no-work" }` before the instance healthcheck, and the claim inserts no execution and changes no node.
 - When one agent has no chain entry whose credential is free, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
+- `claimOnce` of `src/scheduler/claim.ts` holds the instance guard next to `countRunningOfGroup`, inside the claim transaction.
+  The Scheduler Service declares the collaboration `registrationsOfInstance(tx, runtimeIdentity)` in its `contract.ts` as a dependency. The Worker Service implements it.
+  It answers the runtime identities of the other live registrations of the instance of `runtimeIdentity`. It answers an empty list for a registration with a null `instance_id`.
+  The guard counts the executions of those runtime identities whose `ended_at` is null and whose `expired_at` is later than now, the predicate of `countRunningOfGroup`.
+  A count above zero answers `{ kind: "no-work" }`, and the claim inserts no execution and changes no node.
+  The claim transactions of the server serialize, so a second claim of one instance never commits, also when a pull abort arrives late.
+  Today `claimOnce` holds no instance guard. Layer 3 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) builds it.
+  An expired, unsettled execution blocks no other registration of its instance.
+  Tests cover two pulls of one instance on two bindings that commit one claim, an expired execution that blocks nothing, and a registration with no instance.
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, the pinned selections rebuilt from the pins.
 - The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
 - Custody and the execution setup of the Worker Service read the pinned selection and never the live chain.
