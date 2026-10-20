@@ -347,7 +347,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `worker.instance.get`       | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                             | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current }]` |
 | `worker.instance.rotate`    | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key, expected_revision }`              | 200 instance record                                                                                                                                  |
 | `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision }`                          | 200 instance record                                                                                                                                  |
-| `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                | 200 `{ server_version, server_time, sealed }`                                                                                                        |
+| `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                | 200 `{ server_version, sealed }`                                                                                                                     |
 | `worker.instance.connect`   | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`            | 200 `{ connection_id, binding_version, sealed }`                                                                                                     |
 | `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id }`                              | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                        |
 | `worker.ssh.sign`           | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`            | 200 `{ nonce, ciphertext }`                                                                                                                          |
@@ -375,7 +375,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                |
 | 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                 |
 
-The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`. `worker.clock.skew` is a log record only.
+The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`.
 
 ## The instance exchange
 
@@ -387,7 +387,7 @@ HPKE base mode gives confidentiality to the key holder only, and it does not aut
 The worker token:
 
 1. The process calls `worker.instance.token` with `{ instance_id }`.
-2. The server answers `{ server_version, server_time, sealed }`. `sealed` is sealed to the public key of that revision, with the info `kanthord/worker-token/v1` and the aad `instance_id`.
+2. The server answers `{ server_version, sealed }`. `sealed` is sealed to the public key of that revision, with the info `kanthord/worker-token/v1` and the aad `instance_id`.
 3. `sealed` opens to `{ token, expired_at, name, worker, fingerprint }`. `token` is a JWT of the kind `worker`, which [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules. Its lifetime is `WORKER_TOKEN_LIFETIME`, 3600 s.
 
 - An unknown or ended `instance_id` answers 404 `worker.instance.not_found`.
@@ -428,7 +428,7 @@ The heartbeat and the renewal:
 - The process takes a new worker token and calls `connect` again 1800 s after each answer, on the local monotonic clock. The connection answer carries fresh client tokens, so an execution longer than one hour keeps its bearer.
 - The dashboard shows an instance as connected while its last heartbeat is inside `INSTANCE_CONNECTED_WINDOW`, 60 s.
 - An increment of `gateway.auth.version` fails every token with 401. The process takes a new worker token and connects with its `connection_id`. When a `client_secret` changed, it exits 1 with `worker.instance.secret_changed`. The restart resumes each registration and each `running` execution with a fresh handover.
-- The process writes the log record `worker.clock.skew` with `server_time` and the local time when the two clocks differ. The renewal reads only the monotonic clock, so a skew stops nothing.
+- The renewal reads only the monotonic clock, so a difference of the two clocks stops nothing.
 
 Tests:
 
