@@ -80,9 +80,9 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - An instance copy whose `sealed_to` is not the current fingerprint of its holder has no holder. The holder rule, the handover and the health of the instance refuse it.
 - Custody decrypts a stored secret only through one private open function `openSecret(row)`. It refuses a row whose holder is not `server` with 409 `credential.credential.held_by_instance` before the decrypt.
-- Every decrypt path calls `openSecret`: `release`, `releaseWorkbench`, the resource check of `resourceInventory`, `resourceCheck` and `verify`, `checkMaterial` and `updateMetadata`.
+- Every decrypt path calls `openSecret`: `release`, `releaseWorkbench`, the resource check of `resourceInventory`, `resourceCheck` and `verify`, `checkMaterial`, `updateMetadata` and `applyReport`.
 - The refusal therefore covers the verify, the pre-save check, the provider check, the model check, the model list and a workbench session.
-- Today `src/custody/service.ts` calls `decrypt` of `envelope.ts` directly in five places: `capturedResourceCheck`, `release`, `releaseWorkbench`, `checkMaterial` and `updateMetadata`.
+- Today custody calls `decrypt` of `envelope.ts` directly in six places. `src/custody/service.ts` calls it in `capturedResourceCheck`, `release`, `releaseWorkbench`, `checkMaterial` and `updateMetadata`. `src/custody/handover.ts` calls it in `applyReport`.
 - A record answer adds `holder`, `sealed_to` and `sealed_current`. `sealed_current` is true when `sealed_to` equals the current fingerprint of the holder, and it is true for `server`.
 
 ## Suitability
@@ -193,7 +193,10 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `ssh_identities` stays out of `CredentialStore`. The execution store keeps its one pi-ai credential.
 - The handover authorizes each `ssh_identities` entry through the `ssh_identity` grant under the machine identity with the proven claim, and it pins each revision.
 - A refresh report never carries an SSH key. A report with a credential type other than `api_key` and `oauth` answers 400 `custody.handover.report_invalid`.
-- The plaintext of a refresh report is `{ credential_id, digest, credential }` for a row of the holder `server`, and `{ credential_id, digest, sealed }` for an instance copy. The worker instance seals the refreshed credential to its own key. `digest` is the digest of the stored sealed object.
+- The plaintext of a refresh report is `{ credential_id, digest, credential }` for a row of the holder `server`, and `{ credential_id, digest, sealed }` for an instance copy. The worker instance seals the refreshed credential to its own key.
+- `applyReport` reads `holder` of the row before any other step.
+  - For an instance copy, `digest` is the digest of the stored sealed object. Custody compares it with the stored sealed object and never decrypts.
+  - For a row of the holder `server`, `applyReport` calls `openSecret` and compares `digest` with the digest of the stored credential value.
 - AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
 - The worker application holds the client secret of its machine JWT and derives the same two keys. Custody derives the client secret again from the verified `sub`.
