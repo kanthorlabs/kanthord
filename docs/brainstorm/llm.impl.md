@@ -44,11 +44,12 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
 - `openai-compatible.base_url` uses `https` or `http`, with no query, no fragment and no trailing slash.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it answers 409 `llm.metadata.base_url_fixed`, and a rotation can set a new one.
-- The first revision of an `openai-compatible` credential starts with `models: []`.
+- The first revision of an `openai-compatible` copy of the holder `server` starts with `models: []`.
+- The first revision of an `openai-compatible` [instance copy](#instance-copies) takes the `models` that the human types, because no provider check runs for it.
 - Each approved model holds a required `id` and optional `context_window`, `max_tokens` and `reasoning_levels`. An `id` is unique inside `models`.
 - An omitted value takes the default of pi 1.1.0: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
 - `context_window` and `max_tokens` are positive integers, and `max_tokens` does not exceed `context_window` after the defaults apply.
-- A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check).
+- A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check). A metadata edit of an instance copy takes the model ids that the human types.
 - A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it. A fallback configuration is a dependent too.
 - The dependency check and the metadata update commit in one transaction; a refusal lists the dependents in `details` as `{ models: [{ model, agents }] }`.
 
@@ -79,6 +80,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - HTTP 200 holds the answer of `check`, `{ connection, models }`.
 - The route declares an open body, and the handler validates `{ credential }`, so that invalid input answers `llm.provider.invalid_input` and not a Gateway code.
 - HTTP 400 `llm.provider.invalid_input` reports invalid input. HTTP 404 `llm.provider.credential_not_found` reports an unknown credential or a credential of another component.
+- The check reads the copy of the holder `server`. A name with no such copy answers 409 `credential.credential.held_by_instance`, because custody releases no instance copy.
 - The answer holds no key and pre-fills model ids, not limits or reasoning levels.
 - No raw key reaches `llm.provider.check`. The [pre-save check](architecture.impl.md#the-pre-save-check) is the only credential operation that takes a typed secret, and the LLM component runs it through `LlmProvider.check`.
 - A human approves models through a [credential metadata revision](#platform-validators).
@@ -92,6 +94,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The component builds the model runtime with the [model connector](#the-model-connector) from the material that custody releases. The check and an execution use one runtime path for every platform.
 - The check stores nothing, pins no credential revision and caches nothing. The enablement write does not call it.
 - HTTP 404 `llm.model.credential_not_found` reports an unknown credential or a credential of another component.
+- The check reads the copy of the holder `server`. A name with no such copy answers 409 `credential.credential.held_by_instance`.
 - HTTP 400 `llm.model.model_unknown` reports a model outside the model list of the credential. HTTP 400 `llm.model.reasoning_unsupported` reports a reasoning effort outside the supported levels of the model.
 - The check runs one tool round trip: a user message, one declared tool `check_tool`, a tool call of the model, a tool result `ready` and a final reply.
 - The reasoning effort `off` sends no `reasoning` option. Every other effort goes to the model call as `reasoning`.
@@ -107,6 +110,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## The approved models
 
 - The LLM component answers the approved models of a credential to the [Agent configuration validation](agent.impl.md#agent-configuration-validation): the `models` metadata of an `openai-compatible` credential, with the defaults applied.
+- It answers the approved models of each copy. A model is approved for the name when every copy approves it.
 - The Worker Service reads no metadata key of a credential.
 
 ## Operations
@@ -115,6 +119,32 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `llm.credential.create` accepts a record of every LLM platform whose secret shape is not `oauth`.
 - `llm.credential.login` obtains a record of an LLM platform whose secret shape is `oauth`.
 - `llm.credential.get` answers the record with `agent_providers`, the list of `{ agent, name }` of every agent provider that names the credential. The Agent component answers that read.
+
+## Instance copies
+
+- `llm.credential.create` and `llm.credential.rotate` declare the access policy `human_or_worker` of [the Gateway](gateway-service.impl.md#access-policy). Every other credential operation keeps `human`, except where this section names another policy.
+- Under a human identity, `create` takes `{ name, platform, metadata, secret, holders }`. `holders` is a list of `server` and live instance names, and it defaults to `["server"]`. [Custody seals](custody.impl.md#the-seal-of-a-human-entry) each instance copy and writes one row for each holder in one transaction.
+- Under a human identity, `rotate` takes `{ expected_revision, secret }` and the query `holder`, which defaults to `server`.
+- Under a [worker token](gateway-service.vocabulary.md#worker-token), `create` takes `{ name, platform, metadata, holder, sealed, sealed_to }`, and `rotate` takes `{ expected_revision, holder, sealed, sealed_to }`. `holder` equals the instance of the token.
+- A body holds exactly one of `secret` and `sealed` with `sealed_to`. A human body with `sealed`, a worker body with `secret`, or a body with both answers 400 `credential.input.invalid`.
+- A `holder` that names no live instance answers 400 `llm.credential.instance_unknown`.
+- A worker caller acts only on the copies of its own instance. Another holder, a metadata edit, a revoke, an archive or a login answers 403 `llm.credential.instance_forbidden`.
+- `list` and `get` declare `human_or_worker`. A worker caller reads only the copies of its own instance. A human `list` takes the optional query `holder`.
+- `get`, `metadata`, `revoke`, `archive`, `login`, `login_code` and `login_status` take the query or body field `holder`, which defaults to `server`.
+- Each record answer adds `holder`, `sealed_to` and `sealed_current`.
+- An instance copy skips the [pre-save check](architecture.impl.md#the-pre-save-check) and the [provider check](#the-provider-check).
+- The CLI on the host of an instance seals locally. With `--holder <name>` and an instance file `$XDG_CONFIG_HOME/kanthord/workers/<name>.yaml`, it derives the public key from the private key of that file. It authenticates with a worker token, and it trusts no key that the server supplies. The token call creates no connection.
+- Without that file, the CLI sends the plaintext and the holder under the human token, and the server seals.
+- The credential sheet of an instance page sends the plaintext and the holders. Its `Also seal to` field lists every live instance, grouped by worker.
+- The `Rotate` sheet offers `Also rotate on` with every other holder of the name. It sends one request for each holder, each with its own `expected_revision`.
+- `/llm` lists the copies of the holder `server` only and states "Instance credentials live on the worker pages."
+
+### The health of an instance copy
+
+- A worker instance checks each of its own copies at connect and when the `credential_version` of its heartbeat answer changes.
+- It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204.
+- `models` holds the model list of a check that reads one, else null. The dashboard offers it as the model ids of the next metadata edit of an `openai-compatible` instance copy.
+- The component keeps the last report of each copy in memory, with the instance name and the time. A server restart shows `unknown` until the next report.
 
 ## The OAuth login
 
@@ -152,6 +182,18 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The login flow proves the OAuth record; no extra validation call follows it.
 - Output exposes the address and code that the human needs, never a token.
 
+### The login of an instance
+
+- `llm.credential.login` takes the optional `holder`. A login of an instance holder runs on that instance, and the server holds only the session record.
+- An instance with no current connection answers 409 `credential.login.instance_unavailable`.
+- An instance session never uses browser mode. `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use device mode. A request for browser mode answers 400 `credential.login.browser_unavailable`.
+- The heartbeat answer of the instance lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 2 s while a session of it is pending.
+- The instance runs the pi-ai login. It reports `{ state, address, code, message, failure_reason }` through `llm.credential.login_report`: `POST /api/llm/credential/login/:session_id/report`, policy `worker`, mutation, answer 204.
+- In device mode, the instance reports only the user code and the verification address. The PKCE verifier and the polling secret stay in the instance process.
+- The value that the human submits through `llm.credential.login_code` reaches the instance in the next heartbeat answer.
+- At completion, the instance seals the credential to its own key and sends `sealed` and `sealed_to` in the final report. The component writes revision 1 of the `(name, holder)` group through custody, under the rules of this section.
+- The instance refreshes its OAuth copy and reports the refreshed copy sealed, under [the credential handover](custody.impl.md#the-credential-handover). One instance runs one execution at a time, so one copy has one refresh holder.
+
 ## The model connector
 
 - The model connector takes the execution credential store of [custody](custody.impl.md#the-credential-store-of-an-execution), the pi adapter id, the model identifier, the reasoning effort and the metadata of the pinned revision.
@@ -182,6 +224,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## The resource healthcheck
 
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
+- The healthcheck reads `holder` first. An instance copy reports `unknown` with `failure_reason: held_by_instance` and releases nothing. [The health of an instance copy](#the-health-of-an-instance-copy) states the report of the instance.
 - The [LLM providers](#the-llm-provider) supply the checks.
 - No check refreshes an OAuth record. An expired access token of an `openai-codex` or `anthropic-subscription` record answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
 - The `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides the result of an expired record.
@@ -206,3 +249,6 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.
+- Tests cover a human create for several holders, a sealed create of an instance, each refusal of an instance caller, `llm.credential.instance_unknown` and an `openai-compatible` instance copy with typed model ids.
+- Tests cover an instance login in each allowed mode with a fake pi-ai flow, a refused browser mode, `credential.login.instance_unavailable` and an expiry that stores nothing.
+- Tests cover `llm.credential.report`, the healthcheck of an instance copy with no release, and `unknown` after a server restart.

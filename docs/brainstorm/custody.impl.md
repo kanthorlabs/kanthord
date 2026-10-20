@@ -11,17 +11,21 @@ A mechanism here never overrides a rule there.
 ## The credential store record
 
 - Custody owns the shared `credential` table and the [credential envelope](architecture.impl.md#the-credential-table).
-- A row holds `id`, `name`, `platform`, `revision`, `secret`, `metadata`, `created_at`, `ended_at`, `available_at` and `strikes`, and one row is one revision of a credential.
+- A row holds `id`, `name`, `platform`, `holder`, `sealed_to`, `revision`, `secret`, `metadata`, `created_at`, `ended_at`, `available_at` and `strikes`, and one row is one revision of one copy of a credential.
 - The encrypted columns represent `secret`; no plaintext secret persists.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
-- The name is the group key of a credential and never changes. A unique index holds `name` and `revision`, and a new name starts at revision 1.
+- `holder` is `server` or the name of a worker instance, and it is never null. `sealed_to` is the fingerprint of the instance revision that the copy is sealed to, and it is null for `server`.
+- The group key of a credential is `(name, holder)`, and neither part changes. A unique index holds `name`, `holder` and `revision`, and a new group starts at revision 1.
+- Custody validates the fingerprint form of `sealed_to`. The [LLM component](llm.impl.md#instance-copies) validates that `holder` names a live instance.
+- Custody refuses a `holder` other than `server` for a platform outside the LLM platforms with 400 `credential.sealed.invalid`.
 - The names `login`, `platform`, `check` and `ssh` are refused, because the static segments of the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) hold them.
-- Creation and login refuse a name that a row holds with 409 `credential.name.conflict` and the identity of its newest revision in `error.details`.
-- A login checks the name at start and at commit.
-- The write code keeps one platform for every row of a name.
+- Creation and login refuse a `(name, holder)` group that a row holds with 409 `credential.name.conflict` and the identity of its newest revision in `error.details`.
+- A login checks the group at start and at commit.
+- One name holds one platform over every holder. A creation of an existing name with another platform answers 409 `credential.name.platform_conflict`.
 - Custody stores the platform value that the owning component supplies, and it validates no platform.
-- The newest live revision is the row of the name with the greatest `revision` and a null `ended_at`.
+- The newest live revision is the row of the group with the greatest `revision` and a null `ended_at`.
+- Every rule of this section on revisions, rotation, drain, revoke, metadata edit and archive applies to one `(name, holder)` group.
 - A rotation inserts the next revision in one transaction. It copies the metadata of the newest live revision unless the request replaces it, and after the insert it drains every older live revision that no live execution pins in the same transaction.
 - A drain and a revoke set `ended_at`.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
@@ -32,10 +36,12 @@ A mechanism here never overrides a rule there.
 - An archive checks every dependent, including agent providers, in the transaction of the commit.
 - An archive calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
 - An archive calls the Intake collaboration `inboundsNaming(tx, credentialName)` in that transaction. It answers every inbound that names the credential.
-- An archive sets `ended_at` on every live revision of the name and keeps the rows, because an execution record references them.
-- A name with no live revision is archived. A drain and a revoke never end the newest live revision, so only an archive produces that state.
-- An archive is final. An archived name takes no rotation, metadata edit or second archive, answers 409 `credential.credential.archived`, and stays taken.
+- These dependents apply to the group of the holder `server`. An archive of an instance copy calls the Project collaboration that answers the worker bindings that list the instance and whose agent configuration names the credential.
+- An archive sets `ended_at` on every live revision of the group and keeps the rows, because an execution record references them.
+- A group with no live revision is archived. A drain and a revoke never end the newest live revision, so only an archive produces that state.
+- An archive is final. An archived group takes no rotation, metadata edit or second archive, answers 409 `credential.credential.archived`, and stays taken.
 - A refusal lists the dependents.
+- `archiveHeld(tx, holder)` ends every live revision of every group of that holder. The Worker Service calls it in the transaction of an [instance archive](worker-service.impl.md#worker-instances). It checks no dependent, because the instance archive refuses while a binding lists the instance.
 - Creation and rotation validate the local schema of the owning component and make no remote call.
 - Custody logs a human creation or update with the human identity and row identity, never the secret.
 - A generated secret enters through a record function for a generated secret, beside `createLoginRevision`. Its rotation calls a rotate function for a generated secret. Neither function takes material from a request.
@@ -46,6 +52,35 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `oauth`: `{ refresh, access, expires }`; only a login session supplies initial material.
 - `s3_access_key`: `{ access_key_id, secret_access_key }`; a session token is invalid.
 - `ssh_key`: `{ private_key }`; only the generated create and the generated rotation of the owning component supply material. A generic create, rotation or metadata edit of a platform with `ssh_key` answers 400 `credential.entry.unsupported`. The schema checks the armor lines of the `openssh-key-v1` text and a size bound.
+
+## The sealed object
+
+- The plaintext under the credential envelope of an instance copy is the [sealed object](custody.vocabulary.md#sealed-object) `{ alg, enc, ciphertext }` in canonical JSON. `enc` and `ciphertext` are base64url.
+- `alg` is `hpke-x25519-sha256-aes128gcm`: RFC 9180 base mode with DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and AES-128-GCM.
+- The recipient key is the X25519 public key of the instance revision that `sealed_to` names. The info is `kanthord/credential/v1`.
+- The additional authenticated data is the canonical JSON `{ name, platform, holder, sealed_to }`.
+- The sealed plaintext is the stored-secret form of the secret shape of the platform, as for a row of the holder `server`.
+- The plaintext budget is 32,768 bytes. A ciphertext above 32,784 bytes answers 400 `credential.sealed.invalid`.
+- The server, the CLI and the worker application seal and open through `@hpke/core` at the exact version `1.9.0`, a dependency of `engine` only. The lockfile pins `@hpke/common@1.10.1`.
+
+### The seal of a human entry
+
+- A creation or a rotation under a human identity takes the plaintext secret and the holders. Custody validates the secret schema of the shape once.
+- For each instance holder, custody reads the current public key and fingerprint of the instance through the Worker Service, seals the secret and sets `sealed_to`.
+- Custody writes one row for each holder in one transaction. A holder `server` takes the credential envelope as today.
+- Custody clears the plaintext buffer in a `finally` block after the seal, also after a failure.
+
+### The entry of an instance
+
+- A creation or a rotation under a [worker token](gateway-service.vocabulary.md#worker-token) takes `sealed` and `sealed_to`. Its holder is the instance of the token.
+- Custody checks the form of the sealed object, the budget, and that `sealed_to` equals the current fingerprint of the holder. A failure answers 400 `credential.sealed.invalid`.
+- Custody cannot check the secret schema of a sealed copy. The instance validates the secret before it seals.
+
+### Rules of an instance copy
+
+- An instance copy whose `sealed_to` is not the current fingerprint of its holder has no holder. The holder rule, the handover and the health of the instance refuse it.
+- `release()` refuses a row whose holder is not `server` with 409 `credential.credential.held_by_instance`. One choke point covers the verify, the pre-save check, the provider check, the model check, the model list and a workbench session.
+- A record answer adds `holder`, `sealed_to` and `sealed_current`. `sealed_current` is true when `sealed_to` equals the current fingerprint of the holder, and it is true for `server`.
 
 ## Suitability
 
@@ -62,6 +97,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody uses the derived cipher key of the [credential table](architecture.impl.md#the-credential-table), never `master_key` directly.
 - The handover keys derive from the [client secret](gateway-service.impl.md#the-client-secret) of the machine JWT through `crypto.hkdfSync` with SHA-256 and an empty salt.
 - The info of the handover key is `handover/server-to-worker/v1`, and the info of the refresh-report key is `handover/worker-to-server/v1`.
+- A [sealed object](#the-sealed-object) uses the public key of a worker instance. The server holds no private key of an instance.
 - A replacement of `master_key` refuses the start, as [the master_key record](#the-master_key-record) rules.
 - [The verification secret](intake-service.impl.md#the-verification-secret) of the Intake Service owns the webhook secret derivation.
 
@@ -94,7 +130,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The facility refuses another node and takes no association from the caller.
 - For an external harness, the machine identity and execution identity prove the complete chain.
 - The JWT names the client identity and worker binding; the registration is live.
-- The live claim names that binding and instance, and its node is the node of the operation.
+- The live claim names that binding and registration, and its node is the node of the operation.
 - A break in that chain refuses the operation before ciphertext access.
 - A model inference call resolves through the worker binding and selected agent provider, never a credential relationship with a project.
 - The requested operation `ssh_identity` releases the key of an `ssh` record under [the release of an SSH key](#the-release-of-an-ssh-key).
@@ -121,6 +157,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - A human identity passes for a binding of a project. It also passes for the draft configuration of a binding write, a binding check or a binding verify.
 - The service identity of the Project Service passes for a live binding: the resource healthcheck and the instruction files read.
 - A machine identity with a proven execution claim passes only for a repository binding of the pinned node revision of that claim. The Gateway proves the claim of `execution_id` in `src/gateway/invocation.ts`, as it does for `worker.handover` and `intake.action.perform`.
+- At the `worker` placement, the material stays on the server. The [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay) takes the same grant, signs on the server and drops the material.
 - The service identity of the Mission Service passes for `intake.action.check`, through the pinned `FrozenAction`, under the Intake rule of that operation.
 - A release under a machine identity with a proven execution claim pins the revision to the execution at first use. It calls `pinCredential` in the same transaction. Every other release reads the newest live revision.
 - A release of a legacy `ssh` record answers 409 `repository.credential.ssh_key_legacy` under [the Repository rule](repository.impl.md#legacy-ssh-records).
@@ -136,7 +173,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The view reads the revision that the execution pins.
 - `modify()` serializes on the pinned revision and writes the pi-ai result in place.
 - The view refuses `delete()`.
-- At every placement, the view reads the decrypted handover. The worker unit at the `server` or the `container` placement reads no custody record directly.
+- At every placement, the view reads the decrypted handover. The worker unit reads no custody record directly. At the `worker` placement, the worker unit opens the sealed item of the handover with the private key of its instance.
 - Custody drops the view at execution end.
 - A workbench view reads the newest live revision and pins no revision.
 
@@ -144,16 +181,22 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
 - The payload is canonical JSON. It holds the credential of the pinned agent selection of the execution and the SSH identities of the execution.
-- Its sole item holds the record identity, the pi adapter id and the pi-ai credential.
-- The payload holds `ssh_identities: [{ binding_id, credential_id, private_key }]` beside `items`, one entry for each repository binding of the pinned node revision. An execution with no repository binding holds `[]`.
+- `custody.handover` takes the placement of the pinned worker binding and the instance of the identity, and it chooses each item from those values.
+- At the `server` and the `container` placements, its sole item is `{ credential_id, provider_id, credential }`: the record identity, the pi adapter id and the pi-ai credential of a row of the holder `server`.
+- At the `worker` placement, its sole item is `{ credential_id, provider_id, sealed }`: the sealed object of the copy of the instance of the identity. The server never opens it.
+- At the `worker` placement, an item of the holder `server` answers 403 `custody.handover.holder_refused` with `details.reason` `server_held`. An item of another holder, or a copy sealed to a fingerprint that is not current, answers the same code with `reason` `held_elsewhere`.
+- The payload holds `ssh_identities: [{ binding_id, credential_id, private_key }]` beside `items`, one entry for each repository binding of the pinned node revision, at the `server` and the `container` placements. An execution with no repository binding holds `[]`.
+- At the `worker` placement, `ssh_identities` is always `[]`. The worker unit signs through the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay).
 - `ssh_identities` stays out of `CredentialStore`. The execution store keeps its one pi-ai credential.
 - The handover authorizes each `ssh_identities` entry through the `ssh_identity` grant under the machine identity with the proven claim, and it pins each revision.
 - A refresh report never carries an SSH key. A report with a credential type other than `api_key` and `oauth` answers 400 `custody.handover.report_invalid`.
+- The plaintext of a refresh report is `{ credential_id, digest, credential }` for a row of the holder `server`, and `{ credential_id, digest, sealed }` for an instance copy. The worker instance seals the refreshed credential to its own key. `digest` is the digest of the stored sealed object.
 - AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
 - The worker application holds the client secret of its machine JWT and derives the same two keys. Custody derives the client secret again from the verified `sub`.
-- At the `server` and the `container` placements, the envelope crosses only the slot channel on the server host. A `container` instance receives its client secret in the `init` frame of [the slot channel](worker-service.impl.md#the-slot-channel-of-a-container).
-- A valid tag proves the sender and the direction, because only the server and that one worker hold the client secret.
+- At the `server` and the `container` placements, the envelope crosses only the slot channel on the server host. A `container` slot receives its client secret in the `init` frame of [the slot channel](worker-service.impl.md#the-slot-channel-of-a-container).
+- At the `worker` placement, a worker instance receives the client secret of each registration in the sealed connection answer of [the instance exchange](worker-service.impl.md#the-instance-exchange). The envelope crosses the network, and its item stays sealed to the instance key inside it.
+- A valid tag proves the sender and the direction, because only the server and that one worker application hold the client secret.
 - A refresh report carries the digest of the credential value that it replaces. Custody writes the new value in place only when the stored value has that digest, in the same transaction, so a replayed earlier report writes nothing.
 - The client secret protects the handover and the refresh report alone. Registration, the work pull and the MCP calls stay bearer-only.
 - The envelope has no forward secrecy. A client secret that leaks later opens every recorded envelope of its client identity.
@@ -161,12 +204,13 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody refreshes no pinned revision on the server while a live execution holds it.
 - Two executions can hold one revision at once.
 - The refresh-token rotation behaviour of concurrent holders remains a provider constraint.
-- Custody logs the execution identity and record identity of each handover and report, never material.
+- Custody logs the execution identity, the record identity, `client_id` and `runtime_identity` of each handover and report, and `instance_id` at the `worker` placement, never material.
 - `pino` redacts the payload paths.
 
 ## The credential hold
 
-- The columns `available_at` and `strikes` of the row of revision 1 hold the cooldown of the name. The hold is a runtime value of the name, as an OAuth refresh is a runtime value of a revision.
+- The columns `available_at` and `strikes` of the row of revision 1 of a `(name, holder)` group hold the cooldown of that copy. Each copy holds its own cooldown, because each copy can hold another key. The hold is a runtime value of the copy, as an OAuth refresh is a runtime value of a revision.
+- Every port function below takes the holder beside the name. `listHolds(tx)` answers `holder` in each item.
 - `available_at` is the Unix millisecond end of the hold, null while no hold exists. `strikes` is `NOT NULL` with the default 0.
 - Revision 1 exists for the whole life of a name, so the hold has one home. A rotation inserts the next revision with no hold and copies none. An archive keeps the rows and the hold.
 - A drain of revision 1 sets its `ended_at` and leaves the hold unchanged. `holdOf`, `hold`, `release` and `listHolds` ignore `ended_at`, so the hold stays readable and writable on an ended revision 1.
@@ -194,6 +238,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody declares no route and no operation of its own.
 - Custody exposes the record functions that the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) of each component calls: create, list, get, rotate, metadata edit, revoke and archive.
 - A list and a get take the platform set of the calling component, so a component reads only its own records.
+- Every record function takes a holder. A list and a get take an optional holder filter, and the other functions name one `(name, holder)` group.
 - `rotate` adds a revision without a remote call.
 - `revoke` ends one revision at once.
 - `archive` checks every dependent, ends every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
@@ -212,6 +257,9 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, and the metadata copy and replacement at rotation.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover a handover with an SSH entry, an execution with no repository binding, and a report with the credential type `ssh_key`.
+- Tests cover the sealed object against the test vectors of RFC 9180 appendix A.1, the seal of a human entry for two holders in one transaction, a sealed entry of an instance, and each refusal of `credential.sealed.invalid`.
+- Tests cover `credential.name.platform_conflict`, a hold of one copy that leaves the other copies free, and `archiveHeld`.
+- Tests assert that `release()` refuses an instance copy, and that a handover at the `worker` placement refuses a server-held item, an item of another holder and an item sealed to an ended fingerprint, and answers `ssh_identities: []`.
 - Tests assert that a generic create, rotate, metadata edit and check of `ssh` refuse. Tests assert that a generated create logs no key, and that the database file holds no key text.
 - Tests cover each requester kind of `ssh_identity`, a fabricated grant and a consumed grant.
 - Tests assert that `release` refuses a consumed grant, a fabricated grant and an inbound operation under another service identity, and that `drop()` clears the buffer after a success and after a failure.
@@ -223,6 +271,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - For `api_key` and `oauth`, the normalized pi-ai credential occupies at most 48,914 UTF-8 bytes of canonical JSON. This shared shape constraint excludes `s3_access_key`.
 - The budget derives from the 65,536-byte body limit of the [credential report](worker-service.impl.md#the-credential-handover). For `C` credential bytes, the compact report body occupies `98 + 4 × ceil((C + 163) / 3)` bytes: 147 bytes of report metadata and JSON structure, a 16-byte authentication tag, base64 expansion and 98 bytes of outer JSON, execution identity and encoded nonce. A 48,914-byte credential produces 65,534 bytes; one additional credential byte produces 65,538 bytes.
+- An instance copy also follows the 32,768-byte plaintext budget of [the sealed object](#the-sealed-object).
 - Enforce the budget before creation or rotation commits, before OAuth login persistence, during execution-store construction and refresh normalization, and when accepting a decrypted refresh report. An oversized replacement changes neither stored material nor execution-store state.
 - Creation and rotation use HTTP 400 `credential.input.invalid`. [OAuth completion](llm.impl.md#the-oauth-login) follows the existing sanitized failed-session path and stores nothing. Execution-store normalization rejects locally without material in the error. Custody rejects an oversized decrypted report with HTTP 400 `custody.handover.report_invalid`.
 - Boundary tests cover both credential shapes, aggregate OAuth fields, multibyte UTF-8 and JSON escaping. They prove the maximum admitted credential completes handover and the mandatory release report through HTTP, and the next serialized byte refuses without a write or replacement. Gateway still refuses an oversized HTTP request with 413 before Custody validation.

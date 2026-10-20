@@ -53,8 +53,23 @@ Key A of `github-main` leaks, so a human revokes revision 1, and the next use of
 
 ## credential name
 
-The human-selected name of a credential store record, unique on the server.
-A second creation with name `atlas-github` returns the identity of the record that holds that name.
+The human-selected name of a credential store record. One name holds one platform and one copy for each holder.
+A second creation with name `atlas-github` for the same holder returns the identity of the record that holds that name.
+
+## holder
+
+The party that can open a copy of a credential: `server`, or the name of one worker instance.
+The term names no closed set, because an instance name is a value.
+`anthropic` holds a copy for `server` and a copy for `box-coder`. Only `box-coder` opens its copy, and a binding of `box-coder` resolves that copy.
+
+## sealed object
+
+The form of an instance copy: `{ alg, enc, ciphertext }`, sealed with HPKE to the public key of the holder.
+The closed `alg` set is:
+
+- `hpke-x25519-sha256-aes128gcm`
+
+The copy of `anthropic` for `box-coder` holds a sealed object with `sealed_to` `SHA256:3q2+7w...`. A Reset key of `box-coder` leaves that copy with no holder.
 
 ## credential reference
 
@@ -80,6 +95,7 @@ An execution requests a GitHub read for another node, so the facility refuses it
 ## credential handover
 
 The encrypted transfer of execution credentials to the kanthord worker application that hosts the execution.
-An execution on `build-02` receives the credential of its effective agent provider.
+An execution on a pool slot receives the credential of its effective agent provider.
 The application reports refreshed OAuth material and discards the credentials at execution end.
-An execution on `build-02` with the repository binding `kanthord-repo` also receives the SSH key of `kanthord-deploy`, so `build-02` holds no key file.
+An execution on a pool slot with the repository binding `kanthord-repo` also receives the SSH key of `kanthord-deploy`, so the slot holds no key file.
+An execution on the worker instance `box-coder` receives only the copy of `anthropic` sealed to `box-coder`, and no SSH key.

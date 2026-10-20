@@ -35,7 +35,9 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The component reads and writes no SSH file of the host user.
 - The component pins one [host key](repository.vocabulary.md#host-key-pin) for each SSH host. It refuses an operation on a host with no pin.
 - Only a human confirms a host key. The GitHub key source over TLS stands in for that confirmation.
-- The [credential handover](custody.md#secret-use-and-handover) carries the SSH identity to a worker application, so a worker host holds no key copy.
+- At the `server` and the `container` placements, the [credential handover](custody.md#secret-use-and-handover) carries the SSH identity to a worker application, so a slot holds no key copy.
+- At the `worker` placement, no SSH key leaves the server. The worker unit serves a private SSH agent for one git operation, and that agent relays each signature request to the server through the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay).
+- The server signs only a user authentication request for the key of a repository binding of the live claim. In a host-bound request, the host key must equal the pinned host key of the repository host.
 - It performs no platform action.
 - Its writes follow the [write operations](#write-operations) below.
 

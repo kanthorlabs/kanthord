@@ -30,6 +30,7 @@ A caller supplies neither resource selector.
 The ed25519 key pair that one `ssh` record holds, and through which the server reaches a repository.
 Custody stores the private key, and the human adds the public key as a deploy key of one repository.
 `kanthord-deploy` holds the public key `ssh-ed25519 AAAAC3Nz... kanthord-kanthord-deploy`, and a clone of `git@github.com:kanthorlabs/kanthord.git` loads that key into a private SSH agent.
+At the `worker` placement, the instance `box-coder` holds no key of `kanthord-deploy`. Its private SSH agent relays each signature request to the server.
 
 ## host key pin
 
