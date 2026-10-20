@@ -112,7 +112,7 @@ Two more states can interrupt any step. A human can pause a node, which sets `Pa
 
 ## One execution, from pull to release
 
-A native worker instance runs as one `kanthord serve worker` process or as one worker thread of the server. It talks to the server only through the API. It repeats the same cycle for every execution:
+A native worker instance runs as one `kanthord serve worker` process, as one worker thread of the server, or as one container on the server host. It talks to the server only through the API. It repeats the same cycle for every execution:
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "& { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
@@ -215,7 +215,7 @@ These rules explain most behavior that looks surprising at first.
 - **A fresh agent for each execution.** Each execution opens a new agent session with an empty conversation. The execution can lose its claim or its process at any time, so nothing durable lives in the agent. The next execution rebuilds its context from the node branch and from the records of the Mission Service.
 - **Git is the memory of the work.** The node branch carries the work from one execution to the next. A budget end writes a checkpoint commit and pushes it, so no work is lost.
 - **No history rewrite.** No execution deletes, renames or force-pushes a node branch. No execution rewrites a commit that it pushed, because a record can name that commit.
-- **One instance, one execution.** An instance holds at most one execution at a time. One `kanthord serve worker` process hosts one instance. An instance count of 3 needs 3 processes, each with its own machine token.
+- **One instance, one execution.** An instance holds at most one execution at a time. One `kanthord serve worker` process hosts one instance. At the `worker` placement, an instance count of 3 needs 3 processes, each with its own machine token.
 - **A lost claim is a failure.** A claim that reaches `expired_at` with no release is lost. The Scheduler ends the execution and returns the node to `Available` (or `Waiting` for a reviewer claim). The loss counts toward `mission.consecutive_failure_limit`. The worker process that still runs learns of the loss at its next call and stops.
 
 ## Where the state lives
@@ -240,12 +240,24 @@ The start check of `coder@1` runs every task verification again on the head of t
 
 ## Where a worker runs
 
-The field `placement` of a worker binding chooses where its native instances run. The value is `server` or `worker`. An absent field means `worker`. A binding never changes its placement.
+The field `placement` of a worker binding chooses where its native instances run. The value is `server`, `container` or `worker`. A binding of a native worker states it, and a write without it fails. A binding never changes its placement.
 
 - At the `server` placement, the server runs each instance as a worker thread. The server starts one thread for each unit of `instance_count`, up to `worker.server_slot_limit` (default 16). A human generates no token and starts no process.
+- At the `container` placement, the server runs each instance in its own container on the server host, with Podman or Docker. The server starts one container for each unit of `instance_count`, up to `worker.server_slot_limit`. A human generates no token and starts no process. The container image is `<worker.container_image>:<server version>`.
 - At the `worker` placement, each instance is a separate `kanthord serve worker --endpoint <url> --token <token>` process. The process can run on the server host or on another host.
 
-Both placements run the same worker unit. The thread of a server slot reaches the server through the same API operations, under a machine identity of the same project and binding scope.
+Every placement runs the same worker unit. The thread of a server slot and the container of a `container` slot reach the server through the same API operations, under a machine identity of the same project and binding scope. The container reaches the server through a channel that the server holds, and it holds no token.
+
+The server checks the placement `container` with a runtime check. The check answers a reason when the server cannot host containers:
+
+| `reason`              | Condition                                                                 |
+| --------------------- | ------------------------------------------------------------------------- |
+| `server_in_container` | The server runs inside a container.                                       |
+| `runtime_absent`      | Neither `podman` nor `docker` resolves on the `PATH` of the server.       |
+| `runtime_failed`      | The runtime does not answer or fails a check. The condition is transient. |
+| `runtime_rootful`     | A Linux host runs a rootful runtime and the server user is not root.      |
+
+[Worker placements](../reference/worker/placement.md) lists the answer of the check. [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md) shows the steps.
 
 To run 3 instances of `coder@1` for one project at the `server` placement:
 
@@ -254,9 +266,11 @@ To run 3 instances of `coder@1` for one project at the `server` placement:
 
 The server starts the 3 threads. A raise of `instance_count` starts more threads. A lowered count drains the excess threads: an idle thread ends at once, and a busy thread ends after its execution. A server restart starts each thread again under the same client identity, and a live registration resumes its running execution.
 
+To run 3 instances of `coder@1` at the `container` placement, enable the agent and add the worker binding as above, with `"placement": "container"`. The server starts the 3 containers, and a server restart starts each container again under the same client identity.
+
 To run 3 instances of `coder@1` at the `worker` placement:
 
-1. Enable the agent `swe@1`, and add the worker binding as above, with `"placement": "worker"` or with no `placement`.
+1. Enable the agent `swe@1`, and add the worker binding as above, with `"placement": "worker"`.
 2. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
 3. Start one `kanthord serve worker` process with each token. The host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
 
@@ -268,7 +282,7 @@ A worker host needs no SSH key, no SSH configuration and no `known_hosts` entry.
 
 The worker host must reach the SSH port of each repository address host. The SSH port is 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`, and 22 for every other host. See [SSH host keys](../reference/repository/host-key.md#function-description). No binding check proves that path from the worker host. The worker reads no file under `~/.ssh`, so a key or an alias in the SSH configuration of the host has no effect. A temporary directory path above 75 bytes makes every SSH operation fail; see [the temporary directory limit](../reference/repository/ssh-key.md#the-temporary-directory-limit).
 
-An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. Two threads share no file.
+An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. A container at the `container` placement uses `state/kanthord/` of its volume `kanthord_slot_<client_id>`. Two instances share no file.
 
 | Path                               | Content                                                                                                                                                                                                                           |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -283,7 +297,7 @@ The task commit of an `implement` node with two or more repository bindings is t
 
 The workspace and the transcript are local conveniences, not records. Another host or another slot can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
 
-The agent tools and the verification commands run with the rights of the worker process. At the `server` placement, those rights are the rights of the server user. A command can read the files of that user and can signal the server process. KanthorD has no sandbox. Run a worker on a host that you trust with the repository and its credentials.
+The agent tools and the verification commands run with the rights of the worker process. At the `server` placement, those rights are the rights of the server user. A command can read the files of that user and can signal the server process. At the `container` placement, a command runs in the container of its instance. It reads no file of the server and cannot signal the server process. It still reaches every network that the container reaches. KanthorD has no other sandbox. Run a worker on a host that you trust with the repository and its credentials.
 
 ## Read next
 
