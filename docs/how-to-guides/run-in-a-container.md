@@ -331,7 +331,7 @@ The token stays in the worker volume, so no copy on the host needs removal.
 
 `podman logs kanthord-<binding name>` shows `Worker application ready` when the worker is registered. For two bindings, do items 3 and 4 once for each binding.
 
-`podman restart kanthord` keeps the network connection. After `podman rm` and a new `podman run` of the server, run `podman network connect kanthord-net kanthord` again. The worker refuses a server of another version with `worker.version.mismatch`. After [Use a newer image](#use-a-newer-image), remove each worker container with `podman rm -f kanthord-<binding name>`. Then run item 4 again with the new version. The `podman pull` of that section already fetched the image, and the worker volume keeps its client file.
+`podman restart kanthord` keeps the network connection. After `podman rm` of the server, do the worker steps of [Use a newer image](#use-a-newer-image).
 
 ## Use a newer image
 
@@ -345,6 +345,23 @@ podman rm kanthord
 ```
 
 Then run the command of step 3 again, with `<new version>` in place of `<version>` and the same `GIT_*` values. See [upgrade](../reference/upgrade.md).
+
+If a worker runs in a container on the same host, do these steps too. See [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
+
+1. Connect the new server container to the network. `podman rm kanthord` removed the old connection.
+
+   ```sh
+   podman network connect kanthord-net kanthord
+   ```
+
+2. For each worker, remove its container and start it again with the new version. The worker checks the server version at its start, and refuses another version with `worker.version.mismatch`. Today a running worker of the old version does not check again. It keeps running against the new server, so remove it. The worker volume keeps its client file.
+
+   ```sh
+   podman rm -f kanthord-<binding name>
+   podman run -d --name kanthord-<binding name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord-<binding name>:/var/lib/kanthord -e GIT_AUTHOR_NAME="<name>" -e GIT_AUTHOR_EMAIL="<email>" -e GIT_COMMITTER_NAME="<name>" -e GIT_COMMITTER_EMAIL="<email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   ```
+
+For a worker on another host, install the `kanthord` binary of `<new version>` on that host. Then start `kanthord serve worker` again. See [upgrade](../reference/upgrade.md#other-state).
 
 ## Troubleshooting
 
