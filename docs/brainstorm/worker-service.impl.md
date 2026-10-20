@@ -475,7 +475,7 @@ The `serve worker` diagnostics of an instance are `worker.start.instance_config_
 The instance key is the only machine credential of a worker instance.
 HPKE base mode with the suite `DhkemX25519HkdfSha256`, HKDF-SHA256 and AES-128-GCM seals each answer to the public key of the live revision.
 HPKE base mode gives confidentiality to the key holder only, and it does not authenticate the server. TLS or the same host authenticates the server to an instance.
-`@hpke/core` at the exact version `1.9.0` is a dependency of `engine` only.
+[The HPKE dependency](architecture.impl.md#the-hpke-dependency) names the library.
 
 The worker token:
 

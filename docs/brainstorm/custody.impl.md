@@ -61,7 +61,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The additional authenticated data is the canonical JSON `{ name, platform, holder, sealed_to }`.
 - The sealed plaintext is the stored-secret form of the secret shape of the platform, as for a row of the holder `server`.
 - The plaintext budget is 32,768 bytes. A ciphertext above 32,784 bytes answers 400 `credential.sealed.invalid`.
-- The server, the CLI and the worker application seal and open through `@hpke/core` at the exact version `1.9.0`, a dependency of `engine` only. The lockfile pins `@hpke/common@1.10.1`.
+- The server, the CLI and the worker application seal and open through [the HPKE dependency](architecture.impl.md#the-hpke-dependency).
 
 ### The seal of a human entry
 

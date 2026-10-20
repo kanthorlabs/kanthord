@@ -150,27 +150,32 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
      - Verify: the full suites; `git grep` finds no `worker_instance`, `worker.instance.`, `WorkerInstance` or `/api/worker/instance` outside the new meaning; a live `make e2e` at `server` and at `container`.
   3. Build the worker instance end to end: the record and its human operations, `worker.instance.token`, `connect` and `heartbeat`, the JWT kind `worker` and the `client` claims, `worker_instances` with its validation, the effective count, the guard in `claimOnce`, and the worker unit with several bindings.
      - Build the instance configuration, the named directories, `kanthord worker instance`, `kanthord worker join`, the host allowlist rule, and `client_secret` out of `cli.yaml`.
-     - Build the `server_version` check of each heartbeat. It replaces the version read before each new registration.
+     - Build the `server_version` check of each heartbeat. It adds a heartbeat check, and the worker unit keeps its version read of `gateway.openapi` at its start.
+     - Build the HPKE seal and open of [the HPKE dependency](architecture.impl.md#the-hpke-dependency).
      - Change the release smoke, which starts `serve worker` with no configuration. It starts the command with an instance configuration.
      - Until layer 5, the agent configuration of a `worker` binding with a native worker is invalid with `agent.configuration.credential_holder_mismatch`, so no claim follows.
-     - Verify: Gateway tests for each `gateway.jwt.*` code; a Reset key ends the tokens and the registrations in one transaction; a second process supersedes the first, and the first exits with status 3; a server restart keeps the registrations of a live instance; an auth-version increment exits with `worker.instance.secret_changed`, and the restart resumes a `running` execution of a fake unit; an execution passes one token renewal; two pulls of one instance on two bindings commit one claim; a heartbeat with another `server_version` stops the unit; a live instance on `127.0.0.1` registers two bindings of two paused projects.
+     - Verify: Gateway tests for each `gateway.jwt.*` code; a Reset key ends the tokens and the registrations in one transaction; a second process supersedes the first, and the first exits with status 3; a server restart keeps the registrations of a live instance; an auth-version increment exits with `worker.instance.secret_changed`, and the restart resumes a `running` execution of a fake unit; an execution passes one token renewal; two pulls of one instance on two bindings commit one claim; a heartbeat with another `server_version` stops the unit; the RFC 9180 A.1 vectors; a test harness that holds a fixture instance with a fixture claim runs the exchange end to end; a live instance on `127.0.0.1` registers two bindings of two paused projects.
   4. Build the SSH signature relay: `worker.ssh.sign` with both methods, the agent socket of one git operation, and `ssh_public_key` in the execution setup.
      - Verify: socket protocol tests; the refusal of a payload that is no user authentication, of a host-key mismatch, of another binding and of no live claim; a replay answers 409.
      - Verify: plain `git` and OpenSSH push and fetch through the relay against `engine/src/repository/test-sshd.ts`, with a test harness that holds a fixture claim, and once live. The answer `SSH_AGENT_FAILURE` to `session-bind@openssh.com` is not fatal. The repository key type is ed25519, or the relay supports the sign flags `rsa-sha2-256` and `rsa-sha2-512`.
   5. Build the instance-held API-key credentials: `holder`, `sealed_to` and the new unique index, the server seal on the human paths, the local seal of the CLI on the instance host, the policy `human_or_worker`, the sealed handover items and refresh reports, and `credential.credential.held_by_instance`.
      - Build the holder rule in place of the layer 3 refusal, the copy of the claimant, the reason `held_elsewhere` and `archiveHeld`.
-     - Verify: the RFC 9180 A.1 vectors; a holder mismatch at the write and at the resolution; a fake unit opens a sealed handover item.
+     - Verify: a holder mismatch at the write and at the resolution; a fake unit opens a sealed handover item.
   6. Build OAuth on the worker instance, then the `worker` e2e.
      1. Build `holder` on `llm.credential.login`, `login_sessions`, `llm.credential.login_report`, the copy-code and device-code modes only, the sealed revision 1 and the refresh.
         - Verify: a fake pi-ai flow end to end; an expired session stores nothing; a live `anthropic-subscription` sign-in on a dev instance.
      2. Build the `worker` e2e and remove the layer 1 refusal.
         - The persistent dev instances `e2e-coder-<n>` and `e2e-reviewer-<n>` live under `.dev/e2e/instances/`. A missing or ended record removes the local configuration and creates the instance again.
-        - Ulrich signs in `anthropic-subscription` once on each dev instance. One agent provider names that credential in the `swe@1` and `re@1` enablements. A dev instance without a live copy stops the run with the sign-in command.
+        - Ulrich signs in `anthropic-subscription` once on each dev instance. One agent provider names that credential in the `swe@1` and `re@1` enablements.
+        - The run stops and prints one sign-in command for each dev instance without a live copy. A database reset ends every copy, so the first run after each reset asks for one sign-in on each dev instance.
+        - `withoutKanthordClient` of `scripts/e2e/workers.mjs` strips `KANTHORD_WORKER_CONFIG` from the environment of each spawned process.
         - Each run writes `worker_instances` and spawns one `kanthord serve worker --instance <name>` for each listed instance. `run.json` carries `instances: [{ name, worker, pid, log }]`.
         - `make e2e-watch` prints the registration and connection changes. `make e2e-stop` stops the processes, and the instances persist. `make e2e-scale` at `worker` writes the first `n` dev instances into the list and starts the missing processes.
-        - `AGENTS.md` states the run.
+        - `AGENTS.md` states the run and the sign-in cost after a database reset.
         - Verify: a live `make e2e PLACEMENT=worker` to a completed node; two concurrent runs on the same dev instances.
   7. Build the dashboard and the guides: the worker page, the instance page, the sheets, the binding sheet, `/workers`, the readiness detail, the auth strings and the mock daemon. Rewrite section 8 of the container guide, `run-on-a-vps.md`, `run-on-a-mac-with-tailscale.md`, `isolate-worker-instances-in-containers.md` and the references.
+     - Move the paths of `coder-worker.md` (the workspace and the limit of a shared `workspaces/`) and `native-agent.md` (the pi directory) to the data directory of the instance.
+     - The guides state that the old `~/.local/state/kanthord/{workspaces,transcripts,pi}` of a `worker` host is safe to delete.
      - Verify: vitest; `ego-browser` at desktop and at 390 px; the first day on a LAN host, on a stateless container and on a same-host container, with a stopwatch log of each action.
   8. Build the instance credential health: `credential_version`, `llm.credential.report` with `models`, and the health line.
      - Verify: a bad key shows `unhealthy` with the instance and the time; a server restart shows `unknown` until the next report.
