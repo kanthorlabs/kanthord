@@ -299,8 +299,8 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 1. Put both containers on one network:
 
    ```sh
-   podman network create kanthord
-   podman network connect kanthord kanthord
+   podman network create kanthord-net
+   podman network connect kanthord-net kanthord
    ```
 
 2. Store the instance configuration as a Podman secret. `podman secret create` reads it from standard input. Paste the value, then press `Ctrl-D`:
@@ -309,10 +309,10 @@ No block puts the instance configuration on a command line. `<name>` is the inst
    podman secret create kanthord-worker-<name> -
    ```
 
-3. Start the instance:
+3. Start the instance. `<git name>` and `<git email>` set the identity of the commits that the agents make:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
 ## The worker unit and its wrappers
