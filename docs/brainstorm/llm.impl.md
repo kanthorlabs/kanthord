@@ -134,6 +134,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A human create with several holders answers the copy of the first holder.
 - `list` and `get` declare `human_or_worker`. A worker caller reads only the copies of its own instance. A human `list` takes the optional query `holder`.
 - `get`, `metadata`, `revoke`, `archive`, `login`, `login_code` and `login_status` take the query or body field `holder`, which defaults to `server`.
+- Today `login`, `login_code` and `login_status` take no `holder`, and a login writes only a copy of `server`. Layer 6.1 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) builds the login of an instance.
 - Each record answer adds `holder`, `sealed_to` and `sealed_current`.
 - An instance copy skips the [pre-save check](architecture.impl.md#the-pre-save-check) and the [provider check](#the-provider-check).
 - The CLI on the host of an instance seals locally. With `--holder <name>` and an instance file `$XDG_CONFIG_HOME/kanthord/workers/<name>.yaml`, it derives the public key from the private key of that file. It authenticates with a worker token, and it trusts no key that the server supplies. The token call creates no connection.

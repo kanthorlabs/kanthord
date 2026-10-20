@@ -73,6 +73,9 @@ Every API success returns HTTP `200` with JSON. The CLI writes the same object a
 {
   "name": "github-main",
   "platform": "github",
+  "holder": "server",
+  "sealed_to": null,
+  "sealed_current": true,
   "revisions": [
     {
       "id": "credential_01M34JC4BJ66JHP41M4MYY6PST",
@@ -92,17 +95,20 @@ Every API success returns HTTP `200` with JSON. The CLI writes the same object a
 }
 ```
 
-| Property                 | Type                  | Purpose                                                                                     |
-| ------------------------ | --------------------- | ------------------------------------------------------------------------------------------- |
-| `name`                   | string                | Credential name.                                                                            |
-| `platform`               | string                | `github` or `ssh`.                                                                          |
-| `revisions`              | array                 | Every revision, newest first.                                                               |
-| `revisions[].id`         | string                | Revision identity `credential_<ULID>`.                                                      |
-| `revisions[].revision`   | positive integer      | Revision number; the first is `1`.                                                          |
-| `revisions[].metadata`   | object or `null`      | Metadata of the revision; `null` for `github`, `{ "public_key", "fingerprint" }` for `ssh`. |
-| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                                         |
-| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.                           |
-| `idempotency_key`        | canonical ULID string | CLI mutations only; key of the request, for a retry.                                        |
+| Property                 | Type                  | Purpose                                                                                              |
+| ------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `name`                   | string                | Credential name.                                                                                     |
+| `platform`               | string                | `github` or `ssh`.                                                                                   |
+| `holder`                 | string                | Always `server`. Only an LLM credential has [instance copies](../llm/credential.md#instance-copies). |
+| `sealed_to`              | `null`                | Always `null`.                                                                                       |
+| `sealed_current`         | boolean               | Always `true`.                                                                                       |
+| `revisions`              | array                 | Every revision, newest first.                                                                        |
+| `revisions[].id`         | string                | Revision identity `credential_<ULID>`.                                                               |
+| `revisions[].revision`   | positive integer      | Revision number; the first is `1`.                                                                   |
+| `revisions[].metadata`   | object or `null`      | Metadata of the revision; `null` for `github`, `{ "public_key", "fingerprint" }` for `ssh`.          |
+| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                                                  |
+| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.                                    |
+| `idempotency_key`        | canonical ULID string | CLI mutations only; key of the request, for a retry.                                                 |
 
 An archived credential has no revision with `ended_at` set to `null`.
 
@@ -110,7 +116,16 @@ An archived credential has no revision with `ended_at` set to `null`.
 
 ```json
 {
-  "items": [{ "name": "github-main", "platform": "github", "revisions": [] }],
+  "items": [
+    {
+      "name": "github-main",
+      "platform": "github",
+      "holder": "server",
+      "sealed_to": null,
+      "sealed_current": true,
+      "revisions": []
+    }
+  ],
   "next_cursor": null
 }
 ```
@@ -128,6 +143,9 @@ The answer is a credential answer with one more property:
 {
   "name": "deploy-api",
   "platform": "ssh",
+  "holder": "server",
+  "sealed_to": null,
+  "sealed_current": true,
   "revisions": [
     {
       "id": "credential_01M34JC4BJ66JHP41M4MYY6PST",
@@ -262,6 +280,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `400 credential.input.invalid`               | create, rotate, update-metadata, check        | Invalid or reserved name, invalid secret or metadata, or a secret over the byte limit.     |
 | `400 credential.platform.unsupported`        | create, check                                 | The platform is not `github` or `ssh`.                                                     |
 | `409 credential.name.conflict`               | create                                        | The name is taken; `details.id` holds the newest revision identity of the holder.          |
+| `409 credential.name.platform_conflict`      | create                                        | A worker instance holds an LLM copy of the name. `details.platform` holds its platform.    |
 | `409 credential.revision.conflict`           | rotate, update-metadata                       | `expected_revision` is not the newest live revision; `details.revision` holds it.          |
 | `409 credential.credential.archived`         | verify, rotate, update-metadata, archive      | The credential is archived.                                                                |
 | `400 credential.check.unsupported`           | verify, check                                 | The platform has no check, or `check` names the platform `ssh`.                            |

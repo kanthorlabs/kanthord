@@ -25,8 +25,8 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 
 | Tool | Route | Approval | Description |
 | ---- | ----- | -------- | ----------- |
-| `agent--cooldown--clear` | `DELETE /api/agent/cooldown/:credential` | Yes | Clear the cooldown of one credential so that the next claim can select its chain entries again. |
-| `agent--cooldown--list` | `GET /api/agent/cooldown` | No | List the credentials that hold a cooldown, live and expired, ordered by credential name. |
+| `agent--cooldown--clear` | `DELETE /api/agent/cooldown/:credential` | Yes | Clear the cooldown of one credential copy so that the next claim can select its chain entries again. The holder defaults to server. |
+| `agent--cooldown--list` | `GET /api/agent/cooldown` | No | List the credential copies that hold a cooldown, live and expired, ordered by credential name and holder. |
 | `agent--enablement--disable` | `POST /api/agent/enablement/:agent_name/disable` | Yes | Disable an agent enablement without validating dependent bindings. |
 | `agent--enablement--enable` | `POST /api/agent/enablement/:agent_name/enable` | Yes | Validate and enable an existing agent enablement. |
 | `agent--enablement--get` | `GET /api/agent/enablement/:agent_name` | No | Get a live agent enablement. |
@@ -53,14 +53,14 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 
 | Tool | Route | Approval | Description |
 | ---- | ----- | -------- | ----------- |
-| `llm--credential--archive` | `POST /api/llm/credential/:credential_name/archive` | Yes | Archive an LLM credential that no dependent names. |
-| `llm--credential--get` | `GET /api/llm/credential/:credential_name` | No | Get an LLM credential, all its revisions and the agent providers that name it. |
-| `llm--credential--list` | `GET /api/llm/credential` | No | List LLM credentials with optional platform filtering and pagination. |
+| `llm--credential--archive` | `POST /api/llm/credential/:credential_name/archive` | Yes | Archive one copy of an LLM credential that no dependent names. The holder defaults to server. |
+| `llm--credential--get` | `GET /api/llm/credential/:credential_name` | No | Get one copy of an LLM credential, all its revisions and the agent providers that name it. The holder defaults to server for a human and to the instance of a worker token. |
+| `llm--credential--list` | `GET /api/llm/credential` | No | List the copies of LLM credentials with optional platform and holder filtering and pagination. A worker instance lists only its own copies. |
 | `llm--credential--login` | `POST /api/llm/credential/login` | Yes | Start an OAuth credential login session. |
 | `llm--credential--login_status` | `GET /api/llm/credential/login/:session_id` | No | Read the state of an OAuth login session. |
 | `llm--credential--platform_list` | `GET /api/llm/credential/platform` | No | List the LLM credential platforms. |
-| `llm--credential--revoke` | `POST /api/llm/credential/:credential_name/revision/:revision/revoke` | Yes | End an older LLM credential revision. |
-| `llm--credential--update_metadata` | `PUT /api/llm/credential/:credential_name/metadata` | Yes | Update LLM credential metadata in a new revision. |
+| `llm--credential--revoke` | `POST /api/llm/credential/:credential_name/revision/:revision/revoke` | Yes | End an older revision of one copy of an LLM credential. The holder defaults to server. |
+| `llm--credential--update_metadata` | `PUT /api/llm/credential/:credential_name/metadata` | Yes | Update the metadata of one copy of an LLM credential in a new revision. The holder defaults to server. |
 | `llm--credential--verify` | `POST /api/llm/credential/:credential_name/verify` | No | Verify one stored llm credential record. |
 | `llm--model--check` | `POST /api/llm/model/check` | No | Check one tool round trip of a model and a reasoning effort through an LLM credential. |
 | `llm--provider--check` | `POST /api/llm/provider/check` | No | Check the connection of an LLM credential through its LLM provider and read its model list when the check reads one. |
