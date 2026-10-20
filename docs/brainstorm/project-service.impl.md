@@ -132,7 +132,7 @@ The outcomes of the comparison by binding name are below.
 - A worker group whose latest row after the edit is a tombstone or holds `instance_count: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
 - The transaction reads `unmatchedClaims(tx, projectId)` of the [Scheduler Service](scheduler-service.impl.md#the-match) before and after its inserts. A pair that the after-read holds and the before-read lacks refuses the write with 409 `project.bindings.worker.node_unmatched` and `details: { node_ids }`. The refusal writes no row.
 - After the commit of a binding-set write, the Project Service calls the Worker contract method `bindingsChanged(projectId)`.
-- The Worker Service then reconciles the [pool](worker-service.impl.md#the-pool) of each binding at the `server` placement.
+- The Worker Service then reconciles the [pool](worker-service.impl.md#the-pool) of each binding at the `server` or the `container` placement.
 
 The binding set has one read route and one write route, and both serve the whole set.
 
@@ -164,7 +164,7 @@ The validation of the whole set runs at the write, and the validation of one bin
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
 The write refuses a submission that changes the worker of an existing worker binding under the same binding name with 409 `project.bindings.worker.resource_changed`.
 The write refuses a submission that changes the `placement` of an existing worker binding under the same binding name with 409 `project.bindings.worker.placement_changed`.
-The refusal compares the effective placements, where an absent field reads as `worker`.
+The refusal compares the stored placements.
 
 - Worker binding validation calls [Agent configuration validation](agent.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
@@ -185,7 +185,14 @@ The refusal compares the effective placements, where an absent field reads as `w
 - An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
 - For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `agent.configuration.invalid`.
 - A worker binding of a known worker with no declared agent, an external harness, that carries `entries`, `resource_budget` or `placement` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
-- The `placement` field of a worker binding of a worker that kanthord hosts is `server` or `worker`. The write stores `placement` as written. An absent field reads as `worker` at each read, so a stored revision with no field keeps the `worker` placement. No migration rewrites a stored revision.
+- The `placement` field of a worker binding of a worker that kanthord hosts is required, and it is `server`, `container` or `worker`. A write without it refuses with 400 `project.bindings.worker.placement_required` with `details: { binding }`.
+- The write stores `placement` as written. No reader falls back to a default.
+- A worker binding of an external harness reads `placement: null`.
+- No migration writes a placement. A stored revision of a hosted worker binding without `placement` stops the server start with `system.database.binding_placement_missing`, under [architecture.impl.md](architecture.impl.md#the-migration).
+- Before the transaction, a write that adds a worker binding at the `container` placement reads `placementStatus("container")` through the Worker contract. An added binding is a binding name with no live binding, so a name that a project reuses after a removal is added.
+- The write refuses the added binding with 409 `project.bindings.worker.placement_unavailable` and `details: { binding, placement, reason }` when `reason` is `server_in_container`, `runtime_absent` or `runtime_rootful`.
+- The write accepts the added binding on `runtime_failed`, because the backoff of [the pool](worker-service.impl.md#the-pool) covers a stopped runtime.
+- An edit of a live `container` binding reads no placement status, so a human can lower its count to 0 while the runtime is down.
 - A strategy with more than one action refuses the write.
 - A `landing` on an action other than `pull_request` refuses the write at the `landing` path.
 
@@ -218,7 +225,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 ## Worker binding configuration
 
-- A worker binding holds `instance_count`, optional `placement`, optional `tags`, optional `resource_budget` and optional per-agent entries.
+- A worker binding holds `instance_count`, `placement` for a worker that kanthord hosts, optional `tags`, optional `resource_budget` and optional per-agent entries.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
@@ -407,8 +414,9 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
-- A test covers each `placement` value, the default `worker` of an absent field and the storage of the field as written.
-- A test covers the refusal of a change with `project.bindings.worker.placement_changed`, the acceptance of a change between an absent field and `worker`, and the refusal of the field on an external harness.
+- A test covers each `placement` value, the refusal of an absent field with `project.bindings.worker.placement_required`, the storage of the field as written, and `placement: null` of an external harness.
+- A test covers the refusal of a change with `project.bindings.worker.placement_changed` and the refusal of the field on an external harness.
+- A test covers `project.bindings.worker.placement_unavailable` for each of its three reasons on an added binding, the acceptance on `runtime_failed`, the acceptance of an edit of a live `container` binding, and a reused name that counts as added.
 - A test covers a removal, a removal by omission and a revision to `instance_count: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.

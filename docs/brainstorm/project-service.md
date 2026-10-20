@@ -85,9 +85,11 @@ The worker that a worker binding names never changes. A project removes the bind
 
 - A worker binding holds its instance count.
 - An instance count of 0 makes the binding unavailable.
-- A worker binding of a worker that kanthord hosts holds its [placement](worker-service.vocabulary.md#placement): `server` or `worker`.
+- A worker binding of a worker that kanthord hosts holds its [placement](worker-service.vocabulary.md#placement): `server`, `container` or `worker`. Every write of the binding states it.
+- A worker binding of an external harness holds no placement.
 - The placement of a worker binding never changes. A project removes the binding and adds it again instead.
-- For both placements, the instance count limits the live registrations of the binding. At the `server` placement, the server also runs one instance for each unit of the count.
+- For every placement, the instance count limits the live registrations of the binding. At the `server` and the `container` placements, the server also runs one instance for each unit of the count.
+- A write refuses to add a binding at the `container` placement when the server cannot run containers.
 - A worker binding of a native worker can hold an optional [resource budget](worker-service.vocabulary.md#resource-budget).
 - A worker binding can hold an [entry](worker-service.vocabulary.md#entry) for each agent of its worker.
 - The Project Service holds that entry in the binding and resolves no [effective configuration](agent.vocabulary.md#effective-configuration).
