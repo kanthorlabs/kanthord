@@ -216,7 +216,7 @@ A spawn of `ssh-agent` or `ssh-add` that answers `ENOENT` is a missing tool. `ss
 KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of the host user.
 
 `src/repository/ssh-agent.ts` holds one function `withSshAgent(access, context, deadlineMs, work)`.
-`access` is `SshAccess = { private_key, public_key, known_hosts, port }`, in memory only. `known_hosts` holds complete lines. `port` is `sshPortOf` of the address host: its value in `SSH_HOST_PORTS`, else 22.
+`access` is `SshAccess`, in memory only. `SshKeyAccess` is `{ private_key, public_key, known_hosts, port }`. `SshRelayAccess` is `{ relay, public_key, known_hosts, port }` of [the relay agent](#the-relay-agent). `known_hosts` holds complete lines. `port` is `sshPortOf` of the address host: its value in `SSH_HOST_PORTS`, else 22.
 
 1. Sweep the expired SSH agent directories under [crash and abort cleanup](#crash-and-abort-cleanup).
 2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
@@ -271,10 +271,10 @@ ssh -F none -o Port=<port> -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o
 
 ### The relay agent
 
-At the `worker` placement, the worker unit runs a git operation through a relay agent in place of `withSshAgent`.
+At the `worker` placement, the worker unit runs a git operation through a relay agent in place of the SSH agent.
 It chooses the relay when the handover holds no SSH identity for a repository binding. The choice reads the data, not the placement.
 
-- The worker unit serves the agent socket itself, under the directory and path rules of steps 1 to 3 of [the SSH identity](#the-ssh-identity). The socket lives for one git operation.
+- `withSshAgent` takes a `SshRelayAccess` and runs steps 1 to 4, 7 and 8 of [the SSH identity](#the-ssh-identity). In place of steps 5 and 6, the worker unit serves the agent socket itself. The socket lives for one git operation.
 - `SshAccess` holds the public key from `ssh_public_key` of the `repositories` entry of the execution setup, and no private key.
 - The socket answers `SSH_AGENTC_REQUEST_IDENTITIES` with that public key.
 - It relays each `SSH_AGENTC_SIGN_REQUEST` to the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay) and answers the signature.
@@ -283,7 +283,7 @@ It chooses the relay when the handover holds no SSH identity for a repository bi
 
 ### The signature check
 
-The server checks each relayed payload before it releases the key.
+The server checks each relayed payload before it signs.
 
 - The payload is a user authentication request with the user name `git` and the method `publickey` or `publickey-hostbound-v00@openssh.com`.
 - The public key in the payload equals the public key of the `ssh` record of the binding.

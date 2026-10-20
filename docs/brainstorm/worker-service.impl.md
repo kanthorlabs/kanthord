@@ -410,7 +410,6 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 ## Worker instances
 
 [worker-service.md](worker-service.md#worker-instances) states the rules of a worker instance.
-Today the engine holds no SSH signature relay. Layer 4 of the Group B item of [HANDOFF](HANDOFF.md#worker-service) builds it.
 
 ### The instance record
 
@@ -490,6 +489,8 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists, or whose registration holds a live execution. `details.bindings` or `details.executions` lists them. |
 | 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                                                      |
 | 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                                                       |
+| 400  | `worker.ssh.sign_invalid`               | The sealed sign request does not open, or its plaintext does not match the schema.                                                                      |
+| 403  | `worker.ssh.placement_refused`          | The worker binding of the execution is not at the `worker` placement. `details.placement` names its placement.                                          |
 
 The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`.
 
@@ -976,6 +977,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The line is `<host> <key>` for port 22 and `[<host>]:<port> <key>` for another port. The answer holds no key.
 - The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
 - `ssh_public_key` is the OpenSSH public key of the SSH credential of the binding. The answer holds no private key.
+- `ssh_public_key` is the `public_key` metadata of the revision that the execution pins for that credential name, else of the newest live revision. The read creates no pin. A revision without that metadata answers 409 `repository.credential.ssh_key_legacy`.
 - The worker matches each entry of `repositories` to its `ssh_identities` entry of the handover by `binding_id`. It derives the public key from the private key and the SSH port from the address with `RepositoryComponent.sshPortOfAddress`, and builds `SshAccess` in memory.
 - When the handover holds no SSH identity for a repository binding, the worker builds `SshAccess` over the [SSH signature relay](#the-ssh-signature-relay) for that binding. The choice reads the handover, not the placement.
 - The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
@@ -1072,24 +1074,32 @@ The relay lets a worker unit authenticate a git operation with an SSH key that o
 The worker unit uses it for each repository binding whose SSH identity the handover does not carry.
 The relay serves only the `worker` placement, and the `server` and `container` placements keep `ssh_identities` in the handover.
 
-- The worker unit serves a private agent socket for one git operation, in `TMPDIR` under the path rule of the [Repository implementation](repository.impl.md#the-ssh-identity).
+- The worker unit serves a private agent socket for one git operation, in `TMPDIR` under the path rule of the [Repository implementation](repository.impl.md#the-ssh-identity). `src/repository/ssh-relay-agent.ts` serves the socket.
 - The socket answers `SSH_AGENTC_REQUEST_IDENTITIES` with `ssh_public_key` of the execution setup.
 - It relays `SSH_AGENTC_SIGN_REQUEST` to `worker.ssh.sign`, and it answers `SSH_AGENT_FAILURE` to every other message.
+- It answers `SSH_AGENT_FAILURE` to a sign request for another key and to each failure of the relay. git then fails with `repository.connector.git_failed`.
+- The socket records the last relay error. The cause of `repository.connector.git_failed` appends the line `ssh relay: <code>: <message>` and holds that error as its own cause.
+- It closes a connection on a frame of 0 bytes or of more than 262,144 bytes.
 - OpenSSH sends the extension `session-bind@openssh.com` first. The answer `SSH_AGENT_FAILURE` to it is not fatal, and OpenSSH continues with the sign request.
-- The socket ends with its git operation.
+- The socket ends with its git operation. The end cancels each relay call in flight.
 - `worker.ssh.sign` is a `client` secret mutation of `unary` lifetime that requires a live execution.
 - Its body is `{ execution_id, nonce, ciphertext }`. The plaintext is `{ binding_id, data, flags }`.
+- `data` is the base64 of at most 8,192 bytes. `flags` is an unsigned 32-bit value. The body permits at most 16,384 bytes.
+- `src/apps/worker/ssh-relay.ts` seals each request of the worker unit and opens each answer.
 - The answer is `{ nonce, ciphertext }`. The plaintext is `{ signature }`.
 - The keys come from HKDF of `client_secret` with the info `ssh-sign/worker-to-server/v1` and `ssh-sign/server-to-worker/v1`.
 - The AAD is the length-prefixed execution identity followed by the length-prefixed runtime identity.
 - A repeat of an idempotency key answers 409 with no answer.
+- A sealed request that does not open, or a plaintext that does not match the schema, answers 400 `worker.ssh.sign_invalid`.
+- A worker binding of the execution that is not at the `worker` placement answers 403 `worker.ssh.placement_refused`, before the request opens. `details.placement` is `server`, `container` or `null`.
 - The server authorizes the `ssh_identity` grant for a repository binding of the pinned node revision, and it pins the credential revision, under [custody.impl.md](custody.impl.md#the-release-of-an-ssh-key).
 - The server signs only a user-authentication request for that key, with the user name `git` and the method `publickey` or `publickey-hostbound-v00@openssh.com`.
 - For the host-bound method, the server host key in the signed data equals the pinned host key of the repository host.
 - Another payload answers 400 `worker.ssh.sign_refused`. `details.reason` is `not_user_authentication`, `key_mismatch` or `host_key_mismatch`, a closed enum in code.
-- The server signs with ed25519 and drops the key material. It logs the execution, the binding, the credential, `client_id` and `instance_id`.
+- The server signs with ed25519 and ignores `flags`. It drops the key material. It logs the execution, the binding, the credential, `client_id` and `instance_id`.
+- `src/repository/ssh-sign.ts` checks the payload and signs.
 - During a live claim, the holder of the client token and the `client_secret` can authenticate as the deploy key. The reach ends with the claim.
-- Tests cover the socket protocol, each refusal reason, another binding, an execution with no live claim and a replay with 409.
+- Tests cover the socket protocol, each refusal reason, another binding, another placement, an execution with no live claim and a replay with 409.
 - Plain `git` and OpenSSH push and fetch through the relay against `src/repository/test-sshd.ts`, and once against the live repository host.
 - The tests check that the repository key type is ed25519, or that the relay supports the sign flags `rsa-sha2-256` and `rsa-sha2-512`.
 
