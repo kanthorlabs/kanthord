@@ -56,16 +56,17 @@ The API returns HTTP `200` with JSON. The CLI writes the same object as one JSON
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                           | Meaning                                                            |
-| -------------------------------------------- | ------------------------------------------------------------------ |
-| `401 gateway.authentication.unauthorized`    | Absent, invalid, expired or banned token, or a machine token.      |
-| `400 llm.provider.invalid_input`             | The body is not exactly `{ credential }` with a nonempty string.   |
-| `404 llm.provider.credential_not_found`      | Unknown name, archived credential, or a name of another component. |
-| `400 llm.provider.check_unsupported`         | The platform of the credential has no LLM provider.                |
-| `400 gateway.request.invalid_json`           | The request body is not valid JSON.                                |
-| `413 gateway.request.body_too_large`         | The body exceeds 16 KiB.                                           |
-| `415 gateway.request.unsupported_media_type` | The request has no `application/json` content type.                |
-| `504 gateway.invocation.timeout`             | The 30-second operation timeout expired.                           |
+| HTTP status / code                           | Meaning                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`    | Absent, invalid, expired or banned token, or a machine token.                                 |
+| `400 llm.provider.invalid_input`             | The body is not exactly `{ credential }` with a nonempty string.                              |
+| `404 llm.provider.credential_not_found`      | Unknown name, archived credential, or a name of another component.                            |
+| `409 credential.credential.held_by_instance` | The name has live [instance copies](credential.md#instance-copies) and no live `server` copy. |
+| `400 llm.provider.check_unsupported`         | The platform of the credential has no LLM provider.                                           |
+| `400 gateway.request.invalid_json`           | The request body is not valid JSON.                                                           |
+| `413 gateway.request.body_too_large`         | The body exceeds 16 KiB.                                                                      |
+| `415 gateway.request.unsupported_media_type` | The request has no `application/json` content type.                                           |
+| `504 gateway.invocation.timeout`             | The 30-second operation timeout expired.                                                      |
 
 A remote failure is not an API failure; it appears in `connection`.
 

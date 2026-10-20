@@ -82,7 +82,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody decrypts a stored secret only through one private open function `openSecret(row)`. It refuses a row whose holder is not `server` with 409 `credential.credential.held_by_instance` before the decrypt.
 - Every decrypt path calls `openSecret`: `release`, `releaseWorkbench`, the resource check of `resourceInventory`, `resourceCheck` and `verify`, `checkMaterial`, `updateMetadata` and `applyReport`.
 - The refusal therefore covers the verify, the pre-save check, the provider check, the model check, the model list and a workbench session.
-- Today custody calls `decrypt` of `envelope.ts` directly in six places. `src/custody/service.ts` calls it in `capturedResourceCheck`, `release`, `releaseWorkbench`, `checkMaterial` and `updateMetadata`. `src/custody/handover.ts` calls it in `applyReport`.
+- `src/custody/secret.ts` holds `openSecret` and `storedSealed`, and no other custody module calls `decrypt`. `storedSealed` opens the credential envelope of an instance copy and answers its sealed object. It never opens the sealed object.
 - A record answer adds `holder`, `sealed_to` and `sealed_current`. `sealed_current` is true when `sealed_to` equals the current fingerprint of the holder, and it is true for `server`.
 
 ## Suitability
@@ -172,6 +172,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - Custody implements `CredentialStore` of `@earendil-works/pi-ai` at 1.1.0.
 - `src/custody/client.ts` exports `executionCredentialStore`, `ExecutionStoreError` and `ExecutionCredentials`; handover schemas remain in `contract.ts`.
+- `src/custody/client.ts` also exports `openSealedCopy`, `sealedCopyReporter`, `InstanceCopyKey` and `OpenedCopy` of `src/custody/instance-copy.ts`. The worker unit opens a sealed item with them, and seals each refreshed credential to its own key.
 - The methods are `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
 - The [Worker Service](worker-service.impl.md#the-credential-store-of-an-execution) defines the selection and visibility of the execution view.
 - `list()` returns the selected non-secret pair of adapter id and credential type, and custody takes that type from the secret shape that the owning component declares for the platform of the record.
@@ -188,7 +189,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The payload is canonical JSON. It holds the credential of the pinned agent selection of the execution and the SSH identities of the execution.
 - `custody.handover` takes the placement of the pinned worker binding and the instance of the identity, and it chooses each item from those values.
 - At the `server` and the `container` placements, its sole item is `{ credential_id, provider_id, credential }`. These are the record identity, the pi adapter id and the pi-ai credential of a row of the holder `server`.
-- At the `worker` placement, its sole item is `{ credential_id, provider_id, sealed }`: the sealed object of the copy of the instance of the identity. The server never opens it.
+- At the `worker` placement, its sole item is `{ credential_id, provider_id, name, platform, sealed }`: the sealed object of the copy of the instance of the identity. The server never opens it. The worker unit builds the additional authenticated data from `name`, `platform`, its instance name and its current fingerprint.
 - At the `worker` placement, an item of the holder `server` answers 403 `custody.handover.holder_refused` with `details.reason` `server_held`. An item of another holder, or a copy sealed to a fingerprint that is not current, answers the same code with `reason` `held_elsewhere`.
 - The payload holds `ssh_identities: [{ binding_id, credential_id, private_key }]` beside `items`, one entry for each repository binding of the pinned node revision, at the `server` and the `container` placements. An execution with no repository binding holds `[]`.
 - At the `worker` placement, `ssh_identities` is always `[]`. The worker unit signs through the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay).

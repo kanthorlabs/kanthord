@@ -145,6 +145,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | `504 gateway.invocation.timeout`             | Both             | The 30-second operation timeout expired; the write can still complete.                              |
 | `400 credential.input.invalid`               | `ssh-key-create` | The name breaks the name rule or is reserved: `login`, `platform`, `check` or `ssh`.                |
 | `409 credential.name.conflict`               | `ssh-key-create` | The name is taken, also by an archived credential; `details.id` holds the newest revision identity. |
+| `409 credential.name.platform_conflict`      | `ssh-key-create` | A worker instance holds an LLM copy of the name. `details.platform` holds its platform.             |
 | `404 credential.credential.not_found`        | `ssh-key-rotate` | The name is unknown, or its platform belongs to another component.                                  |
 | `409 credential.credential.archived`         | `ssh-key-rotate` | The credential is archived.                                                                         |
 | `409 credential.revision.conflict`           | `ssh-key-rotate` | `expected_revision` is not the newest live revision; `details.revision` holds it.                   |

@@ -50,17 +50,18 @@ The `message` of a model that does not call the tool is `The model did not call 
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                           | Meaning                                                                     |
-| -------------------------------------------- | --------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized`    | Absent, invalid, expired or banned token, or a machine token.               |
-| `400 gateway.request.validation_failed`      | The body is not exactly the three properties below, each a nonempty string. |
-| `404 llm.model.credential_not_found`         | Unknown name, archived credential, or a name of another component.          |
-| `400 llm.model.model_unknown`                | The model is not in the model list of the credential.                       |
-| `400 llm.model.reasoning_unsupported`        | The model does not support the reasoning effort.                            |
-| `400 gateway.request.invalid_json`           | The request body is not valid JSON.                                         |
-| `413 gateway.request.body_too_large`         | The body exceeds 16 KiB.                                                    |
-| `415 gateway.request.unsupported_media_type` | The request has no `application/json` content type.                         |
-| `504 gateway.invocation.timeout`             | The 60-second operation timeout expired.                                    |
+| HTTP status / code                           | Meaning                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized`    | Absent, invalid, expired or banned token, or a machine token.                                 |
+| `400 gateway.request.validation_failed`      | The body is not exactly the three properties below, each a nonempty string.                   |
+| `404 llm.model.credential_not_found`         | Unknown name, archived credential, or a name of another component.                            |
+| `409 credential.credential.held_by_instance` | The name has live [instance copies](credential.md#instance-copies) and no live `server` copy. |
+| `400 llm.model.model_unknown`                | The model is not in the model list of the credential.                                         |
+| `400 llm.model.reasoning_unsupported`        | The model does not support the reasoning effort.                                              |
+| `400 gateway.request.invalid_json`           | The request body is not valid JSON.                                                           |
+| `413 gateway.request.body_too_large`         | The body exceeds 16 KiB.                                                                      |
+| `415 gateway.request.unsupported_media_type` | The request has no `application/json` content type.                                           |
+| `504 gateway.invocation.timeout`             | The 60-second operation timeout expired.                                                      |
 
 A provider failure is not an API failure; it appears in `result`.
 

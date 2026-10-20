@@ -70,6 +70,9 @@ The mutation commands (`create`, `rotate`, `update-metadata`, `revoke` and `arch
 {
   "name": "backup-store",
   "platform": "s3",
+  "holder": "server",
+  "sealed_to": null,
+  "sealed_current": true,
   "revisions": [
     {
       "id": "credential_<ulid>",
@@ -97,23 +100,35 @@ The mutation commands (`create`, `rotate`, `update-metadata`, `revoke` and `arch
 }
 ```
 
-| Property                 | Type                  | Purpose                                                                 |
-| ------------------------ | --------------------- | ----------------------------------------------------------------------- |
-| `name`                   | string                | Credential name.                                                        |
-| `platform`               | string                | Platform of the credential, `s3`.                                       |
-| `revisions`              | array                 | Every revision of the credential, newest first.                         |
-| `revisions[].id`         | string                | Revision identity, `credential_<ulid>`.                                 |
-| `revisions[].revision`   | positive integer      | Revision number, 1 for the first revision.                              |
-| `revisions[].metadata`   | object or `null`      | Metadata of the revision.                                               |
-| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                     |
-| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.       |
-| `idempotency_key`        | canonical ULID string | CLI only, mutations only. The key of this request; keep it for retries. |
+| Property                 | Type                  | Purpose                                                                                              |
+| ------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `name`                   | string                | Credential name.                                                                                     |
+| `platform`               | string                | Platform of the credential, `s3`.                                                                    |
+| `holder`                 | string                | Always `server`. Only an LLM credential has [instance copies](../llm/credential.md#instance-copies). |
+| `sealed_to`              | `null`                | Always `null`.                                                                                       |
+| `sealed_current`         | boolean               | Always `true`.                                                                                       |
+| `revisions`              | array                 | Every revision of the credential, newest first.                                                      |
+| `revisions[].id`         | string                | Revision identity, `credential_<ulid>`.                                                              |
+| `revisions[].revision`   | positive integer      | Revision number, 1 for the first revision.                                                           |
+| `revisions[].metadata`   | object or `null`      | Metadata of the revision.                                                                            |
+| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                                                  |
+| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.                                    |
+| `idempotency_key`        | canonical ULID string | CLI only, mutations only. The key of this request; keep it for retries.                              |
 
 #### list
 
 ```json
 {
-  "items": [{ "name": "backup-store", "platform": "s3", "revisions": [] }],
+  "items": [
+    {
+      "name": "backup-store",
+      "platform": "s3",
+      "holder": "server",
+      "sealed_to": null,
+      "sealed_current": true,
+      "revisions": []
+    }
+  ],
   "next_cursor": null
 }
 ```
@@ -133,6 +148,9 @@ The answer is the credential answer with one more property:
 {
   "name": "backup-store",
   "platform": "s3",
+  "holder": "server",
+  "sealed_to": null,
+  "sealed_current": true,
   "revisions": [],
   "bindings": [
     {
@@ -259,20 +277,21 @@ Mutations (`create`, `rotate`, `update-metadata`, `revoke`, `archive`) can also 
 
 Credential failures:
 
-| HTTP status / code                     | Commands                                                          | Meaning                                                                                                                                        |
-| -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `400 system.pagination.cursor_invalid` | `list`                                                            | The cursor is not a cursor that `list` returned.                                                                                               |
-| `404 credential.credential.not_found`  | `get`, `verify`, `rotate`, `update-metadata`, `archive`, `revoke` | The name does not exist, or its platform belongs to another component. For `revoke`, only the second case gives this code.                     |
-| `400 credential.input.invalid`         | `create`, `rotate`, `update-metadata`, `check`                    | The name is malformed or reserved, or the secret or the metadata fails the platform schema.                                                    |
-| `400 credential.platform.unsupported`  | `create`, `check`                                                 | The platform is not a storage platform.                                                                                                        |
-| `400 credential.check.unsupported`     | `check`, `verify`                                                 | The platform has no probe. The `s3` platform has a probe.                                                                                      |
-| `409 credential.name.conflict`         | `create`                                                          | A credential of any component already has this name, archived names included. `details.id` is the newest revision identity of that credential. |
-| `409 credential.credential.archived`   | `verify`, `rotate`, `update-metadata`, `archive`                  | The credential is archived.                                                                                                                    |
-| `409 credential.revision.conflict`     | `rotate`, `update-metadata`                                       | `expected_revision` is not the newest live revision. `details.revision` is the newest live revision.                                           |
-| `404 credential.revision.not_found`    | `revoke`                                                          | The name has no revision with this number. An unknown name also gives this code.                                                               |
-| `409 credential.revision.ended`        | `revoke`                                                          | The revision already ended, by a revoke, a drain or an archive.                                                                                |
-| `409 credential.revision.newest_live`  | `revoke`                                                          | The revision is the newest live revision.                                                                                                      |
-| `409 credential.credential.in_use`     | `archive`                                                         | A dependent names the credential. `details` holds `agent_providers`, `bindings` and `inbounds`.                                                |
+| HTTP status / code                      | Commands                                                          | Meaning                                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `400 system.pagination.cursor_invalid`  | `list`                                                            | The cursor is not a cursor that `list` returned.                                                                                               |
+| `404 credential.credential.not_found`   | `get`, `verify`, `rotate`, `update-metadata`, `archive`, `revoke` | The name does not exist, or its platform belongs to another component. For `revoke`, only the second case gives this code.                     |
+| `400 credential.input.invalid`          | `create`, `rotate`, `update-metadata`, `check`                    | The name is malformed or reserved, or the secret or the metadata fails the platform schema.                                                    |
+| `400 credential.platform.unsupported`   | `create`, `check`                                                 | The platform is not a storage platform.                                                                                                        |
+| `400 credential.check.unsupported`      | `check`, `verify`                                                 | The platform has no probe. The `s3` platform has a probe.                                                                                      |
+| `409 credential.name.conflict`          | `create`                                                          | A credential of any component already has this name, archived names included. `details.id` is the newest revision identity of that credential. |
+| `409 credential.name.platform_conflict` | `create`                                                          | A worker instance holds an LLM copy of the name. `details.platform` holds its platform.                                                        |
+| `409 credential.credential.archived`    | `verify`, `rotate`, `update-metadata`, `archive`                  | The credential is archived.                                                                                                                    |
+| `409 credential.revision.conflict`      | `rotate`, `update-metadata`                                       | `expected_revision` is not the newest live revision. `details.revision` is the newest live revision.                                           |
+| `404 credential.revision.not_found`     | `revoke`                                                          | The name has no revision with this number. An unknown name also gives this code.                                                               |
+| `409 credential.revision.ended`         | `revoke`                                                          | The revision already ended, by a revoke, a drain or an archive.                                                                                |
+| `409 credential.revision.newest_live`   | `revoke`                                                          | The revision is the newest live revision.                                                                                                      |
+| `409 credential.credential.in_use`      | `archive`                                                         | A dependent names the credential. `details` holds `agent_providers`, `bindings` and `inbounds`.                                                |
 
 The `credential.credential.in_use` details have this shape:
 

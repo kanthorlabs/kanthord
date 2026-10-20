@@ -92,14 +92,14 @@ The API returns HTTP `200` with JSON. This report holds one project `shop` with 
 
 `failure_reason` is a value of one closed list. The [failure reason table](../errors.md#failure-reasons-of-a-health-entry) defines each value. The value of an entry depends on its resource:
 
-| Entry                             | Values                                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| A repository binding of `project` | A git value of the [binding check](../project/binding.md#failure-reasons-of-the-address-entry). |
-| A credential of `llm`             | A value of the [LLM credential check](../llm/credential.md#check-and-verify-answer).            |
-| A credential of `repository`      | A value of the [repository credential check](../repository/credential.md#verify-and-check).     |
-| A credential of `storage`         | A value of the [storage credential check](../storage/credential.md#verify-and-check).           |
-| An agent provider of `agent`      | A value of the LLM credential check of its credential.                                          |
-| An entry of `intake` or `worker`  | `unclassified`.                                                                                 |
+| Entry                             | Values                                                                                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| A repository binding of `project` | A git value of the [binding check](../project/binding.md#failure-reasons-of-the-address-entry).                                                |
+| A credential of `llm`             | A value of the [LLM credential check](../llm/credential.md#check-and-verify-answer). The report lists only `server` copies.                    |
+| A credential of `repository`      | A value of the [repository credential check](../repository/credential.md#verify-and-check).                                                    |
+| A credential of `storage`         | A value of the [storage credential check](../storage/credential.md#verify-and-check).                                                          |
+| An agent provider of `agent`      | A value of the LLM credential check of its credential. A credential that only worker instances hold reports `unknown` with `held_by_instance`. |
+| An entry of `intake` or `worker`  | `unclassified`.                                                                                                                                |
 
 A check that exceeds its deadline carries `unclassified` in every entry. The answer holds no remote text, no secret and no endpoint URL with credentials. The server log record `resource.health.check` keeps the redacted remote text of each failed check under `reason`.
 

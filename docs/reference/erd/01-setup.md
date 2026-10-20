@@ -242,7 +242,6 @@ The owning service enforces every rule below in the transaction of its write. A 
 - An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone. It is also a dependent when no tombstone follows it and a node that is not terminal and not retired pins it. The node pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision of the group and keeps the rows. A group with no live revision is archived, and an archive is final. The archive of a worker instance archives every live group of that holder in its transaction.
 - The dependents above apply to a group of the holder `server`. The dependents of a group of an instance holder are the worker bindings that list the instance and whose agent configuration names the credential. The Project Service answers them through `bindingsListingInstance`.
 - A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
-- Today `credential` holds no `holder` and no `sealed_to`, and its unique index is `(name, revision)`. Layer 5 of the Group B item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-service) builds both columns and the index `(name, holder, revision)`.
 
 ### Repository component
 
@@ -299,7 +298,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The `config` JSON of a repository binding holds `working_layer` with the booleans `agents_md`, `agents_local_md`, `claude_md`, `claude_local_md` and `project_prompt`. A switch change inserts the next binding revision.
 - An enablement change validates every dependent worker binding through `entriesOfAgent` in the transaction of its commit, and a change that invalidates one is refused.
 - A disablement is always permitted, and it refuses every later resolution.
-- The Agent component owns no cooldown table. The cooldown of a credential is the hold on revision 1 of its name, and the hold covers every model of the credential.
+- The Agent component owns no cooldown table. The cooldown of a credential copy is the hold on revision 1 of its `(name, holder)` group, and the hold covers every model of that copy. A claim reads and writes the copy of its claimant holder: the instance of the registration at the `worker` placement, else `server`.
 - `available_at` of a hold is the clock plus `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. A hold is live while `available_at` is later than the clock.
 - A hold stays after its `available_at`, with its `strikes`. A release with no `provider_failed` stop and an operator clear set `available_at` to null and `strikes` to 0.
 - The release transaction writes the hold through the port, and the claim transaction reads it. An operator clear releases it.
