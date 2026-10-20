@@ -23,6 +23,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### LLM component
 
+- [ ] Added 2026-10-20 by Ulrich. Redesign the LLM credentials of the server and the worker. Design a flow that lets a worker placement manage its own LLM credentials. A credential transfer between the server and a worker is allowed only on a private network, for example an internal network, a VPN or a Kubernetes cluster network.
 - [ ] POSTPONED 2026-10-05 by Ulrich until Ulrich holds an active OpenCode Go subscription. Verify the success case of the `opencode-go` check with `deepseek-v4-flash` through the scratchpad e2e call. The e2e key answers 403 "An active OpenCode Go subscription is required" today, so only the refusal case is verified. The model membership check of the Worker configuration also reads the `models` metadata through `compatibleMetadataSchema` in `worker/contract.ts`, and it moves with the same decision.
 
 ### Repository component
