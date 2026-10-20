@@ -169,7 +169,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
      1. Build `holder` on `llm.credential.login`, `login_sessions`, `llm.credential.login_report`, the copy-code and device-code modes only, the sealed revision 1 and the refresh.
         - Verify: a fake pi-ai flow end to end; an expired session stores nothing; a live `anthropic-subscription` sign-in on a dev instance.
      2. Build the `worker` e2e and remove the layer 1 refusal.
-        - The persistent dev instances `e2e-coder-<n>` and `e2e-reviewer-<n>` live under `.dev/e2e/instances/`. A missing or ended record removes the local configuration and creates the instance again. Added 2026-10-21 from layer 6.2, pending review by Ulrich: a missing record creates the instance; a lost local configuration or another live key revision rotates the key; an archived instance stops the run, because its name stays taken.
+        - The persistent dev instances `e2e-coder-<n>` and `e2e-reviewer-<n>` live under `.dev/e2e/instances/`. A missing or ended record removes the local configuration and creates the instance again.
         - Ulrich signs in `anthropic-subscription` once on each dev instance. One agent provider names that credential in the `swe@1` and `re@1` enablements.
         - The run stops and prints one sign-in command for each dev instance without a live copy. A database reset ends every copy, so the first run after each reset asks for one sign-in on each dev instance.
         - `withoutKanthordClient` of `scripts/e2e/workers.mjs` strips `KANTHORD_WORKER_CONFIG` from the environment of each spawned process.
