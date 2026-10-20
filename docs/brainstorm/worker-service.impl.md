@@ -426,7 +426,7 @@ The current connection:
 The heartbeat and the renewal:
 
 - The process calls `worker.instance.heartbeat` every `INSTANCE_HEARTBEAT_INTERVAL`, 15 s, and every 2 s while the instance holds an open login session.
-- The answer is `{ server_version, binding_version, credential_version, login_sessions }`. [llm.impl.md](llm.impl.md) rules `credential_version` and `login_sessions`.
+- The answer is `{ server_version, binding_version, credential_version, login_sessions }`. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) defines `credential_version`. [The login of an instance](llm.impl.md#the-login-of-an-instance) defines `login_sessions`.
 - A `server_version` that differs from the package version stops the worker unit and exits 1 with `worker.version.mismatch`.
 - A changed `binding_version` makes the process call `connect` with its `connection_id`.
 - `bindingsChanged(projectId)` bumps the `binding_version` of each instance that a binding of the project lists in its previous or its latest revision.

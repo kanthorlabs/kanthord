@@ -141,6 +141,8 @@ Each platform validator declares its secret shape, metadata schema and validatio
 
 ### The health of an instance copy
 
+- `credential_version` is an in-memory counter of the component for each instance. Each write of a copy whose holder is that instance raises it by one. A server start sets every counter to 0.
+- The heartbeat answer of the instance carries the counter, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
 - A worker instance checks each of its own copies at connect and when the `credential_version` of its heartbeat answer changes.
 - It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204.
 - `models` holds the model list of a check that reads one, else null. The dashboard offers it as the model ids of the next metadata edit of an `openai-compatible` instance copy.
@@ -188,6 +190,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - An instance with no current connection answers 409 `credential.login.instance_unavailable`.
 - An instance session never uses browser mode. `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use device mode. A request for browser mode answers 400 `credential.login.browser_unavailable`.
 - The heartbeat answer of the instance lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 2 s while a session of it is pending.
+- `login_sessions` is `[{ session_id, platform, mode, code }]`. `mode` is `copy_code` or `device`. `code` is the copy code that the human submitted, or null.
 - The instance runs the pi-ai login. It reports `{ state, address, code, message, failure_reason }` through `llm.credential.login_report`: `POST /api/llm/credential/login/:session_id/report`, policy `worker`, mutation, answer 204.
 - In device mode, the instance reports only the user code and the verification address. The PKCE verifier and the polling secret stay in the instance process.
 - The value that the human submits through `llm.credential.login_code` reaches the instance in the next heartbeat answer.
