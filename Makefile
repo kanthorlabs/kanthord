@@ -14,7 +14,7 @@ export WEB_PORT ?= 27182
 
 .PHONY: help dev bootstrap release release-build release-smoke release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
-	sync sync-status test-submodules cleanup docs-tools \
+	sync sync-status test-submodules test-container cleanup docs-tools \
 	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale e2e-check pi-tools-update
 
 help:
@@ -69,6 +69,8 @@ help:
 	@echo "                   ON_POINTER_BEHIND=forward|bump|abort"
 	@echo "  sync-status      Drift table for the parent and all submodules"
 	@echo "  test-submodules  Test the sync tooling in disposable repositories"
+	@echo "  test-container   Build localhost/kanthord-dev:<version> and run the container driver"
+	@echo "                   against the live runtime. IMAGE=name CONTAINER_ENGINE=podman|docker"
 	@echo "  cleanup          Delete the configuration, data, state and cache directories"
 	@echo "  docs-tools       Regenerate docs/reference/workbench/tools.md"
 	@echo "                   CHECK=1 reports only, and fails when the page is stale"
@@ -142,6 +144,8 @@ sync-status:
 	@$(S)/sync/status.sh
 test-submodules:
 	@$(S)/test/submodules.sh
+test-container:
+	@$(S)/test/container.sh
 cleanup:
 	@$(S)/engine/cleanup.sh
 docs-tools:

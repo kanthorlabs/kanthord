@@ -1,0 +1,58 @@
+name: test-container
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Check out engine and apps
+        env:
+          SUBMODULE_TOKEN: ${{ secrets.SUBMODULE_TOKEN }}
+        run: |
+          if [ -n "$SUBMODULE_TOKEN" ]; then
+            git config --global url."https://x-access-token:${SUBMODULE_TOKEN}@github.com/".insteadOf "git@kanthorlabs.github.com:"
+          else
+            git config --global url."https://github.com/".insteadOf "git@kanthorlabs.github.com:"
+          fi
+          git submodule update --init --depth 1 engine apps
+      - name: Prepare rootless Podman for the runner user
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends podman uidmap slirp4netns
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          if ! grep -q "^$(id -un):" /etc/subuid || ! grep -q "^$(id -un):" /etc/subgid; then
+            sudo usermod --add-subuids 200000-265535 --add-subgids 200000-265535 "$(id -un)"
+          fi
+          podman system migrate
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          podman info --format '{{json .Host.IDMappings.UIDMap}}'
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: engine/.nvmrc
+      - name: Install engine dependencies
+        working-directory: engine
+        run: pnpm install --frozen-lockfile
+      - name: Fetch the pi tools
+        working-directory: engine
+        run: pnpm run pi-tools:fetch
+      - name: Build the image and run the container driver tests
+        env:
+          CONTAINER_ENGINE: podman
+        run: make test-container
