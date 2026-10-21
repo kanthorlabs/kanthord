@@ -268,6 +268,8 @@ One `respondError()` function produces every failure body, in the shape `{"error
 The route used by request logging comes from `matchedRoutes(context)` of `hono/route`.
 `pino` binds a child logger to the request identity, the method and the route.
 It logs one record at entry and one at exit with the status and the latency.
+A failure that is no `OperationError` answers 500 `gateway.invocation.unknown`. The Gateway logs it once at level 50 as `Request failed`, with `err`, `request_id` and the operation identity. The HTTP routes, the port adapter and `app.onError` log it.
+A cancellation error of the request context answers 503 `gateway.invocation.cancelled` and logs no failure. This also applies when the error comes from the authentication of the request.
 `pino` redacts an enumerated list of paths, and a test asserts each path.
 
 ## The operation registry
