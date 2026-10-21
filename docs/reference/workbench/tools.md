@@ -187,7 +187,7 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 | `worker--catalog--get` | `GET /api/worker/catalog/:worker_name` | No | Get a supplied worker declaration. |
 | `worker--catalog--list` | `GET /api/worker/catalog` | No | List released workers in ascending worker-name order. |
 | `worker--instance--archive` | `POST /api/worker/instance/:instance_name/archive` | Yes | Archive a worker instance that no binding lists and whose registrations hold no live execution, and end its registrations. |
-| `worker--instance--get` | `GET /api/worker/instance/:instance_name` | No | Read the live or latest revision of a worker instance with the bindings that list it, its connection, its live registrations and its credential copies. |
+| `worker--instance--get` | `GET /api/worker/instance/:instance_name` | No | Read the live or latest revision of a worker instance with the bindings that list it, its connection, its live registrations and its credential copies with the last health report of each copy. |
 | `worker--instance--list` | `GET /api/worker/instance` | No | Page worker instances in ascending name order with their connection, binding count and holder mismatch. |
 | `worker--placement--list` | `GET /api/worker/placement` | No | List each worker placement with its availability on this server and the reason when it is unavailable, in the order server, container, worker. |
 | `worker--registration--get` | `GET /api/worker/registration/:runtime_identity` | No | Read a live registration record. Unknown and ended registrations answer not found. |

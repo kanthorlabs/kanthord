@@ -145,12 +145,24 @@ Each platform validator declares its secret shape, metadata schema and validatio
 
 ### The health of an instance copy
 
-- `credential_version` is an in-memory counter of the component for each instance. Each write of a copy whose holder is that instance raises it by one. A server start sets every counter to 0.
+- `credential_version` is an in-memory counter of the component for each instance. A server start sets every counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
+- Each committed write of a copy of that instance raises the counter by one. These writes are a create, a rotation, a metadata edit, a revoke, an archive, the completion of a login, and a refresh report.
+- Custody calls `instanceCopyRefreshed(holder)` after it writes the refresh report of an instance copy.
 - The heartbeat answer of the instance carries the counter, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
-- A worker instance checks each of its own copies at connect and when the `credential_version` of its heartbeat answer changes.
-- It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204.
-- `models` holds the model list of a check that reads one, else null. The dashboard offers it as the model ids of the next metadata edit of an `openai-compatible` instance copy.
+- A worker instance checks each of its own copies after its first heartbeat answer and when the `credential_version` of a heartbeat answer changes. The process sends its first heartbeat at its start. A change during a check run starts one more run after it.
+- The instance lists its copies with `llm.credential.list`. It reads each live copy whose `sealed_current` is true through `llm.credential.sealed`.
+- `llm.credential.sealed` is `GET /api/llm/credential/:credential_name/sealed`, policy `worker`, read, secret. The answer is `{ name, platform, revision, metadata, sealed }` of the newest live revision of the copy of the instance of the token. A copy that is absent or sealed to an ended key answers 404 `credential.credential.not_found`. Custody reads the sealed object with `storedSealed` and never opens it.
+- The instance opens the copy with its own key and runs the `check` of [the LLM provider](#the-llm-provider) of the platform with a deadline of 10 s. It maps the result as [the resource healthcheck](#the-resource-healthcheck) does. A platform without a check, an open failure or the deadline reports `unknown` with `failure_reason: unclassified`.
+- A run that ends on an indeterminate answer or a server failure runs again at the next heartbeat. A refusal waits for the next change of the counter.
+- It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204. The body limit is 1 MiB.
+- `revision` must be the newest live revision of a copy of the instance of the token that is sealed to the current key. An absent or ended-key copy answers 404 `credential.credential.not_found`. Another revision answers 409 `credential.revision.conflict` with `details.revision`. These bodies answer 400 `credential.input.invalid`:
+  - a `failure_reason` that is null for a status other than `healthy`, or not null for `healthy`;
+  - the `failure_reason` `held_by_instance`, because only the server answers it;
+  - a `capability` other than the capability of the platform.
+- `models` holds the model list of a check that reads one, else null. It holds at most 512 items, and each `id` and `owned_by` holds at most 256 characters. The instance drops a longer item. The dashboard offers it as the model ids of the next metadata edit of an `openai-compatible` instance copy.
 - The component keeps the last report of each copy in memory, with the instance name and the time. A server restart shows `unknown` until the next report.
+- `worker.instance.get` answers the report of each copy in `credentials[].health`: `{ status, capability, failure_reason, models, reported_at }`. A copy with no report, a report of another revision, or a copy sealed to an ended key answers `unknown`, `failure_reason: held_by_instance`, `models: null` and `reported_at: null`.
+- `CopyHealthBook` of `src/llm/copy-health.ts` holds the counters and the reports. `CopyChecks` of `src/apps/worker/copy-checks.ts` runs the checks on the instance.
 
 ## The OAuth login
 
@@ -271,4 +283,5 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.
 - Tests cover a human create for several holders, a sealed create of an instance and each refusal of an instance caller. They also cover `llm.credential.instance_unknown` and an `openai-compatible` instance copy with typed model ids.
 - Tests cover an instance login in each allowed mode with a fake pi-ai flow, a refused browser mode, `credential.login.instance_unavailable` and an expiry that stores nothing.
-- Tests cover `llm.credential.report`, the healthcheck of an instance copy with no release, and `unknown` after a server restart.
+- Tests cover `llm.credential.report` and each refusal, `llm.credential.sealed`, the counter of each write, the healthcheck of an instance copy with no release, and `unknown` after a server restart.
+- A test runs a live instance against the server with a fake provider check: a bad key shows `unhealthy` with the report time on `worker.instance.get`, and a rotation shows `healthy` after the next check.

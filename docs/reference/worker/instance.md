@@ -33,7 +33,7 @@ A Reset key gives a new instance configuration. Replace the instance file with `
 
 1. `worker.instance.token` sends the `instance_id` and receives a worker token sealed to the public key of the live revision. Only the holder of the private key opens it. The call changes no state.
 2. `worker.instance.connect` sends the worker token. The answer holds, sealed, a `client` JWT and a `client_secret` for each binding that lists the instance.
-3. `worker.instance.heartbeat` renews the connection every 15 seconds, and every 2 seconds while a [login on the instance](../llm/login.md#login-on-a-worker-instance) is pending.
+3. `worker.instance.heartbeat` renews the connection once at the start, then every 15 seconds, and every 2 seconds while a [login on the instance](../llm/login.md#login-on-a-worker-instance) is pending.
 
 The seal is HPKE base mode with the suite `hpke-x25519-sha256-aes128gcm`. HPKE does not authenticate the server. TLS or the same host authenticates the server to an instance.
 
@@ -159,22 +159,37 @@ The API returns HTTP `200` with the newest revision of the name, live or archive
       "name": "claude",
       "revision": 1,
       "platform": "anthropic-subscription",
-      "sealed_current": true
+      "sealed_current": true,
+      "health": {
+        "status": "unhealthy",
+        "capability": "model call",
+        "failure_reason": "unauthorized",
+        "models": null,
+        "reported_at": 1791468011422
+      }
     }
   ]
 }
 ```
 
-| Property                       | Type           | Purpose                                                                                                                                              |
-| ------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connection`                   | object or null | Current connection, as in `worker instance list`.                                                                                                    |
-| `bindings`                     | array          | One `{ project_id, binding }` item for each current binding at the `worker` placement, over every project, that lists the instance.                  |
-| `registrations`                | array          | Live registrations of every revision of the instance. Each item is a record of [`worker registration get`](registration.md#worker-registration-get). |
-| `credentials`                  | array          | Live credential copies that the instance holds, in ascending name order. Each item describes the newest live revision of one name.                   |
-| `credentials[].name`           | string         | Credential name.                                                                                                                                     |
-| `credentials[].revision`       | integer        | Newest live revision of the copy.                                                                                                                    |
-| `credentials[].platform`       | string         | Platform of the credential.                                                                                                                          |
-| `credentials[].sealed_current` | boolean        | `true` when the copy is sealed to the current key of the instance. `false` after a Reset key; rotate the copy with a new secret.                     |
+| Property                       | Type            | Purpose                                                                                                                                              |
+| ------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connection`                   | object or null  | Current connection, as in `worker instance list`.                                                                                                    |
+| `bindings`                     | array           | One `{ project_id, binding }` item for each current binding at the `worker` placement, over every project, that lists the instance.                  |
+| `registrations`                | array           | Live registrations of every revision of the instance. Each item is a record of [`worker registration get`](registration.md#worker-registration-get). |
+| `credentials`                  | array           | Live credential copies that the instance holds, in ascending name order. Each item describes the newest live revision of one name.                   |
+| `credentials[].name`           | string          | Credential name.                                                                                                                                     |
+| `credentials[].revision`       | integer         | Newest live revision of the copy.                                                                                                                    |
+| `credentials[].platform`       | string          | Platform of the credential.                                                                                                                          |
+| `credentials[].sealed_current` | boolean         | `true` when the copy is sealed to the current key of the instance. `false` after a Reset key; rotate the copy with a new secret.                     |
+| `credentials[].health`         | object          | The last check that the instance reported for this revision. See [health of an instance copy](../llm/credential.md#health-of-an-instance-copy).      |
+| `health.status`                | string          | `healthy`, `unhealthy` or `unknown`.                                                                                                                 |
+| `health.capability`            | string          | The capability that the check proves, as in [the check answer](../llm/credential.md#check-and-verify-answer).                                        |
+| `health.failure_reason`        | string or null  | `null` for `healthy` only. `held_by_instance` when no report is held.                                                                                |
+| `health.models`                | array or null   | The model list of a check that reads one, else `null`.                                                                                               |
+| `health.reported_at`           | integer or null | Time of the report in Unix milliseconds. `null` when the server holds no report of this revision.                                                    |
+
+The server holds no report after its start, after a new revision of the copy, or for a copy with `sealed_current` `false`. Such a copy shows `status` `unknown`, `failure_reason` `held_by_instance`, `models` `null` and `reported_at` `null`.
 
 The record fields are the fields of the [instance record](#instance-record).
 
@@ -257,17 +272,17 @@ The API returns HTTP `200`. No CLI command calls this operation.
 }
 ```
 
-| Property                      | Type           | Purpose                                                                                                           |
-| ----------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `server_version`              | string         | Package version of the server. A process with another version stops with `worker.version.mismatch`.               |
-| `binding_version`             | integer        | Current binding version of the instance, as in the connect answer.                                                |
-| `credential_version`          | integer        | Always `0`. The server does not count credential changes of an instance yet.                                      |
-| `login_sessions`              | array          | Pending [logins on the instance](../llm/login.md#login-on-a-worker-instance). An empty list when none is pending. |
-| `login_sessions[].session_id` | string         | Login session.                                                                                                    |
-| `login_sessions[].name`       | string         | Name of the credential that the login creates.                                                                    |
-| `login_sessions[].platform`   | string         | Platform of the login.                                                                                            |
-| `login_sessions[].mode`       | string         | `copy_code` or `device`.                                                                                          |
-| `login_sessions[].code`       | string or null | The value that the human submitted with `login-code`; `null` until then.                                          |
+| Property                      | Type           | Purpose                                                                                                                                                                                                    |
+| ----------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server_version`              | string         | Package version of the server. A process with another version stops with `worker.version.mismatch`.                                                                                                        |
+| `binding_version`             | integer        | Current binding version of the instance, as in the connect answer.                                                                                                                                         |
+| `credential_version`          | integer        | Version of the credential copies of the instance. Each server start and each copy write give a new value. A changed value starts a [check of the copies](../llm/credential.md#health-of-an-instance-copy). |
+| `login_sessions`              | array          | Pending [logins on the instance](../llm/login.md#login-on-a-worker-instance). An empty list when none is pending.                                                                                          |
+| `login_sessions[].session_id` | string         | Login session.                                                                                                                                                                                             |
+| `login_sessions[].name`       | string         | Name of the credential that the login creates.                                                                                                                                                             |
+| `login_sessions[].platform`   | string         | Platform of the login.                                                                                                                                                                                     |
+| `login_sessions[].mode`       | string         | `copy_code` or `device`.                                                                                                                                                                                   |
+| `login_sessions[].code`       | string or null | The value that the human submitted with `login-code`; `null` until then.                                                                                                                                   |
 
 A heartbeat also sets the `connection_name` of a current connection that holds none.
 
