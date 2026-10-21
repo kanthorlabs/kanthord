@@ -83,6 +83,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Every decrypt path calls `openSecret`: `release`, `releaseWorkbench`, the resource check of `resourceInventory`, `resourceCheck` and `verify`, `checkMaterial`, `updateMetadata` and `applyReport`.
 - The refusal therefore covers the verify, the pre-save check, the provider check, the model check, the model list and a workbench session.
 - `src/custody/secret.ts` holds `openSecret` and `storedSealed`, and no other custody module calls `decrypt`. `storedSealed` opens the credential envelope of an instance copy and answers its sealed object. It never opens the sealed object.
+- `heldCopy(tx, set, name, holder)` answers the newest live revision of the copy of an instance holder, or null. `sealedCopy(tx, set, name, holder)` answers that revision with its sealed object for [the health of an instance copy](llm.impl.md#the-health-of-an-instance-copy), and it refuses a copy sealed to an ended key with 404 `credential.credential.not_found`.
 - A record answer adds `holder`, `sealed_to` and `sealed_current`. `sealed_current` is true when `sealed_to` equals the current fingerprint of the holder, and it is true for `server`.
 
 ## Suitability

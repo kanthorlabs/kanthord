@@ -1233,13 +1233,14 @@ The rules of the credential sections follow.
   1. The header: the name, `(v<revision>)`, the worker, the fingerprint and the connection line.
   2. The bindings that list the instance, in every project, from `worker.instance.get`. A row shows the project, the binding, the state `serving` or `draining` and a link to the binding.
   3. The registrations of the instance: the activity and a link to the execution.
-  4. Credentials: a row shows `<name> · <platform> (v<revision>)` and its health line. A copy sealed to an ended fingerprint shows `Re-enter: sealed to an ended key`.
+  4. Credentials: a row shows `<name> · <platform> (v<revision>)` and its health line from `credentials[].health` of `worker.instance.get`. The health line shows the status badge and, with a report, "<failure reason hint> Reported by <instance> at <time>." Without a report it reads "No report from <instance> for this revision since the server start." A copy sealed to an ended fingerprint shows `Re-enter: sealed to an ended key` in place of the health line.
   5. The danger zone: `Reset key` and `Archive`.
 - The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects. The notice reads "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.vocabulary.md](worker-service.vocabulary.md#trust-boundary) states the trust boundary.
 - `Add credential` opens a sheet with the name, the platform, the metadata, the secret and `Also seal to`. `Also seal to` lists every live instance of every worker, grouped by worker. The save sends the secret and the list of holders, and the server seals one copy for each holder, under [llm.impl.md](llm.impl.md).
 - The rotate action opens a sheet with the new secret and `Also rotate on`, which lists every other holder of the name. The save sends one rotate request for each selected holder, each with the `expected_revision` of that holder.
 - `Sign in again` opens the sign-in panel of an OAuth platform for that holder, in copy-code or device-code mode only, under [llm.impl.md](llm.impl.md).
-- The `openai-compatible` copy of an instance gets no model prefill. The human types its model ids.
+- The `openai-compatible` copy of an instance gets no model prefill at its creation. The human types its model ids.
+- A live `openai-compatible` copy sealed to the current key offers `Edit models`. It opens the metadata sheet for that holder and offers each model id of the last report that the draft does not hold as `Add <id>`.
 - `Add instance` opens a sheet with the name, the host kind and the address. The host kind field reads "Where does it run?" and offers `Linux (systemd)`, `macOS (foreground)`, `Container` and `Container on this host`.
 - The address default follows the host kind. `Container on this host` fills `http://kanthord:31415` when `worker.placement.list` reports `server_in_container`. Every other host kind fills the address of the dashboard. A loopback dashboard address leaves the field empty with a hint. The human can edit the address.
 - The sheet sends the name and the address as `endpoint` to `worker.instance.create`. The server generates the key pair, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).

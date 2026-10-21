@@ -541,7 +541,7 @@ For an API key platform, for example `anthropic`:
 4. Paste the key into **API Key**.
 5. Select **Create credential**. The **Credentials** section shows the row `claude · anthropic (v1)`.
 
-The server seals the copy to the key of the instance and keeps no plaintext. The server does not check an instance copy with the provider.
+The server seals the copy to the key of the instance and keeps no plaintext. The server does not check an instance copy with the provider. The connected instance checks the copy and reports the result. The row then shows a health line, for example **Healthy** and "Reported by builder-1 at <time>." A refused key shows **Unhealthy** with a hint. After a server restart, the row shows **Unknown** until the next report of the instance.
 
 For `anthropic-subscription`, the instance runs the sign-in itself. The instance must show `Connected` in step 8.4. Otherwise the sign-in fails with `credential.login.instance_unavailable`.
 

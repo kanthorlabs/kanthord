@@ -68,6 +68,23 @@ A human adds an instance copy with `holders` in the `create` body, or with the q
 
 `verify`, the [provider check](provider.md) and the [model check](model.md) read only the `server` copy. A name that has live instance copies and no live `server` copy answers `409 credential.credential.held_by_instance`. The [resource healthcheck](../gateway/healthcheck.md) reports an agent provider of such a name as `unknown` with the `failure_reason` `held_by_instance`.
 
+### Health of an instance copy
+
+The server never calls the provider with the key of an instance copy. The worker instance checks each of its own copies and reports the result:
+
+1. The instance checks its copies after its first heartbeat, and again when the `credential_version` of a [heartbeat answer](../worker/instance.md#workerinstanceheartbeat) changes.
+2. It lists its copies with `list` under its worker token. For each live copy that is sealed to its current key, it reads the sealed object with `llm.credential.sealed` and opens it with its own key.
+3. It runs the check of the platform with a 10-second deadline, with the status rules of [the check answer](#check-and-verify-answer).
+4. It sends the result with `llm.credential.report`.
+
+The server keeps the last report of each copy in memory. [`worker instance get`](../worker/instance.md#worker-instance-get) shows it in `credentials[].health`, and the instance page of the dashboard shows it as the health line of the copy. A server restart clears every report, so each copy shows `unknown` until the next report of its instance.
+
+`credential_version` starts at the server start time in Unix milliseconds, so each server start gives a new value. These writes of a copy of the instance each add `1`:
+
+- a create, a rotation, a metadata edit, a revoke or an archive;
+- the completion of a login on the instance;
+- a refresh of an OAuth copy by the instance during an execution.
+
 ### Cooldowns
 
 A provider failure with the code `rate_limited`, `unavailable` or `quota_exhausted` puts one copy of the credential into a cooldown. The credential answer carries no cooldown. Read it with [`agent cooldown list`](../agent/cooldown.md). The **Cooldown** section of the LLM credential page in the dashboard shows the same hold. Clear it with [`agent cooldown clear`](../agent/cooldown.md#cooldown-clear).
@@ -320,6 +337,8 @@ A local seal of `create` or `rotate` with `--holder` exits `1` with `cli.llm.cre
 | `archive`         | `POST /api/llm/credential/:credential_name/archive`                   | `llm.credential.archive`         | Yes      | No body    |
 | `check`           | `POST /api/llm/credential/check`                                      | `llm.credential.check`           | No       | 64 KiB     |
 | `verify`          | `POST /api/llm/credential/:credential_name/verify`                    | `llm.credential.verify`          | No       | No body    |
+| none              | `GET /api/llm/credential/:credential_name/sealed`                     | `llm.credential.sealed`          | No       | No body    |
+| none              | `POST /api/llm/credential/:credential_name/report`                    | `llm.credential.report`          | Yes      | 1 MiB      |
 
 | Header            | Required           | Purpose                                                                       |
 | ----------------- | ------------------ | ----------------------------------------------------------------------------- |
@@ -328,6 +347,26 @@ A local seal of `create` or `rotate` with `--holder` exits `1` with `cli.llm.cre
 | `Idempotency-Key` | Mutations          | Fresh canonical ULID for a new request; reuse it only for a retry.            |
 
 Request objects are closed: an unknown field fails validation.
+
+`llm.credential.sealed` and `llm.credential.report` use `worker` access. Only a worker instance calls them, for its own copy of the name. No CLI command calls them.
+
+`llm.credential.sealed` answers `{ name, platform, revision, metadata, sealed }` for the newest live revision of the copy, with the header `Cache-Control: no-store`. `sealed` is the sealed object that only the key of the instance opens. A copy that is absent or sealed to an ended key answers `404 credential.credential.not_found`.
+
+`llm.credential.report` takes this body and answers `204`:
+
+| Field            | Type           | Value                                                                                            |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `revision`       | integer        | The newest live revision of the copy.                                                            |
+| `status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                             |
+| `capability`     | string         | The capability of the platform, as in [the check answer](#check-and-verify-answer).              |
+| `failure_reason` | string or null | `null` for `healthy` only. Otherwise a value of [the failure reasons](#check-and-verify-answer). |
+| `models`         | array or null  | At most 512 `{ id, owned_by, created }` items of a check that reads a model list, else `null`.   |
+
+| HTTP status / code                    | Meaning                                                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `404 credential.credential.not_found` | The instance holds no live copy of the name, or the copy is sealed to an ended key.                                                      |
+| `409 credential.revision.conflict`    | `revision` is not the newest live revision. `details.revision` holds it.                                                                 |
+| `400 credential.input.invalid`        | `failure_reason` does not match `status`, `failure_reason` is `held_by_instance`, or `capability` is not the capability of the platform. |
 
 ### list
 
