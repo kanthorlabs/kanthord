@@ -82,7 +82,7 @@ A failure of steps 3 to 6 fails the operation with `repository.connector.ssh_age
 | `directory`   | The directory cannot be created, or its mode is not `0700`.                                |
 | `socket_path` | The socket path is longer than 100 bytes, or it holds a character outside `A-Za-z0-9/._-`. |
 | `files`       | `id.pub` or `known_hosts` cannot be written.                                               |
-| `agent`       | The agent socket does not appear within 5 seconds or before the deadline.                  |
+| `agent`       | The agent socket does not appear before the deadline, or the agent exits first.            |
 | `load`        | `ssh-add` refuses the key.                                                                 |
 
 A binding apply reports this failure as `422 project.bindings.repository.ssh_unreachable` with `details.failure_reason` `identity_unavailable`. A binding check and verify report it in the `address` entry with the same value.
