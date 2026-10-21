@@ -114,6 +114,20 @@ The command prints a human token on the terminal. See [auth jwt generate](../ref
 
 To use the CLI from your own machine, set `KANTHORD_ENDPOINT=https://kanthord.example.com`.
 
+## 8. Run a worker on another host
+
+A worker instance at the `worker` placement runs in a `kanthord serve worker` process on another Linux host or a Mac. It calls the server at `https://kanthord.example.com`, and Caddy forwards each call. The server accepts the calls of a worker instance with any `Host` header, so the allowlist of step 3 needs no change.
+
+1. On the server, read the version of the server:
+
+   ```sh
+   kanthord --version
+   ```
+
+   The command prints the version, for example `28.0.1`.
+
+2. Do steps 8.2 to 8.6 of [Run kanthord in a container](run-in-a-container.md#82-install-the-binary-on-the-worker-host). Skip step 1 of 8.2. In step 8.3, keep the **Address** `https://kanthord.example.com` that the dashboard fills.
+
 ## Troubleshooting
 
 | Symptom                                    | Cause and fix                                                                                                                                           |

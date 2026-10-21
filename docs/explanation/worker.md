@@ -144,7 +144,7 @@ sequenceDiagram
 
 The steps in plain words:
 
-1. **Register.** The process starts with a machine token. The token names the project and the worker binding. The process registers one instance with the Worker Service and sends a heartbeat every 60 seconds.
+1. **Register.** The instance registers with the Worker Service once for each worker binding that it serves, and sends a heartbeat every 60 seconds. A thread or a container of the server starts with the machine identity of its binding. A `kanthord serve worker` process starts from its instance configuration and receives a client token for each binding that lists the instance.
 2. **Pull.** The instance asks for work. The Scheduler answers when a node in a declared state is ready and the match admits the node, or answers "no work" after 90 seconds.
 3. **Claim.** The Scheduler grants the node. The Mission Service opens attempt 1 when the node has no attempt, and pins the node revision. The claim holds a fixed deadline: `expired_at` is the start time, plus the wall-time budget of the binding, plus `scheduler.release_reserve`, 10 minutes by default, for the cleanup.
 4. **Setup.** The process receives the credentials of the execution through the credential handover of the Worker Service. It then reads the execution setup: the worker name, the model configuration, the composed prompt, the prompt templates, the intent, the repository bindings and the budget. The process reads no configuration file of its own.
@@ -215,7 +215,7 @@ These rules explain most behavior that looks surprising at first.
 - **A fresh agent for each execution.** Each execution opens a new agent session with an empty conversation. The execution can lose its claim or its process at any time, so nothing durable lives in the agent. The next execution rebuilds its context from the node branch and from the records of the Mission Service.
 - **Git is the memory of the work.** The node branch carries the work from one execution to the next. A budget end writes a checkpoint commit and pushes it, so no work is lost.
 - **No history rewrite.** No execution deletes, renames or force-pushes a node branch. No execution rewrites a commit that it pushed, because a record can name that commit.
-- **One instance, one execution.** An instance holds at most one execution at a time. One `kanthord serve worker` process hosts one instance. At the `worker` placement, an instance count of 3 needs 3 processes, each with its own machine token.
+- **One instance, one execution.** An instance holds at most one execution at a time. One `kanthord serve worker` process hosts one instance. At the `worker` placement, a binding that lists 3 instances needs 3 processes, each with its own instance configuration. One instance runs one execution at a time over all the bindings that list it.
 - **A lost claim is a failure.** A claim that reaches `expired_at` with no release is lost. The Scheduler ends the execution and returns the node to `Available` (or `Waiting` for a reviewer claim). The loss counts toward `mission.consecutive_failure_limit`. The worker process that still runs learns of the loss at its next call and stops.
 
 ## Where the state lives
@@ -244,7 +244,7 @@ The field `placement` of a worker binding chooses where its native instances run
 
 - At the `server` placement, the server runs each instance as a worker thread. The server starts one thread for each unit of `instance_count`, up to `worker.server_slot_limit` (default 16). A human generates no token and starts no process.
 - At the `container` placement, the server runs each instance in its own container on the server host, with Podman or Docker. The server starts one container for each unit of `instance_count`, up to `worker.server_slot_limit`. A human generates no token and starts no process. The container image is `<worker.container_image>:<server version>`.
-- At the `worker` placement, each instance is a separate `kanthord serve worker --endpoint <url> --token <token>` process. The process can run on the server host or on another host.
+- At the `worker` placement, each instance is a separate `kanthord serve worker` process. A human adds the instance once on the worker page, and the binding lists it in `worker_instances`. The process can run on the server host or on another host.
 
 Every placement runs the same worker unit. The thread of a server slot and the container of a `container` slot reach the server through the same API operations, under a machine identity of the same project and binding scope. The container reaches the server through a channel that the server holds, and it holds no token.
 
@@ -270,19 +270,22 @@ To run 3 instances of `coder@1` at the `container` placement, enable the agent a
 
 To run 3 instances of `coder@1` at the `worker` placement:
 
-1. Enable the agent `swe@1`, and add the worker binding as above, with `"placement": "worker"`.
-2. Generate one machine token for each instance with `kanthord auth jwt generate --project <project_id> --binding <binding_name> --output <file>`. See [JWT generation](../reference/auth/jwt.md).
-3. Start one `kanthord serve worker` process with each token. The host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+1. Enable the agent `swe@1`.
+2. Add 3 instances of `coder@1` on the worker page, and start one `kanthord serve worker` process for each. The host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+3. Give each instance its own copy of the LLM credential of the agent.
+4. Add the worker binding with `"placement": "worker"` and the 3 instance names in `worker_instances`.
+
+[Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host) shows the steps, and [worker instances](../reference/worker/instance.md) lists the operations.
 
 A worker host needs no SSH key, no SSH configuration and no `known_hosts` entry. The server keeps each [SSH key](../reference/repository/ssh-key.md) in custody. For each execution:
 
-1. The [credential handover](../reference/worker/handover.md) carries the SSH key of each repository binding of the node, in the sealed envelope.
+1. At the `server` and `container` placements, the [credential handover](../reference/worker/handover.md) carries the SSH key of each repository binding of the node, in the sealed envelope. At the `worker` placement, the key stays on the server. The instance sends each SSH signature request to the server through the SSH signature relay.
 2. The execution setup carries the [pinned host key](../reference/repository/host-key.md) of each repository address. An address host with no pin refuses the setup with `409 repository.host_key.unpinned`, and a host outside the SSH host set with `400 project.bindings.repository.address_invalid`. The execution then does not start.
-3. The worker keeps both in memory. Each clone, fetch and push starts a private SSH agent, loads the key, and ends the agent after the git command. The worker writes no private key file.
+3. The worker keeps both in memory. Each clone, fetch and push starts a private SSH agent, and ends the agent after the git command. At the `server` and `container` placements, the agent loads the key. At the `worker` placement, the agent relays the signature request. The worker writes no private key file.
 
 The worker host must reach the SSH port of each repository address host. The SSH port is 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`, and 22 for every other host. See [SSH host keys](../reference/repository/host-key.md#function-description). No binding check proves that path from the worker host. The worker reads no file under `~/.ssh`, so a key or an alias in the SSH configuration of the host has no effect. A temporary directory path above 75 bytes makes every SSH operation fail; see [the temporary directory limit](../reference/repository/ssh-key.md#the-temporary-directory-limit).
 
-An instance keeps its files in a state directory. A process at the `worker` placement uses the state directory of its host, `~/.local/state/kanthord/`. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. A container at the `container` placement uses `state/kanthord/` of its volume `kanthord_slot_<client_id>`. Two instances share no file.
+An instance keeps its files in a data directory. A process at the `worker` placement uses `$XDG_DATA_HOME/kanthord/workers/<name>/` of its host, by default `~/.local/share/kanthord/workers/<name>/`. `<name>` is the instance name. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. A container at the `container` placement uses `state/kanthord/` of its volume `kanthord_slot_<client_id>`. Two instances share no file.
 
 | Path                               | Content                                                                                                                                                                                                                           |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -113,6 +113,28 @@ Apply the tags before the import. An import that adds a node that no worker bind
 
 To run each worker instance in its own container on this Mac, see [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
 
+## Run a worker on another host
+
+A worker instance at the `worker` placement runs in a `kanthord serve worker` process on another Linux host or a Mac of your tailnet. It calls the server at `https://<mac>.<tailnet>.ts.net`. The server accepts the calls of a worker instance with any `Host` header, so the allowlist of step 3 needs no change.
+
+1. On the worker host, check that the host is signed in to the tailnet of the server. On a Mac, set the alias of [2. Find the tailnet name of the Mac](#2-find-the-tailnet-name-of-the-mac) first.
+
+   ```sh
+   tailscale status
+   ```
+
+   The command prints one line for each device of the tailnet. One line holds `<mac>`, the Mac of the server.
+
+2. On the Mac of the server, read the version of the server:
+
+   ```sh
+   kanthord --version
+   ```
+
+   The command prints the version, for example `28.0.1`.
+
+3. Do steps 8.2 to 8.6 of [Run kanthord in a container](run-in-a-container.md#82-install-the-binary-on-the-worker-host) on the worker host. Skip step 1 of 8.2. In step 8.3, set **Address** to `https://<mac>.<tailnet>.ts.net`. The dashboard fills that value when you open the dashboard at that address.
+
 ## Stop sharing the server
 
 ```sh

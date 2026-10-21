@@ -8,11 +8,11 @@
 
 Human mode preserves the supplied username as `sub`; reissuing for the same username generates a fresh `jti` without creating an account or password record. Machine mode generates a fresh client identity and `jti` on every issuance. Local issuance cannot check whether a worker binding exists or is available; Gateway checks it when the token is used.
 
-A machine presents its JWT to [worker registration](../worker/register.md), which returns a runtime identity without issuing or modifying a JWT. Registration state is not a `reg` claim in the token.
+A machine presents its JWT to [worker registration](../worker/register.md), which returns a runtime identity. It issues and changes no JWT. Registration state is not a `reg` claim in the token. A machine token serves a worker of an external harness. `kanthord serve worker` uses no machine token: a [worker instance](../worker/instance.md) takes its tokens with its instance key. The Gateway refuses a machine token of a binding at the `worker` placement with `401 gateway.jwt.instance_required`.
 
 ## Expected response
 
-In human mode, `auth jwt generate` prints the row `token: <jwt>` to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the rows `token` and `client_secret`, aligned. With `--verbose` it prints the claim list after that output. The output is a row, not a JSON response. Its decoded claims have these properties:
+In human mode, `auth jwt generate` prints the row `token: <jwt>` to **terminal stdout**, then exits `0`. In machine mode, it prints the same row `token: <jwt>`. It prints no client secret. With `--verbose` it prints the claim list after that output. The output is a row, not a JSON response. Its decoded claims have these properties:
 
 | Property            | Type                    | Purpose                                                                            |
 | ------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
@@ -75,7 +75,7 @@ kanthord auth jwt generate ulrich --output ./ulrich.cli.yaml --endpoint https://
 
 The command creates an absent file only. An existing file fails with `system.files.publish_failed` and stays unchanged; delete it first to replace it. A file at another path is an export: commands read the default path only, so copy it there as a regular file with mode `0600` that the running user owns.
 
-With `--binding`, `--output` writes a machine token file. The file adds `client_secret` after `token`, and the command prints neither value. `--endpoint` without `--output` fails with `cli.auth.jwt.endpoint_without_output`.
+With `--binding`, `--output` writes the machine token into the same file form: `token`, and `endpoint` only when `--endpoint` is given. The command prints no token. `--endpoint` without `--output` fails with `cli.auth.jwt.endpoint_without_output`.
 
 ### Machine token
 
@@ -86,14 +86,7 @@ kanthord auth jwt generate --project '<project-id>' --binding '<binding-name>' \
 
 `--binding` without `--project` fails with `cli.auth.jwt.binding_without_project`. `--project` without `--binding` fails with `cli.auth.jwt.project_without_binding`.
 
-The output pastes into `cli.yaml` of the worker host, below `endpoint`:
-
-```yaml
-token: <machine-jwt>
-client_secret: <client-secret>
-```
-
-The client secret is `HKDF-SHA256(master_key, "worker/client-secret/v1/" + sub)`. The server stores it nowhere and derives it again from the verified `sub`. Each machine JWT has its own secret, and a human JWT has none. The worker uses it to open its credential handover, so the worker host holds no `master_key`.
+The server derives the client secret of a machine token as `HKDF-SHA256(master_key, "worker/client-secret/v1/" + sub)`. The server stores it nowhere and derives it again from the verified `sub`. Each machine JWT has its own secret, and a human JWT has none. The command prints no client secret.
 
 | Argument / option          | Default / constraints                                                                                   | Purpose                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |

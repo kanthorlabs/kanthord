@@ -31,6 +31,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
       "placement": "worker",
       "client_id": "client_identity_01M34JC4BJ66JHP41M4MYY6PSB",
       "name": "builder-1",
+      "instance": "builder-1",
       "activity": "executing",
       "execution_id": "execution_01M34JC4BJ66JHP41M4MYY6PSC",
       "draining": false,
@@ -50,20 +51,21 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
 
 The API returns HTTP `200` with one registration record. The CLI writes the same object as one JSON line to stdout and exits `0`.
 
-| Property            | Type    | Purpose                                                                              |
-| ------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `runtime_identity`  | string  | Runtime identity of the registration, `worker_registration_<ulid>`.                  |
-| `project_id`        | string  | Project of the worker binding.                                                       |
-| `resource_identity` | string  | Worker binding, `worker:kanthord:<binding-name>`.                                    |
-| `worker_name`       | string  | Supplied worker of the binding, for example `coder@1`.                               |
-| `host`              | string  | `kanthord` or `external-harness`.                                                    |
-| `placement`         | string  | `server`, `container` or `worker`; present only when `host` is `kanthord`.           |
-| `client_id`         | string  | Machine client identity that owns the registration, `client_identity_<ulid>`.        |
-| `name`              | string  | Display name of the machine client, 1 to 64 characters.                              |
-| `activity`          | string  | `idle`, `pulling` or `executing`.                                                    |
-| `execution_id`      | string  | Execution that the registration claims; present only when `activity` is `executing`. |
-| `draining`          | boolean | `true` when the pool of the server drains the slot; otherwise `false`.               |
-| `registered`        | boolean | Always `true`, because the operation returns live registrations only.                |
+| Property            | Type           | Purpose                                                                                                                                                      |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `runtime_identity`  | string         | Runtime identity of the registration, `worker_registration_<ulid>`.                                                                                          |
+| `project_id`        | string         | Project of the worker binding.                                                                                                                               |
+| `resource_identity` | string         | Worker binding, `worker:kanthord:<binding-name>`.                                                                                                            |
+| `worker_name`       | string         | Supplied worker of the binding, for example `coder@1`.                                                                                                       |
+| `host`              | string         | `kanthord` or `external-harness`.                                                                                                                            |
+| `placement`         | string         | `server`, `container` or `worker`; present only when `host` is `kanthord`.                                                                                   |
+| `client_id`         | string         | Machine client identity that owns the registration, `client_identity_<ulid>`.                                                                                |
+| `name`              | string         | Display name of the machine client, 1 to 64 characters.                                                                                                      |
+| `instance`          | string or null | Name of the live [worker instance](instance.md) of the registration at the `worker` placement; `null` at every other placement, or after the revision ended. |
+| `activity`          | string         | `idle`, `pulling` or `executing`.                                                                                                                            |
+| `execution_id`      | string         | Execution that the registration claims; present only when `activity` is `executing`.                                                                         |
+| `draining`          | boolean        | `true` when the pool of the server drains the slot; otherwise `false`.                                                                                       |
+| `registered`        | boolean        | Always `true`, because the operation returns live registrations only.                                                                                        |
 
 ### `worker registration resume` and `worker registration deregister`
 

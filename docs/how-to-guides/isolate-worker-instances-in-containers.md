@@ -120,7 +120,7 @@ In the project, open the **Bindings** tab, and select **Add** in the **Workers**
 4. Choose the **Placement** `container`, and set the **Instance count**.
 5. Select **Save binding**.
 
-A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement). In that section, choose `container` in place of `worker` in its step 3, and skip its step 4.
+A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement). In its step 3, add a binding with another name at the placement `container`, as the list above shows. Skip the steps of the `worker` placement.
 
 The **Workers** page shows each instance with `· container`. The runtime lists the containers of the server:
 

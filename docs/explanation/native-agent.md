@@ -118,7 +118,7 @@ The runtime refuses the setup when the credential does not match the configurati
 
 The host can have its own pi installation with extensions, skills and settings. The native agent ignores all of them:
 
-- pi runs with its own agent directory, `~/.local/state/kanthord/pi`, through `PI_CODING_AGENT_DIR`.
+- pi runs with its own agent directory, through `PI_CODING_AGENT_DIR`. On the server, the directory is `~/.local/state/kanthord/pi`. A worker instance at the `worker` placement uses `pi/` of its data directory, `$XDG_DATA_HOME/kanthord/workers/<name>/pi/`, by default `~/.local/share/kanthord/workers/<name>/pi/`.
 - pi runs offline (`PI_OFFLINE=1`), with telemetry and analytics off.
 - The session loads no extension, no skill, no prompt template, no theme and no context file. KanthorD supplies the system prompt and its own hooks only.
 - The system prompt shows the working directory relative to the home directory, for example `~/work/repo`, not the absolute path.
@@ -229,7 +229,7 @@ KanthorD rejects a source that is larger than 32 KiB, that is not UTF-8, that ho
 
 The agent receives only the tools of its declaration. A tool outside the allowlist does not exist for the agent.
 
-- **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` run `rg` and `fd`. The worker and the server install pinned copies into `pi/bin/` of the state directory at startup and never take them from `PATH`.
+- **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` run `rg` and `fd`. The worker and the server install pinned copies into `bin/` of the pi agent directory at startup and never take them from `PATH`.
 - **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key, `SSH_AUTH_SOCK` and `SSH_AGENT_PID` from the environment of each command, so a command cannot read the credentials of the agent or reach an SSH agent of the host user. During a network git operation of KanthorD on the same host, a command can still sign through the SSH agent socket of that operation, because it runs as the same user. In a Worker execution, the timeout of each command is capped at the remaining budget and at 10 minutes.
 - **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidence_id`, `asset_id` and `uri`.
 - **Operation tools** (Workbench only) expose KanthorD operations. Each call runs with the identity of the human who sent the last message. The [operation tool reference](../reference/workbench/tools.md) lists every tool.
@@ -292,7 +292,7 @@ The human can change the agent provider, the model and the reasoning effort betw
 ## Limitations
 
 - **No resume for a Worker execution.** A Worker execution keeps its session in memory. When the worker process ends, the conversation is lost, and a new attempt starts a new session.
-- **Transcript on the worker host only.** At the end of each execution, the worker appends the transcript to `<state>/transcripts/<execution_id>.jsonl` with mode 0600 and keeps the newest 50 files. The server receives no transcript. The telemetry spans `agent.turn` and `agent.tool` carry the last reply of each turn and the input and output of each tool call.
+- **Transcript on the worker host only.** At the end of each execution, the worker appends the transcript to `transcripts/<execution_id>.jsonl` of the data directory of its instance with mode 0600 and keeps the newest 50 files. The server receives no transcript. The telemetry spans `agent.turn` and `agent.tool` carry the last reply of each turn and the input and output of each tool call.
 - **No sandbox.** `bash` and the file tools run on the host with the rights of the KanthorD process. The tool set of `re@1` limits what the reviewer can do. The working directory of `swe@1` is only its default location, not a boundary.
 - **No approval in a Worker execution.** Only the Workbench asks a human before a call that changes state.
 - **Static catalog.** A new agent or a change of a tool set requires a new KanthorD release. A prompt change does not: the agent directory and the custom prompts override the shipped text.

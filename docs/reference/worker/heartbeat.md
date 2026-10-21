@@ -12,6 +12,8 @@ The server checks heartbeats every 30 seconds. It ends each registration whose l
 
 Heartbeat readings are process-local. When the Server starts, it starts a new window for each live registration.
 
+A worker instance at the `worker` placement also sends its own heartbeat, `worker.instance.heartbeat`. See [worker instances](instance.md#workerinstanceheartbeat).
+
 ## Expected response
 
 The API returns HTTP `204` with no body.
