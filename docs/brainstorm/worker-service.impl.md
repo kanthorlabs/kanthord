@@ -306,6 +306,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 
 - Store the instance configuration as a secret of the platform, and expose it to the container as the env value `KANTHORD_WORKER_CONFIG`.
 - Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
+- Run the container with no health check, for example with `podman run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
 - Run one replica. A second replica supersedes the first, under [The instance exchange](#the-instance-exchange).
 - Publish no port. The instance opens every connection to the server.
 
@@ -327,7 +328,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 3. Start the instance. `<git name>` and `<git email>` set the identity of the commits that the agents make:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
 ## The worker unit and its wrappers
