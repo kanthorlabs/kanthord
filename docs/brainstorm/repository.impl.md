@@ -222,7 +222,7 @@ KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of 
 2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
 3. Refuse a socket path above 100 bytes, because `sun_path` holds 104 bytes on macOS and `ssh-agent` fails without a message on a longer path. Refuse a path that holds a character outside `A-Za-z0-9/._-`.
 4. Write `id.pub` with the public key and `known_hosts` with the lines of `access`, each with mode `0600` and flag `wx`. The directory holds no private key at any time.
-5. Spawn `sh -c 'ssh-agent -D -a "$1" & agent=$!; cat; kill "$agent"; wait "$agent"' sh <dir>/a` with the environment `{ PATH }`. Node holds the stdin pipe of `sh`, and `cat` inherits it. Wait for the socket, bounded by the deadline and by 5 s.
+5. Spawn `sh -c 'ssh-agent -D -a "$1" & agent=$!; cat; kill "$agent"; wait "$agent"' sh <dir>/a` with the environment `{ PATH }`. Node holds the stdin pipe of `sh`, and `cat` inherits it. Wait for the socket until the deadline, the exit of `sh` or a cancel.
    - `-a` is mandatory. Without `-a`, OpenSSH 10.1 and later put the socket under `$HOME/.ssh/agent/` and clean stale sockets there at start.
    - `-D` stops the SSH agent from forking into a daemon, so it stays a child of `sh`. `cat` ends when the pipe closes. `sh` then sends `SIGTERM` to the SSH agent and waits for its exit.
    - `sh` owns the SSH agent, so the SSH agent ends with the pipe, also after a `SIGKILL` of Node.
