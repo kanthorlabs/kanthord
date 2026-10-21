@@ -577,6 +577,8 @@ The stop runs four phases.
 - Phase 1 quiesces every service at once.
   - The root calls `quiesce()` on every service in one step.
   - The Gateway closes the listener without waiting for a connection to drain.
+  - The Gateway closes every idle connection.
+  - Each response after quiescence carries `Connection: close`, so a busy connection closes after that response.
   - The Gateway cancels every waiting work pull and every MCP stream through `Context`.
   - The Scheduler Service starts no new claim.
   - The Worker Service starts no new execution.
