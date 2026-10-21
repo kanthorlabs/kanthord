@@ -579,6 +579,7 @@ The stop runs four phases.
   - The Gateway closes the listener without waiting for a connection to drain.
   - The Gateway closes every idle connection.
   - Each response after quiescence carries `Connection: close`, so a busy connection closes after that response.
+  - After the drain, the Gateway closes every idle connection again. A keep-alive response that left after quiescence thus holds no connection open.
   - The Gateway cancels every waiting work pull and every MCP stream through `Context`.
   - The Scheduler Service starts no new claim.
   - The Worker Service starts no new execution.

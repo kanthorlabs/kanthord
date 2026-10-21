@@ -375,6 +375,7 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 
 - The Gateway closes the listener and cancels waiting work pulls and MCP streams during quiescence.
 - Each response after quiescence carries `Connection: close`. A busy keep-alive connection thus closes after its next response.
+- After the drain, the stop closes every idle connection again. A keep-alive response that left after quiescence thus holds no connection open.
 - Its handlers and dependencies stay available during the drain.
 - The invocation chain then joins handlers and streams before rejecting every new call.
 - The Gateway releases resources in the release phase.
