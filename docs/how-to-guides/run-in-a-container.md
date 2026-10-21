@@ -592,12 +592,13 @@ The host kind `Container` runs the instance on a container platform with no writ
 - Store the instance configuration as a secret of the platform. Give it to the container as the variable `KANTHORD_WORKER_CONFIG`.
 - Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
 - Set the `GIT_*` variables of step 3.
+- Run the container with no health check, for example with `podman run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
 - Run one replica. A second replica takes the connection, and the first exits with status `3`. A restart loop with `worker.instance.superseded` means two deployments of one instance configuration.
 - Publish no port. The instance opens every connection to the server.
 
 Without a volume, a new container starts with no workspace. The identity, the credential copies and the bindings stay on the server. A resumed execution clones the repository again and checks out the pushed node branch. The work that the lost workspace did not push is lost.
 
-The image declares a health check that reads the server on `127.0.0.1:31415`. A worker container serves no server, so its health status becomes `unhealthy`. That status is expected for a worker container.
+The image declares a health check that reads the server on `127.0.0.1:31415`. A worker container serves no server, so the worker commands of this guide pass `--no-healthcheck`. The [instance page](#84-check-the-connection) of the dashboard shows the health of the instance: the connection and the last heartbeat.
 
 This example runs the container with Podman on a host of your network. `docker run` has no `--secret` option, so the example needs Podman.
 
@@ -614,7 +615,7 @@ This example runs the container with Podman on a host of your network. `docker r
 4. Start the instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -664,7 +665,7 @@ The host kind `Container on this host` runs the instance in a second Podman cont
 6. Start the instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -679,7 +680,7 @@ The host kind `Container on this host` runs the instance in a second Podman cont
 
 Then do steps [8.4](#84-check-the-connection) to [8.6](#86-bind-the-instance).
 
-The image holds `bash`, `git`, the OpenSSH client and the `kanthord` binary of the server version. The worker container keeps its workspaces in an anonymous volume. `podman restart kanthord-worker-<name>` keeps them. A new container starts with none, as [Run a worker in a stateless container](#run-a-worker-in-a-stateless-container) states. The health status of the worker container becomes `unhealthy`, and that status is expected.
+The image holds `bash`, `git`, the OpenSSH client and the `kanthord` binary of the server version. The worker container keeps its workspaces in an anonymous volume. `podman restart kanthord-worker-<name>` keeps them. A new container starts with none, as [Run a worker in a stateless container](#run-a-worker-in-a-stateless-container) states.
 
 `podman restart kanthord` keeps the network connection. After `podman rm` of the server, do the worker steps of [Use a newer image](#use-a-newer-image).
 
@@ -770,7 +771,7 @@ For an instance in a container on the same host, do these steps. See [Run a work
 3. Start the instance with the new version. The Podman secret `kanthord-worker-<name>` stays.
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -823,4 +824,4 @@ In a **Verify** row, the value in parentheses is the `failure_reason` of the che
 | The process exits with status `3` and `worker.instance.superseded`                                                                                                                                | A second process with the same instance configuration took the connection. The diagnostic names its `connection_name`. Run one process for each instance. systemd does not restart a process that exits with status `3`.                                                                                                                                                                                                                                                                                                                |
 | **Save binding** fails with `agent.configuration.credential_holder_mismatch`                                                                                                                      | A listed instance holds no live copy of a credential that the agents use. Do [8.5](#85-give-the-instance-the-llm-credential) for each listed instance.                                                                                                                                                                                                                                                                                                                                                                                  |
 | The sign-in of an instance fails with `credential.login.instance_unavailable`                                                                                                                     | The instance is not connected. Start it, and check [8.4](#84-check-the-connection). Then start the sign-in again.                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| The health status of a worker container is `unhealthy`                                                                                                                                            | The health check of the image reads a server on `127.0.0.1:31415`, and a worker container serves no server. The status is expected. Read the connection on the instance page.                                                                                                                                                                                                                                                                                                                                                           |
+| The health status of a worker container is `unhealthy`                                                                                                                                            | The container started without `--no-healthcheck`. The health check of the image reads a server on `127.0.0.1:31415`, and a worker container serves no server. The status does not stop the instance. Read the connection on the instance page. The start commands of this guide pass `--no-healthcheck`.                                                                                                                                                                                                                                |
