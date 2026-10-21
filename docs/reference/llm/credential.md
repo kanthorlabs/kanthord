@@ -58,7 +58,7 @@ A rotation and a revoke end every older live revision of the copy that no live e
 
 ### Instance copies
 
-A credential name holds one copy for each holder. A holder is `server` or the name of a worker instance. Each copy has its own revisions, its own [cooldown](../agent/cooldown.md) and its own archive. Every copy of a name holds the same platform. Only a platform with the secret shape `api_key` takes an instance copy.
+A credential name holds one copy for each holder. A holder is `server` or the name of a worker instance. Each copy has its own revisions, its own [cooldown](../agent/cooldown.md) and its own archive. Every copy of a name holds the same platform. `create` and `rotate` take an instance copy only for a platform with the secret shape `api_key`. An instance copy of an `oauth` platform comes from a [login on the instance](login.md#login-on-a-worker-instance).
 
 The server never opens an instance copy. It stores the copy as an object sealed to the X25519 key of the instance. Only the worker of that instance opens it. A worker binding at the `worker` placement receives only the copy of its own instance; see [the handover](../worker/handover.md).
 

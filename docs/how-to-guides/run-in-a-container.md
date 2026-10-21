@@ -18,18 +18,15 @@ The commands use Podman. With Docker, write `docker` in place of `podman` in eac
 
 Replace each placeholder with your value:
 
-| Placeholder       | Value                                                                    |
-| ----------------- | ------------------------------------------------------------------------ |
-| `<version>`       | The image version, for example `28.0.1`, or `latest`.                    |
-| `<port>`          | The host port of the dashboard, for example `8080`.                      |
-| `<name>`          | The name of the author of the agent commits, for example `Alice Smith`.  |
-| `<email>`         | The email of that author, for example `alice@example.com`.               |
-| `<your username>` | Your user name in the dashboard, for example `alice`.                    |
-| `<owner>`         | The GitHub owner of the repository, for example `acme`.                  |
-| `<repository>`    | The GitHub repository name, for example `app`.                           |
-| `<project id>`    | The **Identity** value on the project page, for example `project_01M5…`. |
-| `<binding name>`  | The name of a worker binding, for example `coder-remote`. See step 8.    |
-| `<server URL>`    | The full URL that a worker host uses, for example `https://kd.acme.dev`. |
+| Placeholder       | Value                                                                   |
+| ----------------- | ----------------------------------------------------------------------- |
+| `<version>`       | The image version, for example `28.0.1`, or `latest`.                   |
+| `<port>`          | The host port of the dashboard, for example `8080`.                     |
+| `<git name>`      | The name of the author of the agent commits, for example `Alice Smith`. |
+| `<git email>`     | The email of that author, for example `alice@example.com`.              |
+| `<your username>` | Your user name in the dashboard, for example `alice`.                   |
+| `<owner>`         | The GitHub owner of the repository, for example `acme`.                 |
+| `<repository>`    | The GitHub repository name, for example `app`.                          |
 
 ## 1. Get the image
 
@@ -59,7 +56,7 @@ The command prints `created: /var/lib/kanthord/config/kanthord/kanthord.yaml`. T
 ## 3. Start the server
 
 ```sh
-podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p 127.0.0.1:<port>:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="<name>" -e GIT_AUTHOR_EMAIL="<email>" -e GIT_COMMITTER_NAME="<name>" -e GIT_COMMITTER_EMAIL="<email>" docker.io/kanthorlabs/kanthord:<version>
+podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p 127.0.0.1:<port>:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version>
 ```
 
 - `--cap-drop=ALL` removes every Linux capability. `--security-opt=no-new-privileges` stops a process from gaining privileges. The server runs as the user `kanthord` and needs neither.
@@ -225,117 +222,515 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 
 ## 8. Run a worker on another host
 
-The `worker` placement waits for the worker instance, which a later version adds. Until then, the server refuses a new binding at the `worker` placement with `project.bindings.worker.placement_unavailable` and the reason `instances_absent`. It refuses the registration of a worker at that placement with `worker.instance.placement_mismatch`. Its credential handover answers `custody.handover.holder_refused`, because the server hands no server-held credential to that placement. Use the `server` placement. The steps of this section apply to a binding that exists from an earlier version.
+At the `worker` placement, a worker runs in a `kanthord serve worker` process outside the server container. One process is one worker instance. You add the instance once in the dashboard. Then a worker binding of a project lists the instance.
 
-A worker binding with the placement `worker` runs its instances in a separate `kanthord serve worker` process, not in the server container. Create the worker binding first:
+- An instance belongs to one worker, for example `coder@1`. Only a binding of that worker can list it.
+- An instance runs one execution at a time.
+- An instance holds its own copy of each LLM credential, sealed to its key. The server hands no server-held credential to an instance.
+- The first-task tutorial needs `coder@1` and `reviewer@1`. To run both at the `worker` placement, add one instance of each worker. Do step 8 once for each instance. For a second instance on the same worker host, skip steps 8.1 and 8.2.
+
+Choose the steps for the place of the instance:
+
+| The instance runs on                     | **Where does it run?**   | Steps                                                                                                          |
+| ---------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| A Linux host of your local network       | `Linux (systemd)`        | 8.1 to 8.6                                                                                                     |
+| A Mac of your local network              | `macOS (foreground)`     | 8.1 to 8.6                                                                                                     |
+| A container platform with no volume      | `Container`              | 8.1, then [Run a worker in a stateless container](#run-a-worker-in-a-stateless-container), then 8.4 to 8.6     |
+| A second container on the container host | `Container on this host` | [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host), then 8.4 to 8.6 |
+
+The steps use these placeholders in addition to the table at the start of this guide:
+
+| Placeholder     | Value                                                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
+| `<name>`        | The name of the worker instance, for example `coder-1`. You choose it in step 8.3.                       |
+| `<LAN address>` | The address of the container host on your local network, for example `192.168.1.10`.                     |
+| `<address>`     | The server address that the instance calls, for example `http://192.168.1.10:<port>`. Step 8.1 makes it. |
+| `<arch>`        | `x64` for an `x86_64` worker host, `arm64` for an `arm64` worker host.                                   |
+| `<user>`        | Your user name on the worker host.                                                                       |
+
+### What the worker host needs
+
+- `bash`, `git` 2.40 or later, and the OpenSSH 9.0 or later client programs `ssh`, `ssh-agent` and `ssh-add`. A missing program stops the start of the instance with `repository.connector.tool_missing`. A program below its minimum version stops the start with `repository.connector.tool_version`. The image holds these programs.
+- No SSH key and no `~/.ssh` file. For each git operation, the instance asks the server to sign through the SSH signature relay. The private key stays on the server. An agent command runs as the user of the instance and can read the SSH keys of that user. Run the instance as a user with no `~/.ssh`.
+- A network path to the SSH port of the repository host: port 22 for `github.com`, `gitlab.com` and `bitbucket.org`, port 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`. The **Verify** of step 5 runs on the server, so it does not prove this path.
+- A temporary directory path of 75 bytes or fewer that holds only letters, digits, `/`, `.`, `_` and `-`. The instance reads `TMPDIR`, else `TMP` or `TEMP`, else it uses `/tmp`. For each git operation, the instance makes an SSH agent socket in that directory. A longer path or another character fails every SSH operation with `repository.connector.ssh_agent_failed`.
+- `curl`, for the downloads of step 8.2.
+- A network path to the server. Step 8.1 makes it.
+
+### 8.1 Open the server to your network
+
+The command of step 3 publishes the server on the loopback address of the container host only. A worker host of your network needs the `<LAN address>` of the container host. Skip this step for an instance in a container on the container host.
+
+1. On the container host, remove the server container. The volume keeps the configuration and the database.
+
+   ```sh
+   podman rm -f kanthord
+   ```
+
+   The command prints `kanthord`.
+
+2. Start the server again. This is the command of step 3 with the added option `-p <LAN address>:<port>:31415`. If you removed `-p 127.0.0.1:1455:1455` in step 3, remove it here too.
+
+   ```sh
+   podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p 127.0.0.1:<port>:31415 -p <LAN address>:<port>:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version>
+   ```
+
+   The command prints the ID of the new container.
+
+3. On the worker host, check the path to the server:
+
+   ```sh
+   curl http://<LAN address>:<port>/api/liveness
+   ```
+
+   The answer starts with `{"status":"ok"`.
+
+`<address>` is now `http://<LAN address>:<port>`. Keep the dashboard on `http://localhost:<port>`. The server accepts the calls of a worker instance with any `Host` header, so `gateway.allowed_hosts` needs no change.
+
+Every host of your network can now reach the API over plain HTTP. Use this setup only on a network that you trust. On another network, give the server an HTTPS address, as [Run kanthord on a VPS](run-on-a-vps.md) or [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md) shows. Then `<address>` is that HTTPS address.
+
+`kanthord serve worker` refuses an `http` address whose host does not resolve to a loopback or private address. The refusal is `worker.start.endpoint_insecure`. The private addresses are `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `fc00::/7` and `fe80::/10`.
+
+### 8.2 Install the binary on the worker host
+
+The binary must have the version of the server. The instance refuses another version with `worker.version.mismatch`.
+
+1. On the container host, read the version of the server:
+
+   ```sh
+   podman exec kanthord kanthord --version
+   ```
+
+   The command prints the version, for example `28.0.1`. In the commands below, write it in place of `<version>`.
+
+On a Linux worker host:
+
+2. Download the binary:
+
+   ```sh
+   curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v<version>/kanthord-linux-<arch>
+   ```
+
+3. Download the checksum file:
+
+   ```sh
+   curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v<version>/SHA256SUMS
+   ```
+
+4. Check the download:
+
+   ```sh
+   sha256sum --ignore-missing -c SHA256SUMS
+   ```
+
+   The command prints `kanthord-linux-<arch>: OK`.
+
+5. Install the binary:
+
+   ```sh
+   sudo install -m 755 kanthord-linux-<arch> /usr/local/bin/kanthord
+   ```
+
+   The command prints nothing.
+
+6. Check the installed version:
+
+   ```sh
+   kanthord --version
+   ```
+
+   The command prints `<version>`.
+
+On a Mac:
+
+2. Download the binary:
+
+   ```sh
+   curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v<version>/kanthord-darwin-arm64
+   ```
+
+3. Download the checksum file:
+
+   ```sh
+   curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v<version>/SHA256SUMS
+   ```
+
+4. Check the download:
+
+   ```sh
+   shasum -a 256 --ignore-missing -c SHA256SUMS
+   ```
+
+   The command prints `kanthord-darwin-arm64: OK`.
+
+5. Remove the macOS quarantine flag. Without this command, macOS refuses to start a binary that a browser downloaded.
+
+   ```sh
+   xattr -d com.apple.quarantine kanthord-darwin-arm64
+   ```
+
+   After a `curl` download, the command prints `xattr: kanthord-darwin-arm64: No such xattr: com.apple.quarantine`. That message is expected.
+
+6. Install the binary:
+
+   ```sh
+   sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord
+   ```
+
+   The command prints nothing.
+
+7. Check the installed version:
+
+   ```sh
+   kanthord --version
+   ```
+
+   The command prints `<version>`.
+
+### 8.3 Add the instance and start it
+
+The dashboard shows the instance configuration only once. It holds the private key of the instance. Open a terminal on the worker host before you start.
+
+1. In the dashboard, open **Workers**. Select the card of the worker, for example `coder@1`.
+2. In the **Instances** section, select **Add instance**.
+3. Enter a **Name**, for example `coder-1`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens. This name is `<name>`.
+4. In **Where does it run?**, choose `Linux (systemd)` or `macOS (foreground)`.
+5. In **Address**, enter `<address>`. The field is empty when the dashboard runs on `localhost`.
+6. Select **Create instance**. The sheet shows the **Instance configuration** and the copy block of the host kind.
+7. Select **Copy** next to **Instance configuration**. Keep the sheet open.
+
+The copy block of the sheet repeats step 8.2 and the commands of the list below, except the log command. If you close the sheet before the paste, select **Reset key** on the instance page. Reset key gives a new instance configuration.
+
+On a Linux worker host, do these steps as `<user>`:
+
+1. Let the user units of `<user>` run without a login session:
+
+   ```sh
+   loginctl enable-linger
+   ```
+
+   The command prints nothing.
+
+2. Write the instance file. The command reads the instance configuration from standard input. Paste the value, press `Enter`, then press `Ctrl-D`.
+
+   ```sh
+   kanthord worker join
+   ```
+
+   The command prints `created: /home/<user>/.config/kanthord/workers/<name>.yaml`. The file has mode `0600`.
+
+3. In the dashboard, select **Done**.
+
+4. Create the directory of the user units:
+
+   ```sh
+   mkdir -p ~/.config/systemd/user
+   ```
+
+   The command prints nothing.
+
+5. Write the template unit `kanthord-worker@.service`:
+
+   ```sh
+   cat > ~/.config/systemd/user/kanthord-worker@.service <<'EOF'
+   [Unit]
+   Description=KanthorD worker instance %i
+
+   [Service]
+   ExecStart=/usr/local/bin/kanthord serve worker --instance %i
+   Restart=on-failure
+   RestartPreventExitStatus=3
+
+   [Install]
+   WantedBy=default.target
+   EOF
+   ```
+
+   The command prints nothing.
+
+6. Create the directory of the settings of this instance:
+
+   ```sh
+   mkdir -p ~/.config/systemd/user/kanthord-worker@<name>.service.d
+   ```
+
+   The command prints nothing.
+
+7. Write the settings of this instance. They set the author of the agent commits and turn off core dumps. The memory of the instance holds the plaintext of its LLM credentials.
+
+   ```sh
+   cat > ~/.config/systemd/user/kanthord-worker@<name>.service.d/kanthord.conf <<'EOF'
+   [Service]
+   Environment="GIT_AUTHOR_NAME=<git name>" "GIT_AUTHOR_EMAIL=<git email>" "GIT_COMMITTER_NAME=<git name>" "GIT_COMMITTER_EMAIL=<git email>"
+   LimitCORE=0
+   EOF
+   ```
+
+   The command prints nothing.
+
+8. Load the new units:
+
+   ```sh
+   systemctl --user daemon-reload
+   ```
+
+   The command prints nothing.
+
+9. Start the instance, and start it again at each boot:
+
+   ```sh
+   systemctl --user enable --now kanthord-worker@<name>
+   ```
+
+   The command prints one line that starts with `Created symlink`.
+
+10. Read the log of the instance:
+
+    ```sh
+    journalctl --user -u kanthord-worker@<name> --no-pager -n 5
+    ```
+
+    One line holds `"msg":"Worker instance ready"` and `"config_source":"file"`.
+
+On a Mac, nothing restarts the process, so keep its terminal open:
+
+1. Write the instance file. The command reads the instance configuration from standard input. Paste the value, press `Enter`, then press `Ctrl-D`.
+
+   ```sh
+   kanthord worker join
+   ```
+
+   The command prints `created: /Users/<user>/.config/kanthord/workers/<name>.yaml`. The file has mode `0600`.
+
+2. In the dashboard, select **Done**.
+
+3. Set the author of the agent commits for this terminal:
+
+   ```sh
+   export GIT_AUTHOR_NAME="<git name>" GIT_AUTHOR_EMAIL="<git email>" GIT_COMMITTER_NAME="<git name>" GIT_COMMITTER_EMAIL="<git email>"
+   ```
+
+   The command prints nothing.
+
+4. Start the instance:
+
+   ```sh
+   kanthord serve worker --instance <name>
+   ```
+
+   The terminal shows a JSON line that holds `"msg":"Worker instance ready"` and `"config_source":"file"`.
+
+After a restart of the Mac, open a terminal and do steps 3 and 4 again. Without the `GIT_*` variables, a commit has the author `kanthord <kanthord@localhost>`.
+
+### 8.4 Check the connection
+
+1. In the dashboard, open **Workers**, then the card of the worker. Select the instance `<name>` in the **Instances** section.
+2. The **Connection** row of the instance page shows `Connected · <connection name> · last heartbeat <time>`. `<connection name>` is the host name of the worker host, or of the container. `<time>` is the UTC time of the last heartbeat, for example `2026-10-21 09:30 UTC`.
+
+When the row shows `Not connected`, read the log of the instance. See [Troubleshooting](#troubleshooting).
+
+### 8.5 Give the instance the LLM credential
+
+The agents of the worker call a model with an LLM credential, for example `claude` of the [first-task tutorial](../tutorials/first-task.md#3-add-the-llm-credential). At the `worker` placement, each listed instance needs its own copy of that credential, with the same name. Without the copy, **Save binding** of step 8.6 fails with `agent.configuration.credential_holder_mismatch`.
+
+For an API key platform, for example `anthropic`:
+
+1. On the instance page, select **Add credential** in the **Credentials** section.
+2. Enter the **Name** of the credential, for example `claude`.
+3. Choose the **Platform** of that credential, for example `anthropic`. A name holds one platform for every copy.
+4. Paste the key into **API Key**.
+5. Select **Create credential**. The **Credentials** section shows the row `claude · anthropic (v1)`.
+
+The server seals the copy to the key of the instance and keeps no plaintext. The server does not check an instance copy with the provider.
+
+For `anthropic-subscription`, the instance runs the sign-in itself. The instance must show `Connected` in step 8.4. Otherwise the sign-in fails with `credential.login.instance_unavailable`.
+
+1. On the instance page, select **Add credential** in the **Credentials** section.
+2. Enter the **Name** of the credential, for example `claude`.
+3. Choose the **Platform** `anthropic-subscription`, then select **Start sign-in**. The instance takes the sign-in at its next heartbeat, within 15 s. Then the panel shows the address and the field **Paste code**.
+4. Open the address in a browser. Sign in to the Anthropic account, then approve the access.
+5. The provider page shows a code of the form `code#state`. Copy the whole value.
+6. Paste the value into **Paste code**, then select **Send code**.
+7. The **Credentials** section shows the row `claude · anthropic-subscription (v1)`.
+
+Do steps 3 to 6 within 15 minutes. For `openai-codex` and `github-copilot`, the instance uses the device code mode. The panel then shows an address and a code. Open the address, and enter the code.
+
+The CLI can also make a copy with the option `--holder`. See [LLM credentials](../reference/llm/credential.md) and [Login on a worker instance](../reference/llm/login.md#login-on-a-worker-instance).
+
+### 8.6 Bind the instance
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
 2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
-3. Choose the **Worker**, for example `coder@1`.
-4. Choose the **Placement** `worker`. The sheet shows `server` by default.
-5. Select **Save binding**.
+3. Choose the **Worker** of the instance, for example `coder@1`.
+4. Wait until the **Agents** section shows the agent with the badge `Enabled`, for example `swe@1`.
+5. Choose the **Placement** `worker`.
+6. In **Instances**, select `<name>`.
+7. Select **Save binding**.
 
-`<binding name>` is the name of this worker binding, not the name of the repository binding of step 5.
+Within about 15 s, the instance registers for the binding. Its log shows a line that holds `"msg":"Worker application ready"` and `"resource_identity":"worker:kanthord:<binding name>"`. `<binding name>` is the name of step 2. The **Live registrations** item of the **Readiness** panel shows `Done`.
 
-The **Placement** list also shows `container`, which is off, because this server runs in a container. That placement needs the kanthord binary on the host. See [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
+When the instance is not connected, the **Live registrations** item shows "Instance <name> is not connected. Start kanthord serve worker with its configuration."
 
-A machine token names one worker binding. One `kanthord serve worker` process serves the binding of its token only. [The first-task tutorial](../tutorials/first-task.md) needs two workers: `coder@1` and `reviewer@1`. To run both on worker hosts, add two worker bindings, for example `coder-remote` with `coder@1` and `reviewer-remote` with `reviewer@1`. Do the token steps below once for each binding. Run one `kanthord serve worker` process for each token. Two processes on one host need two client files. Give each process its own `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. A process reads its client file from `$XDG_CONFIG_HOME/kanthord/cli.yaml`, and keeps its workspaces in `$XDG_STATE_HOME/kanthord`.
+One instance is one trust boundary over every project that it serves. An agent command of any served binding can read the instance key, its credential copies and its workspaces. The binding sheet and the instance page show a notice when the instance serves bindings of two or more projects. List an instance only in bindings of projects that trust each other.
 
-The worker host needs these items:
+### The files of an instance
 
-- `bash`, `git` 2.40 or later, and the OpenSSH 9.0 or later client programs `ssh`, `ssh-agent` and `ssh-add`. `kanthord serve worker` checks them at its start. A missing program stops the start with `repository.connector.tool_missing`. A program below its minimum version stops the start with `repository.connector.tool_version`.
-- The `kanthord` binary of the same version as the image. Download `kanthord-<target>` and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases). `<target>` is `darwin-arm64`, `linux-x64` or `linux-arm64`. For the install steps, see [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md#1-install-the-binary) or [Run kanthord on a VPS](run-on-a-vps.md#1-install-the-binary). A Linux worker host of the same architecture as the container can also use the binary of the image: `podman cp kanthord:/usr/local/bin/kanthord .`.
-- No SSH key, no `known_hosts` entry and no `~/.ssh` file. For each execution, the server hands the worker the SSH key of each repository binding and the pinned host key. The worker keeps the private key in memory only and writes it to no file. Run `kanthord serve worker` as a user with no `~/.ssh`. An agent tool process runs as that user and can read its SSH keys.
-- Core dumps off for `kanthord serve worker`, for example `ulimit -c 0` in its shell or `LimitCORE=0` in its systemd unit. Its memory holds the plaintext SSH key of each execution.
-- A network path to the SSH port of the repository host: port 22 for `github.com`, `gitlab.com` and `bitbucket.org`, port 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`. The **Verify** of step 5 runs on the server, so it does not prove this path.
-- A temporary directory path of 75 bytes or fewer that holds only letters, digits, `/`, `.`, `_` and `-`. The worker reads `TMPDIR`, else `TMP` or `TEMP`, else it uses `/tmp`. For each git operation, the worker makes an SSH agent socket in that directory. The socket path adds 25 bytes, and its limit is 100 bytes. A longer path or another character fails every SSH operation with `repository.connector.ssh_agent_failed`.
-- A network path to the server. The container publishes the server on the host loopback address only. See [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md) or [Run kanthord on a VPS](run-on-a-vps.md). In those guides, write `<port>` in place of `31415` for the proxy target. Add the host part of `<server URL>` to the host allowlist with step 7, for example `kd.acme.dev`.
-- The `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` variables in the environment of `kanthord serve worker`. Without them, a commit has the author `kanthord <kanthord@localhost>`.
-- A machine token for the worker binding.
+| File or directory                                        | On a Linux host or a Mac                  | In the image                                        |
+| -------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------- |
+| The instance file, mode `0600`                           | `~/.config/kanthord/workers/<name>.yaml`  | None. The container reads `KANTHORD_WORKER_CONFIG`. |
+| The data directory: `workspaces/`, `transcripts/`, `pi/` | `~/.local/share/kanthord/workers/<name>/` | `/var/lib/kanthord/data/kanthord/workers/<name>/`   |
+| The log                                                  | The journal of the unit, or the terminal  | `podman logs`                                       |
 
-The copy of the machine token is a secret. Make a private directory for it on the container host:
+`XDG_CONFIG_HOME` and `XDG_DATA_HOME` move the two directories. Each instance holds its own data directory, so two instances on one host share no workspace. A restart with the same configuration is the same instance. It keeps its workspaces, and it resumes its `running` execution.
 
-```sh
-mkdir -m 700 kanthord-transfer
-cd kanthord-transfer
-```
+A second process with the same configuration takes the connection of the instance. The first process then stops its agent commands and exits with status `3` and `worker.instance.superseded`. Until that exit, both processes can act in the same workspace, for at most one heartbeat interval of 15 s. Run one process for each instance.
 
-Create the machine token file in the container, copy it to the host, then remove it from the volume:
+### Run a worker in a stateless container
 
-```sh
-podman exec kanthord kanthord auth jwt generate --project <project id> --binding <binding name> --endpoint <server URL> --output /var/lib/kanthord/<binding name>.cli.yaml
-podman cp kanthord:/var/lib/kanthord/<binding name>.cli.yaml .
-podman exec kanthord rm /var/lib/kanthord/<binding name>.cli.yaml
-```
+The host kind `Container` runs the instance on a container platform with no writable configuration. The container reads the instance configuration from the variable `KANTHORD_WORKER_CONFIG`, so it needs no volume for its identity. Use these settings on any platform:
 
-The first command prints `created: <path>`. It needs no terminal, because it prints no token. The file holds `endpoint`, `token` and `client_secret`. The command refuses to replace an existing file with `system.files.publish_failed`, so remove the copy in the volume.
+- Store the instance configuration as a secret of the platform. Give it to the container as the variable `KANTHORD_WORKER_CONFIG`.
+- Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
+- Set the `GIT_*` variables of step 3.
+- Run one replica. A second replica takes the connection, and the first exits with status `3`. A restart loop with `worker.instance.superseded` means two deployments of one instance configuration.
+- Publish no port. The instance opens every connection to the server.
 
-On the worker host, put the file at `~/.config/kanthord/cli.yaml` with mode `0600`. When `XDG_CONFIG_HOME` is set, the path is `$XDG_CONFIG_HOME/kanthord/cli.yaml`. Then run `kanthord serve worker`.
+Without a volume, a new container starts with no workspace. The identity, the credential copies and the bindings stay on the server. A resumed execution clones the repository again and checks out the pushed node branch. The work that the lost workspace did not push is lost.
 
-After the transfer, remove the copy from the container host:
+The image declares a health check that reads the server on `127.0.0.1:31415`. A worker container serves no server, so its health status becomes `unhealthy`. That status is expected for a worker container.
 
-```sh
-rm <binding name>.cli.yaml
-cd ..
-rmdir kanthord-transfer
-```
+This example runs the container with Podman on a host of your network. `docker run` has no `--secret` option, so the example needs Podman.
 
-See [serve](../reference/serve.md) and [auth jwt generate](../reference/auth/jwt.md).
+1. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it). In **Where does it run?**, choose `Container`.
+2. On the container host of the instance, store the instance configuration as a Podman secret. Paste the value, press `Enter`, then press `Ctrl-D`.
 
-### Move a server binding to the worker placement
+   ```sh
+   podman secret create kanthord-worker-<name> -
+   ```
 
-A later write cannot change the placement of a worker binding. The tutorial bindings `coder` and `reviewer` keep the placement `server`. To move `coder` to a worker host:
+   The command prints the ID of the secret.
 
-1. In the project, open the **Bindings** tab. Select **Remove** on the `coder` row.
-2. In the dialog, select **Make unavailable instead**. The binding keeps its name, and its instance count becomes `0`. The live instances of the binding end, and the binding claims no node.
-3. Add a worker binding with another name and the placement `worker`. For example, add `coder-remote` with `coder@1`, as the start of this step shows.
-4. Create its machine token and start its worker process. On another host, use the token steps above. On the container host, use [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
+3. In the dashboard, select **Done**.
+4. Start the instance:
 
-Do the same for `reviewer`, for example with `reviewer-remote`. Do not select **Remove binding** in step 2. While a node is not `Completed`, the server refuses the removal of the only `coder@1` binding with `project.bindings.worker.node_unmatched`. A binding with instance count `0` still covers the states of the node. To use the binding again, set its instance count above `0`.
+   ```sh
+   podman run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   ```
+
+   The command prints the ID of the new container.
+
+5. Read the log of the instance:
+
+   ```sh
+   podman logs kanthord-worker-<name>
+   ```
+
+   One line holds `"msg":"Worker instance ready"` and `"config_source":"env"`.
+
+With Podman, the image directory `/var/lib/kanthord` becomes an anonymous volume. `podman restart` keeps the workspaces. A new container starts with none.
+
+Then do steps [8.4](#84-check-the-connection) to [8.6](#86-bind-the-instance).
 
 ### Run a worker in a container on the same host
 
-A worker can run in a second container of the same image on the container host. The image holds `bash`, `git`, the OpenSSH client and the `kanthord` binary of the server version. The worker container reaches the server container through a container network, by the container name `kanthord`.
+The host kind `Container on this host` runs the instance in a second Podman container beside the server container `kanthord`. The two containers share a container network. The instance reaches the server by the container name, at `http://kanthord:31415`. `docker run` has no `--secret` option, so these steps need Podman.
 
-1. Create a network, and connect the server container to it:
+1. Create a network:
 
    ```sh
    podman network create kanthord-net
+   ```
+
+   The command prints `kanthord-net`.
+
+2. Connect the server container to the network:
+
+   ```sh
    podman network connect kanthord-net kanthord
    ```
 
-2. Add the host `kanthord:31415` to the host allowlist with step 7:
+   The command prints nothing.
+
+3. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it), but skip step 5. In **Where does it run?**, choose `Container on this host`. **Address** then shows `http://kanthord:31415`.
+4. Store the instance configuration as a Podman secret. Paste the value, press `Enter`, then press `Ctrl-D`.
 
    ```sh
-   podman run --rm -v kanthord:/var/lib/kanthord --entrypoint sed docker.io/kanthorlabs/kanthord:<version> -i 's/^  allowed_hosts:$/&\n    - kanthord:31415/' /var/lib/kanthord/config/kanthord/kanthord.yaml
-   podman run --rm -v kanthord:/var/lib/kanthord docker.io/kanthorlabs/kanthord:<version> config validate
-   podman restart kanthord
+   podman secret create kanthord-worker-<name> -
    ```
 
-3. Write the client file of the worker into a new volume `kanthord-<binding name>`:
+   The command prints the ID of the secret.
+
+5. In the dashboard, select **Done**.
+6. Start the instance:
 
    ```sh
-   podman run --rm -v kanthord:/srv/kanthord:ro -v kanthord-<binding name>:/var/lib/kanthord docker.io/kanthorlabs/kanthord:<version> auth jwt generate --config /srv/kanthord/config/kanthord/kanthord.yaml --project <project id> --binding <binding name> --endpoint http://kanthord:31415 --output
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
-4. Start the worker:
+   The command prints the ID of the new container.
+
+7. Read the log of the instance:
 
    ```sh
-   podman run -d --name kanthord-<binding name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord-<binding name>:/var/lib/kanthord -e GIT_AUTHOR_NAME="<name>" -e GIT_AUTHOR_EMAIL="<email>" -e GIT_COMMITTER_NAME="<name>" -e GIT_COMMITTER_EMAIL="<email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman logs kanthord-worker-<name>
    ```
 
-The command of item 3 does these things:
+   One line holds `"msg":"Worker instance ready"` and `"config_source":"env"`.
 
-- It mounts the server volume read-only at `/srv/kanthord`. `--config` reads the server configuration there, because the token needs the key of the server.
-- It mounts the new worker volume at `/var/lib/kanthord`.
-- `--output` with no path writes the default client file of the image. The image sets `XDG_CONFIG_HOME=/var/lib/kanthord/config`, so the file is `/var/lib/kanthord/config/kanthord/cli.yaml` in the worker volume, not `~/.config/kanthord/cli.yaml`. The client file follows `XDG_CONFIG_HOME`, not `~`. The file has mode `0600`.
-- `--endpoint http://kanthord:31415` writes the address of the server on the container network into the file. `serve worker` reads it there.
+Then do steps [8.4](#84-check-the-connection) to [8.6](#86-bind-the-instance).
 
-The token stays in the worker volume, so no copy on the host needs removal.
-
-`podman logs kanthord-<binding name>` shows `Worker application ready` when the worker is registered. For two bindings, do items 3 and 4 once for each binding.
+The image holds `bash`, `git`, the OpenSSH client and the `kanthord` binary of the server version. The worker container keeps its workspaces in an anonymous volume. `podman restart kanthord-worker-<name>` keeps them. A new container starts with none, as [Run a worker in a stateless container](#run-a-worker-in-a-stateless-container) states. The health status of the worker container becomes `unhealthy`, and that status is expected.
 
 `podman restart kanthord` keeps the network connection. After `podman rm` of the server, do the worker steps of [Use a newer image](#use-a-newer-image).
+
+### Move a server binding to the worker placement
+
+A later write cannot change the placement of a worker binding. The tutorial bindings `coder` and `reviewer` keep the placement `server`. To move `coder` to a worker instance:
+
+1. In the project, open the **Bindings** tab. Select **Remove** on the `coder` row.
+2. In the dialog, select **Make unavailable instead**. The binding keeps its name, and its instance count becomes `0`. The live registration of the binding ends, and the binding claims no node.
+3. Add an instance of `coder@1`, and bind it with another name at the placement `worker`. Do steps 8.1 to 8.6, for example with the instance `coder-1` and the binding `coder-remote`.
+
+Do the same for `reviewer`, for example with the instance `reviewer-1` and the binding `reviewer-remote`. Do not select **Remove binding** in step 2. While a node is not `Completed`, the server refuses the removal of the only `coder@1` binding with `project.bindings.worker.node_unmatched`. A binding with instance count `0` still covers the states of the node. To use the binding again, set its instance count above `0`.
+
+### Clean up a worker host of an earlier version
+
+An earlier version ran `kanthord serve worker` with a machine token in `cli.yaml`. That setup does not work with this version. On each such host, do these steps:
+
+1. Stop the old `kanthord serve worker` process. For a container of the earlier guide, remove it with `podman rm -f kanthord-<binding name>`. `<binding name>` is the name of the old worker binding.
+2. Remove the old workspaces and transcripts. The instance keeps its files in its own data directory now.
+
+   ```sh
+   rm -rf ~/.local/state/kanthord/workspaces ~/.local/state/kanthord/transcripts
+   ```
+
+   The command prints nothing.
+
+3. If the host runs no kanthord server, remove the old pi directory. A server on the same host uses that directory.
+
+   ```sh
+   rm -rf ~/.local/state/kanthord/pi
+   ```
+
+   The command prints nothing.
+
+4. If `~/.config/kanthord/cli.yaml` holds a `client_secret` line, remove the file. Every CLI command that reads this file refuses it with `cli.config.invalid`.
+
+   ```sh
+   rm ~/.config/kanthord/cli.yaml
+   ```
+
+   The command prints nothing.
+
+5. For a container of the earlier guide, remove its volume:
+
+   ```sh
+   podman volume rm kanthord-<binding name>
+   ```
+
+   The command prints `kanthord-<binding name>`.
+
+With `XDG_STATE_HOME` or `XDG_CONFIG_HOME` set, write `$XDG_STATE_HOME/kanthord` or `$XDG_CONFIG_HOME/kanthord` in place of the paths above. Then add an instance on the host with step 8.
 
 ## Use a newer image
 
@@ -350,9 +745,11 @@ podman run --rm -v kanthord:/var/lib/kanthord docker.io/kanthorlabs/kanthord:<ne
 podman rm kanthord
 ```
 
-Then run the command of step 3 again, with `<new version>` in place of `<version>` and the same `GIT_*` values. See [upgrade](../reference/upgrade.md).
+Then run the command of step 3 again, with `<new version>` in place of `<version>` and the same `GIT_*` values. If you did step 8.1, run the command of step 8.1 in its place. See [upgrade](../reference/upgrade.md).
 
-If a worker runs in a container on the same host, do these steps too. See [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
+A worker instance checks the server version at its start and at each heartbeat. After the upgrade of the server, an instance of the old version exits with `worker.version.mismatch`. Upgrade each instance to `<new version>`.
+
+For an instance in a container on the same host, do these steps. See [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
 
 1. Connect the new server container to the network. `podman rm kanthord` removed the old connection.
 
@@ -360,14 +757,36 @@ If a worker runs in a container on the same host, do these steps too. See [Run a
    podman network connect kanthord-net kanthord
    ```
 
-2. For each worker, remove its container and start it again with the new version. The worker checks the server version at its start, and refuses another version with `worker.version.mismatch`. Today a running worker of the old version does not check again. It keeps running against the new server, so remove it. The worker volume keeps its client file.
+   The command prints nothing.
+
+2. Remove the container of the instance and its anonymous volume:
 
    ```sh
-   podman rm -f kanthord-<binding name>
-   podman run -d --name kanthord-<binding name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord-<binding name>:/var/lib/kanthord -e GIT_AUTHOR_NAME="<name>" -e GIT_AUTHOR_EMAIL="<email>" -e GIT_COMMITTER_NAME="<name>" -e GIT_COMMITTER_EMAIL="<email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   podman rm -f -v kanthord-worker-<name>
    ```
 
-For a worker on another host, install the `kanthord` binary of `<new version>` on that host. Then start `kanthord serve worker` again. See [upgrade](../reference/upgrade.md#other-state).
+   The command prints `kanthord-worker-<name>`.
+
+3. Start the instance with the new version. The Podman secret `kanthord-worker-<name>` stays.
+
+   ```sh
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   ```
+
+   The command prints the ID of the new container.
+
+For an instance on a Linux host, do these steps on that host:
+
+1. Install the binary of `<new version>` with steps 2 to 6 of [8.2](#82-install-the-binary-on-the-worker-host). Write `<new version>` in place of `<version>`.
+2. Start the instance again:
+
+   ```sh
+   systemctl --user restart kanthord-worker@<name>
+   ```
+
+   The command prints nothing.
+
+For an instance on a Mac, install the binary of `<new version>` with steps 2 to 7 of [8.2](#82-install-the-binary-on-the-worker-host). Then do steps 3 and 4 of the Mac list of [8.3](#83-add-the-instance-and-start-it) again. For an instance in a stateless container, change the image tag to `<new version>`. The instance keeps its configuration, its credential copies and its bindings. See [upgrade](../reference/upgrade.md#other-state).
 
 ## Troubleshooting
 
@@ -391,4 +810,17 @@ In a **Verify** row, the value in parentheses is the `failure_reason` of the che
 | The binding sheet shows "The host key of github.com was not read." and **Save binding** stays off                                                                                                 | The server cannot reach `api.github.com` over HTTPS. Check the network of the container host, then select **Retry**.                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **Verify** shows **Address · Unhealthy** and the hint "The address is not valid, or its host is not a host of the platform." (`address_invalid`)                                                  | The address does not have the form `git@<host>:<owner>/<repository>.git`, or its host is not `github.com` or `ssh.github.com` for GitHub. An address with the alias `github` of the earlier guide gets this result. In the binding sheet, the **Address** field also shows the host rule. See [Move from the earlier SSH setup](#move-from-the-earlier-ssh-setup).                                                                                                                                                                      |
 | **Verify** shows **SSH credential · Unhealthy** or **Address · Unhealthy**, and the hint "The server cannot load the SSH key." (`identity_unavailable`)                                           | The SSH credential holds no key that the server generated, or the server cannot start its SSH agent. Open **Credentials**, then **Git**, and select **Rotate key** on the credential. Add the new public key as a deploy key. If the fault stays, read `podman logs kanthord`.                                                                                                                                                                                                                                                          |
-| `system.files.publish_failed` from `auth jwt generate --output`                                                                                                                                   | The file exists in the volume. Remove it with `podman exec kanthord rm <path>`, then run the command again.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| The instance page shows `Not connected`                                                                                                                                                           | The process of the instance does not run, or it cannot reach `<address>`. Read the log of the instance: `journalctl --user -u kanthord-worker@<name>`, the terminal on a Mac, or `podman logs kanthord-worker-<name>`. The rows below name each code of that log.                                                                                                                                                                                                                                                                       |
+| `journalctl --user` prints "No journal files were found"                                                                                                                                          | The journal of the host keeps no user journal. Run `sudo journalctl _SYSTEMD_USER_UNIT=kanthord-worker@<name>.service`.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `worker.start.instance_config_absent`                                                                                                                                                             | The process finds no instance configuration. On a Linux host or a Mac, run `kanthord worker join` first, and pass the same `<name>` to `--instance`. In a container, give the secret as the variable `KANTHORD_WORKER_CONFIG`.                                                                                                                                                                                                                                                                                                          |
+| `worker.start.instance_config_conflict`                                                                                                                                                           | `KANTHORD_WORKER_CONFIG` is set while the instance file `workers/<name>.yaml` exists. Remove the variable, or remove the file.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `worker.instance.config_invalid`                                                                                                                                                                  | The pasted value is not complete, or `--instance` differs from the name in the configuration. Paste the whole value again. If you lost the value, select **Reset key** on the instance page.                                                                                                                                                                                                                                                                                                                                            |
+| `cli.worker.join.config_exists`                                                                                                                                                                   | The instance file of the name exists. After a **Reset key**, run `kanthord worker join --force` to replace it.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `worker.start.endpoint_insecure`                                                                                                                                                                  | `<address>` uses `http`, and its host does not resolve to a loopback or private address. Use an HTTPS address, or an address of your local network. See [8.1](#81-open-the-server-to-your-network).                                                                                                                                                                                                                                                                                                                                     |
+| `worker.version.mismatch`                                                                                                                                                                         | The binary or the image of the instance has another version than the server. Install the version of the server. See [8.2](#82-install-the-binary-on-the-worker-host) and [Use a newer image](#use-a-newer-image).                                                                                                                                                                                                                                                                                                                       |
+| `worker.instance.not_found`                                                                                                                                                                       | A **Reset key** or an **Archive** ended the configuration of the instance. After a **Reset key**, write the new configuration with `kanthord worker join --force`, or replace the Podman secret.                                                                                                                                                                                                                                                                                                                                        |
+| `loginctl enable-linger` asks for a password, or fails with "Access denied"                                                                                                                       | The host allows the change only to an administrator. Run `sudo loginctl enable-linger <user>`.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| The process exits with status `3` and `worker.instance.superseded`                                                                                                                                | A second process with the same instance configuration took the connection. The diagnostic names its `connection_name`. Run one process for each instance. systemd does not restart a process that exits with status `3`.                                                                                                                                                                                                                                                                                                                |
+| **Save binding** fails with `agent.configuration.credential_holder_mismatch`                                                                                                                      | A listed instance holds no live copy of a credential that the agents use. Do [8.5](#85-give-the-instance-the-llm-credential) for each listed instance.                                                                                                                                                                                                                                                                                                                                                                                  |
+| The sign-in of an instance fails with `credential.login.instance_unavailable`                                                                                                                     | The instance is not connected. Start it, and check [8.4](#84-check-the-connection). Then start the sign-in again.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| The health status of a worker container is `unhealthy`                                                                                                                                            | The health check of the image reads a server on `127.0.0.1:31415`, and a worker container serves no server. The status is expected. Read the connection on the instance page.                                                                                                                                                                                                                                                                                                                                                           |

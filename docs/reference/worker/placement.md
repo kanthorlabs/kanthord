@@ -6,11 +6,11 @@
 
 List the three worker placements and tell whether this server can host an instance at each one. The read starts no container and writes no state.
 
-| Placement   | Where the instances of a binding run                                        |
-| ----------- | --------------------------------------------------------------------------- |
-| `server`    | The server runs each instance as a thread.                                  |
-| `container` | The server runs each instance in its own container on the server host.      |
-| `worker`    | A `kanthord serve worker` process with a machine token hosts each instance. |
+| Placement   | Where the instances of a binding run                                                    |
+| ----------- | --------------------------------------------------------------------------------------- |
+| `server`    | The server runs each instance as a thread.                                              |
+| `container` | The server runs each instance in its own container on the server host.                  |
+| `worker`    | Each listed [worker instance](instance.md) runs as one `kanthord serve worker` process. |
 
 The `server` and `worker` placements are always available. The `container` placement depends on a runtime check of the server. The check reads the container runtime of the server user, Podman first, then Docker. The server reuses the newest answer for 10 seconds.
 

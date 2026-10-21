@@ -79,7 +79,7 @@ To go back to the previous binary:
 ### Other state
 
 - The worker application refuses a server of another package version. Upgrade each worker binary together with the server.
-- A release note states a change that invalidates every JWT and client secret. Then generate new tokens with [`auth jwt generate`](auth/jwt.md).
+- A release note states a change that invalidates every JWT and client secret. Then generate new human tokens with [`auth jwt generate`](auth/jwt.md). A worker instance takes new tokens itself. An instance whose client secret changed exits with `worker.instance.secret_changed`; start it again.
 - In a container, stop the server container, then run `upgrade` as a one-off container on the same volume with the same `XDG_*` variables, for example `podman run --rm -v kanthord:/var/lib/kanthord kanthord:<version> upgrade`.
 
 ## API shape

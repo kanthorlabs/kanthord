@@ -230,7 +230,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
    loginctl enable-linger
    ```
 
-4. Write the instance file. `kanthord worker join` reads the instance configuration from standard input. Paste the value, then press `Ctrl-D`:
+4. Write the instance file. `kanthord worker join` reads the instance configuration from standard input. Paste the value, press `Enter`, then press `Ctrl-D`:
 
    ```sh
    kanthord worker join
@@ -254,7 +254,18 @@ No block puts the instance configuration on a command line. `<name>` is the inst
    EOF
    ```
 
-6. Start the instance, and start it again at each boot:
+6. Write the settings of this instance. They set the author of the agent commits and turn off core dumps. `<git name>` and `<git email>` set the identity of the commits that the agents make:
+
+   ```sh
+   mkdir -p ~/.config/systemd/user/kanthord-worker@<name>.service.d
+   cat > ~/.config/systemd/user/kanthord-worker@<name>.service.d/kanthord.conf <<'EOF'
+   [Service]
+   Environment="GIT_AUTHOR_NAME=<git name>" "GIT_AUTHOR_EMAIL=<git email>" "GIT_COMMITTER_NAME=<git name>" "GIT_COMMITTER_EMAIL=<git email>"
+   LimitCORE=0
+   EOF
+   ```
+
+7. Start the instance, and start it again at each boot:
 
    ```sh
    systemctl --user daemon-reload
@@ -273,13 +284,19 @@ No block puts the instance configuration on a command line. `<name>` is the inst
    sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord
    ```
 
-3. Write the instance file. Paste the value, then press `Ctrl-D`:
+3. Write the instance file. Paste the value, press `Enter`, then press `Ctrl-D`:
 
    ```sh
    kanthord worker join
    ```
 
-4. Start the instance. Keep the terminal open:
+4. Set the author of the agent commits for this terminal. `<git name>` and `<git email>` set the identity of the commits that the agents make:
+
+   ```sh
+   export GIT_AUTHOR_NAME="<git name>" GIT_AUTHOR_EMAIL="<git email>" GIT_COMMITTER_NAME="<git name>" GIT_COMMITTER_EMAIL="<git email>"
+   ```
+
+5. Start the instance. Keep the terminal open:
 
    ```sh
    kanthord serve worker --instance <name>
@@ -301,7 +318,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
    podman network connect kanthord-net kanthord
    ```
 
-2. Store the instance configuration as a Podman secret. `podman secret create` reads it from standard input. Paste the value, then press `Ctrl-D`:
+2. Store the instance configuration as a Podman secret. `podman secret create` reads it from standard input. Paste the value, press `Enter`, then press `Ctrl-D`:
 
    ```sh
    podman secret create kanthord-worker-<name> -
