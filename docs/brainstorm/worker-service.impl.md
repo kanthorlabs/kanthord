@@ -172,6 +172,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
 - A registration whose answer is indeterminate stops the start with `worker.start.registration_indeterminate`.
 - `SIGINT` and `SIGTERM` stop further startup and further work pulls.
+- A `SIGINT` or a `SIGTERM` during the startup is a stop, not a startup failure. The application exits 0 with no diagnostic.
 - A stop aborts each outstanding work pull. A claim that commits during that abort has no worker until its lease expires, and settlement then declares it lost.
 - The application deregisters only a registration whose runtime identity it knows.
 - The application deregisters at a stop only when no execution is live and no work pull answer failed its schema. An upgrade stops the old process before it starts the new one.
