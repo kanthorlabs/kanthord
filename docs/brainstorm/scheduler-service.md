@@ -124,7 +124,10 @@ The Scheduler bounds waiting-request counts and timeouts separately from claim h
 An empty work pull opens no attempt, creates no execution and counts no live execution.
 A no-work result ends the request.
 An instance retries with backoff, never with tight polling.
+A no-work answer that the Scheduler held for the backoff delay or longer counts as that delay, so the instance pulls again at once.
 A Mission write, an accepted inbound event or an ended execution of the binding triggers a recheck for a waiting pull.
+An ended execution of the same worker instance also triggers a recheck.
+A free slot of a worker instance goes to the binding of the instance that waited longest, and a newer pull waits in that order.
 The Scheduler rechecks every admission condition before it satisfies that pull.
 A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
 A [project pause](project-service.md#project-pause) takes effect while a request waits, and a resume triggers a recheck for a waiting pull.

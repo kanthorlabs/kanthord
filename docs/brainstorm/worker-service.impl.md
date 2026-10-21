@@ -343,6 +343,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 - The `server` wrapper passes `state/kanthord/` of the slot root for both. The `worker` wrapper passes the data directory and the log directory of [The worker application](#the-worker-application).
 - The worker unit registers each entry. Every request of a registration renews its heartbeat, and an idle registration sends a heartbeat inside the heartbeat window.
 - While idle, the worker unit keeps one outstanding work pull on each registration. When one pull answers a claim, it aborts the other pulls and starts no pull until the execution ends.
+- A no-work answer that the server held for the backoff delay or longer resets the backoff, and the pull loop pulls again at once. A shorter no-work answer waits for the rest of the delay. A refused pull therefore keeps its place in the [queue order](scheduler-service.impl.md#the-claim-selection) of its instance.
 - The `worker` wrapper adds and removes entries when the connection answer changes. An entry in the state `draining` ends its live execution first, then deregisters and leaves the list.
 - `log` is a log destination, or a line sink for a test.
 - The `env` of the worker unit equals the `process.env` of its thread.
