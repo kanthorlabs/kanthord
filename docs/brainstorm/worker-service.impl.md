@@ -1115,7 +1115,7 @@ The relay serves only the `worker` placement, and the `server` and `container` p
 - For the host-bound method, the server host key in the signed data equals the pinned host key of the repository host.
 - Another payload answers 400 `worker.ssh.sign_refused`. `details.reason` is `not_user_authentication`, `key_mismatch` or `host_key_mismatch`, a closed enum in code.
 - The server signs with ed25519 and ignores `flags`. It drops the key material. It logs the execution, the binding, the credential, `client_id` and `instance_id`.
-- `src/repository/ssh-sign.ts` checks the payload and signs.
+- `RepositoryComponent.sshSignatureOf` in `src/repository/index.ts` checks the payload with `src/repository/ssh-sign.ts`. After the check, it releases the key through custody and signs.
 - During a live claim, the holder of the client token and the `client_secret` can authenticate as the deploy key. The reach ends with the claim.
 - Tests cover the socket protocol, each refusal reason, another binding, another placement, an execution with no live claim and a replay with 409.
 - Plain `git` and OpenSSH push and fetch through the relay against `src/repository/test-sshd.ts`, and once against the live repository host.

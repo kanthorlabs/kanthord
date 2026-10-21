@@ -283,13 +283,15 @@ It chooses the relay when the handover holds no SSH identity for a repository bi
 
 ### The signature check
 
-The server checks each relayed payload before it signs.
+The server checks each relayed payload before it releases the key.
 
 - The payload is a user authentication request with the user name `git` and the method `publickey` or `publickey-hostbound-v00@openssh.com`.
-- The public key in the payload equals the public key of the `ssh` record of the binding.
+- The public key in the payload equals the `public_key` metadata of the revision of the `ssh` record of the binding.
 - For `publickey-hostbound-v00@openssh.com`, the server host key in the payload equals the [pinned host key](#host-keys) of the repository host.
 - Another payload answers 400 `worker.ssh.sign_refused` with `details.reason` `not_user_authentication`, `key_mismatch` or `host_key_mismatch`.
-- The server signs with the ed25519 key of the record and drops the material in `finally`, under [the release of a key](#the-release-of-a-key).
+- The check reads only public metadata. A refused payload decrypts nothing and writes no release log line.
+- A revision without a valid `public_key` metadata answers 409 `repository.credential.ssh_key_legacy` before any decrypt.
+- After the check, custody releases the key. The server signs with the ed25519 key of the record and drops the material in `finally`, under [the release of a key](#the-release-of-a-key).
 
 ## Host keys
 
