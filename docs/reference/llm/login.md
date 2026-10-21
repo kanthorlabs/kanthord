@@ -20,7 +20,9 @@ The flow has three commands:
 - The instance receives the session in its next heartbeat answer, at most 15 seconds later. While a session is pending, the instance sends a heartbeat every 2 seconds.
 - `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use `device` mode. An instance session never uses `browser` mode.
 - The instance reports the address and the code. The human submits the `code#state` value with `login-code`, and the value reaches the instance in its next heartbeat.
-- The instance seals the OAuth tokens to its own key. The server stores only the sealed copy as revision 1 of the instance holder, with `sealed_to` set to the instance key fingerprint. The server never holds the plaintext tokens.
+- The instance seals the OAuth tokens to its own key. The server stores only the sealed copy, with `sealed_to` set to the instance key fingerprint. The server never holds the plaintext tokens.
+- A new copy gets revision 1. A copy sealed to an ended key, for example after Reset key, gets the next revision. The older revisions then end as after a rotation.
+- A copy that holds a live revision sealed to the current key refuses a new login. An archived copy refuses a new login.
 - The instance refreshes its own copy in an execution and reports the refreshed copy sealed.
 
 ### Platforms and modes
@@ -136,7 +138,8 @@ API failures use the shared [error envelope](../errors.md#api-failures). The sha
 | `400 credential.login.browser_unavailable`  | `login`                      | `browser` mode through a non-loopback `Host`, or for an instance holder.                                                                                                           |
 | `400 llm.credential.instance_unknown`       | `login`                      | `holder` names no live worker instance.                                                                                                                                            |
 | `409 credential.login.instance_unavailable` | `login`                      | The instance holds no current connection, or its last heartbeat is older than 60 seconds.                                                                                          |
-| `409 credential.name.conflict`              | `login`                      | The name is taken. `details.id` holds the identity of its newest revision.                                                                                                         |
+| `409 credential.name.conflict`              | `login`                      | The name is taken. For an instance holder: the copy holds a live revision sealed to the current key. `details.id` holds the identity of that revision.                             |
+| `409 credential.credential.archived`        | `login`                      | The copy of the instance holder is archived. An archive is final.                                                                                                                  |
 | `409 credential.login.pending`              | `login`                      | The human already has a `pending` session for this platform.                                                                                                                       |
 | `503 credential.login.failed`               | `login`                      | The flow failed before an address.                                                                                                                                                 |
 | `503 llm.lifecycle.stopped`                 | `login`                      | The LLM component stopped and accepts no login.                                                                                                                                    |

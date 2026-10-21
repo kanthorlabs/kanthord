@@ -205,6 +205,9 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `llm.credential.login` takes the optional `holder`. A login of an instance holder runs on that instance, and the server holds only the session record.
 - An instance with no current connection answers 409 `credential.login.instance_unavailable`. A connection whose last heartbeat is older than `INSTANCE_CONNECTED_WINDOW` (60 s) counts as no current connection.
 - A holder that names no live instance answers 400 `llm.credential.instance_unknown`.
+- A login of an instance holder refuses with 409 `credential.name.conflict` only when the `(name, holder)` group holds a live revision sealed to the current fingerprint. `details.id` holds the identity of that revision.
+- A login of an archived copy answers 409 `credential.credential.archived`. The archive stays final.
+- A copy whose newest live revision is sealed to an ended key takes a new login. A key rotation or a Reset key of the instance makes a copy stale in this way.
 - `llm.credential.login` waits for the first report of the instance with an address, inside the operation timeout of 30 s. The instance receives the session in its next heartbeat answer.
 - An instance session never uses browser mode. `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use device mode. A request for browser mode answers 400 `credential.login.browser_unavailable`.
 - The heartbeat answer of the instance lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 2 s while a session of it is pending.
@@ -216,8 +219,8 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - An instance session accepts one value, in `copy_code` mode only, after the instance reported the address. Another value answers 409 `credential.login.value_not_awaited`.
 - The instance runs each listed session once. A session that leaves `login_sessions` ends on the instance.
 - The instance expires its own run 15 minutes after it receives the session. The expiry of the server decides.
-- At completion, the instance seals the credential to its own key and sends `sealed` and `sealed_to` in the final report. The component writes revision 1 of the `(name, holder)` group through custody, under the rules of this section.
-- The write checks in one transaction that the session is pending and not expired, and that `sealed_to` is the current fingerprint of the holder. An expired session stores nothing.
+- At completion, the instance seals the credential to its own key and sends `sealed` and `sealed_to` in the final report. The component writes the revision through custody, under the rules of this section. A group with no revision gets revision 1. A group with a stale live revision n gets revision n+1, sealed to the current key, with the metadata of revision n. The older live revisions then drain as after a rotation.
+- The write checks in one transaction that the session is pending and not expired, and that `sealed_to` is the current fingerprint of the holder. It checks the name rules of the start again. An expired session stores nothing.
 - A refused write fails the session with the error code and stores nothing. A `completed` report without `sealed`, or another report with `sealed`, answers 400 `credential.input.invalid`.
 - A report to an unknown, ended or expired session, or to a session of another instance, answers 404 `credential.login.not_found`.
 - `address` is an `https:` URL of at most 2048 characters. `code`, `message` and `failure_reason` hold at most 1024 characters. The first address of a session stays; a report with another address answers 400 `credential.input.invalid`.
@@ -283,5 +286,6 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.
 - Tests cover a human create for several holders, a sealed create of an instance and each refusal of an instance caller. They also cover `llm.credential.instance_unknown` and an `openai-compatible` instance copy with typed model ids.
 - Tests cover an instance login in each allowed mode with a fake pi-ai flow, a refused browser mode, `credential.login.instance_unavailable` and an expiry that stores nothing.
+- Tests cover a login after a key rotation (revision 2 live), a login after a revoked revision (the next revision), a live current copy (409 `credential.name.conflict`), an archived copy (409 `credential.credential.archived`) and a copy that turns current during the session.
 - Tests cover `llm.credential.report` and each refusal, `llm.credential.sealed`, the counter of each write, the healthcheck of an instance copy with no release, and `unknown` after a server restart.
 - A test runs a live instance against the server with a fake provider check: a bad key shows `unhealthy` with the report time on `worker.instance.get`, and a rotation shows `healthy` after the next check.
