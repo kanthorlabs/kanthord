@@ -302,6 +302,8 @@ No block puts the instance configuration on a command line. `<name>` is the inst
    kanthord serve worker --instance <name>
    ```
 
+A container host kind adds the field **Container runtime** with the values `Podman` and `Docker`. `Podman` is the default. The sheet shows the steps of that runtime. The Podman form follows. The Docker forms follow the Podman forms.
+
 `Container` runs the instance on a container platform with no writable configuration:
 
 - Store the instance configuration as a secret of the platform, and expose it to the container as the env value `KANTHORD_WORKER_CONFIG`.
@@ -310,7 +312,7 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 - Run one replica. A second replica supersedes the first, under [The instance exchange](#the-instance-exchange).
 - Publish no port. The instance opens every connection to the server.
 
-`Container on this host` runs the instance in a Podman container beside the server container `kanthord`. The sheet fills the endpoint `http://kanthord:31415`.
+`Container on this host` runs the instance in a container beside the server container `kanthord`. The sheet fills the endpoint `http://kanthord:31415`.
 
 1. Put both containers on one network:
 
@@ -329,6 +331,38 @@ No block puts the instance configuration on a command line. `<name>` is the inst
 
    ```sh
    podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   ```
+
+The Docker form of `Container` replaces the first bullet and the health check bullet:
+
+- Write the line `KANTHORD_WORKER_CONFIG=<value>` to an env file of mode 0600. Give the file to `docker run` with `--env-file`, then delete the file. `docker inspect` shows the value to every user that can run `docker`.
+- Run the container with no health check, for example with `docker run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
+
+The Docker form of `Container on this host`:
+
+1. Put both containers on one network:
+
+   ```sh
+   docker network create kanthord-net
+   docker network connect kanthord-net kanthord
+   ```
+
+2. Write the instance configuration to an env file of mode 0600. `cat` reads it from standard input. Type `KANTHORD_WORKER_CONFIG=`, paste the value, press `Enter`, then press `Ctrl-D`:
+
+   ```sh
+   (umask 077 && cat > <name>.env)
+   ```
+
+3. Start the instance. `docker run` reads the env file once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make:
+
+   ```sh
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   ```
+
+4. Delete the env file. The container keeps the value:
+
+   ```sh
+   rm <name>.env
    ```
 
 ## The worker unit and its wrappers

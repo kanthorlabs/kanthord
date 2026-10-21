@@ -14,7 +14,7 @@ Run the published kanthord container image with Podman or Docker. The image cont
 
 Run every command of this guide in a terminal on the host. `podman run` and `podman exec` run the `kanthord`, `sed`, `ls`, `rm` and `chmod` parts inside a container. Inside the container, `~` is `/var/lib/kanthord`, the volume.
 
-The commands use Podman. With Docker, write `docker` in place of `podman` in each command.
+The commands use Podman. With Docker, write `docker` in place of `podman` in each command. Where a Docker command differs, the guide shows the Docker form.
 
 Replace each placeholder with your value:
 
@@ -600,9 +600,11 @@ Without a volume, a new container starts with no workspace. The identity, the cr
 
 The image declares a health check that reads the server on `127.0.0.1:31415`. A worker container serves no server, so the worker commands of this guide pass `--no-healthcheck`. The [instance page](#84-check-the-connection) of the dashboard shows the health of the instance: the connection and the last heartbeat.
 
-This example runs the container with Podman on a host of your network. `docker run` has no `--secret` option, so the example needs Podman.
+This example runs the container with Podman or Docker on a host of your network. Podman reads the configuration from a Podman secret. Docker reads it from an env file of mode 0600 with `--env-file`, and you delete the file after the start.
 
-1. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it). In **Where does it run?**, choose `Container`.
+`docker inspect kanthord-worker-<name>` shows the value of `KANTHORD_WORKER_CONFIG` to every user that can run `docker`. A member of the `docker` group can already read every volume on the host.
+
+1. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it). In **Where does it run?**, choose `Container`. In **Container runtime**, choose `Podman` or `Docker`.
 2. On the container host of the instance, store the instance configuration as a Podman secret. Paste the value, press `Enter`, then press `Ctrl-D`.
 
    ```sh
@@ -610,6 +612,14 @@ This example runs the container with Podman on a host of your network. `docker r
    ```
 
    The command prints the ID of the secret.
+
+   With Docker, write the instance configuration to an env file of mode 0600. Type `KANTHORD_WORKER_CONFIG=`, paste the value, press `Enter`, then press `Ctrl-D`.
+
+   ```sh
+   (umask 077 && cat > <name>.env)
+   ```
+
+   The command prints nothing.
 
 3. In the dashboard, select **Done**.
 4. Start the instance:
@@ -620,6 +630,22 @@ This example runs the container with Podman on a host of your network. `docker r
 
    The command prints the ID of the new container.
 
+   With Docker, start the instance with the env file:
+
+   ```sh
+   docker run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   ```
+
+   The command prints the ID of the new container.
+
+   With Docker, delete the env file. The container keeps the value.
+
+   ```sh
+   rm <name>.env
+   ```
+
+   The command prints nothing.
+
 5. Read the log of the instance:
 
    ```sh
@@ -628,13 +654,13 @@ This example runs the container with Podman on a host of your network. `docker r
 
    One line holds `"msg":"Worker instance ready"` and `"config_source":"env"`.
 
-With Podman, the image directory `/var/lib/kanthord` becomes an anonymous volume. `podman restart` keeps the workspaces. A new container starts with none.
+The image directory `/var/lib/kanthord` becomes an anonymous volume. `podman restart` keeps the workspaces. A new container starts with none.
 
 Then do steps [8.4](#84-check-the-connection) to [8.6](#86-bind-the-instance).
 
 ### Run a worker in a container on the same host
 
-The host kind `Container on this host` runs the instance in a second Podman container beside the server container `kanthord`. The two containers share a container network. The instance reaches the server by the container name, at `http://kanthord:31415`. `docker run` has no `--secret` option, so these steps need Podman.
+The host kind `Container on this host` runs the instance in a second container beside the server container `kanthord`. The two containers share a container network. The instance reaches the server by the container name, at `http://kanthord:31415`. With Docker, write `docker` in place of `podman` in steps 1, 2 and 7. Steps 4 and 6 show the Docker form. [Run a worker in a stateless container](#run-a-worker-in-a-stateless-container) states who can read the value with Docker.
 
 1. Create a network:
 
@@ -652,7 +678,7 @@ The host kind `Container on this host` runs the instance in a second Podman cont
 
    The command prints nothing.
 
-3. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it), but skip step 5. In **Where does it run?**, choose `Container on this host`. **Address** then shows `http://kanthord:31415`.
+3. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it), but skip step 5. In **Where does it run?**, choose `Container on this host`. **Address** then shows `http://kanthord:31415`. In **Container runtime**, choose `Podman` or `Docker`.
 4. Store the instance configuration as a Podman secret. Paste the value, press `Enter`, then press `Ctrl-D`.
 
    ```sh
@@ -660,6 +686,14 @@ The host kind `Container on this host` runs the instance in a second Podman cont
    ```
 
    The command prints the ID of the secret.
+
+   With Docker, write the instance configuration to an env file of mode 0600. Type `KANTHORD_WORKER_CONFIG=`, paste the value, press `Enter`, then press `Ctrl-D`.
+
+   ```sh
+   (umask 077 && cat > <name>.env)
+   ```
+
+   The command prints nothing.
 
 5. In the dashboard, select **Done**.
 6. Start the instance:
@@ -669,6 +703,22 @@ The host kind `Container on this host` runs the instance in a second Podman cont
    ```
 
    The command prints the ID of the new container.
+
+   With Docker, start the instance with the env file:
+
+   ```sh
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   ```
+
+   The command prints the ID of the new container.
+
+   With Docker, delete the env file. The container keeps the value.
+
+   ```sh
+   rm <name>.env
+   ```
+
+   The command prints nothing.
 
 7. Read the log of the instance:
 
@@ -750,7 +800,7 @@ Then run the command of step 3 again, with `<new version>` in place of `<version
 
 A worker instance checks the server version at its start and at each heartbeat. After the upgrade of the server, an instance of the old version exits with `worker.version.mismatch`. Upgrade each instance to `<new version>`.
 
-For an instance in a container on the same host, do these steps. See [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host).
+For an instance in a container on the same host, do these steps. See [Run a worker in a container on the same host](#run-a-worker-in-a-container-on-the-same-host). With Docker, write `docker` in place of `podman` in steps 1 and 2. Steps 2 and 3 show the Docker form.
 
 1. Connect the new server container to the network. `podman rm kanthord` removed the old connection.
 
@@ -760,7 +810,21 @@ For an instance in a container on the same host, do these steps. See [Run a work
 
    The command prints nothing.
 
-2. Remove the container of the instance and its anonymous volume:
+2. With Docker, first copy the instance configuration of the old container to an env file of mode 0600:
+
+   ```sh
+   docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' kanthord-worker-<name> | grep '^KANTHORD_WORKER_CONFIG=' | (umask 077 && cat > <name>.env)
+   ```
+
+   The command prints nothing. Check that the env file holds the line:
+
+   ```sh
+   grep -c '^KANTHORD_WORKER_CONFIG=' <name>.env
+   ```
+
+   The command prints `1`. If it prints `0`, stop. Do not remove the container, because it holds the only copy of the value.
+
+   Remove the container of the instance and its anonymous volume:
 
    ```sh
    podman rm -f -v kanthord-worker-<name>
@@ -772,6 +836,15 @@ For an instance in a container on the same host, do these steps. See [Run a work
 
    ```sh
    podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   ```
+
+   The command prints the ID of the new container.
+
+   With Docker, start the instance with the env file, then delete the file:
+
+   ```sh
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   rm <name>.env
    ```
 
    The command prints the ID of the new container.
@@ -819,7 +892,7 @@ In a **Verify** row, the value in parentheses is the `failure_reason` of the che
 | `cli.worker.join.config_exists`                                                                                                                                                                   | The instance file of the name exists. After a **Reset key**, run `kanthord worker join --force` to replace it.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `worker.start.endpoint_insecure`                                                                                                                                                                  | `<address>` uses `http`, and its host does not resolve to a loopback or private address. Use an HTTPS address, or an address of your local network. See [8.1](#81-open-the-server-to-your-network).                                                                                                                                                                                                                                                                                                                                     |
 | `worker.version.mismatch`                                                                                                                                                                         | The binary or the image of the instance has another version than the server. Install the version of the server. See [8.2](#82-install-the-binary-on-the-worker-host) and [Use a newer image](#use-a-newer-image).                                                                                                                                                                                                                                                                                                                       |
-| `worker.instance.not_found`                                                                                                                                                                       | A **Reset key** or an **Archive** ended the configuration of the instance. After a **Reset key**, write the new configuration with `kanthord worker join --force`, or replace the Podman secret.                                                                                                                                                                                                                                                                                                                                        |
+| `worker.instance.not_found`                                                                                                                                                                       | A **Reset key** or an **Archive** ended the configuration of the instance. After a **Reset key**, write the new configuration with `kanthord worker join --force`, or replace the Podman secret. With Docker, write a new env file and run the container again.                                                                                                                                                                                                                                                                         |
 | `loginctl enable-linger` asks for a password, or fails with "Access denied"                                                                                                                       | The host allows the change only to an administrator. Run `sudo loginctl enable-linger <user>`.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | The process exits with status `3` and `worker.instance.superseded`                                                                                                                                | A second process with the same instance configuration took the connection. The diagnostic names its `connection_name`. Run one process for each instance. systemd does not restart a process that exits with status `3`.                                                                                                                                                                                                                                                                                                                |
 | **Save binding** fails with `agent.configuration.credential_holder_mismatch`                                                                                                                      | A listed instance holds no live copy of a credential that the agents use. Do [8.5](#85-give-the-instance-the-llm-credential) for each listed instance.                                                                                                                                                                                                                                                                                                                                                                                  |
