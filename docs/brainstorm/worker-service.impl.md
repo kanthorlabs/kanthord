@@ -943,7 +943,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   2. `<runtime> inspect` shows no `client_secret` and no `KANTHORD_*` in the `env` or the command. It shows the read-only root file system, `CapDrop` `ALL` and `no-new-privileges`.
   3. A drain of an idle slot exits 0. No container of the slot remains after 10 s, and the slot volume remains.
   4. A stop exits within 5 s. `terminate()` ends an instance that ignores the stop within 5 s.
-  5. A process that launches a slot and then receives `SIGKILL` leaves no container after 20 s.
+  5. A process that launches a slot and then receives `SIGKILL` leaves no running container after 20 s. The next `prepare()` removes the container record.
   6. `prepare()` removes a container with the owner label, and keeps a container of another owner.
   7. A relaunch with the same `client_id` reads a file that the first run wrote into the slot volume.
   8. `stderr.log` on the host holds the record `Worker application ready`.
