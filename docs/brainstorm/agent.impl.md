@@ -20,7 +20,7 @@ A mechanism here never overrides a rule there.
 - `swe@1` and `re@1` declare an empty option schema.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
 - `agent list` answers one summary per catalog agent: `agent_name`, `worker_names` and `enablement`.
-- `agent get` answers `prompt`, `configuration_schema`, `overridable_fields` and `enablement`.
+- `agent get` answers `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
 - `enablement` is null when no record exists.
 - `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
@@ -145,7 +145,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
   - A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats it as free.
 - `active_position` is the position of the first chain entry whose `cooldown` is `null` or whose `available_at` is not later than the clock reading. It is `null` when every chain entry has a live cooldown.
 - `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", available_at }` when `active_position` is `null`. `available_at` is the earliest `available_at` of the chain.
-- The `agent.get` view of an agent builds the chain from the enablement alone. An absent enablement answers `chain: []`, `active_position: null` and `cooling: null`.
+- The `agent.get` view of an agent builds the chain from the enablement alone. An absent enablement answers `chain: []`, `active_position: null` and `cooling: null`. A disabled enablement answers the same.
 - The project agent configuration views build the chain from the effective configuration and the entry of the worker binding. An invalid configuration answers `chain: []`.
 - The views read the clock once for each answer.
 - Tests cover a chain with no cooldown, one cooling entry, every entry cooling, an expired cooldown and an invalid configuration.
