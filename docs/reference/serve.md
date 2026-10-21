@@ -45,7 +45,7 @@ A second process of the same instance takes the connection. The first process ki
 
 The worker host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. A missing tool stops the start with `repository.connector.tool_missing`, and an older tool with `repository.connector.tool_version`. The worker host needs no SSH key, no SSH configuration and no `known_hosts` entry. At the `worker` placement, the SSH key stays on the server, and the instance sends each SSH signature request to the server through the SSH signature relay. The execution setup carries the pinned host key. The worker host must reach the SSH port of each repository address host. The SSH port is 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`, and 22 for every other host. See [SSH host keys](repository/host-key.md#function-description). No binding check proves that path from the worker host.
 
-`SIGINT`, `SIGTERM`, or cancellation stops the pull loop and deregisters each registration of the instance. A stop during a live execution cancels that execution and fails with `worker.stop.execution_live`.
+`SIGINT`, `SIGTERM`, or cancellation stops the pull loop and deregisters each registration of the instance. A stop during a live execution cancels that execution and fails with `worker.stop.execution_live`. A `SIGINT` or a `SIGTERM` during the start ends the start, and the command exits `0` with no error.
 
 ### Slot (internal)
 
