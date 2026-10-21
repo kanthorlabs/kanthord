@@ -71,7 +71,7 @@ Check the server:
 curl http://localhost:<port>/api/liveness
 ```
 
-A running server answers HTTP `200` with a JSON service map that starts with `{"status":"ok"`. See [liveness](../reference/gateway/liveness.md).
+A running server answers HTTP `200` with a JSON service map that starts with `{"status":"ok"`. If `curl` fails, wait 2 s and run it again. See [liveness](../reference/gateway/liveness.md).
 
 The image also declares a container healthcheck. Every 30 s, Podman or Docker runs `kanthord gateway liveness` inside the container. That command sends no token. Podman runs the first check at the start of the container. That check can fail, because the server is not ready yet. Read the health status:
 
@@ -227,6 +227,7 @@ At the `worker` placement, a worker runs in a `kanthord serve worker` process ou
 - An instance belongs to one worker, for example `coder@1`. Only a binding of that worker can list it.
 - An instance runs one execution at a time.
 - An instance holds its own copy of each LLM credential, sealed to its key. The server hands no server-held credential to an instance.
+- The **Workers** screen and step 8.6 need a project. Without a project, **Workers** shows "No projects". To create one, open **Projects**, then **New project**, as [step 5](#5-connect-a-repository) shows.
 - The first-task tutorial needs `coder@1` and `reviewer@1`. To run both at the `worker` placement, add one instance of each worker. Do step 8 once for each instance. For a second instance on the same worker host, skip steps 8.1 and 8.2.
 
 Choose the steps for the place of the instance:
@@ -255,6 +256,7 @@ The steps use these placeholders in addition to the table at the start of this g
 - A network path to the SSH port of the repository host: port 22 for `github.com`, `gitlab.com` and `bitbucket.org`, port 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`. The **Verify** of step 5 runs on the server, so it does not prove this path.
 - A temporary directory path of 75 bytes or fewer that holds only letters, digits, `/`, `.`, `_` and `-`. The instance reads `TMPDIR`, else `TMP` or `TEMP`, else it uses `/tmp`. For each git operation, the instance makes an SSH agent socket in that directory. A longer path or another character fails every SSH operation with `repository.connector.ssh_agent_failed`.
 - `curl`, for the downloads of step 8.2.
+- `sudo`, for the install of step 8.2.
 - A network path to the server. Step 8.1 makes it.
 
 ### 8.1 Open the server to your network
@@ -269,13 +271,15 @@ The command of step 3 publishes the server on the loopback address of the contai
 
    The command prints `kanthord`.
 
-2. Start the server again. This is the command of step 3 with the added option `-p <LAN address>:<port>:31415`. If you removed `-p 127.0.0.1:1455:1455` in step 3, remove it here too.
+2. Start the server again. This is the command of step 3 with `-p <port>:31415` in place of `-p 127.0.0.1:<port>:31415`. If you removed `-p 127.0.0.1:1455:1455` in step 3, remove it here too.
 
    ```sh
-   podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p 127.0.0.1:<port>:31415 -p <LAN address>:<port>:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version>
+   podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p <port>:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version>
    ```
 
    The command prints the ID of the new container.
+
+   `-p <port>:31415` publishes the dashboard and the API on every interface of the container host. On a Linux host, you can keep the loopback and LAN form: `-p 127.0.0.1:<port>:31415 -p <LAN address>:<port>:31415`. Podman on macOS refuses that form with `Error: rootlessport conflict with ID 2`.
 
 3. On the worker host, check the path to the server:
 
@@ -283,7 +287,7 @@ The command of step 3 publishes the server on the loopback address of the contai
    curl http://<LAN address>:<port>/api/liveness
    ```
 
-   The answer starts with `{"status":"ok"`.
+   The answer starts with `{"status":"ok"`. If `curl` fails, wait 2 s and run it again.
 
 `<address>` is now `http://<LAN address>:<port>`. Keep the dashboard on `http://localhost:<port>`. The server accepts the calls of a worker instance with any `Host` header, so `gateway.allowed_hosts` needs no change.
 
@@ -562,7 +566,7 @@ The CLI can also make a copy with the option `--holder`. See [LLM credentials](.
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
 2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
 3. Choose the **Worker** of the instance, for example `coder@1`.
-4. Wait until the **Agents** section shows the agent with the badge `Enabled`, for example `swe@1`.
+4. The **Agents** section shows the agent of the worker, for example `swe@1`. When the agent shows the badge `Not enabled`, select **Enable swe@1**. Enter an **Agent provider name**, for example `claude`. Choose the **LLM credential** and the **Model identifier**. Then select **Enable agent**. The badge then shows `Enabled`.
 5. Choose the **Placement** `worker`.
 6. In **Instances**, select `<name>`.
 7. Select **Save binding**.
