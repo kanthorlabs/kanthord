@@ -36,7 +36,7 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 | `agent--enablement--provider--remove` | `DELETE /api/agent/enablement/:agent_name/provider/:provider_name` | Yes | Remove an unused named provider, retaining at least one provider. |
 | `agent--enablement--put` | `PUT /api/agent/enablement/:agent_name` | Yes | Create or replace an agent enablement at its expected revision. |
 | `agent--enablement--remove` | `DELETE /api/agent/enablement/:agent_name` | Yes | Remove an agent enablement with no dependent bindings. |
-| `agent--get` | `GET /api/agent/:agent_name` | No | Get an agent declaration and its current enablement. |
+| `agent--get` | `GET /api/agent/:agent_name` | No | Get an agent declaration, its current enablement and the chain view of that enablement. |
 | `agent--model--list` | `GET /api/agent/model` | No | List the models and reasoning efforts of one credential for one agent provider kind, before an enablement names it. |
 | `agent--prompt--get` | `GET /api/agent/prompt` | No | Read the switches, the custom text and the system layer override of one prompt scope. |
 | `agent--prompt--put` | `PUT /api/agent/prompt` | Yes | Replace the custom text of one prompt scope at its expected revision. |
