@@ -153,6 +153,29 @@ The instance healthcheck stays out of every human inspection command under [work
   The claim transactions of the server serialize, so a second claim of one instance never commits, also when a pull abort arrives late.
   An expired, unsettled execution blocks no other registration of its instance.
   Tests cover two pulls of one instance on two bindings that commit one claim. They also cover an expired execution that blocks nothing and a registration with no instance.
+- The queue order of an instance gives a free slot to the registration that waited longest.
+  `InstanceQueue` of `src/scheduler/instance-queue.ts` holds the order in memory. It records the runtime identities that wait, in the order in which each started to wait. A server restart clears the order.
+  - A registration starts to wait when the guard refuses its pull, or when another registration of its instance commits a claim. A registration that already waits keeps its place.
+  - After the guard finds no live execution, `claimOnce` asks `turn`. A registration has its turn when no other live registration of its instance waits before it. A registration that does not wait has its turn only when no other registration of its instance waits.
+  - A refusal by the guard or by the queue order has the outcome `queued`. The pull answers `{ kind: "no-work" }` as before. The claim inserts no execution and changes no node, and a work pull parks until a wakeup or the end of its window.
+  - A committed claim removes the claimant from the order.
+  - Every pull with no claim and no `queued` outcome removes its registration from the order. Examples are no job, a cooldown, a project pause and a failed healthcheck.
+  - That removal wakes the parked pulls of the other waiting registrations of the instance.
+  - The loss sweep removes each waiting registration whose healthcheck fails, for example an ended registration.
+  - A release wakes the parked pulls of the other registrations of the instance of the released execution, and the parked pulls of the project of the execution.
+  - With no other waiting registration, a pull claims at once, so one binding keeps its speed.
+  - The worker unit starts no pull during an execution. A claim aborts the pulls of the other bindings, sometimes before their probe.
+  - The order therefore records every other registration of the instance at the claim.
+  - At the end of the execution, the releasing registration pulls first and gets `queued`. The other registration then claims, or passes its turn.
+  - The order assumes that each live registration of an instance pulls again after an execution ends. The worker unit does this.
+  - A registration that waits and never pulls holds the slot until its registration ends or its healthcheck fails.
+  - Tests cover these cases:
+    - two bindings on one instance that alternate their claims;
+    - a parked pull that a release wakes;
+    - a turn without work that passes the slot;
+    - one binding that keeps its speed, alone and next to a sibling with no work;
+    - one live execution for each instance;
+    - a pruned registration that holds no place.
 - `scheduler.execution.get` and `scheduler.claim.get` answer `agent_selections`, the pinned selections rebuilt from the pins.
 - The release transaction calls the Agent component with the pinned selection and the `stop`, as [the release write](agent.impl.md#the-release-write) states.
 - Custody and the execution setup of the Worker Service read the pinned selection and never the live chain.
