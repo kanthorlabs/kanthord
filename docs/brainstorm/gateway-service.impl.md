@@ -374,6 +374,7 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the four shutdown phases.
 
 - The Gateway closes the listener and cancels waiting work pulls and MCP streams during quiescence.
+- Each response after quiescence carries `Connection: close`. A busy keep-alive connection thus closes after its next response.
 - Its handlers and dependencies stay available during the drain.
 - The invocation chain then joins handlers and streams before rejecting every new call.
 - The Gateway releases resources in the release phase.
