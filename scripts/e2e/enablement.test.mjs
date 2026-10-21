@@ -104,7 +104,7 @@ test("a missing OAuth credential names the concrete login command", async () => 
       CONFIG_PATH,
     ),
     [
-      "swe@1: credential anthropic-subscription is missing; run `kanthord llm credential login anthropic-subscription --name anthropic-subscription`",
+      "swe@1: credential anthropic-subscription is missing; run `(cd engine && node src/main.ts llm credential login anthropic-subscription --name anthropic-subscription)`",
     ],
   );
 });

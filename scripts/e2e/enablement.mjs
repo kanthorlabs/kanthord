@@ -1,3 +1,5 @@
+import { checkoutCommand } from "./api.mjs";
+
 const OAUTH_SECRET_SHAPE = "oauth";
 
 export function mergedProviders(current, enablement) {
@@ -18,7 +20,7 @@ function refusalOf(
   if (!found) {
     const nextStep =
       secretShapes.get(provider) === OAUTH_SECRET_SHAPE
-        ? `run \`kanthord llm credential login ${provider} --name ${credential}\``
+        ? `run \`${checkoutCommand(`llm credential login ${provider} --name ${credential}`)}\``
         : `add it to credentials in ${configPath}`;
     return `${agent}: credential ${credential} is missing; ${nextStep}`;
   }

@@ -52,7 +52,8 @@ const SUBSCRIPTION = {
   platform: "anthropic-subscription",
 };
 const LOGIN =
-  "kanthord llm credential login anthropic-subscription --name anthropic-subscription --holder";
+  "(cd engine && node src/main.ts llm credential login anthropic-subscription --name anthropic-subscription --holder";
+const login = (name) => `${LOGIN} ${name})`;
 
 function withMain(body) {
   const main = mkdtempSync(join(tmpdir(), "e2e-instances-"));
@@ -375,11 +376,12 @@ const LIVE_COPY = {
 const copyPath = (name) =>
   `/api/llm/credential/anthropic-subscription?holder=${name}`;
 
-test("signInGaps names one login for each dev instance without a copy and reports a copy that is not live", async () => {
+test("signInGaps names one login for each dev instance without a live copy and reports an archived copy", async () => {
   const instances = [
     { name: "e2e-coder-1" },
     { name: "e2e-coder-2" },
     { name: "e2e-coder-3" },
+    { name: "e2e-coder-4" },
     { name: "e2e-reviewer-1" },
   ];
   const { api, paths } = fakeApi({
@@ -387,8 +389,10 @@ test("signInGaps names one login for each dev instance without a copy and report
     [copyPath("e2e-coder-2")]: { ...LIVE_COPY, sealed_current: false },
     [copyPath("e2e-coder-3")]: {
       ...LIVE_COPY,
+      sealed_current: false,
       revisions: [{ revision: 1, ended_at: 1792426097901 }],
     },
+    [copyPath("e2e-coder-4")]: { ...LIVE_COPY, platform: "openai-codex" },
   });
   const gaps = await signInGaps(api, instances, [SUBSCRIPTION]);
   assert.deepEqual(
@@ -396,10 +400,10 @@ test("signInGaps names one login for each dev instance without a copy and report
     instances.map(({ name }) => copyPath(name)),
   );
   assert.deepEqual(gaps, {
-    commands: [`${LOGIN} e2e-reviewer-1`],
-    stale: [
-      { instance: "e2e-coder-2", credential: "anthropic-subscription" },
+    commands: [login("e2e-coder-2"), login("e2e-reviewer-1")],
+    blocked: [
       { instance: "e2e-coder-3", credential: "anthropic-subscription" },
+      { instance: "e2e-coder-4", credential: "anthropic-subscription" },
     ],
   });
   assert.equal(hasSignInGaps(gaps), true);
@@ -408,23 +412,23 @@ test("signInGaps names one login for each dev instance without a copy and report
     [instances[0]],
     [SUBSCRIPTION],
   );
-  assert.deepEqual(none, { commands: [], stale: [] });
+  assert.deepEqual(none, { commands: [], blocked: [] });
   assert.equal(hasSignInGaps(none), false);
 });
 
-test("the sign-in message prints each command, one login at a time, and the reset for a copy that is not live", () => {
+test("the sign-in message prints each command from the checkout root, one login at a time, and the reset for an archived copy", () => {
   assert.equal(
     signInMessage("e2e-start", {
-      commands: [`${LOGIN} e2e-coder-1`],
-      stale: [
+      commands: [login("e2e-coder-1")],
+      blocked: [
         { instance: "e2e-coder-2", credential: "anthropic-subscription" },
       ],
     }),
     [
       "e2e-start: sign in once on each dev instance below. The instance processes stay active, because a sign-in needs a connected instance.",
-      "e2e-start: do one login at a time. Open its address, then run kanthord llm credential login-code <session_id> <code#state> before the next login.",
-      `  ${LOGIN} e2e-coder-1`,
-      "e2e-start: e2e-coder-2 holds a copy of anthropic-subscription that is not live. A login cannot replace a copy of the same holder. Reset the dev database, then sign in again.",
+      "e2e-start: do one login at a time. Open its address, then run (cd engine && node src/main.ts llm credential login-code <session_id> <code#state>) before the next login.",
+      "  (cd engine && node src/main.ts llm credential login anthropic-subscription --name anthropic-subscription --holder e2e-coder-1)",
+      "e2e-start: e2e-coder-2 holds a copy of anthropic-subscription that takes no sign-in, because the copy is archived or holds another platform. Reset the dev database, then sign in again.",
       "e2e-start: then run the command again.",
     ].join("\n"),
   );
@@ -482,7 +486,7 @@ test("scale at worker writes no binding while a new dev instance holds no live c
     const { request, deps, puts } = scaleFixture(main, {});
     const scaled = await scaleWorkerBinding(request, deps);
     assert.equal(scaled.instances, null);
-    assert.deepEqual(scaled.gaps.commands, [`${LOGIN} e2e-coder-2`]);
+    assert.deepEqual(scaled.gaps.commands, [login("e2e-coder-2")]);
     assert.deepEqual(
       scaled.prepared.map(({ name, result, started }) => [
         name,

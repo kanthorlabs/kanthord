@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { checkoutCommand } from "./api.mjs";
 import { withoutKanthordClient } from "./workers.mjs";
 
 export const INSTANCES_DIRECTORY = ".dev/e2e/instances";
@@ -247,48 +248,48 @@ export function enablementCredentials(enablements) {
   }));
 }
 
-function liveCopy(copy, platform) {
+function hasLiveRevision(copy, platform) {
   return (
-    copy !== null &&
     copy.platform === platform &&
-    copy.sealed_current &&
     copy.revisions.some(({ ended_at }) => ended_at === null)
   );
 }
 
 export async function signInGaps(api, instances, credentials) {
   const commands = [];
-  const stale = [];
+  const blocked = [];
   for (const { name } of instances)
     for (const { credential, platform } of credentials) {
       const copy = await api.get(
         `/api/llm/credential/${credential}?holder=${name}`,
       );
-      if (liveCopy(copy, platform)) continue;
-      if (copy === null)
+      if (copy === null || hasLiveRevision(copy, platform)) {
+        if (copy?.sealed_current) continue;
         commands.push(
-          `kanthord llm credential login ${platform} --name ${credential} --holder ${name}`,
+          checkoutCommand(
+            `llm credential login ${platform} --name ${credential} --holder ${name}`,
+          ),
         );
-      else stale.push({ instance: name, credential });
+      } else blocked.push({ instance: name, credential });
     }
-  return { commands, stale };
+  return { commands, blocked };
 }
 
-export function hasSignInGaps({ commands, stale }) {
-  return commands.length + stale.length > 0;
+export function hasSignInGaps({ commands, blocked }) {
+  return commands.length + blocked.length > 0;
 }
 
-export function signInMessage(label, { commands, stale }) {
+export function signInMessage(label, { commands, blocked }) {
   const lines = [];
   if (commands.length)
     lines.push(
       `${label}: sign in once on each dev instance below. The instance processes stay active, because a sign-in needs a connected instance.`,
-      `${label}: do one login at a time. Open its address, then run kanthord llm credential login-code <session_id> <code#state> before the next login.`,
+      `${label}: do one login at a time. Open its address, then run ${checkoutCommand("llm credential login-code <session_id> <code#state>")} before the next login.`,
       ...commands.map((command) => `  ${command}`),
     );
-  for (const { instance, credential } of stale)
+  for (const { instance, credential } of blocked)
     lines.push(
-      `${label}: ${instance} holds a copy of ${credential} that is not live. A login cannot replace a copy of the same holder. Reset the dev database, then sign in again.`,
+      `${label}: ${instance} holds a copy of ${credential} that takes no sign-in, because the copy is archived or holds another platform. Reset the dev database, then sign in again.`,
     );
   lines.push(`${label}: then run the command again.`);
   return lines.join("\n");
