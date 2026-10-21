@@ -3,8 +3,8 @@ import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
 import { stopDevDaemon } from "./daemon.mjs";
 import { stopInstanceProcesses } from "./instances.mjs";
-import { isServerManaged } from "./placement.mjs";
 import { deleteRunDeployKeys } from "./ssh-identity.mjs";
+import { stopRun } from "./stop-steps.mjs";
 import {
   containerRuntime,
   requireNoOwnedContainers,
@@ -36,25 +36,15 @@ if (STOP_ENV === "daemon") {
   );
 }
 
-if (isServerManaged(state.placement)) {
-  if (STOP_ENV === "daemon") {
-    await stopDevDaemon(state.endpoint, "e2e-stop");
-    if (state.placement === "container") {
-      await requireNoOwnedContainers(containerRuntime());
-      console.log("e2e-stop: no container with the owner label remains");
-    }
-  } else {
-    const runDir = join(MAIN, ".dev/e2e", run);
-    const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));
-    const project = await api.post(`/api/project/${state.project_id}/pause`);
-    console.log(`e2e-stop: project ${project.id} paused`);
-  }
-} else {
-  const stopped = await stopInstanceProcesses(MAIN, state.instances, {
-    stop: stopWorkers,
-  });
-  for (const instance of stopped)
-    console.log(
-      `e2e-stop: ${instance.name}${instance.pid ? ` pid ${instance.pid}` : ""} ${instance.result}`,
-    );
-}
+const runDir = join(MAIN, ".dev/e2e", run);
+await stopRun(state, STOP_ENV === "daemon", {
+  pauseProject: () =>
+    client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml"))).post(
+      `/api/project/${state.project_id}/pause`,
+    ),
+  stopInstances: () =>
+    stopInstanceProcesses(MAIN, state.instances, { stop: stopWorkers }),
+  stopDevDaemon: () => stopDevDaemon(state.endpoint, "e2e-stop"),
+  requireNoContainers: () => requireNoOwnedContainers(containerRuntime()),
+  log: (line) => console.log(line),
+});

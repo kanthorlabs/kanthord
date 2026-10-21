@@ -68,3 +68,7 @@ export function mainCheckout(root) {
     ).trim(),
   );
 }
+
+export function checkoutCommand(args) {
+  return `(cd engine && node src/main.ts ${args})`;
+}
