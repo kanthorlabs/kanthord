@@ -458,19 +458,19 @@ An `examine` node has no tasks and no node branch. `coder@1` claims it in `Avail
 
 `swe@1` runs on the pi SDK, `@earendil-works/pi-coding-agent` 1.1.0. The [native agent](native-agent.md) page explains the configuration, the prompt layers and the tool set. This section shows which pi calls `coder@1` makes and what it reads back.
 
-| Need of the worker           | pi API                                                                    | What the worker does with it                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| A model with a credential    | `ModelRuntime.create`, then `runtime.getModel`                            | Step 4. The runtime reads the secret from the custody handover. It makes no network call.                               |
-| A session in the workspace   | `createAgentSession` with `SessionManager.inMemory`                       | Step 4. The session lives in memory. A new execution opens a new session.                                               |
-| The task in every model call | The `context` hook and a guard on `agent.streamFunction`                  | The worker pins the work prompt of the current task, so that a compaction does not remove it.                           |
-| A turn of work               | `session.prompt(text)`, then `session.waitForIdle()`                      | Steps 5 to 7. The worker sends the work prompt or an instruction and waits for the agent.                               |
-| The reply                    | `session.getLastAssistantText()`                                          | The worker parses the `kanthord-judgement:` line from the last reply.                                                   |
-| A provider failure           | The last assistant message with `stopReason: "error"`                     | The worker maps `errorMessage` to a code and stops with `provider_failed`.                                              |
-| The turn budget              | `session.subscribe` for `turn_end`, and an override of `agent.finishTurn` | Each `turn_end` counts one turn. After each turn the worker checks the budget and the claim.                            |
-| A safe `bash`                | `createBashToolDefinition` with a `spawnHook` and a timeout               | The hook removes every provider key from the environment. The timeout is 10 minutes or less.                            |
-| Evidence from the agent      | A custom tool `evidence-upload`                                           | The tool uploads a workspace file and returns `evidence_id`, `asset_id` and `uri`.                                      |
-| A stop                       | `session.abort()`                                                         | The worker aborts on a budget end, on a cancellation and before a checkpoint commit.                                    |
-| The transcript               | `session.messages`                                                        | At the end, the worker writes the messages to `transcripts/<execution_id>.jsonl` of the data directory of the instance. |
+| Need of the worker           | pi API                                                                    | What the worker does with it                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| A model with a credential    | `ModelRuntime.create`, then `runtime.getModel`                            | Step 4. The runtime reads the secret from the custody handover. It makes no network call.                                   |
+| A session in the workspace   | `createAgentSession` with `SessionManager.inMemory`                       | Step 4. The session lives in memory. A new execution opens a new session.                                                   |
+| The task in every model call | The `context` hook and a guard on `agent.streamFunction`                  | The worker pins the work prompt of the current task, so that a compaction does not remove it.                               |
+| A turn of work               | `session.prompt(text)`, then `session.waitForIdle()`                      | Steps 5 to 7. The worker sends the work prompt or an instruction and waits for the agent.                                   |
+| The reply                    | `session.getLastAssistantText()`                                          | The worker parses the `kanthord-judgement:` line from the last reply.                                                       |
+| A provider failure           | The last assistant message with `stopReason: "error"`                     | The worker maps `errorMessage` to a code and stops with `provider_failed`.                                                  |
+| The turn budget              | `session.subscribe` for `turn_end`, and an override of `agent.finishTurn` | Each `turn_end` counts one turn. After each turn the worker checks the budget and the claim.                                |
+| A safe `bash`                | `createBashToolDefinition` with a `spawnHook` and a timeout               | The hook removes every provider key from the environment. The timeout is 10 minutes or less.                                |
+| Evidence from the agent      | A custom tool `evidence-upload`                                           | The tool uploads a workspace file and returns `evidence_id`, `asset_id` and `uri`.                                          |
+| A stop                       | `session.abort()`                                                         | The worker aborts on a budget end, on a cancellation and before a checkpoint commit.                                        |
+| The transcript               | `SessionManager.create` and `sessionManager.getEntries()`                 | pi persists each entry to `pi/sessions/execution/<execution_id>/`. The worker sends each new entry to the Tracking Service. |
 
 The worker does not use `steer` or `followUp`. Each instruction is a new `prompt` call after the agent is idle.
 
