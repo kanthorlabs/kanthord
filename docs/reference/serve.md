@@ -37,7 +37,7 @@ The startup runs these steps in order:
 4. It opens the connection with `worker.instance.connect`. The answer holds the client token and the client secret of each binding that lists the instance.
 5. It registers for each binding, and logs one record `Worker application ready` for each registration.
 
-The data directory of the instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/`, `transcripts/` and `pi/`. The log directory is `$XDG_STATE_HOME/kanthord/workers/<name>/`. The process writes its operational log records to standard error. It opens no database and reads no server configuration.
+The data directory of the instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/` and `pi/`. `pi/sessions/execution/` holds the pi session files of the executions. The log directory is `$XDG_STATE_HOME/kanthord/workers/<name>/`. The process writes its operational log records to standard error. It opens no database and reads no server configuration.
 
 After the start, the instance sends a heartbeat every 15 seconds. A changed binding list opens the connection again, so the instance adds and drains bindings without a restart. Another server version ends the process with `worker.version.mismatch`. A **Reset key** or an archive of the instance ends the process with `404 worker.instance.not_found`. A changed client secret of a hosted binding ends the process with `worker.instance.secret_changed`.
 
