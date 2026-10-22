@@ -432,6 +432,7 @@ This sibling declares the fields below.
 - `worker.container_image`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `scheduler.stop_backoff`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
+- `tracking.retention_days`, which [tracking-service.impl.md](tracking-service.impl.md#configuration) declares.
 - `mission.consecutive_failure_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - `mission.text_max_bytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
@@ -1228,10 +1229,11 @@ The rules of the credential sections follow.
 - A planned screen joins the sidebar in the change that adds its route.
 - The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
 - A project-scoped screen waits until the server holds one project or more: Scheduler and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
-- Overview and Scheduler read every project and offer a project filter.
+- Overview, Scheduler and Traces read every project and offer a project filter.
 - On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
 - The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
 - The sidebar item `Workers` of the group `Workforce` opens `/workers`. The worker page `/workers/:workerName` and the instance page `/workers/:workerName/instances/:instanceName` sit under it. Each name in the path is URL-encoded, as on `/agents/:agentName`. [The worker pages](#the-worker-pages) hold the rules.
+- The sidebar item `Traces` of the group `Work` opens `/traces`, after `Scheduler`. The trace page `/traces/:traceId` sits under it. [The trace pages](#the-trace-pages) hold the rules.
 - The sign-in screens call a saved KanthorD address a server, for example `Saved servers` and `Sign in to a KanthorD server`. The word instance names only a worker instance on the screen.
 
 ## The worker pages
@@ -1269,6 +1271,82 @@ The rules of the credential sections follow.
 - When the archive answers 409 `worker.instance.in_use`, the confirmation shows `details.bindings` and `details.executions`.
 - Each row action is a row button. A row wraps its buttons with `flex-wrap`.
 - At a width of 390 px, each page shows one column. Names and fingerprints use `break-all`. A sheet opens full screen, and the instance configuration block scrolls inside itself. No page scrolls horizontally.
+
+## The trace pages
+
+The trace pages show what an execution did, so that a human can debug and optimize it. They read the Tracking Service only, and they decide nothing.
+
+### The trace list
+
+- `/traces` lists the trace summaries of every project, newest first, 50 rows per page with a pager.
+- The toolbar holds the project filter, the state filter, the time range and the search field. `More filters` reveals the worker, agent, model and error type filters, the minimum duration, the minimum tokens, the minimum cost and the sort.
+- The worker, agent, model and error type filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
+- The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The default is `Last 7 days`.
+- The search field sends `q` after 300 ms without a keystroke.
+- The query string holds every filter value, the sort and the page cursor, so a link reproduces the list.
+- A row shows the node name as its title, or the execution identity for a trace with no node. It shows the state badge and the stop reason badge.
+- A row shows the fields worker, agent, model, started, duration, tokens, `Est. cost`, turns, tools and errors.
+- A row opens `/traces/:traceId`. A row of a trace with an error opens it at `first_error_span_id`.
+- The empty text reads "No traces match these filters." With no filter, it reads "No traces yet. A trace opens when a worker claims a node."
+
+### The trace page
+
+- The header shows the node name with a link to the node, the state badge and the stop reason badge.
+- The header facts are the project, the execution, the attempt, the worker, the start, the duration, the input, output and cached tokens, and `Est. cost`.
+- A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the Timeline tab.
+- The page holds two tabs, `Timeline` and `Conversation`. The query string holds `tab`, `span` and `entry`, so a link opens one span or one entry.
+- While the page is visible, an `open` trace reads its summary and its spans again every 5 seconds. It reads its entries after the last cursor. The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
+- A read of a deleted or unknown trace shows "This trace is expired or unknown." with a link back to the list.
+
+### The timeline
+
+- The timeline is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
+- A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`. A span with a start and no end shows `Running` and a bar to the axis end.
+- The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
+- The labels are `Execution`, `Phase <phase>`, `Task <n>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
+  The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
+- The controls are a search field over the labels and the attribute values, and an `Errors only` toggle.
+  The toggle group `All`, `Agent`, `Tools`, `Checks` and `Git` follows them. `Expand all` and `Collapse all` follow them.
+- `Errors only` keeps each error span and its ancestors. The search keeps each match and its ancestors.
+- The tree takes the keyboard: up and down move the selection, right expands, left collapses, and Enter opens the span detail.
+- The waterfall bar uses the theme tokens only. Its text repeats the duration, so the bar holds no information alone.
+
+### The span detail
+
+- From `lg`, the span detail is a panel beside the timeline. Below `lg`, it opens in a `Sheet`.
+- It shows the label, the status, the start, the end, the duration and the offset from the root start.
+- It shows the model, the input, output and cached tokens, `Est. cost`, the finish reason and the model duration of a turn.
+- It shows every attribute, every event and every link of the span, and the telemetry texts that `text_ids` names.
+- A turn shows its model reply entry: the text, the collapsed thinking and each tool call with a link to its tool span.
+- A tool shows the arguments of its call from the model reply entry of its turn, and its result entry.
+- A verification shows its `command` and `output` texts. A judgement and an evaluation show their `rationale` text.
+- A turn or a tool offers `Open in conversation`. It opens the Conversation tab at its entry.
+- A span that references an entry that the store does not hold shows "The entry is not stored."
+
+### The conversation
+
+- The Conversation tab shows the session entries of one agent session in order. A trace with two or more sessions shows a session selector, labeled with the agent name and the start of each session.
+- A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
+- A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
+- The system prompt shows collapsed, with its size. A compaction, a model change and a thinking level change show as one line each.
+- An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
+- A model reply offers `Show in timeline`. It selects its turn span on the Timeline tab.
+
+### The trace links of other pages
+
+- A row of the Scheduler page offers `Trace`. It opens `/traces/<trace_id>` of the execution.
+- An execution row of the Attempts tab of the node sheet offers `Trace`. The row shows turns, tokens, `Est. cost` and errors from `tracking.trace.get`.
+- A registration row of the instance page with a live execution offers `Trace`.
+- The paused detail of an Overview item with an execution offers `Last trace` for the newest execution.
+- The project page header offers `Traces`. It opens `/traces?project_id=<project id>`.
+- The worker page offers `Traces`. It opens `/traces?worker_name=<worker name>`. The agent page offers `Traces`. It opens `/traces?agent_name=<agent name>`.
+- The Workbench pages hold no trace link, because a workbench session is no execution.
+
+### The phone width
+
+- At 390 px, each trace page shows one column with no horizontal page scroll.
+- A timeline row shows the bar below its label. The span detail opens in a full screen `Sheet`.
+- Identities use `break-all`, and long texts wrap inside their block.
 
 ## The dashboard onboarding
 
