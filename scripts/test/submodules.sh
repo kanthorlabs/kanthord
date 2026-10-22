@@ -109,6 +109,30 @@ parent_line=$(grep -n 'sync-all: parent pushed' "$sandbox/sync.log" | cut -d: -f
 NOFETCH=1 "$ROOT/scripts/sync/status.sh" >"$sandbox/status.log"
 grep -q '^webhook .*synced' "$sandbox/status.log" || fail 'status omits webhook'
 
+apps="$ROOT/apps"
+homelab="$ROOT/platforms/homelab"
+git -C "$ROOT/engine" checkout --quiet -b feature/fixture
+apps_published=$(git -C "$sandbox/apps.git" rev-parse main)
+printf 'unpublished apps revision\n' >>"$apps/README.md"
+git -C "$apps" commit --quiet -am 'docs: update apps fixture'
+printf 'uncommitted apps edit\n' >>"$apps/README.md"
+git -C "$homelab" checkout --quiet --detach
+printf 'orphan homelab revision\n' >>"$homelab/README.md"
+git -C "$homelab" commit --quiet -am 'docs: orphan homelab fixture'
+if NOFETCH=1 "$ROOT/scripts/sync/all.sh" >"$sandbox/skip.log" 2>&1; then
+	fail 'sync passed with a dirty repository'
+fi
+[ "$(git -C "$ROOT/engine" symbolic-ref --short HEAD)" = main ] || fail 'engine did not switch to main'
+grep -q 'sync-all: engine switched from feature/fixture to main' "$sandbox/skip.log" || fail 'sync did not report the switch'
+grep -q '^  apps: it has uncommitted changes' "$sandbox/skip.log" || fail 'sync did not report the dirty apps'
+grep -q '^  homelab: it is detached at .*which no branch contains' "$sandbox/skip.log" || fail 'sync did not report the orphan homelab'
+grep -q 'sync-all: resolve each reason, then sync again' "$sandbox/skip.log" || fail 'sync failed for the wrong reason'
+grep -q 'sync-all: webhook is level with origin/main' "$sandbox/skip.log" || fail 'sync did not continue with webhook'
+[ "$(git -C "$sandbox/apps.git" rev-parse main)" = "$apps_published" ] || fail 'sync pushed a skipped repository'
+git -C "$homelab" symbolic-ref --quiet HEAD >/dev/null && fail 'sync switched the orphan homelab'
+git -C "$apps" reset --quiet --hard origin/main
+git -C "$homelab" checkout --quiet main
+
 # Pointer reconciliation must not commit another staged parent file.
 printf 'published second revision\n' >>"$webhook/README.md"
 git -C "$webhook" add -- README.md
