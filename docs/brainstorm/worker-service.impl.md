@@ -791,7 +791,7 @@ Tests of the slot driver:
 - It answers `200 { items: [{ placement, available, reason, detail, container_runtime }] }` in the order `server`, `container`, `worker`.
 - `server` and `worker` always answer `available: true` with null fields. `container` answers the result of `check()`.
 - The CLI leaf is `kanthord worker placement list`.
-- The worker binding sheet of the dashboard reads the list when it opens.
+- The worker binding sheet of the dashboard reads the list when it opens for a new binding.
 - **Placement** shows two radio cards in this order: `Server`, then `Container`. The sheet preselects `Server`, because it is built in and always available.
   - `Server` reads "Built in. Runs each instance as a thread of the server."
   - `Container` reads "Runs each instance in its own container on the server host with `<runtime>`." `<runtime>` is `Podman` or `Docker` from `container_runtime`. The sentence drops "with `<runtime>`" when `container_runtime` is null.

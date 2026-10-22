@@ -14,7 +14,7 @@ List the three worker placements and tell whether this server can host an instan
 
 The `server` and `worker` placements are always available. The `container` placement depends on a runtime check of the server. The check reads the container runtime of the server user, Podman first, then Docker. The server reuses the newest answer for 10 seconds.
 
-The dashboard reads this list when the worker binding sheet opens. It preselects `server`, and it shows `worker` only under **Advanced settings**. It turns `container` off for the three reasons that [`project binding apply`](../project/binding.md#placement) refuses. That command reads the same check and refuses a new `container` binding for these reasons.
+The dashboard reads this list when the worker binding sheet opens for a new binding. The sheet preselects `server`, and it offers `worker` only under **Advanced settings**. [`project binding apply`](../project/binding.md#placement) reads the same check and refuses a new `container` binding for three reasons. The sheet turns `container` off for the same three reasons.
 
 ## Expected response
 
