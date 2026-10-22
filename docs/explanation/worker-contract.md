@@ -139,7 +139,7 @@ A native worker writes its records straight to the primary store of the Tracking
 | pi `tool_execution_start` | Start of `agent.tool`. `toolCallId` is the call id                                                                                    |
 | pi `tool_execution_end`   | End of `agent.tool`. `isError` gives the outcome                                                                                      |
 | A new pi session entry    | One `session_entry` record, sent after the session event that appended the entry                                                      |
-| Agent close               | The remaining entries, then the end of `agent.session`                                                                                |
+| Agent close               | The remaining entries, the end of each open `agent.turn` and `agent.tool` with `Error`, then the end of `agent.session`               |
 | Worker method             | Start and end of `worker.phase`: `prepare`, `start`, `tasks`, `finish`                                                                |
 | Worker task loop          | `worker.task`, `worker.verification`, `worker.judgement`                                                                              |
 | `reviewer@1` evaluation   | `worker.evaluation`, and one `worker.verification` for each command and each rerun                                                    |
