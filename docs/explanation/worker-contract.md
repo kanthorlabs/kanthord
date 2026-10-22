@@ -53,7 +53,7 @@ The Scheduler opens the root span of an execution after the claim. Every span of
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
 flowchart TB
     accTitle: The span tree of one execution
-    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and judgement spans. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add turn and tool spans. An external harness adds progress spans.
+    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and judgement spans. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add session, turn and tool spans. An external harness adds progress spans.
     root(["Root span<br/>Scheduler"])
     root --> phase["worker.phase<br/>native"]
     phase --> task["worker.task<br/>native"]
@@ -62,51 +62,69 @@ flowchart TB
     root --> evaluation["worker.evaluation<br/>native"]
     evaluation --> verify2["worker.verification<br/>native"]
     task --> turn["agent.turn<br/>both"]
-    root --> session["harness.session<br/>harness"]
+    root --> session["agent.session<br/>both"]
     session --> turn2["agent.turn<br/>both"]
     turn --> tool["agent.tool<br/>both"]
     turn2 --> tool2["agent.tool<br/>both"]
     session --> progress["agent.progress<br/>harness"]
+    turn -. "gen_ai.conversation.id" .-> session
     classDef shared fill:#fbeae1,stroke:#eb6c36,color:#2d3142;
     classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
-    class turn,turn2,tool,tool2,progress shared;
+    class session,turn,turn2,tool,tool2,progress shared;
     class root outcome;
 ```
 
 ### The span catalog
 
-The span operation names are a closed set, defined as an enum in code. A span holds identities and measurements in its attributes. Prose, for example a command, an output or a reply, goes into a telemetry text that the span names in `text_ids`.
+The span operation names are a closed set, defined as an enum in code. A span holds identities and measurements in its attributes. Prose of a worker step, for example a command or an output, goes into a telemetry text that the span names in `text_ids`. The prose of the agent, for example a reply, a tool input or a tool output, goes into the [session entries](#the-agent-session) of its agent session.
 
-| Operation             | Producer | Parent                                                     | Attributes                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Texts                                                                 |
-| --------------------- | -------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `worker.phase`        | Native   | Root                                                       | `kanthord.phase`: `prepare`, `start`, `tasks` or `finish`                                                                                                                                                                                                                                                                                                                                                                                                        | None                                                                  |
-| `worker.task`         | Native   | `worker.phase`                                             | `kanthord.task.id`, `kanthord.task.result`: `complete` or `budget_end`. A stop ends the span with the status `Error` and no result                                                                                                                                                                                                                                                                                                                               | None                                                                  |
-| `worker.verification` | Native   | `worker.task`, `worker.phase`, `worker.evaluation` or Root | One span per command. `kanthord.commit` (only when the tested input is one repository address), `kanthord.verification.index`, `kanthord.verification.run`, `process.exit.code`, `kanthord.verification.signal`, `kanthord.verification.timed_out`                                                                                                                                                                                                               | `command`, `output`: the last 4 KiB                                   |
-| `worker.judgement`    | Native   | `worker.task` or `worker.phase`                            | `kanthord.task.id`, `kanthord.commit` (only when the tested input is one repository address), `kanthord.judgement.reply`: `parsed`, `invalid` or `budget_end`, `kanthord.judgement.criterion_met`                                                                                                                                                                                                                                                                | `rationale`                                                           |
-| `worker.evaluation`   | Native   | Root                                                       | `kanthord.commit` (only when the tested input is one repository address), `kanthord.evaluation.result`: the result of the judgement                                                                                                                                                                                                                                                                                                                              | `rationale`                                                           |
-| `harness.session`     | Harness  | Root                                                       | `gen_ai.request.model`, `kanthord.harness.session_id`                                                                                                                                                                                                                                                                                                                                                                                                            | None                                                                  |
-| `agent.turn`          | Both     | The enclosing worker span, Root, or `harness.session`      | `kanthord.agent.name`, `kanthord.turn.index`, `kanthord.agent.chain_position`: 0 for the head of the chain, and `kanthord.agent.chain_level`: `enablement` or `binding`, both from the execution setup (native producer only), `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read_tokens`, `gen_ai.usage.cache_write_tokens`, `gen_ai.response.finish_reasons`, `error.type`: the provider failure code | `reply`: the last assistant text, `error`: the provider error message |
-| `agent.tool`          | Both     | `agent.turn`                                               | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `kanthord.tool.outcome`: `ok` or `error`, `kanthord.tool.duration_ms`                                                                                                                                                                                                                                                                                                                                                 | `input`, `output`                                                     |
-| `agent.progress`      | Harness  | `harness.session`                                          | `kanthord.progress.total`, `kanthord.progress.completed`, `kanthord.progress.in_progress`                                                                                                                                                                                                                                                                                                                                                                        | `items`: the todo list                                                |
+| Operation             | Producer  | Parent                                                     | Attributes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Texts                                              |
+| --------------------- | --------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `scheduler.execution` | Scheduler | None                                                       | `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id`, `kanthord.attempt`. At the end, `kanthord.execution.end`: `finished` or `lost`. After a stop, `kanthord.stop.reason`, `kanthord.stop.code` (when the stop has a code) and `kanthord.stop.detail` (when the stop has a detail). The status is `Error` after a stop or a lost claim, and `Ok` otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                         | None                                               |
+| `worker.phase`        | Native    | Root                                                       | `kanthord.phase`: `prepare`, `start`, `tasks` or `finish`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | None                                               |
+| `worker.task`         | Native    | `worker.phase`                                             | `kanthord.task.id`, `kanthord.task.result`: `complete` or `budget_end`. A stop ends the span with the status `Error` and no result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | None                                               |
+| `worker.verification` | Native    | `worker.task`, `worker.phase`, `worker.evaluation` or Root | One span per command. `kanthord.commit` (only when the tested input is one repository address), `kanthord.verification.index`, `kanthord.verification.run`, `process.exit.code`, `kanthord.verification.signal`, `kanthord.verification.timed_out`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `command`, `output`: the last 4 KiB                |
+| `worker.judgement`    | Native    | `worker.task` or `worker.phase`                            | `kanthord.task.id`, `kanthord.commit` (only when the tested input is one repository address), `kanthord.judgement.reply`: `parsed`, `invalid` or `budget_end`, `kanthord.judgement.criterion_met`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `rationale`                                        |
+| `worker.evaluation`   | Native    | Root                                                       | `kanthord.commit` (only when the tested input is one repository address), `kanthord.evaluation.result`: the result of the judgement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `rationale`                                        |
+| `worker.git`          | Native    | `worker.phase`                                             | `kanthord.git.step`: `commit`, `fetch_base`, `merge_base` or `push`. A failed step ends the span with the status `Error`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `error`: the code and the message of a failed step |
+| `agent.session`       | Both      | The enclosing worker span or Root                          | `gen_ai.operation.name`: `invoke_agent`, `gen_ai.conversation.id`: the span identity, `gen_ai.agent.name`, `kanthord.agent.name`, `kanthord.agent.chain_position`, `kanthord.agent.chain_level`, `gen_ai.request.model`, `kanthord.session.format`: `pi` or `claude_code`, `kanthord.session.format_version`, `kanthord.harness.session_id` (harness only). At the end, `kanthord.session.entry_count`                                                                                                                                                                                                                                                                                                                                                                                                                            | None                                               |
+| `agent.turn`          | Both      | The enclosing worker span, Root, or `agent.session`        | `gen_ai.operation.name`: `chat`, `gen_ai.conversation.id`, `kanthord.agent.name`, `kanthord.turn.index`, `kanthord.agent.chain_position`: 0 for the head of the chain, and `kanthord.agent.chain_level`: `enablement` or `binding`, both from the execution setup (native producer only), `gen_ai.request.model`. At the end, `gen_ai.response.model`, `gen_ai.provider.name`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read.input_tokens`, `gen_ai.usage.cache_creation.input_tokens`, `kanthord.usage.cost_usd`, `gen_ai.response.finish_reasons`, `error.type`: the provider failure code, or `stopped` at the close of the agent trace, `kanthord.session.entry_id`: the entry of the model reply, `kanthord.turn.model_duration_ms`: `durationMs` of the reply, else the measured time | None                                               |
+| `agent.tool`          | Both      | `agent.turn`                                               | `gen_ai.operation.name`: `execute_tool`, `gen_ai.conversation.id`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `kanthord.tool.outcome`: `ok` or `error`, `kanthord.tool.duration_ms`, `error.type`: `tool_error` on an error end, or `stopped` at the close of the agent trace                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | None                                               |
+| `agent.progress`      | Harness   | `agent.session`                                            | `kanthord.progress.total`, `kanthord.progress.completed`, `kanthord.progress.in_progress`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `items`: the todo list                             |
 
 A node with two or more repository bindings has a list of addresses as its tested input, so these spans hold no `kanthord.commit`.
 
-Every span also holds `kanthord.execution.id`, `kanthord.node.id`, `kanthord.attempt` and `kanthord.worker.name`. The trace header holds the project. A span status is `Error` when its operation failed, and `Ok` otherwise. An `agent.turn` that ends with a provider error has the status `Error`.
+Every span of a worker also holds `kanthord.execution.id`, `kanthord.node.id`, `kanthord.attempt` and `kanthord.worker.name`. The trace row holds the project. A span status is `Error` when its operation failed, and `Ok` otherwise. An `agent.turn` that ends with a provider error has the status `Error`.
 
-`reviewer@1` writes `agent.turn` and `agent.tool` spans below `worker.evaluation`. The `reply` text of its last turn holds the whole review, also the parts that the assessment rationale leaves out.
+`reviewer@1` writes `agent.session`, `agent.turn` and `agent.tool` spans below `worker.evaluation`. The model reply of its last turn holds the whole review, also the parts that the assessment rationale leaves out.
 
-A turn and a tool call have one shape for both producers. A dashboard therefore shows a native run and a harness run with the same view.
+A turn and a tool call have one shape for both producers. The Timeline tab of the trace page of the dashboard therefore shows a native run and a harness run with the same view. The Conversation tab renders the entries of the `pi` session format only.
+
+The attributes follow the [OpenTelemetry GenAI semantic conventions](https://github.com/open-telemetry/semantic-conventions-genai). `gen_ai.usage.input_tokens` counts every input token, also the cached ones. `kanthord.usage.cost_usd` is the cost that pi estimates from its price table.
+
+### The agent session
+
+An agent session is the conversation of one agent. Its entries are the agent transcript. The producer sends each entry as a record of the kind `session_entry` when the agent appends it, so a reader sees the conversation of a running execution with a delay of about one second.
+
+- The `agent.session` span names the session. Its span identity is the session identity, and `gen_ai.conversation.id` of each turn and tool span holds it.
+- An `agent.turn` names the entry of its model reply in `kanthord.session.entry_id`. The tool calls of the turn are blocks of that entry.
+- An `agent.tool` finds its result entry through `gen_ai.tool.call.id`: the entry with that `tool_call_id`.
+- When the session opens, the native producer sends one entry of type `custom` with `customType` `kanthord.pinned_context` for the system prompt, and one for each pinned prompt layer. Its `data` holds `part`: `system_prompt` or `layer`, and `text`. These entries are the only record of the pinned texts.
+- The producer cuts an entry above 61440 bytes of JSON and sets `truncated: true`. It replaces the exact secret strings of the LLM credential of the agent with `[redacted]` first.
+- A native `agent.turn` stays a child of its `worker.task` or `worker.judgement` span. `gen_ai.conversation.id` links it to its session.
+- The agent trace closes before the release of the execution, while the claim is live. The close sends the last entries and ends the `agent.session` span, with `Error` after a stop and `Ok` otherwise. It ends each open turn and tool span with `Error` and `error.type` `stopped`.
+- The host keeps a copy of the session as a pi session file. A stateless container loses that copy, and the Tracking Service keeps every entry that reached it.
 
 ### Identities
 
-A producer computes each identity from the execution and a local key. A retry therefore produces the same identity, and the Tracking Service stores the record once.
+A producer computes each identity from the execution, its run key and a local key. A retry of a send therefore produces the same identity, and the Tracking Service stores the record once.
 
-| Identity    | Rule                                                                                                                                                                                                           |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `span_id`   | The first 16 hex characters of SHA-256 of `<execution_id>:<local key>`                                                                                                                                         |
-| Local key   | `phase:<name>`, `<operation>:<n>` for a task, a verification, a judgement and an evaluation, `turn:<n>`, `tool:<turn span id>:<call id>`, `progress:<n>`, `session:<id>`. `<n>` counts from 1 in the execution |
-| `record_id` | `<span_id>:start` or `<span_id>:end` for a span record, `<text_id>` for a text record                                                                                                                          |
-| `text_id`   | `<span_id>:<text name>`, for example `<span_id>:output`. A text above 15000 characters splits into `:output.1`, `:output.2`, at most 8 parts                                                                   |
+| Identity    | Rule                                                                                                                                                                                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `span_id`   | The first 16 hex characters of SHA-256 of `<execution_id>:<run key>:<local key>`. The run key is 8 random hex characters for each process run of the execution, so a resumed execution writes new spans                                                                                           |
+| Local key   | `phase:<name>`, `<operation>:<n>` for a task, a verification, a judgement and an evaluation, `worker.git:<step>:<n>`, `turn:<n>`, `tool:<turn span id>:<call id>`, `progress:<n>`, `session:<n>` for the native producer and `session:<id>` for the harness. `<n>` counts from 1 in the execution |
+| `record_id` | `<span_id>:start` or `<span_id>:end` for a span record, `<text_id>` for a text record, `<session_id>:entry.<entry_id>` for a session entry record                                                                                                                                                 |
+| `text_id`   | `<span_id>:<text name>`, for example `<span_id>:output`. A text above 15000 characters splits into `:output.1`, `:output.2`, at most 8 parts                                                                                                                                                      |
 
 A start record holds `start_time`, the attributes that are known at the start, and the input texts. An end record holds `end_time`, the status, the other attributes and the output texts. No record sets a value that an earlier record set.
 
@@ -116,18 +134,22 @@ A producer writes the start record when the operation starts. It does not wait f
 
 A native worker writes its records straight to the primary store of the Tracking Service. It holds no local store and runs no import. The producer is the worker.
 
-| Source                    | Record                                                                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| pi `turn_start`           | Start of `agent.turn`                                                                                                    |
-| pi `turn_end`             | End of `agent.turn`. `message.usage` gives the tokens, `message.model` the model, `message.stopReason` the finish reason |
-| pi `tool_execution_start` | Start of `agent.tool`. `toolCallId` is the call id, `args` is the `input` text                                           |
-| pi `tool_execution_end`   | End of `agent.tool`. `isError` gives the outcome, `result` is the `output` text                                          |
-| Worker method             | Start and end of `worker.phase`: `prepare`, `start`, `tasks`, `finish`                                                   |
-| Worker task loop          | `worker.task`, `worker.verification`, `worker.judgement`                                                                 |
-| `reviewer@1` evaluation   | `worker.evaluation`, and one `worker.verification` for each command and each rerun                                       |
-| Provider failure          | `error.type` on the end of `agent.turn` takes the `provider_failed` code; `errorMessage` is the `error` text             |
+| Source                    | Record                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `openNativeAgent`         | Start of `agent.session` before the pi session opens. The span identity is the id of the pi session                                   |
+| pi `turn_start`           | Start of `agent.turn`                                                                                                                 |
+| pi `turn_end`             | End of `agent.turn`. `message.usage` gives the tokens and the cost, `message.model` the model, `message.stopReason` the finish reason |
+| pi `tool_execution_start` | Start of `agent.tool`. `toolCallId` is the call id                                                                                    |
+| pi `tool_execution_end`   | End of `agent.tool`. `isError` gives the outcome                                                                                      |
+| A new pi session entry    | One `session_entry` record, sent after the session event that appended the entry                                                      |
+| Agent close               | The remaining entries, the end of each open `agent.turn` and `agent.tool` with `Error`, then the end of `agent.session`               |
+| Worker method             | Start and end of `worker.phase`: `prepare`, `start`, `tasks`, `finish`                                                                |
+| Git step                  | `worker.git` for `commit`, `fetch_base`, `merge_base` and `push`. A failed step adds the `error` text                                 |
+| Worker task loop          | `worker.task`, `worker.verification`, `worker.judgement`                                                                              |
+| `reviewer@1` evaluation   | `worker.evaluation`, and one `worker.verification` for each command and each rerun                                                    |
+| Provider failure          | `error.type` on the end of `agent.turn` takes the `provider_failed` code. The model reply entry holds `errorMessage`                  |
 
-The worker queues its records and sends a batch each second, or at once when 200 records wait. A batch holds at most 768 KiB. A write that has no answer is sent at most three times.
+The worker queues its records and sends a batch each second, or at once when 200 records wait. A batch holds at most 768 KiB. A write that has no answer is sent at most three times. The queue holds at most 5000 records. The worker drops a record beyond that limit.
 
 The execution proof ends with the claim. The worker therefore flushes its queue for at most 5 seconds before the release and before the assessment. A record that is still queued at the end of the execution is dropped, and the worker logs the count. A failed telemetry write never fails the execution.
 
@@ -146,16 +168,16 @@ Each hook runs `kanthord tracking capture`. The command reads the hook JSON from
 
 ### Hook mapping
 
-| Claude Code hook                                          | Record                                                                                                                                        |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SessionStart`                                            | Start of `harness.session`. `model` and `session_id` are attributes                                                                           |
-| `UserPromptSubmit`                                        | Start of `agent.turn`                                                                                                                         |
-| `PreToolUse`                                              | Start of `agent.tool`. `tool_use_id` is the call id, `tool_input` is the `input` text                                                         |
-| `PostToolUse`                                             | End of `agent.tool` with outcome `ok`. `tool_response` is the `output` text, `duration_ms` is the duration                                    |
-| `PostToolUseFailure`                                      | End of `agent.tool` with outcome `error`. `error` is the `output` text                                                                        |
-| `PostToolUse` for `TaskCreate`, `TaskUpdate`, `TodoWrite` | One `agent.progress` span with the counts, and the list as the `items` text                                                                   |
-| `Stop`                                                    | End of `agent.turn`. `last_assistant_message` is the `reply` text. The usage comes from `message.usage` of the transcript entries of the turn |
-| `SessionEnd`                                              | End of `harness.session`                                                                                                                      |
+| Claude Code hook                                          | Record                                                                                                                                             |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart`                                            | Start of `agent.session`. `model` and `session_id` are attributes                                                                                  |
+| `UserPromptSubmit`                                        | Start of `agent.turn`                                                                                                                              |
+| `PreToolUse`                                              | Start of `agent.tool`. `tool_use_id` is the call id                                                                                                |
+| `PostToolUse`                                             | End of `agent.tool` with outcome `ok`. `duration_ms` is the duration                                                                               |
+| `PostToolUseFailure`                                      | End of `agent.tool` with outcome `error`                                                                                                           |
+| `PostToolUse` for `TaskCreate`, `TaskUpdate`, `TodoWrite` | One `agent.progress` span with the counts, and the list as the `items` text                                                                        |
+| `Stop`                                                    | End of `agent.turn`. The usage comes from `message.usage` of the transcript entries of the turn. The new transcript entries become session entries |
+| `SessionEnd`                                              | The remaining transcript entries, then the end of `agent.session`                                                                                  |
 
 No hook payload holds the token usage. The capture reads it from `transcript_path`. The transcript can lag the hook, so a turn can end with no usage attributes.
 
@@ -195,7 +217,7 @@ The Claude Code hook receives this payload:
 }
 ```
 
-Both produce the same two records, with their own call id:
+Both produce the same span record, with their own call id. The tool output reaches the Tracking Service as the session entry of the tool result, in the session format of the producer. The pi form is:
 
 ```json
 [
@@ -209,37 +231,57 @@ Both produce the same two records, with their own call id:
     "end_time": 1791734520120,
     "status": "Ok",
     "attributes": {
-      "gen_ai.tool.name": "bash",
-      "gen_ai.tool.call.id": "toolu_01A…",
       "kanthord.tool.outcome": "ok",
       "kanthord.tool.duration_ms": 4120
-    },
-    "text_ids": ["3b9d0c1e5a7f2264:output"]
+    }
   },
   {
-    "record_id": "3b9d0c1e5a7f2264:output",
+    "record_id": "9e8d7c6b5a493827:entry.c3d4e5f6",
     "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-    "kind": "text",
-    "text_id": "3b9d0c1e5a7f2264:output",
-    "text": "Tests: 1 passed"
+    "kind": "session_entry",
+    "session_id": "9e8d7c6b5a493827",
+    "entry_id": "c3d4e5f6",
+    "parent_entry_id": "b2c3d4e5",
+    "sequence": 14,
+    "entry_type": "message",
+    "entry_time": 1791734520125,
+    "tool_call_id": "call_7",
+    "truncated": false,
+    "entry": {
+      "type": "message",
+      "id": "c3d4e5f6",
+      "parentId": "b2c3d4e5",
+      "timestamp": "2026-10-11T16:02:00.125Z",
+      "message": {
+        "role": "toolResult",
+        "toolCallId": "call_7",
+        "toolName": "bash",
+        "content": [{ "type": "text", "text": "Tests: 1 passed" }],
+        "isError": false,
+        "timestamp": 1791734520125
+      }
+    }
   }
 ]
 ```
+
+The start record of the span carries `gen_ai.tool.name`, `gen_ai.tool.call.id` and `gen_ai.conversation.id: "9e8d7c6b5a493827"`.
 
 ## What the trace answers
 
 The e2e runs of `coder@1` and `reviewer@1` raised these questions. Each one has an answer in the trace of the execution.
 
-| Question during a run                                      | Where the answer is                                                                                                    |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Does the agent make progress, or is it idle?               | The newest `agent.turn` and `agent.tool` spans and their start times                                                   |
-| Which command hangs, and since when?                       | An `agent.tool` or `worker.verification` span with a start and no end. Its `input` or `command` text names the command |
-| Why does each turn fail at once?                           | `agent.turn` spans with the status `Error`, their `error.type` and their `error` text                                  |
-| Does the task loop verify the same commit again and again? | Consecutive `worker.verification` spans with the same `kanthord.commit` and a failed exit code                         |
-| Why did a verification fail?                               | The `output` text of the `worker.verification` span                                                                    |
-| Does a verification pass and then fail on the same commit? | `worker.verification` spans of one command and one commit, across runs and executions, with different exit codes       |
-| How many tokens did a node use before the quota ended?     | The sum of `gen_ai.usage.*` over the `agent.turn` spans of the node                                                    |
-| What did the reviewer write beyond the rationale?          | The `reply` text of the last `agent.turn` below `worker.evaluation`                                                    |
+| Question during a run                                      | Where the answer is                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Does the agent make progress, or is it idle?               | The newest `agent.turn` and `agent.tool` spans and their start times                                                                                   |
+| Which command hangs, and since when?                       | An `agent.tool` or `worker.verification` span with a start and no end. The tool call block of its turn entry, or its `command` text, names the command |
+| Why does each turn fail at once?                           | `agent.turn` spans with the status `Error`, their `error.type`, and the `errorMessage` of their model reply entry                                      |
+| Does the task loop verify the same commit again and again? | Consecutive `worker.verification` spans with the same `kanthord.commit` and a failed exit code                                                         |
+| Why did a verification fail?                               | The `output` text of the `worker.verification` span                                                                                                    |
+| Does a verification pass and then fail on the same commit? | `worker.verification` spans of one command and one commit, across runs and executions, with different exit codes                                       |
+| How many tokens did a node use before the quota ended?     | The trace summary of each execution of the node, or the sum of `gen_ai.usage.*` over its `agent.turn` spans                                            |
+| What did the reviewer write beyond the rationale?          | The model reply entry of the last `agent.turn` below `worker.evaluation`                                                                               |
+| What did the agent read and write before a failure?        | The session entries of its agent session, in order, from the entry that the failed turn names                                                          |
 
 The answers are for a human. No service reads them to stop an execution or to move a node. The state channel does that: the claim check, the `no_progress` stop and the `provider_failed` stop.
 
@@ -248,4 +290,4 @@ The answers are for a human. No service reads them to stop an execution or to mo
 - **Telemetry decides nothing.** A missing span proves no failure, and a span completes no node. Only the state channel moves a node.
 - **No live view of a harness.** A harness record reaches the server only at an ingestion that a human starts.
 - **Best effort capture.** A harness that exposes less produces fewer spans. A full local log discards its oldest records.
-- **No secret in a record.** The native worker removes provider keys from every command environment. A harness hook captures what the tool returns, so a secret in a tool output reaches the `output` text.
+- **No secret of the execution credentials in a record.** The native worker removes provider keys from every command environment, and it removes the secrets of the LLM credential of the agent from every session entry. Another secret that a tool prints, for example a value of a repository file, reaches the session entry.

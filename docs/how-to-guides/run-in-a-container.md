@@ -580,11 +580,11 @@ One instance is one trust boundary over every project that it serves. An agent c
 
 ### The files of an instance
 
-| File or directory                                        | On a Linux host or a Mac                  | In the image                                        |
-| -------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------- |
-| The instance file, mode `0600`                           | `~/.config/kanthord/workers/<name>.yaml`  | None. The container reads `KANTHORD_WORKER_CONFIG`. |
-| The data directory: `workspaces/`, `transcripts/`, `pi/` | `~/.local/share/kanthord/workers/<name>/` | `/var/lib/kanthord/data/kanthord/workers/<name>/`   |
-| The log                                                  | The journal of the unit, or the terminal  | `podman logs`                                       |
+| File or directory                        | On a Linux host or a Mac                  | In the image                                        |
+| ---------------------------------------- | ----------------------------------------- | --------------------------------------------------- |
+| The instance file, mode `0600`           | `~/.config/kanthord/workers/<name>.yaml`  | None. The container reads `KANTHORD_WORKER_CONFIG`. |
+| The data directory: `workspaces/`, `pi/` | `~/.local/share/kanthord/workers/<name>/` | `/var/lib/kanthord/data/kanthord/workers/<name>/`   |
+| The log                                  | The journal of the unit, or the terminal  | `podman logs`                                       |
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` move the two directories. Each instance holds its own data directory, so two instances on one host share no workspace. A restart with the same configuration is the same instance. It keeps its workspaces, and it resumes its `running` execution.
 

@@ -15,7 +15,7 @@ KanthorD does not implement the agent loop itself. It embeds [pi](https://www.np
 - When a provider is busy, the next execution uses the next model of a fallback chain.
 - The prompt has three layers: the system layer, the agent layer and the working layer. The model reads them in that order, and the task comes last.
 - The tool set, not the prompt, limits what an agent can do. A tool outside the set does not exist for the agent.
-- In a worker execution, the agent has a budget of 200 turns and 2 hours, and its conversation lives in memory only.
+- In a worker execution, the agent has a budget of 200 turns and 2 hours. pi persists its conversation to a session file, and the Tracking Service holds its entries.
 
 ## The two agents
 
@@ -39,14 +39,14 @@ The Agent component belongs to no service. A consumer opens an agent session for
 
 Both consumers use the same open path. They differ in these points:
 
-| Point                | Worker execution                            | Workbench session                                    |
-| -------------------- | ------------------------------------------- | ---------------------------------------------------- |
-| Working directory    | The workspace of the execution              | `~/.local/state/kanthord/workbench/<agent_name>`     |
-| Last pinned message  | The work prompt of the task or the node     | None                                                 |
-| Extra tools          | `evidence-upload` for `swe@1`               | KanthorD operation tools                             |
-| Approval of a change | None, because no human is present           | The human approves each operation that changes state |
-| Budget               | 200 turns and 2 hours                       | None                                                 |
-| Conversation storage | In memory, lost at the end of the execution | A pi session file that survives a restart            |
+| Point                | Worker execution                                                         | Workbench session                                    |
+| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Working directory    | The workspace of the execution                                           | `~/.local/state/kanthord/workbench/<agent_name>`     |
+| Last pinned message  | The work prompt of the task or the node                                  | None                                                 |
+| Extra tools          | `evidence-upload` for `swe@1`                                            | KanthorD operation tools                             |
+| Approval of a change | None, because no human is present                                        | The human approves each operation that changes state |
+| Budget               | 200 turns and 2 hours                                                    | None                                                 |
+| Conversation storage | A pi session file of the execution, and the session entries of its trace | A pi session file that survives a restart            |
 
 ## Configuration: which model answers
 
@@ -291,8 +291,8 @@ The human can change the agent provider, the model and the reasoning effort betw
 
 ## Limitations
 
-- **No resume for a Worker execution.** A Worker execution keeps its session in memory. When the worker process ends, the conversation is lost, and a new attempt starts a new session.
-- **Transcript on the worker host only.** At the end of each execution, the worker appends the transcript to `transcripts/<execution_id>.jsonl` of the data directory of its instance with mode 0600 and keeps the newest 50 files. The server receives no transcript. The telemetry spans `agent.turn` and `agent.tool` carry the last reply of each turn and the input and output of each tool call.
+- **No resume of a conversation.** A Worker execution persists its pi session to a file, but it never opens that file again. When the worker process ends, a resumed execution starts a new session.
+- **Transcript in the Tracking Service.** pi persists each session entry to `pi/sessions/execution/<execution_id>/` of the data directory of the instance, and the instance keeps the newest 50 directories. The worker sends each entry to the Tracking Service when pi appends it, with the secrets of the LLM credential of the agent removed. The spans `agent.turn` and `agent.tool` reference the entries and embed no content.
 - **No sandbox.** `bash` and the file tools run on the host with the rights of the KanthorD process. The tool set of `re@1` limits what the reviewer can do. The working directory of `swe@1` is only its default location, not a boundary.
 - **No approval in a Worker execution.** Only the Workbench asks a human before a call that changes state.
 - **Static catalog.** A new agent or a change of a tool set requires a new KanthorD release. A prompt change does not: the agent directory and the custom prompts override the shipped text.

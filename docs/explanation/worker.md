@@ -222,16 +222,16 @@ These rules explain most behavior that looks surprising at first.
 
 The agent forgets everything at the end of an execution. The next execution reads the state from these places:
 
-| State                                                  | Where it lives                                 | Durable                 |
-| ------------------------------------------------------ | ---------------------------------------------- | ----------------------- |
-| The work: every task commit and checkpoint commit      | The node branch on the git remote              | Yes                     |
-| The node state, the attempt and the pinned revision    | The Mission Service                            | Yes                     |
-| The evidence, the assessments and their rationales     | The Mission Service                            | Yes                     |
-| The claim, its deadline and the selected model         | The Scheduler execution record                 | Yes                     |
-| The cooldown of a busy credential                      | The Agent component on the server, in Custody  | Yes                     |
-| The task judgements of the last execution on this host | `judged-tasks.json` in the workspace           | No, a cache of one host |
-| The checkout itself                                    | `workspaces/` on the worker host               | No, a cache of one host |
-| The agent conversation                                 | Memory, then `transcripts/` on the worker host | No, never read again    |
+| State                                                  | Where it lives                                                 | Durable                         |
+| ------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------- |
+| The work: every task commit and checkpoint commit      | The node branch on the git remote                              | Yes                             |
+| The node state, the attempt and the pinned revision    | The Mission Service                                            | Yes                             |
+| The evidence, the assessments and their rationales     | The Mission Service                                            | Yes                             |
+| The claim, its deadline and the selected model         | The Scheduler execution record                                 | Yes                             |
+| The cooldown of a busy credential                      | The Agent component on the server, in Custody                  | Yes                             |
+| The task judgements of the last execution on this host | `judged-tasks.json` in the workspace                           | No, a cache of one host         |
+| The checkout itself                                    | `workspaces/` on the worker host                               | No, a cache of one host         |
+| The agent conversation                                 | The Tracking Service, and a pi session file on the worker host | Telemetry, never read to decide |
 
 The start check of `coder@1` runs every task verification again on the head of the node branch. It therefore needs only the durable rows. The caches save agent turns, and their loss repeats no work.
 
@@ -287,18 +287,17 @@ The worker host must reach the SSH port of each repository address host. The SSH
 
 An instance keeps its files in a data directory. A process at the `worker` placement uses `$XDG_DATA_HOME/kanthord/workers/<name>/` of its host, by default `~/.local/share/kanthord/workers/<name>/`. `<name>` is the instance name. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. A container at the `container` placement uses `state/kanthord/` of its volume `kanthord_slot_<client_id>`. Two instances share no file.
 
-| Path                               | Content                                                                                                                                                                                                                           |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaces/<node_id>/`            | The workspace of one `implement` node: `checkouts/<binding name>/` for each repository binding and `judged-tasks.json`. The next execution of the node on this host reuses it. The instance removes it 7 days after its last use. |
-| `workspaces/<execution_id>/`       | The fresh directory of one evaluation execution or one `examine` execution. It holds `checkouts/<binding name>/` for each checkout and `evidence/` for the placed evidence. The instance removes it at the end.                   |
-| `transcripts/<execution_id>.jsonl` | The agent conversation of one execution, mode `0600`. The instance keeps the newest 50.                                                                                                                                           |
-| `pi/`                              | The private directory of the pi runtime. It is separate from any pi installation of the user. A worker execution keeps its pi session in memory and writes no session file here.                                                  |
+| Path                         | Content                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `workspaces/<node_id>/`      | The workspace of one `implement` node: `checkouts/<binding name>/` for each repository binding and `judged-tasks.json`. The next execution of the node on this host reuses it. The instance removes it 7 days after its last use.          |
+| `workspaces/<execution_id>/` | The fresh directory of one evaluation execution or one `examine` execution. It holds `checkouts/<binding name>/` for each checkout and `evidence/` for the placed evidence. The instance removes it at the end.                            |
+| `pi/`                        | The private directory of the pi runtime. It is separate from any pi installation of the user. `pi/sessions/execution/<execution_id>/` holds the pi session files of one execution. The instance keeps the newest 50 execution directories. |
 
 The agent root is the directory that the agent works from. A node with no repository binding uses the workspace as the agent root. A node with one repository binding uses its checkout as the agent root. A node with two or more repository bindings uses `checkouts/` as the agent root.
 
 The task commit of an `implement` node with two or more repository bindings is the set of the heads of its node branches. Each required external action resolves on its own.
 
-The workspace and the transcript are local conveniences, not records. Another host or another slot can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
+The workspace and the pi session files are local conveniences, not records. The worker sends every session entry to the Tracking Service when the agent appends it. Another host or another slot can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
 
 The agent tools and the verification commands run with the rights of the worker process. At the `server` placement, those rights are the rights of the server user. A command can read the files of that user and can signal the server process. At the `container` placement, a command runs in the container of its instance. It reads no file of the server and cannot signal the server process. It still reaches every network that the container reaches. KanthorD has no other sandbox. Run a worker on a host that you trust with the repository and its credentials.
 
