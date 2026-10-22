@@ -498,21 +498,21 @@ Examples:
 - Cancellation uses the `Context` interface in `src/kernel/context.ts`. A `Context` holds two read-only fields:
   - `signal` is a native `AbortSignal`. It aborts on cancellation, and its `reason` holds the cancellation error.
   - `deadline` holds Unix milliseconds or `null`. A platform call reads it to compute its own `deadlineAt`.
-- A caller passes `Context` as an explicit parameter. No `AsyncLocalStorage` carries a context.
+- A caller passes `Context` as an explicit parameter.
 - `background` is the root. Its signal never aborts.
 - `CancellationContext` is the owner handle. Only its owner calls `cancel(reason)`. Cancellation is idempotent, and the first reason stays.
 - The default reason is `ContextCancelled` with the code `system.context.cancelled`. A deadline aborts with `DeadlineExceeded` and the code `system.context.deadline_exceeded`.
 - The signal of a child is `AbortSignal.any` of the parent signal and the signal of the owner. The child thus inherits parent cancellation with the reason of the parent. It holds no listener on the parent, so the garbage collector reclaims a released child. A cancel of a child leaves its parent and siblings running.
-- A child holds the earlier deadline of its own deadline and the parent deadline. It arms its own timer only when its own deadline is earlier. A context deadline never uses `AbortSignal.timeout`, because a deadline abort carries the coded `DeadlineExceeded`.
+- A child holds the earlier deadline of its own deadline and the parent deadline. It arms its own timer only when its own deadline is earlier.
 - A child that inherits the deadline of its parent arms no timer of its own. The parent cancels it, so the child holds the error instance of the parent.
 - `joined(first, second)` makes the parent of a context with two parents. Its signal is `AbortSignal.any` of both signals, and its deadline is the earlier deadline. A Gateway invocation uses it for the shutdown context and the caller context.
-- A consumer uses the native members of the signal:
+- A consumer uses these members and functions:
   - `signal.aborted` tests cancellation.
   - `signal.throwIfAborted()` guards the admission of work.
   - `reasonOf(signal)` reads the reason as `Error | null`.
-  - `cancelled(signal)` returns a promise that settles on the abort.
+  - `cancelled(signal)` returns a promise that settles on the abort. Its listener stays until the abort. Use it only on a signal that aborts when the work ends.
   - `addAbortListener(signal, listener)` of `node:events` subscribes.
-- A transport takes `context.signal` directly. No bridge controller sits between a context and a transport.
+- A transport takes `context.signal` directly.
 - `addAbortListener` returns a `Disposable`. Hold it with `using` in a lexical scope. Otherwise, call `[Symbol.dispose]()` when the work ends. The owner cancels a context with a deadline when its work ends, so the timer stops.
 - A cancellation listener never throws. A throw from a listener becomes an `uncaughtException`, so the process terminates. On a cancel, every other listener of that signal still runs first. On a registration on an aborted signal, the listener runs in a microtask.
 - Every service and component implements graceful shutdown for the work and resources it owns. Long-running work cooperates with its context; a synchronous component completes its current operation before its owner releases it.
