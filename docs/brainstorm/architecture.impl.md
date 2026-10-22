@@ -1283,7 +1283,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The worker, agent, model and error type filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
 - The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The default is `Last 7 days`.
 - The search field sends `q` after 300 ms without a keystroke.
-- The query string holds every filter value, the sort and the page cursor, so a link reproduces the list.
+- The query string holds every filter value and the sort, so a link reproduces the first page of the list.
 - A row shows the node name as its title, or the execution identity for a trace with no node. It shows the state badge and the stop reason badge.
 - A row shows the fields worker, agent, model, started, duration, tokens, `Est. cost`, turns, tools and errors.
 - A row opens `/traces/:traceId`. A row of a trace with an error opens it at `first_error_span_id`.
@@ -1294,7 +1294,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The header shows the node name with a link to the node, the state badge and the stop reason badge.
 - The header facts are the project, the execution, the attempt, the worker, the start, the duration, the input, output and cached tokens, and `Est. cost`.
 - A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the Timeline tab.
-- The page holds two tabs, `Timeline` and `Conversation`. The query string holds `tab`, `span` and `entry`, so a link opens one span or one entry.
+- The page holds two tabs, `Timeline` and `Conversation`. The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
 - While the page is visible, an `open` trace reads its summary and its spans again every 5 seconds. It reads its entries after the last cursor. The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
 - A read of a deleted or unknown trace shows "This trace is expired or unknown." with a link back to the list.
 
@@ -1328,7 +1328,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The Conversation tab shows the session entries of one agent session in order. A trace with two or more sessions shows a session selector, labeled with the agent name and the start of each session.
 - A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
 - A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
-- The system prompt shows collapsed, with its size. A compaction, a model change and a thinking level change show as one line each.
+- A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
 - A model reply offers `Show in timeline`. It selects its turn span on the Timeline tab.
 
