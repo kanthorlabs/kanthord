@@ -908,7 +908,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `control("stop")` sends the `stop` frame. The worker unit stops under its rules, the thread exits and `serve slot` exits. The container ends, `--rm` removes it, and the client exits with the code of the container.
 - `terminate()` runs `<runtime> kill --signal KILL kanthord_slot_<client_id>`. "no such container" counts as success. When the client still lives 2 s later, the driver sends `SIGKILL` to the client.
 - `exited` resolves at the exit of the client. Code 125 is a runtime error, for example a pull, name or mount failure. Code 126 or 127 means that the command cannot run. The pool host writes each one as `worker.pool.instance_failed` with `exit_code`, and `stderr.log` holds the runtime text.
-- A server crash closes the pipe ends of the server. The container then reads the end of stdin, and `serve slot` exits. When the client survives or dies with no end of stdin, the 15 s frame deadline ends the instance.
+- A server crash closes the pipe ends of the server. The container then reads the end of stdin, and `serve slot` exits. When the client survives or dies with no end of stdin, the 15 s frame deadline ends the instance. This stop after a crash is best effort. A slot container that stays running is removed at the next start.
 - Under systemd, a crash can kill `conmon` with the instance. The runtime then keeps a container record with no process. No slot acts on a claim, so G5 holds.
 - At the next start, `prepare()` removes every container of the owner. The slot starts again with the same `client_id`, the same slot volume and the live registration, so the `running` execution resumes.
 - A systemd unit of the server sets `KillMode=mixed`. `systemctl stop` then sends `SIGTERM` to the server process only, and the pool host stops each instance with its `stop` frame.
@@ -944,7 +944,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   2. `<runtime> inspect` shows no `client_secret` and no `KANTHORD_*` in the `env` or the command. It shows the read-only root file system, `CapDrop` `ALL` and `no-new-privileges`.
   3. A drain of an idle slot exits 0. No container of the slot remains after 10 s, and the slot volume remains.
   4. A stop exits within 5 s. `terminate()` ends an instance that ignores the stop within 5 s.
-  5. A process that launches a slot and then receives `SIGKILL` leaves no running container after 20 s. The next `prepare()` removes the container record.
+  5. A process that launches a slot and then receives `SIGKILL` leaves a container that the next `prepare()` removes.
   6. `prepare()` removes a container with the owner label, and keeps a container of another owner.
   7. A relaunch with the same `client_id` reads a file that the first run wrote into the slot volume.
   8. `stderr.log` on the host holds the record `Worker application ready`.
