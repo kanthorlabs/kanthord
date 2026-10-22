@@ -15,7 +15,7 @@ Manage the global enablement of a catalog agent. An enablement belongs to no pro
 | `disable` | Set the state of a live enablement to `disabled`, without a validation.         |
 | `remove`  | Remove an enablement that no worker binding uses.                               |
 
-Every write adds a revision, and the revision increases by `1`. Every write except a first `put` requires the latest revision that the caller read. `enable` and `disable` add a revision also when the state does not change.
+Every write adds a revision, and the revision increases by `1`. Every write except a `put` with no live record requires the latest revision that the caller read. `enable` and `disable` add a revision also when the state does not change.
 
 `put` with no prior record creates the enablement in the `enabled` state. A replacement keeps the current state. A retained agent provider cannot change its provider kind. An omitted agent provider is a removal. To change only the provider list, use [the provider commands](enablement-provider.md).
 
@@ -25,7 +25,7 @@ A configuration write validates the default configuration. The default `agent_pr
 
 `disable` is the stop switch of an agent. It keeps the worker bindings. A later binding write for the agent fails with `agent.enablement.unavailable`, and configuration resolution reports that code.
 
-`remove` writes a removal revision. The record then disappears from `list` and `get`, and `agent get` answers `enablement: null`. A later `put` creates a new `enabled` record. That `put` requires the revision of the removal, which is the removed revision plus `1`.
+`remove` writes a removal revision. The record then disappears from `list` and `get`, and `agent get` answers `enablement: null`. A later `put` creates a new `enabled` record. That `put` names no `expected_revision`, because a removed enablement counts as absent.
 
 ## Expected response
 
@@ -166,12 +166,12 @@ curl -s http://127.0.0.1:31415/api/agent/enablement/swe@1 \
 
 ### Create or replace an enablement
 
-| Body field                | Type    | Required                   | Purpose                                                                                                    |
-| ------------------------- | ------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `expected_revision`       | integer | Yes when a revision exists | Positive latest revision that the caller read, the removal revision included.                              |
-| `agent_providers`         | array   | Yes, at least one item     | Complete list of `{ name, provider, credential }`; every field is a nonempty string.                       |
-| `default_configuration`   | object  | Yes                        | `{ agent_provider, model_identifier, reasoning_effort }`.                                                  |
-| `fallback_configurations` | array   | Yes                        | At most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items; `[]` means no fallback. |
+| Body field                | Type    | Required                      | Purpose                                                                                                    |
+| ------------------------- | ------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `expected_revision`       | integer | Yes when a live record exists | Positive latest revision that the caller read.                                                             |
+| `agent_providers`         | array   | Yes, at least one item        | Complete list of `{ name, provider, credential }`; every field is a nonempty string.                       |
+| `default_configuration`   | object  | Yes                           | `{ agent_provider, model_identifier, reasoning_effort }`.                                                  |
+| `fallback_configurations` | array   | Yes                           | At most 7 complete `{ agent_provider, model_identifier, reasoning_effort }` items; `[]` means no fallback. |
 
 The body and its objects are closed; an unknown field fails validation.
 

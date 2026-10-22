@@ -47,7 +47,7 @@ A mechanism here never overrides a rule there.
 - The [entry forms](worker-service.vocabulary.md#entry) define inheritance and required fields.
 - A write refuses nonempty `options`.
 - Every enablement write, worker binding write and resolution runs the same checks.
-- Every enablement write names `expected_revision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A stale or absent value answers 409 `agent.enablement.revision_conflict` with the current value in `details`.
+- Every enablement write names `expected_revision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A `put` after a removal names none. A stale or absent value answers 409 `agent.enablement.revision_conflict` with the current value in `details`.
 - A `put` or a `provider.add` that names the name of another agent provider of the same enablement answers 409 `agent.enablement.provider.name_conflict`.
 - A `put` or a `provider.add` that names a credential of another agent provider of the same enablement answers 409 `agent.enablement.provider.credential_conflict`. A `provider.add` names the credential and the holding agent provider in `details`.
 - It checks the override allowlist before the merge, then validates the complete effective configuration.
