@@ -292,7 +292,7 @@ The human can change the agent provider, the model and the reasoning effort betw
 ## Limitations
 
 - **No resume of a conversation.** A Worker execution persists its pi session to a file, but it never opens that file again. When the worker process ends, a resumed execution starts a new session.
-- **Transcript in the Tracking Service.** pi persists each session entry to `pi/sessions/execution/<execution_id>/` of the data directory of the instance, and the instance keeps the newest 50 directories. The worker sends each entry to the Tracking Service when pi appends it, with the secrets of the execution credentials removed. The spans `agent.turn` and `agent.tool` reference the entries and embed no content.
+- **Transcript in the Tracking Service.** pi persists each session entry to `pi/sessions/execution/<execution_id>/` of the data directory of the instance, and the instance keeps the newest 50 directories. The worker sends each entry to the Tracking Service when pi appends it, with the secrets of the LLM credential of the agent removed. The spans `agent.turn` and `agent.tool` reference the entries and embed no content.
 - **No sandbox.** `bash` and the file tools run on the host with the rights of the KanthorD process. The tool set of `re@1` limits what the reviewer can do. The working directory of `swe@1` is only its default location, not a boundary.
 - **No approval in a Worker execution.** Only the Workbench asks a human before a call that changes state.
 - **Static catalog.** A new agent or a change of a tool set requires a new KanthorD release. A prompt change does not: the agent directory and the custom prompts override the shipped text.
