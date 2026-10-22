@@ -110,6 +110,8 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. RULED 2026-10-11 by Ulrich: [worker-contract.md](../explanation/worker-contract.md#identities) rules the span, record and text identities of worker records, the split of a text above 60 KiB, and the attribute names of the worker span catalog. Execution identity validation awaits the Scheduler contract.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion awaits byte and count limits, local-log and segment bounds, and `fsync` bounds.
+- [ ] Added 2026-10-22 from the Tracking Service redesign. Implement the capture of the Claude Code transcript as the session entries of an agent session with the format `claude_code`. [tracking-service.impl.md](tracking-service.impl.md#claude-code-hooks) holds the rules, and the build of 2026-10-22 implements only the `pi` format of the native worker.
+- [ ] Added 2026-10-22 from the Tracking Service redesign. Add `worker.git` to the span catalog of [worker-contract.md](../explanation/worker-contract.md#the-span-catalog). The worker writes it, with `kanthord.git.step`, and the catalog does not list it.
 
 ### Root repository
 

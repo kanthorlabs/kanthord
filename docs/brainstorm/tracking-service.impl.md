@@ -29,12 +29,15 @@ A kanthord operation name stays the span operation, and `gen_ai.operation.name` 
 
 | Span operation  | `gen_ai.operation.name` | GenAI attributes                                                                                                                                                                                                                                                                                 |
 | --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agent.session` | `invoke_agent`          | `gen_ai.conversation.id`, `gen_ai.request.model`                                                                                                                                                                                                                                                 |
+| `agent.session` | `invoke_agent`          | `gen_ai.conversation.id`, `gen_ai.agent.name`, `gen_ai.request.model`                                                                                                                                                                                                                            |
 | `agent.turn`    | `chat`                  | `gen_ai.conversation.id`, `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.provider.name`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read.input_tokens`, `gen_ai.usage.cache_creation.input_tokens`, `gen_ai.response.finish_reasons`, `error.type` |
 | `agent.tool`    | `execute_tool`          | `gen_ai.conversation.id`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `error.type`                                                                                                                                                                                                                |
 
 - `gen_ai.conversation.id` holds the session identity, which is the span identity of the `agent.session` span.
 - `gen_ai.request.model` holds the model of the agent configuration. `gen_ai.response.model` holds the model that the provider names in its reply.
+- `gen_ai.agent.name` and `kanthord.agent.name` hold the agent name, for example `swe@1`.
+- `error.type` of an `agent.turn` holds the provider failure code. `error.type` of an `agent.tool` holds `tool_error` on an error end.
+- `kanthord.turn.model_duration_ms` holds `durationMs` of the model reply. Without it, the producer measures the time from the start of the turn to the end of the reply.
 - `gen_ai.usage.input_tokens` counts every input token, also the tokens that a cache read or a cache write covers. The two cache attributes count a part of it.
 - An attribute that the conventions do not define takes the `kanthord.` prefix, for example `kanthord.usage.cost_usd` and `kanthord.session.entry_id`.
 - A span holds no `gen_ai.input.messages`, no `gen_ai.output.messages`, no `gen_ai.tool.call.arguments` and no `gen_ai.tool.call.result`. The session entries hold that content, and a span references them.
@@ -132,9 +135,16 @@ A session entry is a record of the kind `session_entry` in `tracking.telemetry.w
 - No foreign key joins an entry to its session span, so an entry can arrive before its span.
 - An entry counts toward the record bound of its execution.
 - The record bound of 64 KiB applies to an entry record as to every record.
-- The producer bounds the canonical JSON of `entry` to 61440 bytes. Above that bound it cuts every string value of the entry to its first 4096 characters and sets `truncated`.
-- When the cut entry stays above the bound, the producer sends only `type`, `id`, `parentId` and `timestamp`, and it sets `truncated`.
-- Before the cut, the producer replaces each secret of the execution credentials with `[redacted]` in every string value of the entry.
+- The producer bounds the canonical JSON of `entry` to 61440 bytes. Above that bound it cuts each string value above 4096 characters, and it sets `truncated`.
+- A cut keeps the first half and the last half of the limit around the marker `[cut <n> characters]`. `<n>` counts the removed characters.
+- When the entry stays above the bound, the producer cuts again with the limits 1024 and then 256.
+- When the entry stays above the bound after the limit 256, the producer sends only `type`, `id`, `parentId` and `timestamp`. It also keeps `role`, `toolCallId`, `toolName`, `isError`, `usage` and `stopReason` of `message`.
+- Before the cut, the producer replaces each secret of the LLM credential of the agent with `[redacted]` in every string value of the entry. It matches the exact secret strings only, so an identity, a commit or a tool call identity stays whole.
+- `entry_id` and `tool_call_id` come from the entry before the redaction.
+- A `pi` entry holds its tool call identity in `toolCallId` of a tool result message. A `claude_code` entry holds `tool_call_id: null`, and a reader finds its tool result through the `tool_use_id` of the content blocks.
+- The native producer appends one entry of type `custom` with `customType` `kanthord.pinned_context` when the session opens. Its `data` holds `system_prompt`, the final system prompt of the agent, and `layers`, the texts of the pinned prompt layers in order.
+  The worker injects these texts into each model call and pi persists no entry of them, so this entry is the only record of them.
+- pi persists each change of the prompt sections as a message with `role` `system`. Such an entry is a session entry as every other.
 
 ## Trace summary
 
@@ -173,7 +183,7 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - `tracking.retention_days` holds the retention of a trace in days. It defaults to `30`.
 - The retention of a trace starts at `created_at` of its row.
 - The service runs a sweep at its start and then every hour.
-- A sweep deletes the rows of `tracking_trace` with `created_at` older than the retention, at most 20 rows in each transaction. `ON DELETE CASCADE` deletes their spans, records, telemetry texts and session entries.
+- A sweep deletes the rows of `tracking_trace` with `created_at` older than the retention, at most 20 rows in each transaction. One sweep runs at most 50 transactions. `ON DELETE CASCADE` deletes their spans, records, telemetry texts and session entries.
 - The table `tracking_telemetry_text` holds no `expired_at`, and its `content` is `NOT NULL`.
 - The design answers a reference to a deleted trace as expired. The store keeps no tombstone of a deleted trace, so the read answers `404 tracking.trace.not_found`, the same answer as for an unknown trace.
 - `tracking.text.get` answers `{ trace_id, text_id, content, created_at }`.
@@ -187,11 +197,14 @@ The row of `tracking_trace` holds the summary columns of the trace.
 
 ## Ruled values
 
-- `EXECUTION_RECORD_LIMIT` is 50000 records for one trace. A `coder@1` execution of 200 turns writes about 3000 records with its session entries.
-- The refusal reasons are a closed set in code: `trace_mismatch`, `execution_bound`, `record_too_large`, `self_parent`, `foreign_producer`, `value_replaced`, `text_exists` and `trace_expired`.
-- The record dispositions are `Stored` and `Refused`.
-- The producer of the root span is `scheduler`.
-- The root span ends with `Error` when the execution stops or when the claim is lost, and with `Ok` otherwise.
+- RULED 2026-10-22 under the delegation of Ulrich. `EXECUTION_RECORD_LIMIT` is 50000 records for one trace.
+- RULED 2026-10-22 under the delegation of Ulrich. The refusal reasons are a closed set in code: `trace_mismatch`, `execution_bound`, `record_too_large`, `self_parent`, `foreign_producer`, `value_replaced`, `text_exists` and `trace_expired`.
+- RULED 2026-10-22 under the delegation of Ulrich. The record dispositions are `Stored` and `Refused`.
+- RULED 2026-10-22 under the delegation of Ulrich. The producer of the root span is `scheduler`.
+- RULED 2026-10-22 under the delegation of Ulrich. The root span ends with `Error` when the execution stops or when the claim is lost, and with `Ok` otherwise.
+- RULED 2026-10-22 under the delegation of Ulrich. `tracking.retention_days` defaults to 30. A sweep runs at the start and every hour, with at most 20 rows in each transaction and 50 transactions in one sweep.
+- RULED 2026-10-22 under the delegation of Ulrich. The entry bound is 61440 bytes, and the cut limits are 4096, 1024 and 256 characters.
+- RULED 2026-10-22 under the delegation of Ulrich. `tracking.facet.get` answers at most 200 values for each facet. The dashboard reads an open trace again every 5 seconds.
 
 ## Capture and packaging
 

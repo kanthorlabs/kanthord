@@ -107,7 +107,7 @@ The span `agent.session` names it, and the identity of that span is the session 
 
 ## session entry
 
-A session entry is one entry of an agent session, and it is a telemetry text.
+A session entry is one entry of an agent session. It is a record of its own kind and no telemetry text.
 A model reply, a tool result and a compaction summary of `swe@1` are session entries.
 The entry identity, the session identity and the position of the entry identify it inside its trace.
 

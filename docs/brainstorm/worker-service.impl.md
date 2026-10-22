@@ -1482,8 +1482,11 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
 - The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
-- After each session event, the worker sends each entry beyond the count that it already sent. It sends the rest when the agent closes.
-- The worker removes the secrets of the execution credentials from each entry before it sends the entry.
+- When the session opens, the worker appends one `kanthord.pinned_context` entry with the final system prompt and the pinned prompt layers.
+- After each session event, the worker sends each entry beyond the count that it already sent.
+- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span. A record after the release has no live claim, so the server refuses it.
+- An `agent.turn` span stays a child of its enclosing `worker.task` or `worker.judgement` span. Its `gen_ai.conversation.id` names its session.
+- The worker replaces the secrets of the LLM credential of the agent with `[redacted]` in each entry before it sends the entry. It matches the exact secret strings only.
 - The session file stays on the host as a convenience. A stateless container loses it, and the Tracking Service still holds every entry that reached it.
 - The span identity of a worker span hashes the execution identity, a run key and the local key. The run key is 8 random hexadecimal characters, new in each process run of the execution. A resumed execution therefore writes new spans and keeps the spans of the earlier run.
 

@@ -105,7 +105,7 @@ The text of a prompt reaches telemetry through an agent transcript alone.
 
 An [agent session](tracking-service.vocabulary.md#agent-session) is the conversation of one agent inside one execution.
 Its [session entries](tracking-service.vocabulary.md#session-entry), in their order, are the agent transcript.
-A session entry is a telemetry text of the trace of its execution.
+A session entry belongs to the trace of its execution. It is a record of its own kind and no telemetry text.
 A session span names one agent session, and the identity of that span is the session identity.
 The session span carries the [session format](tracking-service.vocabulary.md#session-format) of the entries, so that a reader can render them.
 The producer sends each entry when the agent appends it, and an execution does not wait for its end.
@@ -115,7 +115,7 @@ The content of a tool call and of a model reply reaches telemetry through the se
 An entry above the entry bound keeps its identity and its structure, and it states that its content is cut.
 The host of an execution keeps its own copy of each agent session as a convenience.
 That copy is no kanthord record, and a reader never depends on it.
-The producer removes the secrets of the credentials of the execution from every entry before it sends the entry.
+The producer removes the secrets of the LLM credential of the agent from every entry before it sends the entry.
 
 ## The trace summary
 

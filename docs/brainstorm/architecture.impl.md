@@ -1301,9 +1301,11 @@ The trace pages show what an execution did, so that a human can debug and optimi
 ### The timeline
 
 - The timeline is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
-- A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`. A span with a start and no end shows `Running` and a bar to the axis end.
+- A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`.
+- A span with a start and no end shows `Running` and a bar to the axis end while the trace is `open`. In a trace that is not `open`, it shows `No end recorded` and a bar of zero width at its start.
+- An `agent.turn` row shows its tokens and `Est. cost`. A `worker.task`, a `worker.judgement` and an `agent.session` row show the sums of the turns below them.
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
-- The labels are `Execution`, `Phase <phase>`, `Task <n>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
+- The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
 - The controls are a search field over the labels and the attribute values, and an `Errors only` toggle.
   The toggle group `All`, `Agent`, `Tools`, `Checks` and `Git` follows them. `Expand all` and `Collapse all` follow them.
@@ -1317,6 +1319,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - It shows the label, the status, the start, the end, the duration and the offset from the root start.
 - It shows the model, the input, output and cached tokens, `Est. cost`, the finish reason and the model duration of a turn.
 - It shows every attribute, every event and every link of the span, and the telemetry texts that `text_ids` names.
+- A turn and a tool take their session from `gen_ai.conversation.id`.
 - A turn shows its model reply entry: the text, the collapsed thinking and each tool call with a link to its tool span.
 - A tool shows the arguments of its call from the model reply entry of its turn, and its result entry.
 - A verification shows its `command` and `output` texts. A judgement and an evaluation show their `rationale` text.
@@ -1328,6 +1331,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The Conversation tab shows the session entries of one agent session in order. A trace with two or more sessions shows a session selector, labeled with the agent name and the start of each session.
 - A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
 - A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
+- A system message and the `kanthord.pinned_context` entry show collapsed, with their size. They expand to the prompt text and its sections.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
 - A model reply offers `Show in timeline`. It selects its turn span on the Timeline tab.
