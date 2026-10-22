@@ -800,7 +800,7 @@ Tests of the slot driver:
   - `server_in_container`: "This server runs in a container, so it cannot start a container for each instance. Keep server."
   - `runtime_absent`: "Install Podman or Docker on the server host, then open this sheet again."
   - `runtime_rootful`: "`<runtime>` runs as root on this host. Use rootless Podman or rootless Docker." `<runtime>` is `Podman` or `Docker` from `container_runtime`, or "The container runtime" when `container_runtime` is null.
-- On `runtime_failed`, `Container` stays on, because the write accepts that binding. The card adds "`<detail>`. Start the container runtime, then open this sheet again." to its description.
+- On `runtime_failed`, `Container` stays on, because the write accepts that binding. The card adds "`<detail>`. Fix the container runtime of the server user, then open this sheet again." to its description.
 - The `worker` placement is no card. A collapsed **Advanced settings** section of the sheet holds the switch **Worker placement**, the resource budget and the tags. The switch reads "Runs each listed worker instance as a kanthord serve worker process on a machine that you manage. Add the instances on the worker page first."
 - While the switch is on, both cards are off, **Instances** replaces **Instance count**, and **Placement** reads "Advanced settings set the worker placement. Turn it off to choose server or container." A switch back to off selects `Server`.
 - **Advanced settings** opens by itself when the draft holds the `worker` placement, a budget or a tag, and when a budget field or the tags fail their check.
