@@ -363,13 +363,13 @@ Every operation has a timeout of 30 seconds. The body limit is 10 MiB. The Gatew
 | Header            | Required                                              | Purpose                                                                 |
 | ----------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
 | `Authorization`   | All except `token`                                    | `Bearer <human-jwt>` or `Bearer <worker-jwt>`, as in the access column. |
-| `Idempotency-Key` | `create`, `rotate`, `archive`, `connect`, `heartbeat` | Fresh canonical ULID for a new request.                                 |
+| `Idempotency-Key` | `create`, `rotate`, `archive`, `connect`, `heartbeat` | Fresh `idempotency_key_<ulid>` for a new request.                       |
 | `Content-Type`    | Operations with a body                                | `application/json`.                                                     |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/worker/instance \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"name":"builder-1","worker":"coder@1","endpoint":"https://kanthord.example.com"}'
 
@@ -381,7 +381,7 @@ curl -i http://127.0.0.1:31415/api/worker/instance/builder-1 \
 
 curl -i -X POST http://127.0.0.1:31415/api/worker/instance/builder-1/archive \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PSD' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":2}'
 
@@ -393,11 +393,11 @@ curl -i -X POST http://127.0.0.1:31415/api/worker/instance/token \
 ## CLI shape
 
 ```text
-kanthord worker instance create <name> --worker <worker> [--worker-endpoint <url>] [--output [--force]] [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord worker instance create <name> --worker <worker> [--worker-endpoint <url>] [--output [--force]] [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord worker instance list [--worker <worker>] [--include-archived] [--limit <count>] [--cursor <opaque>] [--token <jwt>] [--endpoint <url>]
 kanthord worker instance get <name> [--token <jwt>] [--endpoint <url>]
-kanthord worker instance rotate <name> --expected-revision <revision> [--worker-endpoint <url>] [--output [--force]] [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord worker instance archive <name> --expected-revision <revision> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord worker instance rotate <name> --expected-revision <revision> [--worker-endpoint <url>] [--output [--force]] [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord worker instance archive <name> --expected-revision <revision> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord worker join [--force]
 ```
 
@@ -419,14 +419,14 @@ The CLI refuses a malformed or reserved name with `worker.instance.name_invalid`
 
 ### `worker instance create` and `worker instance rotate`
 
-| Option                           | Default / resolution       | Purpose                                                                                              |
-| -------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `--worker <worker>`              | Required for `create`      | Hosted worker of the instance.                                                                       |
-| `--expected-revision <revision>` | Required for `rotate`      | Live revision of the instance.                                                                       |
-| `--worker-endpoint <url>`        | The resolved `--endpoint`  | Server address that the instance calls. The CLI writes it into the instance configuration.           |
-| `--output`                       | Off                        | Writes the instance file `workers/<name>.yaml` on this host in place of the configuration on stdout. |
-| `--force`                        | Off                        | With `--output`, overwrites an existing instance file.                                               |
-| `--idempotency-key <ulid>`       | A generated canonical ULID | Sets the `Idempotency-Key` header.                                                                   |
+| Option                           | Default / resolution                 | Purpose                                                                                              |
+| -------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `--worker <worker>`              | Required for `create`                | Hosted worker of the instance.                                                                       |
+| `--expected-revision <revision>` | Required for `rotate`                | Live revision of the instance.                                                                       |
+| `--worker-endpoint <url>`        | The resolved `--endpoint`            | Server address that the instance calls. The CLI writes it into the instance configuration.           |
+| `--output`                       | Off                                  | Writes the instance file `workers/<name>.yaml` on this host in place of the configuration on stdout. |
+| `--force`                        | Off                                  | With `--output`, overwrites an existing instance file.                                               |
+| `--idempotency-key <key>`        | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header.                                                                   |
 
 Run the command with `--output` on the host of the instance. Without `--output`, stdout must be a terminal, because the line holds the private key.
 
@@ -440,7 +440,7 @@ The CLI checks the input before it sends a request:
 | `cli.config.invalid_endpoint`                                                            | `--worker-endpoint` is not an absolute HTTP(S) URL without credentials, query or fragment. |
 | `cli.worker.join.config_exists`                                                          | `--output` without `--force`, and the instance file exists. The row `path` names it.       |
 | `cli.output.terminal_required`                                                           | No `--output`, and stdout is not a terminal.                                               |
-| `cli.idempotency_key.invalid`                                                            | `--idempotency-key` is not a canonical ULID.                                               |
+| `cli.idempotency_key.invalid`                                                            | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                              |
 | `cli.worker.instance.revision_invalid`                                                   | `rotate`: `--expected-revision` is absent or not a positive integer.                       |
 
 ### `worker instance list`
@@ -460,10 +460,10 @@ There are no command options. A missing token fails with `cli.worker.instance.ge
 
 ### `worker instance archive`
 
-| Option                           | Default / resolution       | Purpose                                                             |
-| -------------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| `--expected-revision <revision>` | Required                   | Live revision of the instance.                                      |
-| `--idempotency-key <ulid>`       | A generated canonical ULID | Sets the `Idempotency-Key` header; supply the same key for a retry. |
+| Option                           | Default / resolution                 | Purpose                                                             |
+| -------------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| `--expected-revision <revision>` | Required                             | Live revision of the instance.                                      |
+| `--idempotency-key <key>`        | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header; supply the same key for a retry. |
 
 The success line adds `idempotency_key` to the archived record. `--expected-revision` that is absent or not a positive integer fails with `cli.worker.instance.revision_invalid`. A missing token fails with `cli.worker.instance.archive.token_required`.
 

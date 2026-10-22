@@ -856,6 +856,7 @@ The invocation chain holds idempotency in memory.
 
 - The `caller` field of a record holds the service name for a service identity.
 - A mutation carries an idempotency key on every adapter.
+- An idempotency key has the form `idempotency_key_<ulid>`, like every other identity, and a bare ULID is invalid.
 - One logical invocation keeps its key across retries.
 - The idempotency component holds each record in memory with a TTL.
 - No store holds a replay record.

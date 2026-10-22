@@ -206,7 +206,7 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `cli.mission.node.<command>.token_required`  | No nonblank token resolves.                                                                                                                              |
 | `cli.mission.node.<command>.indeterminate`   | A transport failure, a timeout or a malformed answer. Retry with the printed key.                                                                        |
 | `cli.file.*`                                 | `--file` is absent, not a regular file, `-`, not UTF-8, not JSON, has a repeated key, is not an object, or fails the schema (`cli.file.schema_invalid`). |
-| `cli.idempotency_key.invalid`                | `--idempotency-key` is not a canonical ULID.                                                                                                             |
+| `cli.idempotency_key.invalid`                | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                                                                            |
 
 `<command>` is `check`, `pause`, `resume`, `block`, `unblock`, `ready`, `override`, `discard` or `priority.set`.
 
@@ -243,17 +243,17 @@ All operations use `POST`, access `human` (human bearer JWT), a 30-second timeou
 
 The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications`, `bindings` (binding IDs), `intent` and the optional `tags`, as in [node create](node.md#request-bodies). Bodies accept no unknown field.
 
-| Header            | Required | Purpose                                              |
-| ----------------- | -------- | ---------------------------------------------------- |
-| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                |
-| `Content-Type`    | Yes      | `application/json`.                                  |
-| `Idempotency-Key` | Yes      | Canonical ULID; retain it to retry the same control. |
+| Header            | Required | Purpose                                                        |
+| ----------------- | -------- | -------------------------------------------------------------- |
+| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                          |
+| `Content-Type`    | Yes      | `application/json`.                                            |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>`; retain it to retry the same control. |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/pause \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
   -d '{"reason":"Review the plan","expected_mission_version":8,"expected_state":"Executing","expected_attempt":1}'
 ```
 
@@ -263,7 +263,7 @@ curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8
 curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/resume \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PS' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PS' \
   -d '{"reason":"Plan reviewed","expected_mission_version":8,"expected_state":"Paused","expected_attempt":1,"target":"Available"}'
 ```
 
@@ -272,15 +272,15 @@ The Gateway keeps the answer of a mutation for its idempotency key in process me
 ## CLI shape
 
 ```text
-kanthord mission node check <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node pause <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node resume <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node block <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node unblock <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node ready <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node override <node-id> --result success --file <path> [--idempotency-key <ulid>]
-kanthord mission node discard <node-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node priority set <node-id> --file <path> [--idempotency-key <ulid>]
+kanthord mission node check <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node pause <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node resume <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node block <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node unblock <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node ready <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node override <node-id> --result success --file <path> [--idempotency-key <key>]
+kanthord mission node discard <node-id> --file <path> [--idempotency-key <key>]
+kanthord mission node priority set <node-id> --file <path> [--idempotency-key <key>]
 ```
 
 Every command also accepts `--token <jwt>` and `--endpoint <url>`.
@@ -289,20 +289,20 @@ Every command also accepts `--token <jwt>` and `--endpoint <url>`.
 kanthord mission node pause node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file pause.json
 kanthord mission node resume node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file resume.json
 kanthord mission node override node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --result success --file override.json \
-  --idempotency-key 01M4C5J3SBXJ52XQ9FSFRTK4PR
+  --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR
 ```
 
 | Positional argument | Purpose                 |
 | ------------------- | ----------------------- |
 | `<node-id>`         | Required `node_<ulid>`. |
 
-| Option                     | Default / resolution                                                        | Purpose                                               |
-| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `--file <path>`            | Required; no default                                                        | JSON request body file.                               |
-| `--result <result>`        | `override` only; required; no default                                       | Must be `success`. The CLI sets `result` in the body. |
-| `--idempotency-key <ulid>` | A generated canonical ULID                                                  | Sets `Idempotency-Key`; supply the same key to retry. |
-| `--token <jwt>`            | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.              |
-| `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                      |
+| Option                    | Default / resolution                                                        | Purpose                                               |
+| ------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `--file <path>`           | Required; no default                                                        | JSON request body file.                               |
+| `--result <result>`       | `override` only; required; no default                                       | Must be `success`. The CLI sets `result` in the body. |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>`                                        | Sets `Idempotency-Key`; supply the same key to retry. |
+| `--token <jwt>`           | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.              |
+| `--endpoint <url>`        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                      |
 
 The `--file` of each command holds the complete request body, except for `override`. The `override` file holds no `result` field, and a `result` field fails the schema.
 

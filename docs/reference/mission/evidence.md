@@ -172,14 +172,14 @@ The example abbreviates the evidence record.
 | `evidence` | `Evidence`       | The new evidence.                                                                                            |
 | `uploads`  | array of objects | One item for each `object` asset: `asset_id`, `put_url`, `headers` and `expires_at`. Empty for other assets. |
 
-The CLI refuses `object` assets, so its `uploads` array is always empty. The CLI adds `idempotency_key` (canonical ULID) to the object and writes one JSON line to stdout, then exits `0`. Retain the key with the same machine token for retries.
+The CLI refuses `object` assets, so its `uploads` array is always empty. The CLI adds `idempotency_key` (`idempotency_key_<ulid>`) to the object and writes one JSON line to stdout, then exits `0`. Retain the key with the same machine token for retries.
 
 ### `evidence delete` and `evidence asset delete`
 
 The API returns HTTP `204` with no body. The CLI writes one JSON line with the retry key and exits `0`:
 
 ```json
-{ "idempotency_key": "01M4C5G6DGWEVZYSPETSQR65JH" }
+{ "idempotency_key": "idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH" }
 ```
 
 ### `evidence asset content get`
@@ -258,7 +258,7 @@ The CLI checks some input before it sends a request. Each local failure exits `1
 | `cli.mission.evidence.asset.delete.invalid_expected_mission_version`                                                                                                     | `asset delete`         | `--expected-mission-version` is not a positive decimal integer.                                                      |
 | `cli.mission.evidence.asset.content.get.invalid_asset_id`                                                                                                                | `content get`          | `<asset-id>` is not a canonical `evidence_asset_<ulid>` identity.                                                    |
 | `cli.mission.evidence.<command>.token_required`                                                                                                                          | All                    | No nonblank token resolves. `<command>` is `list`, `get`, `submit`, `delete`, `asset.delete` or `asset.content.get`. |
-| `cli.idempotency_key.invalid`                                                                                                                                            | `submit`, both deletes | `--idempotency-key` is not a canonical ULID.                                                                         |
+| `cli.idempotency_key.invalid`                                                                                                                                            | `submit`, both deletes | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                                        |
 | `cli.file.invalid_path`, `cli.file.not_found`, `cli.file.not_regular`, `cli.file.encoding_invalid`, `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | `submit`               | `--file` is `-`, absent, not a regular file, not UTF-8, not JSON, holds a duplicate key, or is not a JSON object.    |
 | `cli.file.schema_invalid`                                                                                                                                                | `submit`               | The file does not match the `EvidenceSubmit` schema.                                                                 |
 | `gateway.request.validation_failed`                                                                                                                                      | All                    | The local copy of the operation schema rejects the input, for example `--force` without `--reason`.                  |
@@ -341,7 +341,7 @@ To read the next page, send the `next_cursor` value as the `cursor` query parame
 | Header            | Required | Purpose                                                               |
 | ----------------- | -------- | --------------------------------------------------------------------- |
 | `Authorization`   | Yes      | `Bearer <machine-jwt>` of the registered worker that holds the claim. |
-| `Idempotency-Key` | Yes      | Canonical ULID; retain it for retries of that request.                |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>`; retain it for retries of that request.      |
 | `Content-Type`    | Yes      | `application/json`.                                                   |
 
 | Body field      | Type                   | Rule                                                                                                                                                                |
@@ -366,7 +366,7 @@ A `media_type` has the form `type/subtype` and holds at most 255 characters.
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/evidence \
   -H 'Authorization: Bearer <machine-jwt>' \
-  -H 'Idempotency-Key: 01M4C5G6DGWEVZYSPETSQR65JH' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
   -H 'Content-Type: application/json' \
   -d '{"execution_id":"execution_01M4C5G6BP0355Z52M6JCYZCSK","attempt":1,"node_revision":3,"subject":"Unit test report","assets":[{"kind":"produced","content":{"media_type":"text/plain","encoding":"base64","data":"dGVzdA=="}}],"verification":{"tested_input":{"kind":"repository","binding_id":"binding_01M4C5G6BP5EWTVTTXFH1R25MC","commit":"4b825dc642cb6eb9a060e54bf8d69288fbee4904"},"results":[{"command":"npm test","exit_code":0,"signal":null,"timed_out":false}]}}'
 ```
@@ -395,11 +395,11 @@ curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8
 
 Both deletes use these headers and body:
 
-| Header            | Required | Purpose                                                |
-| ----------------- | -------- | ------------------------------------------------------ |
-| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                  |
-| `Idempotency-Key` | Yes      | Canonical ULID; retain it for retries of that request. |
-| `Content-Type`    | Yes      | `application/json`.                                    |
+| Header            | Required | Purpose                                                          |
+| ----------------- | -------- | ---------------------------------------------------------------- |
+| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                            |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>`; retain it for retries of that request. |
+| `Content-Type`    | Yes      | `application/json`.                                              |
 
 | Body field                 | Type                  | Rule                                                                         |
 | -------------------------- | --------------------- | ---------------------------------------------------------------------------- |
@@ -410,7 +410,7 @@ Both deletes use these headers and body:
 ```sh
 curl -i -X DELETE http://127.0.0.1:31415/api/mission/evidence/evidence_01M4C5G6BN71J38HW3MFCKMAT6 \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M4C5G6DGWEVZYSPETSQR65JH' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
   -H 'Content-Type: application/json' \
   -d '{"expected_mission_version":7,"force":true,"reason":"Remove exposed material"}'
 ```
@@ -465,30 +465,30 @@ kanthord mission evidence get evidence_01M4C5G6BN71J38HW3MFCKMAT6
 ### `evidence submit`
 
 ```text
-kanthord mission evidence submit <node-id> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord mission evidence submit <node-id> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
 KANTHORD_TOKEN='<machine-jwt>' kanthord mission evidence submit node_01M4C5G6BNQQPFNM7M8W0GW1W4 \
   --file evidence.json \
-  --idempotency-key 01M4C5G6DGWEVZYSPETSQR65JH
+  --idempotency-key idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH
 ```
 
 | Positional argument | Purpose                                     |
 | ------------------- | ------------------------------------------- |
 | `<node-id>`         | Required `node_<ulid>` of the claimed node. |
 
-| Option                     | Default / resolution       | Purpose                                                                                      |
-| -------------------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
-| `--file <path>`            | Required                   | Regular UTF-8 file that holds the `EvidenceSubmit` JSON object. Stdin (`-`) is not accepted. |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets the `Idempotency-Key` header; supply the same key when you retry.                       |
+| Option                    | Default / resolution                 | Purpose                                                                                      |
+| ------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `--file <path>`           | Required                             | Regular UTF-8 file that holds the `EvidenceSubmit` JSON object. Stdin (`-`) is not accepted. |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header; supply the same key when you retry.                       |
 
 The CLI sends the file content as the request body. The CLI help labels `--file` as "Node JSON file"; the file holds an `EvidenceSubmit` object.
 
 ### `evidence delete`
 
 ```text
-kanthord mission evidence delete <evidence-id> --expected-mission-version <version> [--force] [--reason <text>] [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord mission evidence delete <evidence-id> --expected-mission-version <version> [--force] [--reason <text>] [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -503,7 +503,7 @@ kanthord mission evidence delete evidence_01M4C5G6BN71J38HW3MFCKMAT6 \
 ### `evidence asset delete`
 
 ```text
-kanthord mission evidence asset delete <asset-id> --expected-mission-version <version> [--force] [--reason <text>] [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord mission evidence asset delete <asset-id> --expected-mission-version <version> [--force] [--reason <text>] [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -517,12 +517,12 @@ kanthord mission evidence asset delete evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR
 
 Both delete commands take these options:
 
-| Option                                 | Default / resolution       | Purpose                                                                |
-| -------------------------------------- | -------------------------- | ---------------------------------------------------------------------- |
-| `--expected-mission-version <version>` | Required                   | Positive decimal integer sent as `expected_mission_version`.           |
-| `--force`                              | `false`                    | Sends `force: true`, which skips the terminal-chain check.             |
-| `--reason <text>`                      | None                       | Sent as `reason`. Required with `--force`.                             |
-| `--idempotency-key <ulid>`             | A generated canonical ULID | Sets the `Idempotency-Key` header; supply the same key when you retry. |
+| Option                                 | Default / resolution                 | Purpose                                                                |
+| -------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| `--expected-mission-version <version>` | Required                             | Positive decimal integer sent as `expected_mission_version`.           |
+| `--force`                              | `false`                              | Sends `force: true`, which skips the terminal-chain check.             |
+| `--reason <text>`                      | None                                 | Sent as `reason`. Required with `--force`.                             |
+| `--idempotency-key <key>`              | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header; supply the same key when you retry. |
 
 The CLI always sends `force` as an explicit boolean.
 

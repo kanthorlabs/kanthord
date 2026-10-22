@@ -21,8 +21,16 @@ Gateway request IDs use `request_<ulid>`, for example `request_01ARZ3NDEKTSV4RRF
 - The shared failure schema validates request IDs. Clients treat malformed failure envelopes as indeterminate results.
 - An idempotent replay retains the recorded answer, including its original request ID. Its HTTP response header identifies the current request.
 
+## Idempotency keys
+
+A client-generated `Idempotency-Key` value uses `idempotency_key_<ulid>`, for example `idempotency_key_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
+
+- The same value appears in the `idempotency_key` field of a CLI output.
+- The Gateway refuses a bare ULID or any other form with `gateway.idempotency.invalid_key`.
+- The CLI refuses an invalid `--idempotency-key` value before it sends the request.
+
 ## Exceptions
 
-Protocol-defined identities, natural keys and composite keys retain their declared representations. Human usernames and operation names are not generated opaque entity IDs. JWT `jti` values and client-generated `Idempotency-Key` values remain bare canonical ULIDs under their existing contracts. Temporary filesystem names are not entity identities.
+Protocol-defined identities, natural keys and composite keys retain their declared representations. Human usernames and operation names are not generated opaque entity IDs. JWT `jti` values remain bare canonical ULIDs under their existing contract. Temporary filesystem names are not entity identities.
 
 A ULID does not establish causal order. Use the owning service's revision or ordering contract when causal order is required.

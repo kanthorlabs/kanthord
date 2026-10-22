@@ -136,25 +136,25 @@ Every API call returns HTTP `200` with JSON. The CLI writes one JSON line to std
     }
   ],
   "agent_providers": [{ "agent": "swe@1", "name": "default" }],
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property                 | Type                     | Surface               | Purpose                                                                                                                  |
-| ------------------------ | ------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `name`                   | string                   | API and CLI           | Credential name.                                                                                                         |
-| `platform`               | string                   | API and CLI           | Platform of the credential; it never changes.                                                                            |
-| `holder`                 | string                   | API and CLI           | `server`, or the name of the worker instance of the copy.                                                                |
-| `sealed_to`              | string or `null`         | API and CLI           | Key fingerprint that the copy is sealed to; `null` for `server`.                                                         |
-| `sealed_current`         | boolean                  | API and CLI           | `true` when the copy is live and `sealed_to` is the current key fingerprint of the instance; always `true` for `server`. |
-| `revisions`              | array                    | API and CLI           | Every revision of the copy, newest first.                                                                                |
-| `revisions[].id`         | `credential_<ulid>`      | API and CLI           | [Identity](../identities.md) of the revision row.                                                                        |
-| `revisions[].revision`   | positive integer         | API and CLI           | Revision number.                                                                                                         |
-| `revisions[].metadata`   | object or `null`         | API and CLI           | Metadata of the revision.                                                                                                |
-| `revisions[].created_at` | integer                  | API and CLI           | Creation time in Unix milliseconds.                                                                                      |
-| `revisions[].ended_at`   | integer or `null`        | API and CLI           | End time in Unix milliseconds; `null` for a live revision.                                                               |
-| `agent_providers`        | array of `{agent, name}` | `get` only            | Agent providers that name the credential.                                                                                |
-| `idempotency_key`        | canonical ULID string    | CLI mutation commands | Key of the request; keep it for a retry.                                                                                 |
+| Property                 | Type                            | Surface               | Purpose                                                                                                                  |
+| ------------------------ | ------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `name`                   | string                          | API and CLI           | Credential name.                                                                                                         |
+| `platform`               | string                          | API and CLI           | Platform of the credential; it never changes.                                                                            |
+| `holder`                 | string                          | API and CLI           | `server`, or the name of the worker instance of the copy.                                                                |
+| `sealed_to`              | string or `null`                | API and CLI           | Key fingerprint that the copy is sealed to; `null` for `server`.                                                         |
+| `sealed_current`         | boolean                         | API and CLI           | `true` when the copy is live and `sealed_to` is the current key fingerprint of the instance; always `true` for `server`. |
+| `revisions`              | array                           | API and CLI           | Every revision of the copy, newest first.                                                                                |
+| `revisions[].id`         | `credential_<ulid>`             | API and CLI           | [Identity](../identities.md) of the revision row.                                                                        |
+| `revisions[].revision`   | positive integer                | API and CLI           | Revision number.                                                                                                         |
+| `revisions[].metadata`   | object or `null`                | API and CLI           | Metadata of the revision.                                                                                                |
+| `revisions[].created_at` | integer                         | API and CLI           | Creation time in Unix milliseconds.                                                                                      |
+| `revisions[].ended_at`   | integer or `null`               | API and CLI           | End time in Unix milliseconds; `null` for a live revision.                                                               |
+| `agent_providers`        | array of `{agent, name}`        | `get` only            | Agent providers that name the credential.                                                                                |
+| `idempotency_key`        | `idempotency_key_<ulid>` string | CLI mutation commands | Key of the request; keep it for a retry.                                                                                 |
 
 ### List answer
 
@@ -309,7 +309,7 @@ Local CLI failures exit `1` before a request:
 | `cli.llm.credential.<command>.token_required`                        | All                                            | No nonblank token resolves.                                                                               |
 | `cli.pagination.limit_invalid`                                       | `list`                                         | `--limit` is not a positive integer.                                                                      |
 | `cli.pagination.limit_out_of_range`                                  | `list`                                         | `--limit` is greater than `1000`.                                                                         |
-| `cli.llm.credential.revoke.invalid_revision`                         | `revoke`                                       | `<revision>` is not a positive safe integer.                                                              |     | `cli.idempotency_key.invalid` | Mutation commands | `--idempotency-key` is not a canonical ULID. |
+| `cli.llm.credential.revoke.invalid_revision`                         | `revoke`                                       | `<revision>` is not a positive safe integer.                                                              |     | `cli.idempotency_key.invalid` | Mutation commands | `--idempotency-key` is not an `idempotency_key_<ulid>` value. |
 | `cli.option.duplicate`                                               | All                                            | A single-use option appears twice.                                                                        |
 | `cli.file.invalid_path`                                              | `create`, `rotate`, `update-metadata`, `check` | The path is `-`; stdin is not accepted.                                                                   |
 | `cli.file.not_found`, `cli.file.not_regular`                         | `create`, `rotate`, `update-metadata`, `check` | The file is absent or is not a regular file.                                                              |
@@ -323,7 +323,7 @@ A local seal of `create` or `rotate` with `--holder` exits `1` with `cli.llm.cre
 
 ## API shape
 
-`create`, `rotate`, `list` and `get` use the access `human_or_worker`: `Authorization: Bearer <human-jwt>`, or the worker token of a worker instance. The other operations use human access with `Authorization: Bearer <human-jwt>`. Every operation has a 30-second timeout. Mutations require an `Idempotency-Key` header with a fresh canonical ULID. A retry with the same key, caller and request replays the recorded answer within the process-local [idempotency TTL](../config/show.md). A recorded failure replays too.
+`create`, `rotate`, `list` and `get` use the access `human_or_worker`: `Authorization: Bearer <human-jwt>`, or the worker token of a worker instance. The other operations use human access with `Authorization: Bearer <human-jwt>`. Every operation has a 30-second timeout. Mutations require an `Idempotency-Key` header with a fresh `idempotency_key_<ulid>`. A retry with the same key, caller and request replays the recorded answer within the process-local [idempotency TTL](../config/show.md). A recorded failure replays too.
 
 | Command           | Method and path                                                       | Operation ID                     | Mutation | Body limit |
 | ----------------- | --------------------------------------------------------------------- | -------------------------------- | -------- | ---------- |
@@ -344,7 +344,7 @@ A local seal of `create` or `rotate` with `--holder` exits `1` with `cli.llm.cre
 | ----------------- | ------------------ | ----------------------------------------------------------------------------- |
 | `Authorization`   | Yes                | `Bearer <human-jwt>`, or `Bearer <worker-token>` where the access permits it. |
 | `Content-Type`    | Routes with a body | `application/json`.                                                           |
-| `Idempotency-Key` | Mutations          | Fresh canonical ULID for a new request; reuse it only for a retry.            |
+| `Idempotency-Key` | Mutations          | Fresh `idempotency_key_<ulid>` for a new request; reuse it only for a retry.  |
 
 Request objects are closed: an unknown field fails validation.
 
@@ -411,7 +411,7 @@ A worker token sends `{ name, platform, metadata, holder, sealed, sealed_to }`. 
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"name":"team-openai","platform":"openai","metadata":null,"secret":{"key":"<api-key>"},"holders":["server","builder-1"]}'
 ```
 
@@ -425,7 +425,7 @@ A worker token sends `{ expected_revision, holder, sealed, sealed_to, metadata? 
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential/team-openai/revision \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"expected_revision":1,"secret":{"key":"<new-api-key>"}}'
 ```
 
@@ -437,7 +437,7 @@ The path parameter `credential_name` is required. The body is `{ expected_revisi
 curl -i -X PUT http://127.0.0.1:31415/api/llm/credential/local-vllm/metadata \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"expected_revision":1,"metadata":{"base_url":"http://10.0.0.5:8000/v1","models":[{"id":"qwen3-coder","max_tokens":8192}]}}'
 ```
 
@@ -448,7 +448,7 @@ The path parameters `credential_name` and `revision` are required. `revision` is
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential/team-openai/revision/1/revoke \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ### archive
@@ -458,7 +458,7 @@ The path parameter `credential_name` is required. The optional query `holder` se
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential/team-openai/archive \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ### check
@@ -487,11 +487,11 @@ curl -i -X POST http://127.0.0.1:31415/api/llm/credential/team-openai/verify \
 kanthord llm credential list [--platform <platform>] [--holder <name>] [--include-archived] [--limit <count>] [--cursor <cursor>]
 kanthord llm credential get <credential-name> [--holder <name>]
 kanthord llm credential platforms
-kanthord llm credential create --file <path> [--holder <name>] [--idempotency-key <ulid>]
-kanthord llm credential rotate <credential-name> --file <path> [--holder <name>] [--idempotency-key <ulid>]
-kanthord llm credential update-metadata <credential-name> --file <path> [--holder <name>] [--idempotency-key <ulid>]
-kanthord llm credential revoke <credential-name> <revision> [--holder <name>] [--idempotency-key <ulid>]
-kanthord llm credential archive <credential-name> [--holder <name>] [--idempotency-key <ulid>]
+kanthord llm credential create --file <path> [--holder <name>] [--idempotency-key <key>]
+kanthord llm credential rotate <credential-name> --file <path> [--holder <name>] [--idempotency-key <key>]
+kanthord llm credential update-metadata <credential-name> --file <path> [--holder <name>] [--idempotency-key <key>]
+kanthord llm credential revoke <credential-name> <revision> [--holder <name>] [--idempotency-key <key>]
+kanthord llm credential archive <credential-name> [--holder <name>] [--idempotency-key <key>]
 kanthord llm credential check --file <path>
 kanthord llm credential verify <credential-name>
 ```
@@ -503,7 +503,7 @@ kanthord llm credential platforms
 kanthord llm credential create --file ./team-openai.json
 kanthord llm credential list --platform openai --limit 50
 kanthord llm credential rotate team-openai --file ./team-openai-rotate.json \
-  --idempotency-key 01M34JC4BJ66JHP41M4MYY6PST
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 kanthord llm credential revoke team-openai 1
 kanthord llm credential verify team-openai --endpoint http://127.0.0.1:31415
 kanthord llm credential create --file ./team-openai.json --holder builder-1
@@ -530,17 +530,17 @@ An example `rotate` file, at mode `0600`: `{ "expected_revision": 1, "secret": {
 
 `list`, `platforms`, `create` and `check` take no positional arguments.
 
-| Option                     | Commands                                                                  | Default / resolution                                                        | Purpose                                                                           |
-| -------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `--token <jwt>`            | All                                                                       | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                                          |
-| `--endpoint <url>`         | All                                                                       | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                                  |
-| `--platform <platform>`    | `list`                                                                    | No filter                                                                   | Sets the `platform` query.                                                        |
-| `--include-archived`       | `list`                                                                    | `false`                                                                     | Sets `include_archived=true`. Without it, the CLI sends `include_archived=false`. |
-| `--limit <count>`          | `list`                                                                    | `100`                                                                       | Page size from `1` to `1000`.                                                     |
-| `--cursor <cursor>`        | `list`                                                                    | First page                                                                  | Sets the `cursor` query.                                                          |
-| `--holder <name>`          | `list`, `get`, `create`, `rotate`, `update-metadata`, `revoke`, `archive` | `server`; `list` lists every copy                                           | Selects the copy: `server` or an instance name. See the local seal below.         |
-| `--file <path>`            | `create`, `rotate`, `update-metadata`, `check`                            | Required                                                                    | JSON file that holds the request body.                                            |
-| `--idempotency-key <ulid>` | `create`, `rotate`, `update-metadata`, `revoke`, `archive`                | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key for a retry.               |
+| Option                    | Commands                                                                  | Default / resolution                                                        | Purpose                                                                           |
+| ------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `--token <jwt>`           | All                                                                       | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                                          |
+| `--endpoint <url>`        | All                                                                       | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                                  |
+| `--platform <platform>`   | `list`                                                                    | No filter                                                                   | Sets the `platform` query.                                                        |
+| `--include-archived`      | `list`                                                                    | `false`                                                                     | Sets `include_archived=true`. Without it, the CLI sends `include_archived=false`. |
+| `--limit <count>`         | `list`                                                                    | `100`                                                                       | Page size from `1` to `1000`.                                                     |
+| `--cursor <cursor>`       | `list`                                                                    | First page                                                                  | Sets the `cursor` query.                                                          |
+| `--holder <name>`         | `list`, `get`, `create`, `rotate`, `update-metadata`, `revoke`, `archive` | `server`; `list` lists every copy                                           | Selects the copy: `server` or an instance name. See the local seal below.         |
+| `--file <path>`           | `create`, `rotate`, `update-metadata`, `check`                            | Required                                                                    | JSON file that holds the request body.                                            |
+| `--idempotency-key <key>` | `create`, `rotate`, `update-metadata`, `revoke`, `archive`                | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key for a retry.               |
 
 Explicit options take precedence. See [client configuration](../README.md#client-configuration) for the private `cli.yaml` file. Each option is single-use. The read commands reject `--idempotency-key` as an unknown option.
 

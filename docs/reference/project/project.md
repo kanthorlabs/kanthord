@@ -50,19 +50,19 @@ Every operation returns HTTP `200`. The CLI writes one JSON line to stdout and e
   "created_at": 1759900000000,
   "paused_at": null,
   "workspace_directory": "~/.local/state/kanthord/projects/project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property              | Type                  | Surface     | Purpose                                                                                        |
-| --------------------- | --------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `id`                  | string                | API and CLI | Project ID with the `project` prefix.                                                          |
-| `name`                | string                | API and CLI | Project name.                                                                                  |
-| `binding_set_version` | positive integer      | API and CLI | Current binding set version. A new project has version `1`.                                    |
-| `created_at`          | integer               | API and CLI | Creation time in Unix milliseconds.                                                            |
-| `paused_at`           | integer or null       | API and CLI | Time of the pause in Unix milliseconds. `null` for an active project.                          |
-| `workspace_directory` | string                | API and CLI | Workspace directory path on the server host. A path inside the home directory starts with `~`. |
-| `idempotency_key`     | canonical ULID string | CLI only    | Key of this request. Supply it again to retry the same request.                                |
+| Property              | Type                            | Surface     | Purpose                                                                                        |
+| --------------------- | ------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `id`                  | string                          | API and CLI | Project ID with the `project` prefix.                                                          |
+| `name`                | string                          | API and CLI | Project name.                                                                                  |
+| `binding_set_version` | positive integer                | API and CLI | Current binding set version. A new project has version `1`.                                    |
+| `created_at`          | integer                         | API and CLI | Creation time in Unix milliseconds.                                                            |
+| `paused_at`           | integer or null                 | API and CLI | Time of the pause in Unix milliseconds. `null` for an active project.                          |
+| `workspace_directory` | string                          | API and CLI | Workspace directory path on the server host. A path inside the home directory starts with `~`. |
+| `idempotency_key`     | `idempotency_key_<ulid>` string | CLI only    | Key of this request. Supply it again to retry the same request.                                |
 
 ### project list
 
@@ -124,19 +124,19 @@ Within the replay TTL, a repeated key with the same request and caller returns t
 
 The CLI checks its input before it sends a request. Each local failure exits `1` and writes `<code>: <message>` to stderr.
 
-| Code                                    | Commands                              | Meaning                                           |
-| --------------------------------------- | ------------------------------------- | ------------------------------------------------- |
-| `cli.project.create.invalid_name`       | `create`                              | The `--name` value does not follow the name rule. |
-| `cli.project.rename.invalid_name`       | `rename`                              | The `--name` value does not follow the name rule. |
-| `cli.project.get.invalid_project_id`    | `get`                                 | The argument is not a valid project ID.           |
-| `cli.project.rename.invalid_project_id` | `rename`                              | The argument is not a valid project ID.           |
-| `cli.project.pause.invalid_project_id`  | `pause`                               | The argument is not a valid project ID.           |
-| `cli.project.resume.invalid_project_id` | `resume`                              | The argument is not a valid project ID.           |
-| `cli.pagination.limit_invalid`          | `list`                                | `--limit` is not a positive decimal integer.      |
-| `cli.pagination.limit_out_of_range`     | `list`                                | `--limit` is more than `1000`.                    |
-| `cli.idempotency_key.invalid`           | `create`, `rename`, `pause`, `resume` | `--idempotency-key` is not a canonical ULID.      |
-| `cli.option.duplicate`                  | All                                   | An option occurs more than once.                  |
-| `cli.project.<command>.token_required`  | All                                   | No nonblank token resolves.                       |
+| Code                                    | Commands                              | Meaning                                                       |
+| --------------------------------------- | ------------------------------------- | ------------------------------------------------------------- |
+| `cli.project.create.invalid_name`       | `create`                              | The `--name` value does not follow the name rule.             |
+| `cli.project.rename.invalid_name`       | `rename`                              | The `--name` value does not follow the name rule.             |
+| `cli.project.get.invalid_project_id`    | `get`                                 | The argument is not a valid project ID.                       |
+| `cli.project.rename.invalid_project_id` | `rename`                              | The argument is not a valid project ID.                       |
+| `cli.project.pause.invalid_project_id`  | `pause`                               | The argument is not a valid project ID.                       |
+| `cli.project.resume.invalid_project_id` | `resume`                              | The argument is not a valid project ID.                       |
+| `cli.pagination.limit_invalid`          | `list`                                | `--limit` is not a positive decimal integer.                  |
+| `cli.pagination.limit_out_of_range`     | `list`                                | `--limit` is more than `1000`.                                |
+| `cli.idempotency_key.invalid`           | `create`, `rename`, `pause`, `resume` | `--idempotency-key` is not an `idempotency_key_<ulid>` value. |
+| `cli.option.duplicate`                  | All                                   | An option occurs more than once.                              |
+| `cli.project.<command>.token_required`  | All                                   | No nonblank token resolves.                                   |
 
 A declared server failure exits `1`. The CLI writes `<code>: request failed` and the row `status`. For `create`, `rename`, `pause` and `resume`, it also writes the row `idempotency_key`. A transport failure, a timeout or a malformed response exits `1` with `cli.project.<command>.indeterminate`. For `create`, `rename`, `pause` and `resume`, the message is `the result is unknown; retry with the same idempotency key`, and the row `idempotency_key` holds the key. For a read, the message is `the result is unknown; retry the command`. There is no automatic retry.
 
@@ -171,16 +171,16 @@ A declared server failure exits `1`. The CLI writes `<code>: request failed` and
 
 The body object of `create` and `rename` accepts no other field. The body limit is 10 MiB. `pause` and `resume` accept no body.
 
-| Header            | Required                                 | Purpose                                                                |
-| ----------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
-| `Authorization`   | Yes                                      | `Bearer <human-jwt>`.                                                  |
-| `Idempotency-Key` | `create`, `rename`, `pause` and `resume` | Fresh canonical ULID for a new request. Keep it to retry that request. |
-| `Content-Type`    | `create` and `rename`                    | `application/json`.                                                    |
+| Header            | Required                                 | Purpose                                                                          |
+| ----------------- | ---------------------------------------- | -------------------------------------------------------------------------------- |
+| `Authorization`   | Yes                                      | `Bearer <human-jwt>`.                                                            |
+| `Idempotency-Key` | `create`, `rename`, `pause` and `resume` | Fresh `idempotency_key_<ulid>` for a new request. Keep it to retry that request. |
+| `Content-Type`    | `create` and `rename`                    | `application/json`.                                                              |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/project \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"name":"payments"}'
 
@@ -192,28 +192,28 @@ curl -i http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4 \
 
 curl -i -X PATCH http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4 \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PQR' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PQR' \
   -H 'Content-Type: application/json' \
   -d '{"name":"billing"}'
 
 curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/pause \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PQS'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PQS'
 
 curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/resume \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PQT'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PQT'
 ```
 
 ## CLI shape
 
 ```text
-kanthord project create --name <name> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord project create --name <name> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord project list [--limit <count>] [--cursor <cursor>] [--token <jwt>] [--endpoint <url>]
 kanthord project get <project-id> [--token <jwt>] [--endpoint <url>]
-kanthord project rename <project-id> --name <name> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord project pause <project-id> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord project resume <project-id> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord project rename <project-id> --name <name> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord project pause <project-id> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord project resume <project-id> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -231,10 +231,10 @@ kanthord project resume project_01JD3W8QF4Q7J8M9N0P1R2S3T4
 
 There are no positional arguments.
 
-| Option                     | Default / resolution       | Purpose                                               |
-| -------------------------- | -------------------------- | ----------------------------------------------------- |
-| `--name <name>`            | Required                   | Project name.                                         |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets `Idempotency-Key`. Supply the same key to retry. |
+| Option                    | Default / resolution                 | Purpose                                               |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `--name <name>`           | Required                             | Project name.                                         |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets `Idempotency-Key`. Supply the same key to retry. |
 
 ### project list
 
@@ -259,10 +259,10 @@ There are no command options.
 | -------------- | --------------------- |
 | `<project-id>` | Project ID to rename. |
 
-| Option                     | Default / resolution       | Purpose                                               |
-| -------------------------- | -------------------------- | ----------------------------------------------------- |
-| `--name <name>`            | Required                   | New project name.                                     |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets `Idempotency-Key`. Supply the same key to retry. |
+| Option                    | Default / resolution                 | Purpose                                               |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `--name <name>`           | Required                             | New project name.                                     |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets `Idempotency-Key`. Supply the same key to retry. |
 
 ### project pause
 
@@ -270,9 +270,9 @@ There are no command options.
 | -------------- | -------------------- |
 | `<project-id>` | Project ID to pause. |
 
-| Option                     | Default / resolution       | Purpose                                               |
-| -------------------------- | -------------------------- | ----------------------------------------------------- |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets `Idempotency-Key`. Supply the same key to retry. |
+| Option                    | Default / resolution                 | Purpose                                               |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets `Idempotency-Key`. Supply the same key to retry. |
 
 ### project resume
 
@@ -280,9 +280,9 @@ There are no command options.
 | -------------- | --------------------- |
 | `<project-id>` | Project ID to resume. |
 
-| Option                     | Default / resolution       | Purpose                                               |
-| -------------------------- | -------------------------- | ----------------------------------------------------- |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets `Idempotency-Key`. Supply the same key to retry. |
+| Option                    | Default / resolution                 | Purpose                                               |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets `Idempotency-Key`. Supply the same key to retry. |
 
 ### Shared options
 

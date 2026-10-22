@@ -83,14 +83,17 @@ The API returns HTTP `200` with one of two objects.
 The CLI adds the retry key, writes one JSON line to stdout, and exits `0`. Both `claimed` and `no-work` exit `0`.
 
 ```json
-{ "kind": "no-work", "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST" }
+{
+  "kind": "no-work",
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}
 ```
 
-| Property          | Type                   | Surface     | Purpose                                                                                      |
-| ----------------- | ---------------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| `kind`            | `claimed` or `no-work` | API and CLI | Result of the pull.                                                                          |
-| `execution`       | `ExecutionRecord`      | API and CLI | Only with `claimed`. The fields are in [the execution record](execution.md#executionrecord). |
-| `idempotency_key` | canonical ULID string  | CLI only    | Key used for this request; retain it for a retry.                                            |
+| Property          | Type                            | Surface     | Purpose                                                                                      |
+| ----------------- | ------------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
+| `kind`            | `claimed` or `no-work`          | API and CLI | Result of the pull.                                                                          |
+| `execution`       | `ExecutionRecord`               | API and CLI | Only with `claimed`. The fields are in [the execution record](execution.md#executionrecord). |
+| `idempotency_key` | `idempotency_key_<ulid>` string | CLI only    | Key used for this request; retain it for a retry.                                            |
 
 ### Failures
 
@@ -111,19 +114,19 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 
 The CLI checks the file and the key before it sends a request. Each local failure exits `1` and sends no request.
 
-| CLI code                                 | Meaning                                                      |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| `cli.file.invalid_path`                  | `--file -` is not accepted; the command does not read stdin. |
-| `cli.file.not_found`                     | The file does not exist.                                     |
-| `cli.file.not_regular`                   | The path is not a regular file.                              |
-| `cli.file.encoding_invalid`              | The file is not valid UTF-8.                                 |
-| `cli.file.not_json`                      | The file is not valid JSON.                                  |
-| `cli.file.duplicate_key`                 | A JSON object repeats a member name.                         |
-| `cli.file.not_object`                    | The JSON value is not an object.                             |
-| `cli.file.schema_invalid`                | The object is not the closed request body below.             |
-| `cli.idempotency_key.invalid`            | `--idempotency-key` is not a canonical ULID.                 |
-| `cli.scheduler.work.pull.token_required` | No nonblank token resolves.                                  |
-| `cli.option.duplicate`                   | An option occurs more than once.                             |
+| CLI code                                 | Meaning                                                       |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| `cli.file.invalid_path`                  | `--file -` is not accepted; the command does not read stdin.  |
+| `cli.file.not_found`                     | The file does not exist.                                      |
+| `cli.file.not_regular`                   | The path is not a regular file.                               |
+| `cli.file.encoding_invalid`              | The file is not valid UTF-8.                                  |
+| `cli.file.not_json`                      | The file is not valid JSON.                                   |
+| `cli.file.duplicate_key`                 | A JSON object repeats a member name.                          |
+| `cli.file.not_object`                    | The JSON value is not an object.                              |
+| `cli.file.schema_invalid`                | The object is not the closed request body below.              |
+| `cli.idempotency_key.invalid`            | `--idempotency-key` is not an `idempotency_key_<ulid>` value. |
+| `cli.scheduler.work.pull.token_required` | No nonblank token resolves.                                   |
+| `cli.option.duplicate`                   | An option occurs more than once.                              |
 
 A declared API failure makes the CLI exit `1`. The diagnostic starts with the error code of the API and holds the rows `status` and `idempotency_key`. A transport failure, timeout or malformed response exits `1` with `cli.scheduler.work.pull.indeterminate`, the message `the result is unknown; retry with the same idempotency key` and the row `idempotency_key`. After an indeterminate result, send the same file with the same key and machine token. There is no automatic retry.
 
@@ -144,17 +147,17 @@ A declared API failure makes the CLI exit `1`. The diagnostic starts with the er
 | `resource_identity` | nonempty string              | Required. Must equal the resource identity of the machine identity. |
 | `runtime_identity`  | `worker_registration_<ulid>` | Required. Must equal the runtime identity of the live registration. |
 
-| Header            | Required | Purpose                                                                  |
-| ----------------- | -------- | ------------------------------------------------------------------------ |
-| `Authorization`   | Yes      | `Bearer <machine-jwt>` of the registered worker instance.                |
-| `Content-Type`    | Yes      | `application/json`.                                                      |
-| `Idempotency-Key` | Yes      | Fresh canonical ULID for a new pull; retain it for retries of that pull. |
+| Header            | Required | Purpose                                                                            |
+| ----------------- | -------- | ---------------------------------------------------------------------------------- |
+| `Authorization`   | Yes      | `Bearer <machine-jwt>` of the registered worker instance.                          |
+| `Content-Type`    | Yes      | `application/json`.                                                                |
+| `Idempotency-Key` | Yes      | Fresh `idempotency_key_<ulid>` for a new pull; retain it for retries of that pull. |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/scheduler/work/pull \
   -H 'Authorization: Bearer <machine-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   --max-time 125 \
   -d '{"resource_identity":"<resource-identity>","runtime_identity":"<runtime-identity>"}'
 ```
@@ -164,7 +167,7 @@ A disconnect ends the wait for an answer. It does not undo a committed claim. Th
 ## CLI shape
 
 ```text
-kanthord scheduler work pull --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord scheduler work pull --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -176,11 +179,11 @@ kanthord scheduler work pull --file pull.json --token '<machine-jwt>'
 
 There are no positional arguments.
 
-| Option                     | Default / resolution                                                        | Purpose                                                                       |
-| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `--file <path>`            | Required; no default                                                        | JSON file that holds the request body. The file must be a regular UTF-8 file. |
-| `--idempotency-key <ulid>` | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key when you retry.        |
-| `--token <jwt>`            | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Machine JWT sent as the bearer credential.                                    |
-| `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                              |
+| Option                    | Default / resolution                                                        | Purpose                                                                       |
+| ------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `--file <path>`           | Required; no default                                                        | JSON file that holds the request body. The file must be a regular UTF-8 file. |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key when you retry.        |
+| `--token <jwt>`           | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Machine JWT sent as the bearer credential.                                    |
+| `--endpoint <url>`        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                              |
 
 `--token` and `--endpoint` belong to the `scheduler` group, and each leaf command accepts them. Explicit options take precedence; see [client configuration](../README.md#client-configuration). Generate the machine JWT with [`kanthord auth jwt generate`](../auth/jwt.md). The command reads no server configuration. The HTTP client has a 121-second deadline for this 120-second operation.

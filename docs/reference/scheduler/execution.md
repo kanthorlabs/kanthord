@@ -115,15 +115,15 @@ The CLI adds the retry key, writes one JSON line to stdout, and exits `0` (shown
 {
   "execution_id": "execution_01JZ8R2B3C4D5E6F7G8H9J0K1M",
   "ended_at": 1791448200000,
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property          | Type                  | Surface     | Purpose                    |
-| ----------------- | --------------------- | ----------- | -------------------------- |
-| `execution_id`    | `execution_<ulid>`    | API and CLI | The released execution.    |
-| `ended_at`        | timestamp             | API and CLI | Time of the release.       |
-| `idempotency_key` | canonical ULID string | CLI only    | Key used for this request. |
+| Property          | Type                            | Surface     | Purpose                    |
+| ----------------- | ------------------------------- | ----------- | -------------------------- |
+| `execution_id`    | `execution_<ulid>`              | API and CLI | The released execution.    |
+| `ended_at`        | timestamp                       | API and CLI | Time of the release.       |
+| `idempotency_key` | `idempotency_key_<ulid>` string | CLI only    | Key used for this request. |
 
 ### `ExecutionRecord`
 
@@ -191,7 +191,7 @@ The CLI checks some input before it sends a request. Each local failure exits `1
 | `cli.scheduler.execution.list.token_required`          | `list`    | No nonblank token resolves.                                                            |
 | `cli.scheduler.execution.release.token_required`       | `release` | No nonblank token resolves.                                                            |
 | `cli.file.*`                                           | `release` | The `--file` value fails a file check; the codes are in [pull work](work.md#failures). |
-| `cli.idempotency_key.invalid`                          | `release` | `--idempotency-key` is not a canonical ULID.                                           |
+| `cli.idempotency_key.invalid`                          | `release` | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                          |
 | `cli.option.duplicate`                                 | All       | An option occurs more than once.                                                       |
 
 The CLI does not check `--attempt` without `--node`; the API rejects it with `400 gateway.request.validation_failed`.
@@ -254,13 +254,13 @@ curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5
 | ----------------- | -------- | ------------------------------------------------------------ |
 | `Authorization`   | Yes      | `Bearer <machine-jwt>` of the instance that holds the claim. |
 | `Content-Type`    | Yes      | `application/json`.                                          |
-| `Idempotency-Key` | Yes      | Canonical ULID for the release request.                      |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>` for the release request.            |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/scheduler/execution/execution_01JZ8R2B3C4D5E6F7G8H9J0K1M/release \
   -H 'Authorization: Bearer <machine-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"further_work":false}'
 ```
 
@@ -305,7 +305,7 @@ kanthord scheduler execution list project_01JZ8PZ0A1B2C3D4E5F6G7H8J9 \
 ### `execution release`
 
 ```text
-kanthord scheduler execution release <execution-id> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord scheduler execution release <execution-id> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -318,10 +318,10 @@ kanthord scheduler execution release execution_01JZ8R2B3C4D5E6F7G8H9J0K1M \
 | ------------------- | --------------------------------------- |
 | `<execution-id>`    | Required `execution_<ulid>` to release. |
 
-| Option                     | Default / resolution       | Purpose                                                                       |
-| -------------------------- | -------------------------- | ----------------------------------------------------------------------------- |
-| `--file <path>`            | Required; no default       | JSON file that holds the request body. The file must be a regular UTF-8 file. |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets the `Idempotency-Key` header.                                            |
+| Option                    | Default / resolution                 | Purpose                                                                       |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| `--file <path>`           | Required; no default                 | JSON file that holds the request body. The file must be a regular UTF-8 file. |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header.                                            |
 
 ### Shared options
 

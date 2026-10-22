@@ -328,7 +328,7 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `cli.mission.node.<command>.token_required`                                                   | No nonblank token resolves.                                                                                                                              |
 | `cli.mission.node.<command>.indeterminate`                                                    | A transport failure, a timeout or a malformed answer. For a write, retry with the printed key.                                                           |
 | `cli.file.*`                                                                                  | `--file` is absent, not a regular file, `-`, not UTF-8, not JSON, has a repeated key, is not an object, or fails the schema (`cli.file.schema_invalid`). |
-| `cli.idempotency_key.invalid`                                                                 | `--idempotency-key` is not a canonical ULID.                                                                                                             |
+| `cli.idempotency_key.invalid`                                                                 | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                                                                            |
 
 `<command>` is the dotted command path, for example `retire.preview` or `revision.list`. `node retire` without `--file` fails with the Commander message for a required option. `node retire preview` rejects `--file` and `--idempotency-key` as unknown options.
 
@@ -350,11 +350,11 @@ All operations use access `human` (human bearer JWT) and a 30-second timeout.
 
 Path parameters: `mission_id` is `mission_<ulid>`, `node_id` is `node_<ulid>`, and `revision` is a positive safe integer.
 
-| Header            | Required    | Purpose                                            |
-| ----------------- | ----------- | -------------------------------------------------- |
-| `Authorization`   | Yes         | `Bearer <human-jwt>`.                              |
-| `Content-Type`    | Writes only | `application/json`.                                |
-| `Idempotency-Key` | Writes only | Canonical ULID; retain it to retry the same write. |
+| Header            | Required    | Purpose                                                      |
+| ----------------- | ----------- | ------------------------------------------------------------ |
+| `Authorization`   | Yes         | `Bearer <human-jwt>`.                                        |
+| `Content-Type`    | Writes only | `application/json`.                                          |
+| `Idempotency-Key` | Writes only | `idempotency_key_<ulid>`; retain it to retry the same write. |
 
 The Gateway keeps the answer of a write for its idempotency key in process memory for `idempotency_ttl` seconds, 86400 by default. A retry with the same key, human account and request replays that answer. This rule also applies to a failure. Read requests send no body.
 
@@ -395,7 +395,7 @@ The content object has `name`, `requirement` and `criterion` (nonblank strings),
 curl -i -X POST http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/node \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
   -d '{"filename":"signup.md","expected_mission_version":7,"reason":"Add sign-up","content":{"name":"Add sign-up","requirement":"Users create accounts.","criterion":"A new user signs in.","verifications":["pnpm test"],"bindings":["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],"intent":"implement","tags":[]},"tasks":[]}'
 ```
 
@@ -409,11 +409,11 @@ curl -i 'http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/n
 ```text
 kanthord mission node list <mission-id> [--intent <intent>] [--state <state>] [--include-retired] [--limit <count>] [--cursor <cursor>]
 kanthord mission node get <node-id>
-kanthord mission node create <mission-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission node update <node-id> --file <path> [--idempotency-key <ulid>]
+kanthord mission node create <mission-id> --file <path> [--idempotency-key <key>]
+kanthord mission node update <node-id> --file <path> [--idempotency-key <key>]
 kanthord mission node retire preview <node-id> [--force]
-kanthord mission node retire <node-id> --file <path> [--force] [--idempotency-key <ulid>]
-kanthord mission node rebind <mission-id> <binding-id> --file <path> [--node <node-id>] [--idempotency-key <ulid>]
+kanthord mission node retire <node-id> --file <path> [--force] [--idempotency-key <key>]
+kanthord mission node rebind <mission-id> <binding-id> --file <path> [--node <node-id>] [--idempotency-key <key>]
 kanthord mission node revision list <node-id> [--limit <count>] [--cursor <cursor>]
 kanthord mission node revision get <node-id> <revision>
 ```
@@ -424,7 +424,7 @@ Every command also accepts `--token <jwt>` and `--endpoint <url>`.
 kanthord mission node create mission_01M4C5J3SA6W8RBBC92HA9SSDS --file signup.json
 kanthord mission node retire preview node_01M4C5J3SBEB4P8KDXAZ6GKB6R --force
 kanthord mission node retire node_01M4C5J3SBEB4P8KDXAZ6GKB6R --force --file retire.json \
-  --idempotency-key 01M4C5J3SBXJ52XQ9FSFRTK4PR
+  --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR
 ```
 
 | Positional argument | Purpose                                                 |
@@ -434,19 +434,19 @@ kanthord mission node retire node_01M4C5J3SBEB4P8KDXAZ6GKB6R --force --file reti
 | `<binding-id>`      | Required `binding_<ulid>`: the target binding revision. |
 | `<revision>`        | Required positive safe integer.                         |
 
-| Option                     | Commands                             | Default / resolution                                                        | Purpose                                                              |
-| -------------------------- | ------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `--intent <intent>`        | `node list`                          | Absent                                                                      | Sets `intent`.                                                       |
-| `--state <state>`          | `node list`                          | Absent                                                                      | Sets `state`.                                                        |
-| `--include-retired`        | `node list`                          | `false`                                                                     | Sets `include_retired=true`; the CLI always sends this value.        |
-| `--limit <count>`          | List commands                        | `100`                                                                       | Page size, `1` to `1000`.                                            |
-| `--cursor <cursor>`        | List commands                        | Absent                                                                      | Continues from `next_cursor`.                                        |
-| `--file <path>`            | Writes                               | Required; no default                                                        | JSON body file. See the file contents below.                         |
-| `--force`                  | `node retire`, `node retire preview` | `false`                                                                     | Sets `force`. Use the same value for the preview and the retirement. |
-| `--node <node-id>`         | `node rebind`                        | Absent                                                                      | Sets `node_id`; rebinds only this node.                              |
-| `--idempotency-key <ulid>` | Writes                               | A generated canonical ULID                                                  | Sets `Idempotency-Key`; supply the same key to retry.                |
-| `--token <jwt>`            | All                                  | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                             |
-| `--endpoint <url>`         | All                                  | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                     |
+| Option                    | Commands                             | Default / resolution                                                        | Purpose                                                              |
+| ------------------------- | ------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `--intent <intent>`       | `node list`                          | Absent                                                                      | Sets `intent`.                                                       |
+| `--state <state>`         | `node list`                          | Absent                                                                      | Sets `state`.                                                        |
+| `--include-retired`       | `node list`                          | `false`                                                                     | Sets `include_retired=true`; the CLI always sends this value.        |
+| `--limit <count>`         | List commands                        | `100`                                                                       | Page size, `1` to `1000`.                                            |
+| `--cursor <cursor>`       | List commands                        | Absent                                                                      | Continues from `next_cursor`.                                        |
+| `--file <path>`           | Writes                               | Required; no default                                                        | JSON body file. See the file contents below.                         |
+| `--force`                 | `node retire`, `node retire preview` | `false`                                                                     | Sets `force`. Use the same value for the preview and the retirement. |
+| `--node <node-id>`        | `node rebind`                        | Absent                                                                      | Sets `node_id`; rebinds only this node.                              |
+| `--idempotency-key <key>` | Writes                               | A generated `idempotency_key_<ulid>`                                        | Sets `Idempotency-Key`; supply the same key to retry.                |
+| `--token <jwt>`           | All                                  | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                             |
+| `--endpoint <url>`        | All                                  | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                     |
 
 The `--file` contents:
 

@@ -116,7 +116,7 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `cli.mission.edge.list.token_required`, `cli.mission.dependency.<action>.token_required` | No nonblank token resolves.                                                                                                                              |
 | `cli.mission.edge.list.indeterminate`, `cli.mission.dependency.<action>.indeterminate`   | A transport failure, a timeout or a malformed answer. For a dependency command, retry with the printed key.                                              |
 | `cli.file.*`                                                                             | `--file` is absent, not a regular file, `-`, not UTF-8, not JSON, has a repeated key, is not an object, or fails the schema (`cli.file.schema_invalid`). |
-| `cli.idempotency_key.invalid`                                                            | `--idempotency-key` is not a canonical ULID.                                                                                                             |
+| `cli.idempotency_key.invalid`                                                            | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                                                                            |
 
 `<action>` is `add` or `remove`.
 
@@ -140,17 +140,17 @@ Path parameters: `mission_id` is a `mission_<ulid>`. `node_id` is the dependent 
 
 The dependency operations take the body `{ "reason": "<nonblank string>", "expected_mission_version": <positive integer> }` and accept no unknown field. `DELETE` also requires this JSON body.
 
-| Header            | Required        | Purpose                                           |
-| ----------------- | --------------- | ------------------------------------------------- |
-| `Authorization`   | Yes             | `Bearer <human-jwt>`.                             |
-| `Content-Type`    | Dependency only | `application/json`.                               |
-| `Idempotency-Key` | Dependency only | Canonical ULID; retain it to retry the same edit. |
+| Header            | Required        | Purpose                                                     |
+| ----------------- | --------------- | ----------------------------------------------------------- |
+| `Authorization`   | Yes             | `Bearer <human-jwt>`.                                       |
+| `Content-Type`    | Dependency only | `application/json`.                                         |
+| `Idempotency-Key` | Dependency only | `idempotency_key_<ulid>`; retain it to retry the same edit. |
 
 ```sh
 curl -i -X PUT http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SBEB4P8KDXAZ6GKB6R/dependency/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
   -d '{"reason":"Sign-up needs the login page","expected_mission_version":8}'
 ```
 
@@ -165,8 +165,8 @@ The Gateway keeps the answer of a mutation for its idempotency key in process me
 
 ```text
 kanthord mission edge list <mission-id> [--node <node-id>] [--limit <count>] [--cursor <cursor>]
-kanthord mission dependency add <node-id> <depends-on-id> --file <path> [--idempotency-key <ulid>]
-kanthord mission dependency remove <node-id> <depends-on-id> --file <path> [--idempotency-key <ulid>]
+kanthord mission dependency add <node-id> <depends-on-id> --file <path> [--idempotency-key <key>]
+kanthord mission dependency remove <node-id> <depends-on-id> --file <path> [--idempotency-key <key>]
 ```
 
 Every command also accepts `--token <jwt>` and `--endpoint <url>`.
@@ -182,14 +182,14 @@ kanthord mission dependency add node_01M4C5J3SBEB4P8KDXAZ6GKB6R node_01M4C5J3SAM
 | `<node-id>`         | Required `node_<ulid>` of the dependent.    |
 | `<depends-on-id>`   | Required `node_<ulid>` of the prerequisite. |
 
-| Option                     | Commands   | Default / resolution                                                        | Purpose                                                      |
-| -------------------------- | ---------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `--node <node-id>`         | Edge list  | Absent                                                                      | Sets `node_id`.                                              |
-| `--limit <count>`          | Edge list  | `100`                                                                       | Page size, `1` to `1000`.                                    |
-| `--cursor <cursor>`        | Edge list  | Absent                                                                      | Continues from `next_cursor`.                                |
-| `--file <path>`            | Dependency | Required; no default                                                        | JSON body file with `reason` and `expected_mission_version`. |
-| `--idempotency-key <ulid>` | Dependency | A generated canonical ULID                                                  | Sets `Idempotency-Key`; supply the same key to retry.        |
-| `--token <jwt>`            | All        | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                     |
-| `--endpoint <url>`         | All        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                             |
+| Option                    | Commands   | Default / resolution                                                        | Purpose                                                      |
+| ------------------------- | ---------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `--node <node-id>`        | Edge list  | Absent                                                                      | Sets `node_id`.                                              |
+| `--limit <count>`         | Edge list  | `100`                                                                       | Page size, `1` to `1000`.                                    |
+| `--cursor <cursor>`       | Edge list  | Absent                                                                      | Continues from `next_cursor`.                                |
+| `--file <path>`           | Dependency | Required; no default                                                        | JSON body file with `reason` and `expected_mission_version`. |
+| `--idempotency-key <key>` | Dependency | A generated `idempotency_key_<ulid>`                                        | Sets `Idempotency-Key`; supply the same key to retry.        |
+| `--token <jwt>`           | All        | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                     |
+| `--endpoint <url>`        | All        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                             |
 
 The CLI validates IDs, the token, the key and the file before it sends a request. Each option is accepted once. See [client configuration](../README.md#client-configuration). The HTTP client has a 31-second deadline.

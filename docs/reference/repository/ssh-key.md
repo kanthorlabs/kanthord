@@ -113,19 +113,19 @@ Both commands return HTTP `200` with a [credential answer](credential.md#credent
       "ended_at": null
     }
   ],
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property                           | Type                  | Purpose                                                 |
-| ---------------------------------- | --------------------- | ------------------------------------------------------- |
-| `name`                             | string                | Credential name.                                        |
-| `platform`                         | string                | Always `ssh`.                                           |
-| `revisions`                        | array                 | Every revision, newest first.                           |
-| `revisions[].metadata.public_key`  | string                | Public key of the revision. Add it as a deploy key.     |
-| `revisions[].metadata.fingerprint` | string                | `SHA256:` fingerprint of the public key.                |
-| `revisions[].ended_at`             | integer or `null`     | End time in Unix milliseconds; `null` while it is live. |
-| `idempotency_key`                  | canonical ULID string | CLI only; key of the request, for a retry.              |
+| Property                           | Type                            | Purpose                                                 |
+| ---------------------------------- | ------------------------------- | ------------------------------------------------------- |
+| `name`                             | string                          | Credential name.                                        |
+| `platform`                         | string                          | Always `ssh`.                                           |
+| `revisions`                        | array                           | Every revision, newest first.                           |
+| `revisions[].metadata.public_key`  | string                          | Public key of the revision. Add it as a deploy key.     |
+| `revisions[].metadata.fingerprint` | string                          | `SHA256:` fingerprint of the public key.                |
+| `revisions[].ended_at`             | integer or `null`               | End time in Unix milliseconds; `null` while it is live. |
+| `idempotency_key`                  | `idempotency_key_<ulid>` string | CLI only; key of the request, for a retry.              |
 
 The other revision properties are those of the [credential answer](credential.md#credential-answer). After a rotation, `revisions` holds the new revision first. An older revision that no live execution pins shows `ended_at`.
 
@@ -158,7 +158,7 @@ The CLI exits `1` for every failure and writes a diagnostic line `<code>: <messa
 | `cli.repository.credential.<command>.token_required`        | Both             | The resolved token is absent or blank. The CLI sends no request.      |
 | `cli.repository.credential.<command>.indeterminate`         | Both             | Transport failure, timeout or malformed response; retry with the key. |
 | `cli.repository.credential.ssh_key_rotate.invalid_revision` | `ssh-key-rotate` | `--expected-revision` is not a positive safe integer.                 |
-| `cli.idempotency_key.invalid`                               | Both             | `--idempotency-key` is not a canonical ULID.                          |
+| `cli.idempotency_key.invalid`                               | Both             | `--idempotency-key` is not an `idempotency_key_<ulid>` value.         |
 | `cli.option.duplicate`                                      | Both             | An option occurs more than once.                                      |
 
 `<command>` is `ssh_key_create` or `ssh_key_rotate`.
@@ -167,11 +167,11 @@ The CLI exits `1` for every failure and writes a diagnostic line `<code>: <messa
 
 Both operations use the `human` access policy, a 30-second timeout and a 1 KiB body limit. Both are mutations and need `Idempotency-Key`. The workbench agent has no tool for either operation.
 
-| Header            | Required | Purpose                                                       |
-| ----------------- | -------- | ------------------------------------------------------------- |
-| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                         |
-| `Content-Type`    | Yes      | `application/json`.                                           |
-| `Idempotency-Key` | Yes      | Canonical ULID; reuse the same key to retry the same request. |
+| Header            | Required | Purpose                                                                 |
+| ----------------- | -------- | ----------------------------------------------------------------------- |
+| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                                   |
+| `Content-Type`    | Yes      | `application/json`.                                                     |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>`; reuse the same key to retry the same request. |
 
 ### ssh-key-create
 
@@ -188,7 +188,7 @@ Both operations use the `human` access policy, a 30-second timeout and a 1 KiB b
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential/ssh/key \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"name":"deploy-api"}'
 ```
@@ -210,7 +210,7 @@ The static path `/ssh/key` takes precedence over `/:credential_name`, so `ssh` i
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential/deploy-api/ssh/key \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":1}'
 ```
@@ -218,8 +218,8 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential/deploy-api/ssh/
 ## CLI shape
 
 ```text
-kanthord repository credential ssh-key-create <name> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord repository credential ssh-key-rotate <name> --expected-revision <n> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential ssh-key-create <name> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential ssh-key-rotate <name> --expected-revision <n> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -231,11 +231,11 @@ kanthord repository credential ssh-key-rotate deploy-api --expected-revision 1
 | -------- | -------- | ------------------------------------------------------------------------------------------------------ |
 | `<name>` | Both     | Credential name; sent as `body.name` by `ssh-key-create` and as `credential_name` by `ssh-key-rotate`. |
 
-| Option                     | Commands         | Default / resolution                                                  | Purpose                                                                |
-| -------------------------- | ---------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `--expected-revision <n>`  | `ssh-key-rotate` | Required; no default                                                  | Sets `body.expected_revision`. The CLI checks it before the token.     |
-| `--idempotency-key <ulid>` | Both             | A generated canonical ULID                                            | Sets the `Idempotency-Key` header; supply the same key when you retry. |
-| `--token <jwt>`            | Both             | `KANTHORD_TOKEN` → client-file token; a nonblank token is required    | Human JWT sent in the `Authorization` header.                          |
-| `--endpoint <url>`         | Both             | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL.                                                       |
+| Option                    | Commands         | Default / resolution                                                  | Purpose                                                                |
+| ------------------------- | ---------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `--expected-revision <n>` | `ssh-key-rotate` | Required; no default                                                  | Sets `body.expected_revision`. The CLI checks it before the token.     |
+| `--idempotency-key <key>` | Both             | A generated `idempotency_key_<ulid>`                                  | Sets the `Idempotency-Key` header; supply the same key when you retry. |
+| `--token <jwt>`           | Both             | `KANTHORD_TOKEN` → client-file token; a nonblank token is required    | Human JWT sent in the `Authorization` header.                          |
+| `--endpoint <url>`        | Both             | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL.                                                       |
 
 Each option is single-use. The commands take no file and read no standard input. See [client configuration](../README.md#client-configuration).

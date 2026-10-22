@@ -44,7 +44,7 @@ Change or inspect one agent provider of a live [agent enablement](enablement.md)
     "reasoning_effort": "high"
   },
   "revision": 2,
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
@@ -97,7 +97,7 @@ The CLI checks some input before it sends the request. `<command>` is `add`, `re
 | -------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
 | `cli.agent.enablement.provider.remove.invalid_revision`  | remove      | `--expected-revision` is not a positive safe integer.                                |
 | `cli.agent.enablement.provider.<command>.token_required` | All         | No option, environment variable or client file supplies a token.                     |
-| `cli.idempotency_key.invalid`                            | add, remove | `--idempotency-key` is not a canonical ULID.                                         |
+| `cli.idempotency_key.invalid`                            | add, remove | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                        |
 | `cli.file.invalid_path`                                  | add         | `--file` is `-`; the command does not read stdin.                                    |
 | `cli.file.not_found`, `cli.file.not_regular`             | add         | The `--file` path does not exist, or is not a regular file.                          |
 | `cli.file.encoding_invalid`, `cli.file.not_json`         | add         | The file is not UTF-8, or is not one JSON document.                                  |
@@ -109,7 +109,7 @@ A declared failure makes the CLI exit `1` and print `<code>: request failed` and
 
 ## API shape
 
-All operations use `human` access, a 30-second timeout, and the header `Authorization: Bearer <human-jwt>`. Mutations also require `Content-Type: application/json` and an `Idempotency-Key` header with a fresh canonical ULID. The mutation body limit is 64 KiB. The HTTP client of the CLI has a 31-second deadline.
+All operations use `human` access, a 30-second timeout, and the header `Authorization: Bearer <human-jwt>`. Mutations also require `Content-Type: application/json` and an `Idempotency-Key` header with a fresh `idempotency_key_<ulid>`. The mutation body limit is 64 KiB. The HTTP client of the CLI has a 31-second deadline.
 
 | Command               | Method and path                                                       | Operation ID                           | Mutation |
 | --------------------- | --------------------------------------------------------------------- | -------------------------------------- | -------- |
@@ -138,7 +138,7 @@ The body is closed; an unknown field fails validation.
 ```sh
 curl -s -X POST http://127.0.0.1:31415/api/agent/enablement/swe@1/provider \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":1,"name":"spare","provider":"anthropic","credential":"<credential-name>"}'
 ```
@@ -152,7 +152,7 @@ curl -s -X POST http://127.0.0.1:31415/api/agent/enablement/swe@1/provider \
 ```sh
 curl -s -X DELETE http://127.0.0.1:31415/api/agent/enablement/swe@1/provider/spare \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":2}'
 ```
@@ -169,8 +169,8 @@ curl -s http://127.0.0.1:31415/api/agent/enablement/swe@1/provider/main/model \
 ## CLI shape
 
 ```text
-kanthord agent enablement provider add <agent-name> --file <path> [--idempotency-key <ulid>]
-kanthord agent enablement provider remove <agent-name> <provider-name> --expected-revision <revision> [--idempotency-key <ulid>]
+kanthord agent enablement provider add <agent-name> --file <path> [--idempotency-key <key>]
+kanthord agent enablement provider remove <agent-name> <provider-name> --expected-revision <revision> [--idempotency-key <key>]
 kanthord agent enablement provider model list <agent-name> <provider-name>
 ```
 
@@ -202,7 +202,7 @@ The `--file` of `provider add` holds the request body as one JSON object:
 | -------------------------------- | ----------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `--file <path>`                  | add         | Required                                                                    | UTF-8 JSON file with the request body.                             |
 | `--expected-revision <revision>` | remove      | Required                                                                    | Sets `expected_revision`.                                          |
-| `--idempotency-key <ulid>`       | add, remove | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key on a retry. |
+| `--idempotency-key <key>`        | add, remove | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key on a retry. |
 | `--token <jwt>`                  | All         | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                           |
 | `--endpoint <url>`               | All         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                   |
 

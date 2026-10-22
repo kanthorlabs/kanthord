@@ -511,8 +511,9 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), the [LL
 
 ## Idempotency of a mutation
 
-- Every mutation route requires the `Idempotency-Key` header, which holds a ULID that the client generates.
-- `ulid` generates that value.
+- Every mutation route requires the `Idempotency-Key` header, which holds a key that the client generates.
+- The key has the form `idempotency_key_<ulid>`, like every other identity. The Gateway refuses any other form, a bare ULID included, with `gateway.idempotency.invalid_key`.
+- `createIdempotencyKey` of `src/kernel/identity.ts` generates that value.
 - The key is no identity that the server generates for an entity of its own.
 - The operation registry declares a route as a mutation.
 - The idempotency component runs on mutation routes alone.
