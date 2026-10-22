@@ -1331,7 +1331,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The Conversation tab shows the session entries of one agent session in order. A trace with two or more sessions shows a session selector, labeled with the agent name and the start of each session.
 - A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
 - A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
-- A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt` or `Layer <n>`. They expand to the prompt text and its sections.
+- A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt` or `Layer <n>`. A system message of pi shows `System prompt update`. They expand to the prompt text and its sections.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
 - A model reply offers `Show in timeline`. It selects its turn span on the Timeline tab.
