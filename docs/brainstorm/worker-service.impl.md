@@ -152,7 +152,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The wrapper resolves the [instance configuration](#the-instance-configuration). It reads no `cli.yaml`.
 - The bindings, the worker, the agent configuration and the effective instance count come from the server through the [connection answer](#the-instance-exchange). The worker application reads the setup of one execution through `worker.execution.setup.get`.
 - One process hosts one instance. The instance serves each binding that lists it through one registration of that binding.
-- The data directory of an instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/`, `transcripts/` and `pi/` of the worker unit.
+- The data directory of an instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/` and `pi/` of the worker unit.
 - The log directory of an instance is `$XDG_STATE_HOME/kanthord/workers/<name>/`.
 - The wrapper gives the worker unit these directories. The worker unit names no placement and no instance.
 - The startup order is:
@@ -166,7 +166,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The worker unit checks `ssh-agent` and `ssh-add` for presence at its start. A spawn that answers `ENOENT` refuses the start with `repository.connector.tool_missing`.
 - The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
 - When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`. When the stop has a cause text, the record also adds `detail`.
-- The application writes the transcript of each execution to `transcripts/<execution identity>.jsonl` of its data directory with mode `0600`, and it keeps the newest 50 transcripts.
+- The worker unit keeps the agent sessions of each execution in `pi/sessions/execution/<execution identity>/` of its data directory, under [Traces](#traces). It keeps the newest 50 execution directories.
 - After each registration, the worker unit logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
 - The application writes operational log records to stderr as JSON lines. It prints no token, no private key and no instance configuration, and it requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -373,7 +373,7 @@ The Docker form of `Container on this host`:
 - `src/apps/worker/unit.ts` holds `WorkerUnit`, the worker unit.
 - It takes `{ bindings, directories, env, log, instance_key?, model_runtime_factory?, repository_transport?, resume_pull_wait_ms?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
 - `bindings` is a list of `{ transport, client_secret }`, one entry for each registration of the instance. A pool slot passes a list of one entry.
-- `directories` is `{ data, log }`. The data directory holds `workspaces/`, `transcripts/` and `pi/`.
+- `directories` is `{ data, log }`. The data directory holds `workspaces/` and `pi/`.
 - `instance_key` is `{ holder, sealed_to, public_key, private_key() }` of the instance. `private_key()` answers a new buffer that the caller clears after each open. The `worker` wrapper passes it, and the `server` wrapper passes none.
 - The handover of the worker unit opens a sealed item with `openSealedCopy` of [the custody client](custody.impl.md#the-credential-handover), and it seals each refreshed credential to its own key. Without `instance_key`, or with a key that does not open it, a sealed item fails the handover with `worker.handover.sealed_unopened`.
 - The `server` wrapper passes `state/kanthord/` of the slot root for both. The `worker` wrapper passes the data directory and the log directory of [The worker application](#the-worker-application).
@@ -391,8 +391,8 @@ The Docker form of `Container on this host`:
 - `instanceHealthcheck` refuses a draining slot, so that pull claims no new work. The claim returns a `running` execution before the healthcheck.
 - The modules of `src/worker/` that only the worker unit runs move to `src/worker/unit/`. `src/worker/unit/index.ts` is their one entry.
 - Today these modules are `execution-run`, `native-agent`, `native-method`, `steps-implement`, `steps-examine`, `judgement`, `judged-tasks`, `evaluation` and `evaluation-input`.
-- They also include `base-refresh`, `verification`, `local-git`, `workspace`, `budget`, `model-runtime`, `tool-table`, `host-tools`, `transcript` and `method-clients`.
-- They also include `method-telemetry`, `telemetry`, `agent-telemetry`, `report-facts` and `node-reads`.
+- They also include `base-refresh`, `verification`, `local-git`, `workspace`, `budget`, `model-runtime`, `tool-table`, `host-tools` and `method-clients`.
+- They also include `method-telemetry`, `telemetry`, `agent-telemetry`, `session-entries`, `report-facts` and `node-reads`.
 - `toolDeclarations` moves out of `tool-table` and stays in `src/worker/`, because the server reads it.
 - `src/worker/index.ts` keeps the server entry: `WorkerService`, its migrations and its configuration.
 - `local-git`, `verification` and `tool-table` take the `env` of the worker unit. They pass `childEnvironment(env)` to each child process and read no `process.env`.
@@ -751,7 +751,7 @@ Tests of the slot driver:
 - The `env` holds no other variable, so it holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - `HOME` is the value of the server user. The `thread` driver keeps no OS-containment guarantee, under [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
 - `childEnvironment` of `src/agent/environment.ts` removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID`, so an agent tool process at every placement holds no agent of the host user.
-- The worker unit keeps its workspaces, its transcripts, its `pi/` directory and its log under `state/kanthord/` of the slot root. Two slots share no workspace.
+- The worker unit keeps its workspaces, its `pi/` directory with its agent sessions and its log under `state/kanthord/` of the slot root. Two slots share no workspace.
 - Each thread holds its own `process.env` and its own module instance of pi.
 - `loadPi` therefore sets `PI_OFFLINE` and `PI_CODING_AGENT_DIR` for its thread only. pi of that thread finds `rg` and `fd` in `pi/bin/` of the slot.
 - The worker unit installs and checks the [pi tool binaries](#pi-tool-binaries) into its own `pi/bin/` at its start, at every placement.
@@ -828,8 +828,8 @@ Tests of the slot driver:
 ### The slot volume
 
 - The named volume `kanthord_slot_<client_id>` mounts at `/var/lib/kanthord`. At its first mount, it copies the ownership of `/var/lib/kanthord` from the image, so uid 10001 owns it on every runtime.
-- It holds `state/kanthord/kanthord.log`, the workspaces, the transcripts, the `pi/` directory and `tmp/`.
-- A transcript of a `container` slot is `state/kanthord/transcripts/<execution_id>.jsonl` of the slot volume.
+- It holds `state/kanthord/kanthord.log`, the workspaces, the `pi/` directory and `tmp/`.
+- An agent session of a `container` slot is a file in `state/kanthord/pi/sessions/execution/<execution_id>/` of the slot volume.
 - No host file changes its owner, and no `--userns` option applies.
 
 ### The run command
@@ -1476,7 +1476,17 @@ At the `worker` placement, the worker unit holds no SSH private key. A process o
 
 ## Traces
 
-The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
+The pi session entries of an execution become its transcript telemetry, as the [session entries](tracking-service.impl.md#session-entries) of its agent sessions.
+
+- `openNativeAgent` starts one `agent.session` span before it opens the pi session. The span identity is the pi session id.
+- It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
+- The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
+- A resumed execution opens a new agent session, and a new session file, in the same directory.
+- After each session event, the worker sends each entry beyond the count that it already sent. It sends the rest when the agent closes.
+- The worker removes the secrets of the execution credentials from each entry before it sends the entry.
+- The session file stays on the host as a convenience. A stateless container loses it, and the Tracking Service still holds every entry that reached it.
+- The span identity of a worker span hashes the execution identity, a run key and the local key. The run key is 8 random hexadecimal characters, new in each process run of the execution. A resumed execution therefore writes new spans and keeps the spans of the earlier run.
+
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
 The finish of the steps method on an `implement` node writes one `worker.git` span for each git step. `kanthord.git.step` is `commit`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`

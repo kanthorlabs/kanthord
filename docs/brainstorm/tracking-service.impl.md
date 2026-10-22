@@ -27,11 +27,11 @@ A trace identity is 16 random bytes and a span identity is 8 random bytes, each 
 The agent spans follow the [OpenTelemetry GenAI semantic conventions](https://github.com/open-telemetry/semantic-conventions-genai).
 A kanthord operation name stays the span operation, and `gen_ai.operation.name` maps it to the GenAI operation.
 
-| Span operation  | `gen_ai.operation.name` | GenAI attributes                                                                                                                                                                                                                       |
-| --------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent.session` | `invoke_agent`          | `gen_ai.conversation.id`, `gen_ai.request.model`                                                                                                                                                                                       |
+| Span operation  | `gen_ai.operation.name` | GenAI attributes                                                                                                                                                                                                                                                                                 |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent.session` | `invoke_agent`          | `gen_ai.conversation.id`, `gen_ai.request.model`                                                                                                                                                                                                                                                 |
 | `agent.turn`    | `chat`                  | `gen_ai.conversation.id`, `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.provider.name`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read.input_tokens`, `gen_ai.usage.cache_creation.input_tokens`, `gen_ai.response.finish_reasons`, `error.type` |
-| `agent.tool`    | `execute_tool`          | `gen_ai.conversation.id`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `error.type`                                                                                                                                                      |
+| `agent.tool`    | `execute_tool`          | `gen_ai.conversation.id`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `error.type`                                                                                                                                                                                                                |
 
 - `gen_ai.conversation.id` holds the session identity, which is the span identity of the `agent.session` span.
 - `gen_ai.request.model` holds the model of the agent configuration. `gen_ai.response.model` holds the model that the provider names in its reply.
@@ -110,20 +110,20 @@ No reader waits for the root span.
 
 A session entry is a record of the kind `session_entry` in `tracking.telemetry.write` and in an ingestion.
 
-| Field             | Value                                                                                                     |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `record_id`       | `<session_id>:entry.<entry_id>`                                                                           |
-| `trace_id`        | The trace of the execution                                                                                |
-| `kind`            | `session_entry`                                                                                           |
-| `session_id`      | The span identity of the `agent.session` span                                                             |
-| `entry_id`        | The identity of the entry in its session: 1 to 64 characters of lower-case letters, digits and `-`        |
-| `parent_entry_id` | The `parentId` of the entry, or `null`                                                                    |
-| `sequence`        | The position of the entry in the session, from 1                                                          |
-| `entry_type`      | The `type` of the entry, for example `message`, `compaction` or `model_change`                            |
-| `entry_time`      | The time of the entry in Unix milliseconds                                                                |
-| `tool_call_id`    | The `toolCallId` of a tool result message, otherwise `null`                                               |
-| `truncated`       | `true` when the producer cut the entry to the entry bound                                                 |
-| `entry`           | The JSON object of the entry in its session format                                                        |
+| Field             | Value                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `record_id`       | `<session_id>:entry.<entry_id>`                                                                    |
+| `trace_id`        | The trace of the execution                                                                         |
+| `kind`            | `session_entry`                                                                                    |
+| `session_id`      | The span identity of the `agent.session` span                                                      |
+| `entry_id`        | The identity of the entry in its session: 1 to 64 characters of lower-case letters, digits and `-` |
+| `parent_entry_id` | The `parentId` of the entry, or `null`                                                             |
+| `sequence`        | The position of the entry in the session, from 1                                                   |
+| `entry_type`      | The `type` of the entry, for example `message`, `compaction` or `model_change`                     |
+| `entry_time`      | The time of the entry in Unix milliseconds                                                         |
+| `tool_call_id`    | The `toolCallId` of a tool result message, otherwise `null`                                        |
+| `truncated`       | `true` when the producer cut the entry to the entry bound                                          |
+| `entry`           | The JSON object of the entry in its session format                                                 |
 
 - A record identity matches `^[0-9a-f]{16}:[a-z][a-z0-9_.-]*$` and holds at most 128 characters. The `-` admits the UUID form of an entry identity.
 - The schema refuses a record whose `record_id` differs from `<session_id>:entry.<entry_id>`.
