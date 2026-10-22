@@ -1482,9 +1482,10 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
 - The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
-- When the session opens, the worker appends one `kanthord.pinned_context` entry with the final system prompt and the pinned prompt layers.
+- When the session opens, the worker appends one `kanthord.pinned_context` entry for the final system prompt and one for each pinned prompt layer.
 - After each session event, the worker sends each entry beyond the count that it already sent.
-- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span. A record after the release has no live claim, so the server refuses it.
+- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
+- A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.
 - An `agent.turn` span stays a child of its enclosing `worker.task` or `worker.judgement` span. Its `gen_ai.conversation.id` names its session.
 - The worker replaces the secrets of the LLM credential of the agent with `[redacted]` in each entry before it sends the entry. It matches the exact secret strings only.
 - The session file stays on the host as a convenience. A stateless container loses it, and the Tracking Service still holds every entry that reached it.

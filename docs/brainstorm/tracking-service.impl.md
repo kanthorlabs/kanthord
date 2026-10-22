@@ -36,7 +36,7 @@ A kanthord operation name stays the span operation, and `gen_ai.operation.name` 
 - `gen_ai.conversation.id` holds the session identity, which is the span identity of the `agent.session` span.
 - `gen_ai.request.model` holds the model of the agent configuration. `gen_ai.response.model` holds the model that the provider names in its reply.
 - `gen_ai.agent.name` and `kanthord.agent.name` hold the agent name, for example `swe@1`.
-- `error.type` of an `agent.turn` holds the provider failure code. `error.type` of an `agent.tool` holds `tool_error` on an error end.
+- `error.type` of an `agent.turn` holds the provider failure code. `error.type` of an `agent.tool` holds `tool_error` on an error end. A turn or a tool that the close of the agent trace ends holds `stopped`.
 - `kanthord.turn.model_duration_ms` holds `durationMs` of the model reply. Without it, the producer measures the time from the start of the turn to the end of the reply.
 - `gen_ai.usage.input_tokens` counts every input token, also the tokens that a cache read or a cache write covers. The two cache attributes count a part of it.
 - An attribute that the conventions do not define takes the `kanthord.` prefix, for example `kanthord.usage.cost_usd` and `kanthord.session.entry_id`.
@@ -142,8 +142,10 @@ A session entry is a record of the kind `session_entry` in `tracking.telemetry.w
 - Before the cut, the producer replaces each secret of the LLM credential of the agent with `[redacted]` in every string value of the entry. It matches the exact secret strings only, so an identity, a commit or a tool call identity stays whole.
 - `entry_id` and `tool_call_id` come from the entry before the redaction.
 - A `pi` entry holds its tool call identity in `toolCallId` of a tool result message. A `claude_code` entry holds `tool_call_id: null`, and a reader finds its tool result through the `tool_use_id` of the content blocks.
-- The native producer appends one entry of type `custom` with `customType` `kanthord.pinned_context` when the session opens. Its `data` holds `system_prompt`, the final system prompt of the agent, and `layers`, the texts of the pinned prompt layers in order.
-  The worker injects these texts into each model call and pi persists no entry of them, so this entry is the only record of them.
+- When the session opens, the native producer appends one entry of type `custom` with `customType` `kanthord.pinned_context` for each part of the pinned context. Each part takes its own entry bound.
+  The first part holds `{ part: "system_prompt", text }`, the final system prompt of the agent. Each pinned prompt layer follows as `{ part: "layer", index, text }`, with `index` from 1.
+  pi writes a `model_change` and a `thinking_level_change` entry at the session open, so these entries follow them.
+  The worker injects these texts into each model call and pi persists no entry of them, so these entries are the only record of them.
 - pi persists each change of the prompt sections as a message with `role` `system`. Such an entry is a session entry as every other.
 
 ## Trace summary
