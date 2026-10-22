@@ -168,7 +168,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 ### Telemetry texts
 
 - A telemetry text belongs to exactly one trace. A span references it by identity and never embeds it.
-- An agent transcript is the ordered session entries of one agent session, and each entry is a telemetry text.
+- An agent transcript is the ordered session entries of one agent session. A session entry is a record of its own kind and no telemetry text.
 - `tracking_session_entry` holds one row for each entry. A unique index covers `(trace_id, session_id, sequence)`. A new entry at a taken sequence is refused.
 - No foreign key joins an entry to its `agent.session` span, so an entry can arrive before its span.
 - A telemetry text holds no retention of its own and no `expired_at`, and `content` is `NOT NULL`. The deletion of its trace deletes it, and a reference to a deleted trace resolves to expired. Today the store keeps no tombstone, and a read of a deleted trace answers `404 tracking.trace.not_found`. The text read checks the trace first. A text of a deleted or unknown trace answers `404 tracking.trace.not_found`. A text that a held trace does not hold answers `404 tracking.text.not_found`.
