@@ -51,6 +51,8 @@ for name in $SUBMODULES; do
 done
 
 step "3/6 branches"
+git -C "$ROOT" config core.hooksPath .githooks || die "the hooks path setup failed"
+log "hooks path .githooks"
 "$ROOT/scripts/repo/attach.sh" || exit 1
 
 step "4/6 dependencies"
