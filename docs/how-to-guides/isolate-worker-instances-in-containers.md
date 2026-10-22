@@ -110,14 +110,14 @@ The server adds its own version as the tag to the name in `worker.container_imag
 
 ## 3. Check the placement
 
-In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows `container` on. When it is off, the sheet shows the reason. Under `runtime_failed`, the sheet turns `container` off, but a save through the API still passes. See [Troubleshooting](#troubleshooting).
+In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows the `Container` card on, with the runtime that the server uses, for example "with Podman". When the card is off, it shows the reason. Under `runtime_failed`, the card stays on and shows the detail, because a save passes and the instances start after the runtime recovers. See [Troubleshooting](#troubleshooting).
 
 ## 4. Add the worker binding
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
 2. Enter a **Name**, for example `coder-box`. Use a name that the project does not hold.
 3. Choose the **Worker**, for example `coder@1`.
-4. Choose the **Placement** `container`, and set the **Instance count**.
+4. Select the **Placement** card `Container`, and set the **Instance count**.
 5. Select **Save binding**.
 
 A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement). In its step 3, add a binding with another name at the placement `container`, as the list above shows. Skip the steps of the `worker` placement.

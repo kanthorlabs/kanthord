@@ -567,7 +567,7 @@ The CLI can also make a copy with the option `--holder`. See [LLM credentials](.
 2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
 3. Choose the **Worker** of the instance, for example `coder@1`.
 4. The **Agents** section shows the agent of the worker, for example `swe@1`. When the agent shows the badge `Not enabled`, select **Enable swe@1**. Enter an **Agent provider name**, for example `claude`. Choose the **LLM credential** and the **Model identifier**. Then select **Enable agent**. The badge then shows `Enabled`.
-5. Choose the **Placement** `worker`.
+5. Open **Advanced settings**, and turn on **Worker placement**. The `Server` and `Container` cards turn off, and **Instances** replaces **Instance count**.
 6. In **Instances**, select `<name>`.
 7. Select **Save binding**.
 
