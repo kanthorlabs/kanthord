@@ -609,7 +609,7 @@ This example runs the container with Podman or Docker on a host of your network.
 
 `docker inspect kanthord-worker-<name>` shows the value of `KANTHORD_WORKER_CONFIG` to every user that can run `docker`. A member of the `docker` group can already read every volume on the host.
 
-1. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it). In **Where does it run?**, choose `Container`. In **Container runtime**, choose `Podman` or `Docker`.
+1. Do steps 1 to 8 of the dashboard list of [8.3](#83-add-the-instance-and-start-it). In **Where does it run?**, choose `Container`. In **Container runtime**, choose `Podman` or `Docker`.
 2. On the container host of the instance, store the instance configuration as a Podman secret. Paste the value, press `Enter`, then press `Ctrl-D`.
 
    ```sh
@@ -683,7 +683,7 @@ The host kind `Container on this host` runs the instance in a second container b
 
    The command prints nothing.
 
-3. Do steps 1 to 7 of the dashboard list of [8.3](#83-add-the-instance-and-start-it), but skip step 5. In **Where does it run?**, choose `Container on this host`. **Address** then shows `http://kanthord:31415`. In **Container runtime**, choose `Podman` or `Docker`.
+3. Do steps 1 to 8 of the dashboard list of [8.3](#83-add-the-instance-and-start-it), but skip step 6. In **Where does it run?**, choose `Container on this host`. **Address** then shows `http://kanthord:31415`. In **Container runtime**, choose `Podman` or `Docker`.
 4. Store the instance configuration as a Podman secret. Paste the value, press `Enter`, then press `Ctrl-D`.
 
    ```sh
