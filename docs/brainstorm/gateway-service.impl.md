@@ -362,7 +362,7 @@ The single binary serves the dashboard of the `apps` repository from the origin 
 
 The Gateway Service builds one `CancellationContext` for each request under its shutdown context, following [architecture.impl.md](architecture.impl.md#the-service-lifecycle-and-context).
 It cancels that context on a client disconnect or process shutdown and releases it when the response ends.
-It passes the `Context` interface in the caller context and through direct clients, authentication and component collaborators. Native request signals remain at the HTTP boundary.
+It passes the `Context` interface in the caller context and through direct clients, authentication and component collaborators. A transport takes `context.signal` directly.
 Every route takes a timeout, and the value differs by route.
 The operation registry holds the timeout of a route beside its access policy, so one declaration drives both.
 The default timeout is 30 s. Human verification and worker registration each take 10 s.

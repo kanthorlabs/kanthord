@@ -495,15 +495,26 @@ Examples:
 - The root owns every `run()` result because a lifecycle failure is a value and reaches no fatal handler by itself.
 - Concurrent calls to `start` or `stop` join the same operation. A stopped instance cannot start again.
 - `healthcheck()` returns `Promise<Record<string, number>>`, keyed by owned component name. An integer code of `200` means healthy and `503` means unavailable. An aggregate is healthy only when its nonempty component map is entirely healthy.
-- Cancellation uses the Go-inspired `Context` interface in `src/kernel/context.ts`.
-- `deadline()` exposes Unix milliseconds or `null`.
-- `done()` exposes a promise that resolves on cancellation.
-- `err()` exposes the cancellation error or `null`.
-- `onCancel()` exposes an immediately effective, removable subscription.
-- `background` is the uncancelled root. `CancellationContext` is the concrete implementation; its owner cancels it, cancellation is idempotent, a child inherits parent cancellation and the earlier deadline, and cancelling a child leaves its parent and siblings running.
-- Service and component collaborators receive `Context`, not a native `AbortSignal`. Native signals are bridged at transport boundaries. The owner releases a context's subscriptions and deadline timer when its work finishes.
-- A cancellation listener never throws. A throw from a listener becomes an `uncaughtException` on both paths, the registration on an already-cancelled context and the cancellation itself, so the process terminates, and every other listener of that cancellation still runs first.
+- Cancellation uses the `Context` interface in `src/kernel/context.ts`. A `Context` holds two read-only fields:
+  - `signal` is a native `AbortSignal`. It aborts on cancellation, and its `reason` holds the cancellation error.
+  - `deadline` holds Unix milliseconds or `null`. A platform call reads it to compute its own `deadlineAt`.
+- A caller passes `Context` as an explicit parameter. No `AsyncLocalStorage` carries a context.
+- `background` is the root. Its signal never aborts.
+- `CancellationContext` is the owner handle. Only its owner calls `cancel(reason)`. Cancellation is idempotent, and the first reason stays.
+- The default reason is `ContextCancelled` with the code `system.context.cancelled`. A deadline aborts with `DeadlineExceeded` and the code `system.context.deadline_exceeded`.
+- The signal of a child is `AbortSignal.any` of the parent signal and the signal of the owner. The child thus inherits parent cancellation with the reason of the parent. It holds no listener on the parent, so the garbage collector reclaims a released child. A cancel of a child leaves its parent and siblings running.
+- A child holds the earlier deadline of its own deadline and the parent deadline. It arms its own timer only when its own deadline is earlier. A context deadline never uses `AbortSignal.timeout`, because a deadline abort carries the coded `DeadlineExceeded`.
 - A child that inherits the deadline of its parent arms no timer of its own. The parent cancels it, so the child holds the error instance of the parent.
+- `joined(first, second)` makes the parent of a context with two parents. Its signal is `AbortSignal.any` of both signals, and its deadline is the earlier deadline. A Gateway invocation uses it for the shutdown context and the caller context.
+- A consumer uses the native members of the signal:
+  - `signal.aborted` tests cancellation.
+  - `signal.throwIfAborted()` guards the admission of work.
+  - `reasonOf(signal)` reads the reason as `Error | null`.
+  - `cancelled(signal)` returns a promise that settles on the abort.
+  - `addAbortListener(signal, listener)` of `node:events` subscribes.
+- A transport takes `context.signal` directly. No bridge controller sits between a context and a transport.
+- `addAbortListener` returns a `Disposable`. Hold it with `using` in a lexical scope. Otherwise, call `[Symbol.dispose]()` when the work ends. The owner cancels a context with a deadline when its work ends, so the timer stops.
+- A cancellation listener never throws. A throw from a listener becomes an `uncaughtException`, so the process terminates. On a cancel, every other listener of that signal still runs first. On a registration on an aborted signal, the listener runs in a microtask.
 - Every service and component implements graceful shutdown for the work and resources it owns. Long-running work cooperates with its context; a synchronous component completes its current operation before its owner releases it.
 - Shutdown runs four phases: quiesce every service, drain with dependencies available, join the invocation chain, then release resources in reverse construction order.
 - [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) defines those phases.
