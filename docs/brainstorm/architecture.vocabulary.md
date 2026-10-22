@@ -56,10 +56,11 @@ The result that a resource healthcheck reports. The set is closed and holds thre
 
 ## failure reason
 
-The cause of a resource status other than healthy. The set is closed and holds 13 values.
+The cause of a resource status other than healthy. The set is closed and holds 14 values.
 
 - **git values**: `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid` and `identity_unavailable`.
 - **HTTP values**: `unauthorized`, `forbidden`, `rate_limited`, `unreachable` and `invalid_response`.
+- **instance copy value**: `held_by_instance`, a credential copy that a worker instance holds. The server holds no secret of that copy, so the check reports `unknown`.
 - **unclassified**: a failure with no reported cause, a check that exceeds its deadline included. Git checks and HTTP checks both report it.
 
 The check of LLM credential `team-openai` gets HTTP 401 and reports `unhealthy` with the failure reason `unauthorized`.
