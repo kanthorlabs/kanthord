@@ -199,7 +199,7 @@ A replacement instance starts on the binding after the removed instance ends its
 A removal or an unavailability of the binding ends its registrations, and the `server` application stops every instance of the binding.
 A pool slot keeps its client identity across a server restart, as an instance at the `worker` placement keeps its client identities across its restart.
 A binding that a project adds again after its removal gets new client identities.
-The removal of a binding removes the logs, the transcripts and the workspaces of its pool slots.
+The removal of a binding removes the logs, the agent sessions and the workspaces of its pool slots.
 A server stop cancels the live execution of each instance.
 An instance with a live execution keeps its registration, and an idle instance deregisters, as at a stop of a `worker` application.
 A server restart starts each instance again under the same client identity.

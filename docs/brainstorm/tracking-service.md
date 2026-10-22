@@ -13,6 +13,7 @@ No service reads telemetry to make a decision.
 The Tracking Service does one thing: tracking.
 It enforces no rule on the content of a record.
 It refuses no record for its content.
+The telemetry of an execution lets a human understand, debug and optimize that execution.
 The [architecture](architecture.md#tracking-service) states the obligation of a service that writes telemetry.
 
 ## The trace model
@@ -90,7 +91,6 @@ A reader distinguishes a span that the server observed from a span that an exter
 ## The telemetry text
 
 A telemetry text carries prose that a human, a repository or a model authored.
-An agent transcript is a telemetry text.
 A telemetry text holds its own identity.
 A span references it by that identity and never embeds it.
 A span attribute holds no authored prose.
@@ -101,6 +101,31 @@ The record that the prompt composer of the [Worker Service](worker-service.md#pr
 That record follows the trace and the access of its span.
 The text of a prompt reaches telemetry through an agent transcript alone.
 
+## The agent session
+
+An [agent session](tracking-service.vocabulary.md#agent-session) is the conversation of one agent inside one execution.
+Its [session entries](tracking-service.vocabulary.md#session-entry), in their order, are the agent transcript.
+A session entry belongs to the trace of its execution. It is a record of its own kind and no telemetry text.
+A session span names one agent session, and the identity of that span is the session identity.
+The session span carries the [session format](tracking-service.vocabulary.md#session-format) of the entries, so that a reader can render them.
+The producer sends each entry when the agent appends it, and an execution does not wait for its end.
+An entry holds its identity, its parent entry, its position in the session, its type, its time and its content.
+A span references an entry by the session identity and the entry identity, and it never embeds the entry.
+The content of a tool call and of a model reply reaches telemetry through the session entries alone.
+An entry above the entry bound keeps its identity and its structure, and it states that its content is cut.
+The host of an execution keeps its own copy of each agent session as a convenience.
+That copy is no kanthord record, and a reader never depends on it.
+The producer removes the secrets of the LLM credential of the agent from every entry before it sends the entry.
+
+## The trace summary
+
+The [trace summary](tracking-service.vocabulary.md#trace-summary) states the totals of the stored spans of one trace for a reader.
+It holds the [trace state](tracking-service.vocabulary.md#trace-state) and the times of the root span.
+It holds the token counts, the cost, the span counts, the error count and the names that the spans carry.
+The Tracking Service updates the summary in the same write as the span that changes it.
+The summary counts the stored records only, so it is as lossy as the records.
+No service reads a summary to make a decision.
+
 ## Writing telemetry
 
 The [architecture](architecture.md#relations) owns the relation of every service to the Tracking Service.
@@ -109,13 +134,15 @@ A failed write never fails the operation.
 It never changes its result or delays it beyond a bound.
 No service waits for a telemetry write before it returns its result.
 The Tracking Service holds measurements that other services produce.
-It derives no measurement.
+It derives no measurement of an operation.
+The trace summary adds up the measurements that the spans of one trace hold, and it measures no operation itself.
 The [Scheduler Service](scheduler-service.md#topology-and-work-queue) owns the measurements that it produces.
 
 ## The external harness
 
 The kanthord extension of an external harness program captures what that program exposes.
 It captures all exposed content, including authored prose.
+It captures the transcript of the harness as the session entries of an agent session.
 The capture is best effort.
 A harness that exposes less produces less telemetry.
 That changes no rule of the system.
@@ -144,7 +171,7 @@ A record states its execution identity and its trace identity, and the two agree
 An ingestion assigns no trace and reassigns no trace.
 Every record carries an identity that its producer mints.
 The Tracking Service deduplicates by that identity within the retention of the trace.
-It refuses a record that arrives after its trace expires. Today no deletion of a trace exists, so no record meets that case.
+It refuses a record that arrives after its trace expires.
 The Tracking Service holds no state of the progress of an ingestion between two ingestions.
 The Tracking Service accepts records in any order.
 The delivery promise holds after a human issues an ingestion.
@@ -175,13 +202,14 @@ The [Project Service](project-service.md#authorization-and-credential-custody) o
 ## Retention and deletion
 
 The trace is the only unit of retention.
-A span and a telemetry text hold no retention of their own.
-A deletion of a trace deletes every span, every record and every telemetry text of that trace.
+A span, a telemetry text and a session entry hold no retention of their own.
+A deletion of a trace deletes every span, every record, every telemetry text and every session entry of that trace.
 A deletion of a span deletes no telemetry text.
 A reference to a deleted trace resolves to expired and never to missing.
-Today the store keeps no tombstone, so the read answers 404 `tracking.trace.not_found` for a deleted trace, the same answer as for an unknown trace.
+The store keeps no tombstone, so the read answers 404 `tracking.trace.not_found` for a deleted trace, the same answer as for an unknown trace.
 The operator configures the retention of a trace once for the server, and never per project.
-Today the server holds no retention value, no sweep and no delete operation of a trace, so it deletes no trace.
+The retention of a trace starts when the trace opens.
+The server deletes a trace when its retention ends.
 The [architecture](architecture.md#tracking-service) owns the difference between telemetry retention and evidence retention.
 A deletion of a telemetry record changes no outcome, removes no evidence and changes no state of a node.
 
@@ -189,7 +217,7 @@ A deletion of a telemetry record changes no outcome, removes no evidence and cha
 
 Telemetry is lossy.
 The Tracking Service drops a record under pressure and counts the drop.
-The absence of a span proves nothing.
+The absence of a span or of a session entry proves nothing.
 It never establishes that an operation did not happen, that an execution made no progress or that a node failed.
 A reader assembles a trace from the records that the Tracking Service holds.
 The Tracking Service promises no reader a complete trace.
@@ -201,11 +229,15 @@ The Tracking Service provides an API that reads a trace.
 It uses the authentication and authorization of the system.
 It defines no authorization model of its own.
 The [Project Service](project-service.md#authorization-and-credential-custody) owns that authorization.
+A reader lists the traces with their summaries, and it filters and sorts that list.
+A reader reads the spans, the telemetry texts and the session entries of one trace.
+A reader of an open trace reads it again to follow it.
+No operation streams a trace, a span or a session entry.
 
 ## Boundary
 
 The [Project Service](project-service.md#authorization-and-credential-custody) owns the authorization of an operation.
 The [Mission Service](mission-service.md#outcome-and-completion) owns evidence, assessment and outcome.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) owns the execution record, the claim and the lease.
-The [Worker Service](worker-service.md#boundary) owns the hosting and lifecycle of an execution.
-The Tracking Service owns the trace, span, telemetry text, record disposition, the retention of a trace and the drop.
+The [Worker Service](worker-service.md#boundary) owns the hosting and lifecycle of an execution and the local copy of an agent session.
+The Tracking Service owns the trace, span, telemetry text, session entry, trace summary, record disposition, the retention of a trace and the drop.

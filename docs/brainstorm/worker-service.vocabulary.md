@@ -51,7 +51,7 @@ At the `server` placement, an agent tool runs as the server OS user. It can read
 
 The worker unit is the application code that hosts one instance.
 It owns the registrations, the heartbeat, the work pulls and the executions of the instance.
-It also owns the workspace, the pi tools, the transcripts and the log of the instance.
+It also owns the workspace, the pi tools, the agent sessions and the log of the instance.
 It is the same code at every placement, and it holds no branch on its placement.
 The instance of `coder-main` and the instance of `coder-remote` run the same worker unit.
 
@@ -340,7 +340,7 @@ The server answers it with a `port` frame.
 ## slot volume
 
 The slot volume is the named volume `kanthord_slot_<client_id>` that holds the state of a `container` slot.
-It holds the workspaces, the transcripts, the `pi/` directory and the log of the instance.
+It holds the workspaces, the `pi/` directory with the agent sessions and the log of the instance.
 Slot 0 of `coder-box` writes its workspace into its slot volume.
 A relaunch of slot 0 under the same client identity mounts the same volume and resumes its `running` execution.
 

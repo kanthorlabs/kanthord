@@ -97,7 +97,45 @@ The Scheduler Service is the producer of the span for the `Billing` work pull.
 ## telemetry text
 
 A telemetry text is a record of authored prose.
-The transcript of external harness `claude-code` is a telemetry text.
+The `output` of a verification of `Add password reset` is a telemetry text.
+
+## agent session
+
+An agent session is the conversation of one agent inside one execution.
+The `swe@1` agent of the execution of `Add password reset` holds one agent session.
+The span `agent.session` names it, and the identity of that span is the session identity.
+
+## session entry
+
+A session entry is one entry of an agent session. It is a record of its own kind and no telemetry text.
+A model reply, a tool result and a compaction summary of `swe@1` are session entries.
+The entry identity, the session identity and the position of the entry identify it inside its trace.
+
+## session format
+
+A session format names the shape of the entries of an agent session.
+The set is closed and it holds two values.
+
+- **pi**
+- **claude_code**
+
+The `swe@1` session of the `Billing` execution has the format `pi`.
+
+## trace summary
+
+A trace summary holds the totals of the stored spans of one trace.
+The summary of the `Billing` execution holds 42 turns, 118 tool calls, 2 errors and 310000 tokens.
+
+## trace state
+
+A trace state describes the root span of a trace in its summary.
+The set is closed and it holds three values.
+
+- **open**: the store holds no end of the root span.
+- **ok**: the root span ended with the status `Ok`.
+- **error**: the root span ended with the status `Error`.
+
+The trace of a running execution of `Add password reset` is `open`.
 
 ## record disposition
 
@@ -112,7 +150,8 @@ The set is closed and it holds two values.
 Retention is the period for which the Tracking Service holds a trace.
 The trace is the only unit of retention.
 The server deletes the trace of an execution of project `Billing` when its retention ends.
-The deletion removes every span, record and telemetry text of that trace.
+The deletion removes every span, record, telemetry text and session entry of that trace.
+The retention of a trace of project `Billing` ends 30 days after the trace opens.
 
 ## acknowledgement
 
