@@ -396,12 +396,13 @@ On a Mac:
 The dashboard shows the instance configuration only once. It holds the private key of the instance. Open a terminal on the worker host before you start.
 
 1. In the dashboard, open **Workers**. Select the card of the worker, for example `coder@1`.
-2. In the **Instances** section, select **Add instance**.
-3. Enter a **Name**, for example `coder-1`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens. This name is `<name>`.
-4. In **Where does it run?**, choose `Linux (systemd)` or `macOS (foreground)`.
-5. In **Address**, enter `<address>`. The field is empty when the dashboard runs on `localhost`.
-6. Select **Create instance**. The sheet shows the **Instance configuration** and the copy block of the host kind.
-7. Select **Copy** next to **Instance configuration**. Keep the sheet open.
+2. If the worker has no instance, select **Advanced: worker instances**. The **Instances** section opens.
+3. In the **Instances** section, select **Add instance**.
+4. Enter a **Name**, for example `coder-1`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens. This name is `<name>`.
+5. In **Where does it run?**, choose `Linux (systemd)` or `macOS (foreground)`.
+6. In **Address**, enter `<address>`. The field is empty when the dashboard runs on `localhost`.
+7. Select **Create instance**. The sheet shows the **Instance configuration** and the copy block of the host kind.
+8. Select **Copy** next to **Instance configuration**. Keep the sheet open.
 
 The copy block of the sheet repeats step 8.2 and the commands of the list below, except the log command. If you close the sheet before the paste, select **Reset key** on the instance page. Reset key gives a new instance configuration.
 
