@@ -134,7 +134,7 @@ On the VPS, run `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman ps
 
 The server writes the output of each instance to `workers/<client_id>/stderr.log` of its state directory, for example `~/.local/state/kanthord/workers/<client_id>/stderr.log`. On the VPS, the state directory is `/var/lib/kanthord/.local/state/kanthord`.
 
-The trace page of the dashboard shows the conversation of each execution. The pi session files also stay in the volume of the instance. To list the files of one execution:
+The Conversation tab of the trace page of the dashboard shows the session entries of each execution. The pi session files also stay in the volume of the instance. To list the files of one execution:
 
 ```sh
 podman run --rm -v kanthord_slot_<client_id>:/v:ro --entrypoint ls docker.io/kanthorlabs/kanthord:<version> /v/state/kanthord/pi/sessions/execution/<execution_id>
