@@ -21,7 +21,7 @@ Replace each placeholder with your value:
 | Placeholder      | Value                                                                                                                                  |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `<version>`      | The version of the server, for example `28.0.1`.                                                                                       |
-| `<project id>`   | The **Identity** value on the project page, for example `project_01M5…`.                                                               |
+| `<project id>`   | The **Identity** value under **Details** on the project page, for example `project_01M5…`.                                             |
 | `<client_id>`    | The part after `kanthord_slot_` in the container names that `podman ps --filter label=io.kanthord.owner --format '{{.Names}}'` prints. |
 | `<execution_id>` | The identity of an execution, for example `execution_01M5…`.                                                                           |
 
