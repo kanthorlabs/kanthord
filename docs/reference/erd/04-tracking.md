@@ -32,7 +32,7 @@ erDiagram
     tracking_trace {
         text trace_id PK "protocol value"
         text project_id "correlation, null for no project"
-        text execution_id "correlation or null"
+        text execution_id UK "correlation or null, unique when set"
         text root_span_id "the root of the trace, its row can be absent"
         text node_id "correlation or null"
         integer attempt "attempt of the execution or null"
@@ -122,8 +122,8 @@ erDiagram
 | ------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tracking_trace`          | Tracking Service | Derived: a trace belongs to exactly one project or to no project, it is the unit of deletion, and an ingestion resolves the project through the records of the Tracking Service, under [the trace and the project](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-and-the-project) and [ingestion](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#ingestion). Ruled: the summary columns follow the [trace summary](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#trace-summary). |
 | `tracking_span`           | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the span. The columns are derived from [the trace model](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-model) and the span record of the [Tracking CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/tracking.md#span-record-fields-kind-span).                                                                                                                                                          |
-| `tracking_record`         | Tracking Service | Derived: the Tracking Service deduplicates by the record identity that its producer mints, within the retention of the trace. The identity contract is open in HANDOFF.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention) deletes it with its trace. The columns are derived, and the identity contract of a text is open in HANDOFF.                                                                                                                                                                                                                               |
+| `tracking_record`         | Tracking Service | Derived: the Tracking Service deduplicates by the record identity that its producer mints, within the retention of the trace. The identity has the form `<span_id>:<name>` and holds at most 128 characters.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention) deletes it with its trace. The columns are derived, and the identity of a text has the form `<span_id>:<name>`.                                                                                                                                                                                                                           |
 | `tracking_session_entry`  | Tracking Service | Ruled: [session entries](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#session-entries) holds the entries of an agent session; [retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention) deletes them with their trace.                                                                                                                                                                                                                                                                                           |
 
 ## Constraints
@@ -132,16 +132,17 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 ### Admission and durability
 
-- One transaction inserts the `tracking_record` row of a record and applies its contribution to its span or its telemetry text. The acknowledgement answers `Stored` only after that commit.
+- One transaction inserts the `tracking_record` row of a record and applies its contribution to its span, its telemetry text or its session entry. The acknowledgement answers `Stored` only after that commit.
 - `tracking_record` holds one row for each stored record identity of a trace. A repeat of that identity is `Stored` and changes nothing. A refused record and a dropped record leave no row.
-- `target_id` of a record names a span or a telemetry text of the same trace.
-- The records of one execution have a bound. A new record beyond that bound is `Refused` and writes neither its `tracking_record` row nor its contribution. A repeat of a stored record stays `Stored` and adds no row. The value of the bound is open.
-- A bulk import and the retention sweep run in bounded transactions.
+- `target_id` of a record names a span, a telemetry text or a session entry record of the same trace.
+- The records of one execution have a bound. A new record beyond that bound is `Refused` and writes neither its `tracking_record` row nor its contribution. A repeat of a stored record stays `Stored` and adds no row. The bound is 50,000 records for each trace.
+- The retention sweep runs in bounded transactions.
 
 ### Traces
 
 - A trace belongs to exactly one project or to no project. A server operation that concerns several projects opens one root span, and so one trace, for each project, and the root spans link to each other.
-- The first stored server record of a trace creates its `tracking_trace` row. For an execution, the Scheduler Service opens the root span after the claim records the execution, and `trace_id`, `root_span_id`, `project_id` and `execution_id` equal the values of the execution record. An imported record never creates a trace row.
+- A unique index covers `tracking_trace.execution_id` where it is not null.
+- The first stored record of a trace creates its `tracking_trace` row. The server record of the Scheduler Service or the first write of a native worker creates it. For an execution, the Scheduler Service opens the root span after the claim records the execution, and `trace_id`, `root_span_id`, `project_id` and `execution_id` equal the values of the execution record. An imported record never creates a trace row.
 - A trace has exactly one root span, and `root_span_id` names it. A lost write of the root span leaves no root row. The trace then stays readable through its other spans, and a reader meets an unresolved parent. The representation of a missing root is open.
 - An ingestion carries no project. It names an existing trace, and it assigns no trace and reassigns no trace. The Tracking Service resolves the project from `tracking_trace`.
 - An imported record names an execution and a trace that agree with `tracking_trace`. A record that names another trace is refused.
@@ -176,7 +177,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 ### Retention and deletion
 
 - The trace is the only unit of retention. The deletion of a trace row deletes its spans, its records, its telemetry texts and its session entries through `ON DELETE CASCADE`. The deletion of a span deletes no telemetry text.
-- The operator configures the retention of a trace once for the server, never per project, as `tracking.retention_days`, default 30. The retention starts at `created_at` of the trace row. A sweep at the start and every hour deletes the expired rows, at most 20 in each transaction.
+- The operator configures the retention of a trace once for the server, never per project, as `tracking.retention_days`, default 30, a safe integer from 1 to 3650. The retention starts at `created_at` of the trace row. A sweep at the start and every hour deletes the expired rows, at most 20 in each transaction and 50 transactions in one sweep.
 - A deletion of a telemetry row changes no outcome, removes no evidence and changes no state of a node.
 - Telemetry is the one exception to the rule that an owner deletes no record that a peer can reference, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. `scheduler_execution.trace_id` and `root_span_id` keep their values after the deletion of their trace, and they resolve to expired.
 
