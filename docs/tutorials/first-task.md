@@ -168,8 +168,8 @@ Add the `coder` binding from Onboarding:
 2. Select **Add** in the **Workers** section.
 3. Enter a **Name**: `coder`.
 4. Choose the **Worker** `coder@1`.
-5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Placement** then shows `server`. **Save binding** stays off until the agents load.
-6. Keep **Placement** `server` and **Instance count** `1`. The list also shows `container`, which is off, because this server runs in a container.
+5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Placement** then shows `Server` selected. **Save binding** stays off until the agents load.
+6. Keep **Placement** `Server` and **Instance count** `1`. The `Container` card is off, because this server runs in a container. Leave **Advanced settings** closed.
 7. Select **Save binding**.
 
 Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**. Onboarding counts one worker binding as enough, but the first task needs both. Add the `reviewer` binding now.
@@ -179,7 +179,7 @@ Add the `reviewer` binding on the project page:
 1. Open **Projects**, then the project `first`, then the **Bindings** tab.
 2. Select **Add** in the **Workers** section.
 3. Enter the **Name** `reviewer`, and choose the **Worker** `reviewer@1`.
-4. Wait until **Placement** shows `server`. Keep **Instance count** `1`.
+4. Wait until **Placement** shows `Server` selected. Keep **Instance count** `1`.
 5. Select **Save binding**. The sheet closes, and the project page stays open.
 
 At the `server` placement, the server runs each instance as a thread. You start no process and generate no token. At the `server` placement, an agent command can read every credential of the server. Inside the server container it cannot read the files of your host. Bind only a repository that you trust. See [Where a worker runs](../explanation/worker.md#where-a-worker-runs). To run a worker on another host, use the `worker` placement of [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement).

@@ -110,14 +110,14 @@ The server adds its own version as the tag to the name in `worker.container_imag
 
 ## 3. Check the placement
 
-In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows `container` on. When it is off, the sheet shows the reason. Under `runtime_failed`, the sheet turns `container` off, but a save through the API still passes. See [Troubleshooting](#troubleshooting).
+In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows the `Container` card on, with the runtime that the server uses, for example "with Podman". When the card is off, it shows the reason. Under `runtime_failed`, the card stays on and shows the detail, because a save passes and the instances start after the runtime recovers. See [Troubleshooting](#troubleshooting).
 
 ## 4. Add the worker binding
 
 1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
 2. Enter a **Name**, for example `coder-box`. Use a name that the project does not hold.
 3. Choose the **Worker**, for example `coder@1`.
-4. Choose the **Placement** `container`, and set the **Instance count**.
+4. Select the **Placement** card `Container`, and set the **Instance count**.
 5. Select **Save binding**.
 
 A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement). In its step 3, add a binding with another name at the placement `container`, as the list above shows. Skip the steps of the `worker` placement.
@@ -158,7 +158,7 @@ On the VPS, write `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman`
 | The sheet shows "Install Podman or Docker on the server host…", or `reason: runtime_absent` | No `podman` and no `docker` is on the `PATH` of the server. Do step 1, then restart the server.                                                                                                                                                   |
 | The sheet shows "Cannot connect to Podman…", or `reason: runtime_failed` with that text     | The Podman machine is stopped. Run `podman machine start`. The instances start by themselves.                                                                                                                                                     |
 | The sheet or `reason: runtime_failed` names the server user and the uid map                 | The user has no subordinate uid range that covers uid 10001 of the container. Do item 1 of [On a VPS with the service user](#on-a-vps-with-the-service-user).                                                                                     |
-| The sheet shows "Docker runs as root on this host…", or `reason: runtime_rootful`           | Docker runs as root on this Linux host. Use rootless Podman or rootless Docker. A Linux VM runtime other than Docker Desktop, for example Rancher Desktop, gets this refusal too. Use Podman there.                                               |
+| The sheet shows "… runs as root on this host…", or `reason: runtime_rootful`                | The runtime runs as root on this Linux host. Use rootless Podman or rootless Docker. A Linux VM runtime other than Docker Desktop, for example Rancher Desktop, gets this refusal too. Use Podman there.                                          |
 | `reason: runtime_failed` stays while `podman machine list` shows a running machine          | The server runs with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME`. The check runs with the full server environment and loses the Podman machine connection. Remove both variables from the server environment, then restart the server.          |
 | An instance never shows on the **Workers** page                                             | Read `workers/<client_id>/stderr.log`. A failed pull shows there. Pull the image as the user of the server, then wait for the next start of the instance. The server tries again after a pause of up to 30 s.                                     |
 | A node fails with a provider or storage error that names `127.0.0.1` or `localhost`         | The endpoint is on the host loopback address. See [Limits](#limits).                                                                                                                                                                              |
