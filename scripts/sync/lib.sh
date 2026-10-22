@@ -15,6 +15,64 @@ stash_file() { printf '%s/%s.stash' "$SYNC_STATE" "$1"; }
 
 pinned() { cat "$(pin_file "$1")"; }
 
+SKIPPED=${SKIPPED:-}
+SKIP_REPORT=""
+
+skip_repo() {
+	SKIPPED="$SKIPPED $1"
+	SKIP_REPORT="$SKIP_REPORT$1: $2
+"
+	warn "$1 is skipped: $2"
+}
+
+is_skipped() {
+	case " $SKIPPED " in
+	*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+admit_repo() {
+	local dir operation
+	dir=$(repo_dir "$1")
+	[ -e "$dir/.git" ] || die "$1 is not initialized. Run git submodule update --init"
+	if operation=$(in_progress "$dir"); then
+		skip_repo "$1" "it has an unfinished $operation"
+		return 1
+	fi
+	if has_unmerged "$dir"; then
+		skip_repo "$1" "it has unmerged paths"
+		return 1
+	fi
+	[ "${ON_DIRTY:-skip}" = "skip" ] || return 0
+	if is_dirty "$dir"; then
+		skip_repo "$1" "it has uncommitted changes"
+		return 1
+	fi
+	if [ "${ON_UNTRACKED:-add}" = "add" ] && [ -n "$(untracked_files "$dir")" ]; then
+		skip_repo "$1" "it has new files. Pass ON_UNTRACKED=skip to sync without them"
+		return 1
+	fi
+	return 0
+}
+
+switch_to_main() {
+	local dir branch head
+	dir=$(repo_dir "$1")
+	branch=$(current_branch "$dir")
+	[ "$branch" = "main" ] && return 0
+	head=$(git -C "$dir" rev-parse HEAD)
+	if [ -z "$branch" ] && [ -z "$(git -C "$dir" for-each-ref --contains "$head" refs/heads refs/remotes)" ]; then
+		skip_repo "$1" "it is detached at $head, which no branch contains. Name it with git -C $dir switch -c <branch>"
+		return 1
+	fi
+	if ! git -C "$dir" checkout main >/dev/null 2>&1; then
+		skip_repo "$1" "it could not check out main"
+		return 1
+	fi
+	log "$1 switched from ${branch:-detached $(printf '%.7s' "$head")} to main"
+}
+
 # P0. Reject every state that makes an automatic sync unsafe, then pin
 # origin/main so every later phase reads one fixed commit.
 preflight_repo() {
@@ -74,7 +132,7 @@ protect_repo() {
 		return 0
 	fi
 
-	case "${ON_DIRTY:-stash}" in
+	case "${ON_DIRTY:-skip}" in
 	stash)
 		stash_argv="push --message"
 		[ "${ON_UNTRACKED:-add}" = "add" ] && stash_argv="push --include-untracked --message"

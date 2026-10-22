@@ -8,6 +8,10 @@ SCRIPT_NAME=sync-pointer
 bumped=""
 bumped_paths=()
 for name in $SUBMODULES; do
+	if is_skipped "$name"; then
+		log "$name is skipped. Its pointer stays"
+		continue
+	fi
 	dir=$(repo_dir "$name")
 	path=$(repo_path "$name")
 	recorded=$(git -C "$ROOT" rev-parse --verify --quiet "HEAD:$path") || die "$name has no recorded gitlink"

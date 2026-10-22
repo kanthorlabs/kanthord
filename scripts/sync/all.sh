@@ -14,19 +14,30 @@ trap 'report_published' EXIT
 
 # P0. Preflight and pin.
 log "phase 0: preflight"
+case "${ON_DIRTY:=skip}" in
+skip | stash | commit | abort) ;;
+*) die "unknown ON_DIRTY=${ON_DIRTY}" ;;
+esac
 sync_state_reset
-for name in parent $SUBMODULES; do
+preflight_repo parent
+admit_repo parent || true
+for name in $SUBMODULES; do
+	admit_repo "$name" || continue
+	switch_to_main "$name" || continue
 	preflight_repo "$name"
+done
+for name in parent $SUBMODULES; do
+	is_skipped "$name" && continue
 	printf '  %-8s %s\n' "$name" "$(drift_state "$name")"
 done
 
 # P1. Protect every working tree, the parent index included.
 log "phase 1: protect the working trees"
-for name in parent $SUBMODULES; do protect_repo "$name"; done
+for name in parent $SUBMODULES; do is_skipped "$name" || protect_repo "$name"; done
 
 # P2. Integrate the parent first.
 log "phase 2: integrate the parent"
-integrate_repo parent
+is_skipped parent || integrate_repo parent
 
 # P3. Gitlinks that unpushed parent commits already name.
 log "phase 3: enumerate the outgoing gitlinks"
@@ -47,6 +58,7 @@ outgoing_gitlinks() {
 	done | sort -u
 }
 for name in $SUBMODULES; do
+	is_skipped "$name" && continue
 	guards=$(outgoing_gitlinks "$name" | tr '\n' ' ') || die "$name gitlink enumeration failed"
 	printf '%s' "$guards" >"$SYNC_STATE/$name.guards"
 	[ -n "$guards" ] && log "$name is named by unpushed parent commits: $guards"
@@ -55,20 +67,24 @@ done
 # P4. Integrate the submodules, without rewriting a guarded commit.
 log "phase 4: integrate the submodules"
 for name in $SUBMODULES; do
+	is_skipped "$name" && continue
 	GUARD_COMMITS=$(cat "$SYNC_STATE/$name.guards" 2>/dev/null) integrate_repo "$name"
 done
 
 # P5. Decide the pointers on the already-integrated parent.
 log "phase 5: reconcile the pointers"
-"$(dirname "$0")/pointer.sh" || die "pointer reconciliation failed"
+if ! is_skipped parent; then
+	SKIPPED=$SKIPPED "$(dirname "$0")/pointer.sh" || die "pointer reconciliation failed"
+fi
 
 # P6. Submodules are published first.
 log "phase 6: push the submodules"
-for name in $SUBMODULES; do push_repo "$name"; done
+for name in $SUBMODULES; do is_skipped "$name" || push_repo "$name"; done
 
 # P7. A local gitlink is not evidence that the remote has the commit.
 log "phase 7: verify the outgoing gitlinks are published"
 for name in $SUBMODULES; do
+	is_skipped "$name" && continue
 	dir=$(repo_dir "$name")
 	git -C "$dir" fetch --prune origin >/dev/null 2>&1 || die "$name re-fetch failed"
 	published=$(git -C "$dir" rev-parse --verify origin/main)
@@ -83,16 +99,18 @@ done
 # P8. Publish the parent.
 log "phase 8: open the parent pull request"
 rm -f "$SYNC_STATE/parent.pr"
-publish_parent
+is_skipped parent || publish_parent
 
 # P9. Prove the postcondition.
 log "phase 9: verify"
 for name in $SUBMODULES; do
+	is_skipped "$name" && continue
 	preflight_repo "$name"
 	state=$(drift_state "$name")
 	[ "$state" = "synced" ] || die "$name is $state after the sync"
 done
 for name in $SUBMODULES; do
+	is_skipped parent || is_skipped "$name" && continue
 	[ "$(git -C "$ROOT" rev-parse "HEAD:$(repo_path "$name")")" = "$(git -C "$(repo_dir "$name")" rev-parse HEAD)" ] ||
 		die "$name pointer and checkout disagree after the sync"
 done
@@ -103,6 +121,12 @@ for name in parent $SUBMODULES; do restore_repo "$name"; done
 
 trap - EXIT
 rm -f "$SYNC_STATE/published"
+if [ -n "$SKIPPED" ]; then
+	[ -f "$SYNC_STATE/parent.pr" ] && log "the parent waits in $(cat "$SYNC_STATE/parent.pr")"
+	warn "these repositories are not synced:"
+	printf '%s' "$SKIP_REPORT" | sed 's/^/  /' >&2
+	die "resolve each reason, then sync again"
+fi
 if [ -f "$SYNC_STATE/parent.pr" ]; then
 	log "the submodules are level with origin/main. The parent waits in $(cat "$SYNC_STATE/parent.pr")"
 else
