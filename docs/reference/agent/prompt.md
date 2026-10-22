@@ -41,20 +41,20 @@ Each operation returns HTTP `200` with the settings of the scope. The CLI writes
   "system_layer": "inherit",
   "revision": 2,
   "locked_switches": [],
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property          | Type                  | Surface                  | Purpose                                                                   |
-| ----------------- | --------------------- | ------------------------ | ------------------------------------------------------------------------- |
-| `scope`           | string                | API and CLI              | `system`, `agent` or `workbench`.                                         |
-| `agent_name`      | string                | API and CLI              | Agent of the scope; an empty string for the `system` scope.               |
-| `switches`        | object of booleans    | API and CLI              | Every switch of the scope.                                                |
-| `custom_text`     | string                | API and CLI              | Text of the `custom` source; an empty text is an `absent` source.         |
-| `system_layer`    | string or null        | API and CLI              | `inherit`, `on` or `off` for an `agent` scope; `null` for other scopes.   |
-| `revision`        | integer               | API and CLI              | Current revision; `0` when the scope has no row.                          |
-| `locked_switches` | string array          | API and CLI              | Switches that the server configuration locks; empty when no lock applies. |
-| `idempotency_key` | canonical ULID string | CLI only, mutations only | Key used for this request; reuse it to retry the same request.            |
+| Property          | Type                            | Surface                  | Purpose                                                                   |
+| ----------------- | ------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| `scope`           | string                          | API and CLI              | `system`, `agent` or `workbench`.                                         |
+| `agent_name`      | string                          | API and CLI              | Agent of the scope; an empty string for the `system` scope.               |
+| `switches`        | object of booleans              | API and CLI              | Every switch of the scope.                                                |
+| `custom_text`     | string                          | API and CLI              | Text of the `custom` source; an empty text is an `absent` source.         |
+| `system_layer`    | string or null                  | API and CLI              | `inherit`, `on` or `off` for an `agent` scope; `null` for other scopes.   |
+| `revision`        | integer                         | API and CLI              | Current revision; `0` when the scope has no row.                          |
+| `locked_switches` | string array                    | API and CLI              | Switches that the server configuration locks; empty when no lock applies. |
+| `idempotency_key` | `idempotency_key_<ulid>` string | CLI only, mutations only | Key used for this request; reuse it to retry the same request.            |
 
 ### Failures
 
@@ -86,7 +86,7 @@ The CLI checks the target before it sends the request. `<command>` is `get`, `pu
 | `cli.agent.prompt.switch.state_required`       | switch      | None or both of `--on` and `--off` are present.                                |
 | `cli.agent.prompt.switch.invalid_system_layer` | switch      | `--system-layer` is not `inherit`, `on` or `off`, or the scope is not `agent`. |
 | `cli.agent.prompt.<command>.token_required`    | All         | No option, environment variable or client file supplies a token.               |
-| `cli.idempotency_key.invalid`                  | put, switch | `--idempotency-key` is not a canonical ULID.                                   |
+| `cli.idempotency_key.invalid`                  | put, switch | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                  |
 | `cli.file.invalid_path`                        | put         | `--file` is `-`; the command does not read stdin.                              |
 | `cli.file.not_found`                           | put         | The `--file` path does not exist.                                              |
 | `cli.file.not_regular`                         | put         | The `--file` path is not a regular file.                                       |
@@ -135,15 +135,15 @@ curl -s 'http://127.0.0.1:31415/api/agent/prompt?scope=agent&agent_name=swe@1' \
 | `expected_revision` | integer | Yes when the row exists          | Positive revision that the caller read.     |
 | `custom_text`       | string  | Yes                              | New custom text, at most 32768 UTF-8 bytes. |
 
-| Header            | Required | Purpose                                      |
-| ----------------- | -------- | -------------------------------------------- |
-| `Content-Type`    | Yes      | `application/json`.                          |
-| `Idempotency-Key` | Yes      | Fresh canonical ULID; retain it for retries. |
+| Header            | Required | Purpose                                                |
+| ----------------- | -------- | ------------------------------------------------------ |
+| `Content-Type`    | Yes      | `application/json`.                                    |
+| `Idempotency-Key` | Yes      | Fresh `idempotency_key_<ulid>`; retain it for retries. |
 
 ```sh
 curl -s -X PUT http://127.0.0.1:31415/api/agent/prompt \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"scope":"agent","agent_name":"swe@1","expected_revision":1,"custom_text":"Answer in English.\n"}'
 ```
@@ -172,7 +172,7 @@ The headers are the headers of `PUT /api/agent/prompt`.
 ```sh
 curl -s -X POST http://127.0.0.1:31415/api/agent/prompt/switch \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"scope":"workbench","agent_name":"swe@1","expected_revision":2,"switch":"claude_md","enabled":false}'
 ```
@@ -181,8 +181,8 @@ curl -s -X POST http://127.0.0.1:31415/api/agent/prompt/switch \
 
 ```text
 kanthord agent prompt get --scope <scope> [--agent <agent-name>]
-kanthord agent prompt put --scope <scope> [--agent <agent-name>] [--expected-revision <revision>] --file <path> [--idempotency-key <ulid>]
-kanthord agent prompt switch --scope <scope> [--agent <agent-name>] [--expected-revision <revision>] (--switch <source> (--on | --off) | --system-layer <override>) [--idempotency-key <ulid>]
+kanthord agent prompt put --scope <scope> [--agent <agent-name>] [--expected-revision <revision>] --file <path> [--idempotency-key <key>]
+kanthord agent prompt switch --scope <scope> [--agent <agent-name>] [--expected-revision <revision>] (--switch <source> (--on | --off) | --system-layer <override>) [--idempotency-key <key>]
 ```
 
 Each command also accepts `--token <jwt>` and `--endpoint <url>`.
@@ -206,7 +206,7 @@ There are no positional arguments.
 | `--switch <source>`              | switch      | None; exactly one of `--switch` and `--system-layer`                        | Sets `switch`.                                                     |
 | `--on`, `--off`                  | switch      | None; exactly one with `--switch`                                           | Sets `enabled` to `true` or `false`.                               |
 | `--system-layer <override>`      | switch      | None; the `agent` scope only                                                | Sets `system_layer`.                                               |
-| `--idempotency-key <ulid>`       | put, switch | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key on a retry. |
+| `--idempotency-key <key>`        | put, switch | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key on a retry. |
 | `--token <jwt>`                  | All         | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                           |
 | `--endpoint <url>`               | All         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                   |
 

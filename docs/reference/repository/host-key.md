@@ -55,7 +55,7 @@ When a host presents a key other than its pin, ssh writes "REMOTE HOST IDENTIFIC
 
 ## Expected response
 
-Every API success returns HTTP `200` with JSON. The CLI writes the same object as one JSON line to stdout and exits `0`. The CLI `pin` adds `idempotency_key`, the canonical ULID that it sent.
+Every API success returns HTTP `200` with JSON. The CLI writes the same object as one JSON line to stdout and exits `0`. The CLI `pin` adds `idempotency_key`, the `idempotency_key_<ulid>` that it sent.
 
 ### list
 
@@ -128,18 +128,18 @@ The CLI exits `1` for every failure and writes a diagnostic line `<code>: <messa
 | `cli.repository.host_key.<command>.token_required` | All      | The resolved token is absent or blank. The CLI sends no request.                    |
 | `cli.repository.host_key.<command>.indeterminate`  | All      | Transport failure, timeout or malformed response. For `pin`, retry with the key.    |
 | `cli.repository.host_key.pin.fingerprint_invalid`  | `pin`    | `--fingerprint` is not `SHA256:` and 43 base64 characters. The CLI checks it first. |
-| `cli.idempotency_key.invalid`                      | `pin`    | `--idempotency-key` is not a canonical ULID.                                        |
+| `cli.idempotency_key.invalid`                      | `pin`    | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                       |
 | `cli.option.duplicate`                             | All      | An option occurs more than once.                                                    |
 
 ## API shape
 
 Every operation uses the `human` access policy and a 30-second timeout. `scan` and `pin` also apply a 10-second read deadline.
 
-| Header            | Required    | Purpose                                                       |
-| ----------------- | ----------- | ------------------------------------------------------------- |
-| `Authorization`   | Yes         | `Bearer <human-jwt>`.                                         |
-| `Content-Type`    | With a body | `application/json`.                                           |
-| `Idempotency-Key` | `pin`       | Canonical ULID; reuse the same key to retry the same request. |
+| Header            | Required    | Purpose                                                                 |
+| ----------------- | ----------- | ----------------------------------------------------------------------- |
+| `Authorization`   | Yes         | `Bearer <human-jwt>`.                                                   |
+| `Content-Type`    | With a body | `application/json`.                                                     |
+| `Idempotency-Key` | `pin`       | `idempotency_key_<ulid>`; reuse the same key to retry the same request. |
 
 ### list
 
@@ -197,7 +197,7 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/host-key/scan \
 ```sh
 curl -i -X PUT http://127.0.0.1:31415/api/repository/host-key/gitlab.com \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"fingerprint":"SHA256:<43-base64-characters>"}'
 ```
@@ -207,7 +207,7 @@ curl -i -X PUT http://127.0.0.1:31415/api/repository/host-key/gitlab.com \
 ```text
 kanthord repository host-key list [--token <jwt>] [--endpoint <url>]
 kanthord repository host-key scan <host> [--token <jwt>] [--endpoint <url>]
-kanthord repository host-key pin <host> --fingerprint <SHA256:...> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord repository host-key pin <host> --fingerprint <SHA256:...> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
@@ -225,7 +225,7 @@ Invoke `kanthord repository host-key` without a command to show its help.
 | Option                       | Commands | Default / resolution                                                  | Purpose                                                                |
 | ---------------------------- | -------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `--fingerprint <SHA256:...>` | `pin`    | Required; no default                                                  | Sets `body.fingerprint`.                                               |
-| `--idempotency-key <ulid>`   | `pin`    | A generated canonical ULID                                            | Sets the `Idempotency-Key` header; supply the same key when you retry. |
+| `--idempotency-key <key>`    | `pin`    | A generated `idempotency_key_<ulid>`                                  | Sets the `Idempotency-Key` header; supply the same key when you retry. |
 | `--token <jwt>`              | All      | `KANTHORD_TOKEN` → client-file token; a nonblank token is required    | Human JWT sent in the `Authorization` header.                          |
 | `--endpoint <url>`           | All      | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL.                                                       |
 

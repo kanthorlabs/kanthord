@@ -56,7 +56,7 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
 The API returns HTTP `204` with no body. The CLI writes one JSON line with the retry key and exits `0`:
 
 ```json
-{ "idempotency_key": "01M4C5G6DGWEVZYSPETSQR65JH" }
+{ "idempotency_key": "idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH" }
 ```
 
 ### Failures
@@ -78,14 +78,14 @@ The CLI checks some input before it sends the request.
 | CLI code                                      | Commands | Meaning                                                          |
 | --------------------------------------------- | -------- | ---------------------------------------------------------------- |
 | `cli.agent.cooldown.<command>.token_required` | All      | No option, environment variable or client file supplies a token. |
-| `cli.idempotency_key.invalid`                 | clear    | `--idempotency-key` is not a canonical ULID.                     |
+| `cli.idempotency_key.invalid`                 | clear    | `--idempotency-key` is not an `idempotency_key_<ulid>` value.    |
 | `cli.agent.cooldown.<command>.indeterminate`  | All      | A transport failure, timeout or malformed response.              |
 
 A declared failure makes the CLI exit `1` and print `<code>: request failed` and the row `status: <status>` to stderr. A `clear` prints `<code>: request failed` and the rows `status: <status>` and `idempotency_key: <key>` instead. Retry an indeterminate `clear` with the same key.
 
 ## API shape
 
-All operations use `human` access, a 30-second timeout, and the header `Authorization: Bearer <human-jwt>`. The `clear` operation also requires an `Idempotency-Key` header with a fresh canonical ULID. The HTTP client of the CLI has a 31-second deadline.
+All operations use `human` access, a 30-second timeout, and the header `Authorization: Bearer <human-jwt>`. The `clear` operation also requires an `Idempotency-Key` header with a fresh `idempotency_key_<ulid>`. The HTTP client of the CLI has a 31-second deadline.
 
 | Command | Method and path                          | Operation ID           | Mutation |
 | ------- | ---------------------------------------- | ---------------------- | -------- |
@@ -100,14 +100,14 @@ curl -s http://127.0.0.1:31415/api/agent/cooldown \
 
 curl -s -X DELETE 'http://127.0.0.1:31415/api/agent/cooldown/<credential-name>?holder=builder-1' \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ## CLI shape
 
 ```text
 kanthord agent cooldown list
-kanthord agent cooldown clear <credential> [--holder <name>] [--idempotency-key <ulid>]
+kanthord agent cooldown clear <credential> [--holder <name>] [--idempotency-key <key>]
 ```
 
 Each command also accepts `--token <jwt>` and `--endpoint <url>`.
@@ -122,11 +122,11 @@ kanthord agent cooldown clear <credential-name> --holder builder-1
 | -------------- | -------- | -------- | -------------------------------------- |
 | `<credential>` | clear    | Yes      | Credential name; maps to `credential`. |
 
-| Option                     | Commands | Default / resolution                                                        | Purpose                                                                   |
-| -------------------------- | -------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `--holder <name>`          | clear    | `server`                                                                    | Holder of the copy: `server` or a worker instance name; maps to `holder`. |
-| `--idempotency-key <ulid>` | clear    | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key on a retry.        |
-| `--token <jwt>`            | All      | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                                  |
-| `--endpoint <url>`         | All      | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                          |
+| Option                    | Commands | Default / resolution                                                        | Purpose                                                                   |
+| ------------------------- | -------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `--holder <name>`         | clear    | `server`                                                                    | Holder of the copy: `server` or a worker instance name; maps to `holder`. |
+| `--idempotency-key <key>` | clear    | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key on a retry.        |
+| `--token <jwt>`           | All      | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                                  |
+| `--endpoint <url>`        | All      | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                          |
 
 The `agent` group declares `--token` and `--endpoint`. Each option except `--endpoint` accepts one occurrence only; a repeat fails with `cli.option.duplicate`. See [client configuration](../README.md#client-configuration).

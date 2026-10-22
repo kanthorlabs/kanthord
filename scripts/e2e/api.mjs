@@ -6,6 +6,7 @@ import { dirname } from "node:path";
 const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ULID_TIME_LENGTH = 10;
 const ULID_BASE = 32;
+const IDEMPOTENCY_KEY_PREFIX = "idempotency_key";
 const NOT_FOUND = 404;
 
 export function ulid() {
@@ -40,7 +41,8 @@ export function client(endpoint, token) {
   async function call(method, path, body) {
     const headers = { authorization: `Bearer ${token}` };
     if (body !== undefined) headers["content-type"] = "application/json";
-    if (method !== "GET") headers["idempotency-key"] = ulid();
+    if (method !== "GET")
+      headers["idempotency-key"] = `${IDEMPOTENCY_KEY_PREFIX}_${ulid()}`;
     const response = await fetch(endpoint + path, {
       method,
       headers,

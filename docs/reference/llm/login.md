@@ -84,7 +84,7 @@ The CLI writes `name: value` rows to stdout, not JSON, and exits `0`. The rows a
 session_id:      login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W
 code:            <user-code>
 expires_at:      2026-10-08T00:15:00.000Z
-idempotency_key: 01M34JC4BJ66JHP41M4MYY6PST
+idempotency_key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 
 address:
 <verification-url>
@@ -97,14 +97,14 @@ The API returns HTTP `200` with `{ "session_id": "<login-session-id>" }`. The CL
 ```json
 {
   "session_id": "login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W",
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property          | Type                   | Surface     | Purpose                                  |
-| ----------------- | ---------------------- | ----------- | ---------------------------------------- |
-| `session_id`      | `login_session_<ulid>` | API and CLI | Session that received the value.         |
-| `idempotency_key` | canonical ULID string  | CLI only    | Key of the request; keep it for a retry. |
+| Property          | Type                            | Surface     | Purpose                                  |
+| ----------------- | ------------------------------- | ----------- | ---------------------------------------- |
+| `session_id`      | `login_session_<ulid>`          | API and CLI | Session that received the value.         |
+| `idempotency_key` | `idempotency_key_<ulid>` string | CLI only    | Key of the request; keep it for a retry. |
 
 ### login-status
 
@@ -151,12 +151,12 @@ A declared failure makes the CLI exit `1` and print `<code>: request failed` and
 
 Local CLI failures exit `1` before a request:
 
-| Code                                                                                                                                        | Meaning                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `cli.llm.credential.login.invalid_mode`                                                                                                     | `--mode` is not `browser`, `device` or `copy_code`. |
-| `cli.llm.credential.login.token_required`, `cli.llm.credential.login_code.token_required`, `cli.llm.credential.login_status.token_required` | No nonblank token resolves.                         |
-| `cli.idempotency_key.invalid`                                                                                                               | `--idempotency-key` is not a canonical ULID.        |
-| `cli.option.duplicate`                                                                                                                      | A single-use option appears twice.                  |
+| Code                                                                                                                                        | Meaning                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `cli.llm.credential.login.invalid_mode`                                                                                                     | `--mode` is not `browser`, `device` or `copy_code`.           |
+| `cli.llm.credential.login.token_required`, `cli.llm.credential.login_code.token_required`, `cli.llm.credential.login_status.token_required` | No nonblank token resolves.                                   |
+| `cli.idempotency_key.invalid`                                                                                                               | `--idempotency-key` is not an `idempotency_key_<ulid>` value. |
+| `cli.option.duplicate`                                                                                                                      | A single-use option appears twice.                            |
 
 ## API shape
 
@@ -169,11 +169,11 @@ Local CLI failures exit `1` before a request:
 
 Every command uses human access and has a 30-second timeout. `llm.credential.login_report` uses `worker` access: only the worker instance of the session calls it, and it answers `204`. Its failures are `404 credential.login.not_found` for an unknown, ended or expired session or a session of another instance, and `400 credential.input.invalid` for a `completed` report without `sealed`, another report with `sealed`, an address that is no `https:` URL, or a second address. A refused write fails the session with its code, for example `400 credential.sealed.invalid`.
 
-| Header            | Required              | Purpose                                                            |
-| ----------------- | --------------------- | ------------------------------------------------------------------ |
-| `Authorization`   | Yes                   | `Bearer <human-jwt>`.                                              |
-| `Content-Type`    | `login`, `login-code` | `application/json`.                                                |
-| `Idempotency-Key` | `login`, `login-code` | Fresh canonical ULID for a new request; reuse it only for a retry. |
+| Header            | Required              | Purpose                                                                      |
+| ----------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `Authorization`   | Yes                   | `Bearer <human-jwt>`.                                                        |
+| `Content-Type`    | `login`, `login-code` | `application/json`.                                                          |
+| `Idempotency-Key` | `login`, `login-code` | Fresh `idempotency_key_<ulid>` for a new request; reuse it only for a retry. |
 
 A retry with the same key, caller and request replays the recorded answer within the process-local idempotency TTL. A replay of `login` returns the recorded session and starts no new session.
 
@@ -185,7 +185,7 @@ The body is `{ platform, name, mode?, holder? }`. `platform` and `name` are requ
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential/login \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"platform":"openai-codex","name":"team-codex","mode":"device"}'
 ```
 
@@ -197,7 +197,7 @@ The path parameter `session_id` is required. The body is `{ value }`, a nonempty
 curl -i -X POST http://127.0.0.1:31415/api/llm/credential/login/login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W/code \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"value":"<redirect-url-or-code>"}'
 ```
 
@@ -213,8 +213,8 @@ curl -i http://127.0.0.1:31415/api/llm/credential/login/login_session_01K6ZB3Q8X
 ## CLI shape
 
 ```text
-kanthord llm credential login <platform> --name <name> [--mode browser|device|copy_code] [--holder <name>] [--idempotency-key <ulid>]
-kanthord llm credential login-code <session> <value> [--idempotency-key <ulid>]
+kanthord llm credential login <platform> --name <name> [--mode browser|device|copy_code] [--holder <name>] [--idempotency-key <key>]
+kanthord llm credential login-code <session> <value> [--idempotency-key <key>]
 kanthord llm credential login-status <session>
 ```
 
@@ -233,14 +233,14 @@ kanthord llm credential login-code login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W '<re
 | `<session>`         | `login-code`, `login-status` | Login session ID; sent as the `session_id` path parameter.                    |
 | `<value>`           | `login-code`                 | Code, redirect URL or `code#state` value that the session awaits.             |
 
-| Option                     | Commands              | Default / resolution                                                        | Purpose                                                             |
-| -------------------------- | --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `--token <jwt>`            | All                   | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                            |
-| `--endpoint <url>`         | All                   | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                    |
-| `--name <name>`            | `login`               | Required                                                                    | Name of the new credential.                                         |
-| `--mode <mode>`            | `login`               | Absent; the platform default applies                                        | `browser`, `device` or `copy_code`.                                 |
-| `--holder <name>`          | `login`               | `server`                                                                    | Holder of the new copy: `server` or a worker instance name.         |
-| `--idempotency-key <ulid>` | `login`, `login-code` | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key for a retry. |
+| Option                    | Commands              | Default / resolution                                                        | Purpose                                                             |
+| ------------------------- | --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `--token <jwt>`           | All                   | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                            |
+| `--endpoint <url>`        | All                   | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                    |
+| `--name <name>`           | `login`               | Required                                                                    | Name of the new credential.                                         |
+| `--mode <mode>`           | `login`               | Absent; the platform default applies                                        | `browser`, `device` or `copy_code`.                                 |
+| `--holder <name>`         | `login`               | `server`                                                                    | Holder of the new copy: `server` or a worker instance name.         |
+| `--idempotency-key <key>` | `login`, `login-code` | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key for a retry. |
 
 Explicit options take precedence. See [client configuration](../README.md#client-configuration) for the private `cli.yaml` file. Each option is single-use. `login-status` rejects `--idempotency-key` as an unknown option. No command prompts for input or waits for completion; call `login-status` again to follow the session.
 

@@ -31,16 +31,16 @@ The CLI adds the retry key, writes one JSON line to stdout, and exits `0` (shown
   "runtime_identity": "<runtime-identity>",
   "resource_identity": "worker:kanthord:<binding-name>",
   "worker_name": "<worker-name>",
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property            | Type                  | Surface     | Purpose                                                                       |
-| ------------------- | --------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `runtime_identity`  | string                | API and CLI | Runtime identity of the worker registration; not a JWT.                       |
-| `resource_identity` | string                | API and CLI | Worker binding of the registration, as `worker:kanthord:<binding name>`.      |
-| `worker_name`       | string                | API and CLI | Name of the worker definition that the binding selects.                       |
-| `idempotency_key`   | canonical ULID string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
+| Property            | Type                            | Surface     | Purpose                                                                       |
+| ------------------- | ------------------------------- | ----------- | ----------------------------------------------------------------------------- |
+| `runtime_identity`  | string                          | API and CLI | Runtime identity of the worker registration; not a JWT.                       |
+| `resource_identity` | string                          | API and CLI | Worker binding of the registration, as `worker:kanthord:<binding name>`.      |
+| `worker_name`       | string                          | API and CLI | Name of the worker definition that the binding selects.                       |
+| `idempotency_key`   | `idempotency_key_<ulid>` string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
 
 Neither response contains a token or expiry. The CLI saves no credential or endpoint.
 
@@ -71,15 +71,15 @@ A declared failure makes the CLI exit `1` and print `<code>: worker register: re
 | Path/query parameters | None                                                                      |
 | Request body          | None; even JSON `{}` is rejected                                          |
 
-| Header            | Required | Purpose                                                                                     |
-| ----------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `Authorization`   | Yes      | `Bearer <machine-jwt>` containing the existing machine credential.                          |
-| `Idempotency-Key` | Yes      | Fresh canonical ULID for a new registration request; retain it for retries of that request. |
+| Header            | Required | Purpose                                                                                               |
+| ----------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `Authorization`   | Yes      | `Bearer <machine-jwt>` containing the existing machine credential.                                    |
+| `Idempotency-Key` | Yes      | Fresh `idempotency_key_<ulid>` for a new registration request; retain it for retries of that request. |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/worker/register \
   -H 'Authorization: Bearer <machine-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 The 40 KiB body limit does not permit a registration payload. Worker runtimes can call this API directly with their existing machine JWT.
@@ -87,22 +87,22 @@ The 40 KiB body limit does not permit a registration payload. Worker runtimes ca
 ## CLI shape
 
 ```text
-kanthord worker register [--token <jwt>] [--endpoint <url>] [--idempotency-key <ulid>]
+kanthord worker register [--token <jwt>] [--endpoint <url>] [--idempotency-key <key>]
 ```
 
 ```sh
 kanthord worker register \
   --token '<machine-jwt>' \
   --endpoint http://127.0.0.1:31415 \
-  --idempotency-key 01M34JC4BJ66JHP41M4MYY6PST
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 ```
 
 There are no positional arguments.
 
-| Option                     | Default / resolution                                                        | Purpose                                                               |
-| -------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `--token <jwt>`            | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Machine JWT sent as the bearer credential.                            |
-| `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                      |
-| `--idempotency-key <ulid>` | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key when retrying. |
+| Option                    | Default / resolution                                                        | Purpose                                                               |
+| ------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `--token <jwt>`           | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Machine JWT sent as the bearer credential.                            |
+| `--endpoint <url>`        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                      |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key when retrying. |
 
 Explicit options take precedence. Prefer `KANTHORD_TOKEN` or a private `cli.yaml` over literal tokens in shell history; see [client configuration](../README.md#client-configuration). The command sends no request body, reads no server configuration, rejects `--config`, and accepts no client-ID or client-secret options. The HTTP client has an 11-second deadline for this 10-second operation.

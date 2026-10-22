@@ -40,14 +40,14 @@ The CLI writes one JSON line to stdout and exits `0` (shown formatted here):
 ```json
 {
   "received": true,
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property          | Type                  | Surface  | Purpose                          |
-| ----------------- | --------------------- | -------- | -------------------------------- |
-| `received`        | boolean, always true  | CLI only | The server returned an envelope. |
-| `idempotency_key` | canonical ULID string | CLI only | Key used for this request.       |
+| Property          | Type                            | Surface  | Purpose                          |
+| ----------------- | ------------------------------- | -------- | -------------------------------- |
+| `received`        | boolean, always true            | CLI only | The server returned an envelope. |
+| `idempotency_key` | `idempotency_key_<ulid>` string | CLI only | Key used for this request.       |
 
 The CLI output contains no envelope, nonce or credential.
 
@@ -89,17 +89,17 @@ A declared failure makes the CLI exit `1` and write `<code>: worker handover: re
 | Path/query parameters | None                                                                          |
 | Request body          | `{ "execution_id": "<execution-id>" }`; JSON, at most 1 KiB                   |
 
-| Header            | Required | Purpose                                          |
-| ----------------- | -------- | ------------------------------------------------ |
-| `Authorization`   | Yes      | `Bearer <machine-jwt>` of the registered client. |
-| `Content-Type`    | Yes      | `application/json`.                              |
-| `Idempotency-Key` | Yes      | Fresh canonical ULID for each handover request.  |
+| Header            | Required | Purpose                                                   |
+| ----------------- | -------- | --------------------------------------------------------- |
+| `Authorization`   | Yes      | `Bearer <machine-jwt>` of the registered client.          |
+| `Content-Type`    | Yes      | `application/json`.                                       |
+| `Idempotency-Key` | Yes      | Fresh `idempotency_key_<ulid>` for each handover request. |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/worker/handover \
   -H 'Authorization: Bearer <machine-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -d '{"execution_id":"<execution-id>"}'
 ```
 
@@ -108,23 +108,23 @@ The `execution_id` is a prefixed identity, for example `execution_<ulid>`; see t
 ## CLI shape
 
 ```text
-kanthord worker handover <execution-id> [--token <jwt>] [--endpoint <url>] [--idempotency-key <ulid>]
+kanthord worker handover <execution-id> [--token <jwt>] [--endpoint <url>] [--idempotency-key <key>]
 ```
 
 ```sh
 kanthord worker handover '<execution-id>' \
   --token '<machine-jwt>' \
-  --idempotency-key 01M34JC4BJ66JHP41M4MYY6PST
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 ```
 
 | Argument         | Purpose                                                         |
 | ---------------- | --------------------------------------------------------------- |
 | `<execution-id>` | Canonical execution identity that the caller's instance claims. |
 
-| Option                     | Default / resolution                                                        | Purpose                                    |
-| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
-| `--token <jwt>`            | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Machine JWT sent as the bearer credential. |
-| `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                           |
-| `--idempotency-key <ulid>` | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header.         |
+| Option                    | Default / resolution                                                        | Purpose                                    |
+| ------------------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
+| `--token <jwt>`           | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Machine JWT sent as the bearer credential. |
+| `--endpoint <url>`        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                           |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header.         |
 
 The CLI checks its input before the request. An invalid execution identity fails with `cli.worker.handover.invalid_execution_id`. A missing token fails with `cli.worker.handover.token_required`. A malformed key fails with `cli.idempotency_key.invalid`. A repeated `--token` or `--idempotency-key` fails with `cli.option.duplicate`. See [client configuration](../README.md#client-configuration) for the token and endpoint precedence. The HTTP client deadline is 31 seconds.

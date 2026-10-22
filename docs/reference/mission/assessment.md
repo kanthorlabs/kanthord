@@ -163,10 +163,10 @@ The example abbreviates each record.
 
 The CLI adds the retry key and writes one JSON line to stdout, then exits `0`:
 
-| Property                        | Type                  | Surface     | Purpose                                                                       |
-| ------------------------------- | --------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `assessment`, `node`, `outcome` | as above              | API and CLI | As above.                                                                     |
-| `idempotency_key`               | canonical ULID string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
+| Property                        | Type                            | Surface     | Purpose                                                                       |
+| ------------------------------- | ------------------------------- | ----------- | ----------------------------------------------------------------------------- |
+| `assessment`, `node`, `outcome` | as above                        | API and CLI | As above.                                                                     |
+| `idempotency_key`               | `idempotency_key_<ulid>` string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
 
 Identity formats follow the [identity reference](../identities.md). Timestamps are integer Unix milliseconds in UTC.
 
@@ -206,7 +206,7 @@ The CLI checks some input before it sends a request. Each local failure exits `1
 | `cli.mission.assessment.get.invalid_assessment_id`                                                                                                                       | `get`            | `<assessment-id>` is not a canonical `assessment_<ulid>` identity.                                                |
 | `cli.mission.assessment.submit.invalid_node_id`                                                                                                                          | `submit`         | `<node-id>` is not a canonical `node_<ulid>` identity.                                                            |
 | `cli.mission.assessment.list.token_required`, `cli.mission.assessment.get.token_required`, `cli.mission.assessment.submit.token_required`                                | Same command     | No nonblank token resolves.                                                                                       |
-| `cli.idempotency_key.invalid`                                                                                                                                            | `submit`         | `--idempotency-key` is not a canonical ULID.                                                                      |
+| `cli.idempotency_key.invalid`                                                                                                                                            | `submit`         | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                                     |
 | `cli.file.invalid_path`, `cli.file.not_found`, `cli.file.not_regular`, `cli.file.encoding_invalid`, `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | `submit`         | `--file` is `-`, absent, not a regular file, not UTF-8, not JSON, holds a duplicate key, or is not a JSON object. |
 | `cli.file.schema_invalid`                                                                                                                                                | `submit`         | The file does not match the `AssessmentSubmit` schema.                                                            |
 | `gateway.request.validation_failed`                                                                                                                                      | All              | The local copy of the operation schema rejects the input.                                                         |
@@ -276,7 +276,7 @@ To read the next page, send the `next_cursor` value as the `cursor` query parame
 | Header            | Required | Purpose                                                               |
 | ----------------- | -------- | --------------------------------------------------------------------- |
 | `Authorization`   | Yes      | `Bearer <machine-jwt>` of the registered worker that holds the claim. |
-| `Idempotency-Key` | Yes      | Canonical ULID; retain it for retries of that request.                |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>`; retain it for retries of that request.      |
 | `Content-Type`    | Yes      | `application/json`.                                                   |
 
 | Body field               | Type                                             | Rule                                                                                                                                                                                                                                                                                                     |
@@ -302,7 +302,7 @@ The required verification commands are the verifications of the pinned revision.
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/assessment \
   -H 'Authorization: Bearer <machine-jwt>' \
-  -H 'Idempotency-Key: 01M4C5G6DGWEVZYSPETSQR65JH' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
   -H 'Content-Type: application/json' \
   -d '{"execution_id":"execution_01M4C5G6BP0355Z52M6JCYZCSK","attempt":1,"node_revision":3,"evidence_ids":["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],"dependency_outcome_ids":[],"result":"success","rationale":"All verification commands passed on the tested commit.","tested_input":{"kind":"repository","binding_id":"binding_01M4C5G6BP5EWTVTTXFH1R25MC","commit":"4b825dc642cb6eb9a060e54bf8d69288fbee4904"}}'
 ```
@@ -355,22 +355,22 @@ kanthord mission assessment get assessment_01M4C5G6BPZCGBK0EFKVT5AXH2
 ### `assessment submit`
 
 ```text
-kanthord mission assessment submit <node-id> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord mission assessment submit <node-id> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
 KANTHORD_TOKEN='<machine-jwt>' kanthord mission assessment submit node_01M4C5G6BNQQPFNM7M8W0GW1W4 \
   --file assessment.json \
-  --idempotency-key 01M4C5G6DGWEVZYSPETSQR65JH
+  --idempotency-key idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH
 ```
 
 | Positional argument | Purpose                                     |
 | ------------------- | ------------------------------------------- |
 | `<node-id>`         | Required `node_<ulid>` of the claimed node. |
 
-| Option                     | Default / resolution       | Purpose                                                                                        |
-| -------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
-| `--file <path>`            | Required                   | Regular UTF-8 file that holds the `AssessmentSubmit` JSON object. Stdin (`-`) is not accepted. |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets the `Idempotency-Key` header; supply the same key when you retry.                         |
+| Option                    | Default / resolution                 | Purpose                                                                                        |
+| ------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `--file <path>`           | Required                             | Regular UTF-8 file that holds the `AssessmentSubmit` JSON object. Stdin (`-`) is not accepted. |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header; supply the same key when you retry.                         |
 
 The CLI sends the file content as the request body. The CLI help labels `--file` as "Node JSON file"; the file holds an `AssessmentSubmit` object.

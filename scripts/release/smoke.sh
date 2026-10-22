@@ -91,7 +91,7 @@ const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 let time = Date.now(), key = "";
 for (let i = 0; i < 10; i++, time = Math.floor(time / 32)) key = alphabet[time % 32] + key;
 for (const byte of require("node:crypto").randomBytes(16)) key += alphabet[byte % 32];
-process.stdout.write(key);
+process.stdout.write(`idempotency_key_${key}`);
 ')
 login=$(curl -fsS -X POST "$endpoint/api/llm/credential/login" \
 	-H "Authorization: Bearer $token" -H "Content-Type: application/json" \

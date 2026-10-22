@@ -63,7 +63,7 @@ No answer contains a secret.
 
 ## Expected response
 
-Every API success returns HTTP `200` with JSON. The CLI writes the same object as one JSON line to stdout and exits `0`. A CLI mutation adds `idempotency_key`, the canonical ULID that it sent.
+Every API success returns HTTP `200` with JSON. The CLI writes the same object as one JSON line to stdout and exits `0`. A CLI mutation adds `idempotency_key`, the `idempotency_key_<ulid>` that it sent.
 
 ### Credential answer
 
@@ -95,20 +95,20 @@ Every API success returns HTTP `200` with JSON. The CLI writes the same object a
 }
 ```
 
-| Property                 | Type                  | Purpose                                                                                              |
-| ------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `name`                   | string                | Credential name.                                                                                     |
-| `platform`               | string                | `github` or `ssh`.                                                                                   |
-| `holder`                 | string                | Always `server`. Only an LLM credential has [instance copies](../llm/credential.md#instance-copies). |
-| `sealed_to`              | `null`                | Always `null`.                                                                                       |
-| `sealed_current`         | boolean               | Always `true`.                                                                                       |
-| `revisions`              | array                 | Every revision, newest first.                                                                        |
-| `revisions[].id`         | string                | Revision identity `credential_<ULID>`.                                                               |
-| `revisions[].revision`   | positive integer      | Revision number; the first is `1`.                                                                   |
-| `revisions[].metadata`   | object or `null`      | Metadata of the revision; `null` for `github`, `{ "public_key", "fingerprint" }` for `ssh`.          |
-| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                                                  |
-| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.                                    |
-| `idempotency_key`        | canonical ULID string | CLI mutations only; key of the request, for a retry.                                                 |
+| Property                 | Type                            | Purpose                                                                                              |
+| ------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `name`                   | string                          | Credential name.                                                                                     |
+| `platform`               | string                          | `github` or `ssh`.                                                                                   |
+| `holder`                 | string                          | Always `server`. Only an LLM credential has [instance copies](../llm/credential.md#instance-copies). |
+| `sealed_to`              | `null`                          | Always `null`.                                                                                       |
+| `sealed_current`         | boolean                         | Always `true`.                                                                                       |
+| `revisions`              | array                           | Every revision, newest first.                                                                        |
+| `revisions[].id`         | string                          | Revision identity `credential_<ULID>`.                                                               |
+| `revisions[].revision`   | positive integer                | Revision number; the first is `1`.                                                                   |
+| `revisions[].metadata`   | object or `null`                | Metadata of the revision; `null` for `github`, `{ "public_key", "fingerprint" }` for `ssh`.          |
+| `revisions[].created_at` | integer                         | Creation time in Unix milliseconds.                                                                  |
+| `revisions[].ended_at`   | integer or `null`               | End time in Unix milliseconds; `null` while the revision is live.                                    |
+| `idempotency_key`        | `idempotency_key_<ulid>` string | CLI mutations only; key of the request, for a retry.                                                 |
 
 An archived credential has no revision with `ended_at` set to `null`.
 
@@ -310,7 +310,7 @@ The CLI exits `1` for every failure and writes a diagnostic line `<code>: <messa
 | `cli.repository.credential.revoke.invalid_revision`                  | revoke                                 | `<revision>` is not a positive safe integer in decimal digits.                           |
 | `cli.pagination.limit_invalid`                                       | list                                   | `--limit` is not a positive safe integer in decimal digits.                              |
 | `cli.pagination.limit_out_of_range`                                  | list                                   | `--limit` is above 1000.                                                                 |
-| `cli.idempotency_key.invalid`                                        | Mutations                              | `--idempotency-key` is not a canonical ULID.                                             |
+| `cli.idempotency_key.invalid`                                        | Mutations                              | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                            |
 | `cli.option.duplicate`                                               | All                                    | An option occurs more than once.                                                         |
 | `cli.file.invalid_path`                                              | create, rotate, update-metadata, check | `--file -`; the CLI does not read stdin.                                                 |
 | `cli.file.not_found`, `cli.file.not_regular`                         | create, rotate, update-metadata, check | The file is absent or is not a regular file.                                             |
@@ -330,11 +330,11 @@ Common properties of every operation:
 | Query   | Closed; an unknown query parameter fails validation                              |
 | Body    | A closed JSON object where a body is accepted; an unknown field fails validation |
 
-| Header            | Required    | Purpose                                                       |
-| ----------------- | ----------- | ------------------------------------------------------------- |
-| `Authorization`   | Yes         | `Bearer <human-jwt>`.                                         |
-| `Content-Type`    | With a body | `application/json`.                                           |
-| `Idempotency-Key` | Mutations   | Canonical ULID; reuse the same key to retry the same request. |
+| Header            | Required    | Purpose                                                                 |
+| ----------------- | ----------- | ----------------------------------------------------------------------- |
+| `Authorization`   | Yes         | `Bearer <human-jwt>`.                                                   |
+| `Content-Type`    | With a body | `application/json`.                                                     |
+| `Idempotency-Key` | Mutations   | `idempotency_key_<ulid>`; reuse the same key to retry the same request. |
 
 The `:credential_name` parameter is a nonempty string. The static paths `/platform`, `/check` and `/ssh/key` take precedence over `/:credential_name`. [SSH keys](ssh-key.md#api-shape) states the two `ssh/key` routes.
 
@@ -424,7 +424,7 @@ curl -i http://127.0.0.1:31415/api/repository/credential/platform \
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"name":"github-main","platform":"github","metadata":null,"secret":{"key":"<github-token>"}}'
 ```
@@ -448,7 +448,7 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential \
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/revision \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":1,"secret":{"key":"<github-token>"}}'
 ```
@@ -471,7 +471,7 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/rev
 ```sh
 curl -i -X PUT http://127.0.0.1:31415/api/repository/credential/github-main/metadata \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":1,"metadata":null}'
 ```
@@ -489,7 +489,7 @@ curl -i -X PUT http://127.0.0.1:31415/api/repository/credential/github-main/meta
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/revision/1/revoke \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ### archive
@@ -505,7 +505,7 @@ curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/rev
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/repository/credential/github-main/archive \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ### check
@@ -538,11 +538,11 @@ kanthord repository credential list [--platform <platform>] [--include-archived]
 kanthord repository credential get <credential-name> [--token <jwt>] [--endpoint <url>]
 kanthord repository credential verify <credential-name> [--token <jwt>] [--endpoint <url>]
 kanthord repository credential platforms [--token <jwt>] [--endpoint <url>]
-kanthord repository credential create --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord repository credential rotate <credential-name> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord repository credential update-metadata <credential-name> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord repository credential revoke <credential-name> <revision> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord repository credential archive <credential-name> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential create --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential rotate <credential-name> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential update-metadata <credential-name> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential revoke <credential-name> <revision> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord repository credential archive <credential-name> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord repository credential check --file <path> [--token <jwt>] [--endpoint <url>]
 ```
 
@@ -554,7 +554,7 @@ kanthord repository credential platforms
 kanthord repository credential create --file ./github-main.json
 kanthord repository credential rotate github-main --file ./github-main-rotate.json
 kanthord repository credential update-metadata github-main --file ./github-main-metadata.json
-kanthord repository credential revoke github-main 1 --idempotency-key 01M34JC4BJ66JHP41M4MYY6PST
+kanthord repository credential revoke github-main 1 --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 kanthord repository credential archive github-main
 kanthord repository credential check --file ./github-main-check.json
 ```
@@ -570,16 +570,16 @@ Invoke `kanthord repository` or `kanthord repository credential` without a comma
 
 ### Options
 
-| Option                     | Commands                                         | Default / resolution                                                  | Purpose                                                                |
-| -------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `--token <jwt>`            | All                                              | `KANTHORD_TOKEN` → client-file token; a nonblank token is required    | Human JWT sent in the `Authorization` header.                          |
-| `--endpoint <url>`         | All                                              | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL.                                                       |
-| `--platform <platform>`    | list                                             | No filter                                                             | Sets query `platform`.                                                 |
-| `--include-archived`       | list                                             | Off; the CLI sends `include_archived=false`                           | Sends `include_archived=true`.                                         |
-| `--limit <count>`          | list                                             | `100`; at most `1000`                                                 | Sets query `limit`.                                                    |
-| `--cursor <cursor>`        | list                                             | No cursor                                                             | Sets query `cursor` to a `next_cursor` value.                          |
-| `--file <path>`            | create, rotate, update-metadata, check           | Required; no default                                                  | JSON file that supplies the request body.                              |
-| `--idempotency-key <ulid>` | create, rotate, update-metadata, revoke, archive | A generated canonical ULID                                            | Sets the `Idempotency-Key` header; supply the same key when you retry. |
+| Option                    | Commands                                         | Default / resolution                                                  | Purpose                                                                |
+| ------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `--token <jwt>`           | All                                              | `KANTHORD_TOKEN` → client-file token; a nonblank token is required    | Human JWT sent in the `Authorization` header.                          |
+| `--endpoint <url>`        | All                                              | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL.                                                       |
+| `--platform <platform>`   | list                                             | No filter                                                             | Sets query `platform`.                                                 |
+| `--include-archived`      | list                                             | Off; the CLI sends `include_archived=false`                           | Sends `include_archived=true`.                                         |
+| `--limit <count>`         | list                                             | `100`; at most `1000`                                                 | Sets query `limit`.                                                    |
+| `--cursor <cursor>`       | list                                             | No cursor                                                             | Sets query `cursor` to a `next_cursor` value.                          |
+| `--file <path>`           | create, rotate, update-metadata, check           | Required; no default                                                  | JSON file that supplies the request body.                              |
+| `--idempotency-key <key>` | create, rotate, update-metadata, revoke, archive | A generated `idempotency_key_<ulid>`                                  | Sets the `Idempotency-Key` header; supply the same key when you retry. |
 
 Each option is single-use. Read commands reject `--idempotency-key` as an unknown option. Explicit options take precedence; see [client configuration](../README.md#client-configuration). Prefer `KANTHORD_TOKEN` or a private `cli.yaml` to a literal token in shell history.
 

@@ -55,31 +55,31 @@ A configuration write validates the default configuration. The default `agent_pr
     }
   ],
   "revision": 1,
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property                                     | Type                  | Surface                  | Purpose                                                                                |
-| -------------------------------------------- | --------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `agent_name`                                 | string                | API and CLI              | Catalog key of the agent.                                                              |
-| `state`                                      | string                | API and CLI              | `enabled` or `disabled`.                                                               |
-| `agent_providers`                            | array                 | API and CLI              | Agent providers. Each name and each credential is unique inside the enablement.        |
-| `agent_providers[].name`                     | string                | API and CLI              | Name of the agent provider; binding entries and the default configuration refer to it. |
-| `agent_providers[].provider`                 | string                | API and CLI              | Provider kind: `openai-compatible` or a built-in provider of pi-ai 1.1.0.              |
-| `agent_providers[].credential`               | string                | API and CLI              | Credential name in custody. The record holds no secret.                                |
-| `default_configuration.agent_provider`       | string                | API and CLI              | Name of the default agent provider.                                                    |
-| `default_configuration.model_identifier`     | string                | API and CLI              | Default model.                                                                         |
-| `default_configuration.reasoning_effort`     | string                | API and CLI              | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.                           |
-| `fallback_configurations`                    | array                 | API and CLI              | Tail of the fallback chain, at most 7 items. `[]` means no fallback.                   |
-| `fallback_configurations[].agent_provider`   | string                | API and CLI              | Name of an agent provider of the enablement.                                           |
-| `fallback_configurations[].model_identifier` | string                | API and CLI              | Model of that agent provider.                                                          |
-| `fallback_configurations[].reasoning_effort` | string                | API and CLI              | A level of that model, from the set of `default_configuration.reasoning_effort`.       |
-| `revision`                                   | integer               | API and CLI              | Revision of this record.                                                               |
-| `idempotency_key`                            | canonical ULID string | CLI only, mutations only | Key used for this request; reuse it to retry the same request.                         |
+| Property                                     | Type                            | Surface                  | Purpose                                                                                |
+| -------------------------------------------- | ------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `agent_name`                                 | string                          | API and CLI              | Catalog key of the agent.                                                              |
+| `state`                                      | string                          | API and CLI              | `enabled` or `disabled`.                                                               |
+| `agent_providers`                            | array                           | API and CLI              | Agent providers. Each name and each credential is unique inside the enablement.        |
+| `agent_providers[].name`                     | string                          | API and CLI              | Name of the agent provider; binding entries and the default configuration refer to it. |
+| `agent_providers[].provider`                 | string                          | API and CLI              | Provider kind: `openai-compatible` or a built-in provider of pi-ai 1.1.0.              |
+| `agent_providers[].credential`               | string                          | API and CLI              | Credential name in custody. The record holds no secret.                                |
+| `default_configuration.agent_provider`       | string                          | API and CLI              | Name of the default agent provider.                                                    |
+| `default_configuration.model_identifier`     | string                          | API and CLI              | Default model.                                                                         |
+| `default_configuration.reasoning_effort`     | string                          | API and CLI              | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.                           |
+| `fallback_configurations`                    | array                           | API and CLI              | Tail of the fallback chain, at most 7 items. `[]` means no fallback.                   |
+| `fallback_configurations[].agent_provider`   | string                          | API and CLI              | Name of an agent provider of the enablement.                                           |
+| `fallback_configurations[].model_identifier` | string                          | API and CLI              | Model of that agent provider.                                                          |
+| `fallback_configurations[].reasoning_effort` | string                          | API and CLI              | A level of that model, from the set of `default_configuration.reasoning_effort`.       |
+| `revision`                                   | integer                         | API and CLI              | Revision of this record.                                                               |
+| `idempotency_key`                            | `idempotency_key_<ulid>` string | CLI only, mutations only | Key used for this request; reuse it to retry the same request.                         |
 
 `list` returns `{ "items": [<record>, ...], "next_cursor": "<cursor>" }`. `next_cursor` is `null` on the last page.
 
-`remove` returns `{ "agent_name": "swe@1", "removed": true }` on the API. The CLI adds the retry key and prints `{ "agent_name": "swe@1", "removed": true, "idempotency_key": "<ulid>" }`.
+`remove` returns `{ "agent_name": "swe@1", "removed": true }` on the API. The CLI adds the retry key and prints `{ "agent_name": "swe@1", "removed": true, "idempotency_key": "idempotency_key_<ulid>" }`.
 
 ### Failures
 
@@ -116,7 +116,7 @@ The CLI checks some input before it sends the request. `<command>` is the comman
 | `cli.pagination.limit_out_of_range`               | list                    | `--limit` is above 1000.                                                             |
 | `cli.agent.enablement.<command>.invalid_revision` | enable, disable, remove | `--expected-revision` is not a positive safe integer.                                |
 | `cli.agent.enablement.<command>.token_required`   | All                     | No option, environment variable or client file supplies a token.                     |
-| `cli.idempotency_key.invalid`                     | Mutations               | `--idempotency-key` is not a canonical ULID.                                         |
+| `cli.idempotency_key.invalid`                     | Mutations               | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                        |
 | `cli.file.invalid_path`                           | put                     | `--file` is `-`; the command does not read stdin.                                    |
 | `cli.file.not_found`, `cli.file.not_regular`      | put                     | The `--file` path does not exist, or is not a regular file.                          |
 | `cli.file.encoding_invalid`, `cli.file.not_json`  | put                     | The file is not UTF-8, or is not one JSON document.                                  |
@@ -128,7 +128,7 @@ A declared failure makes the CLI exit `1` and print `<code>: request failed` and
 
 ## API shape
 
-All operations use `human` access, a 30-second timeout, and the header `Authorization: Bearer <human-jwt>`. Mutations also require `Content-Type: application/json` and an `Idempotency-Key` header with a fresh canonical ULID. The mutation body limit is 64 KiB. The HTTP client of the CLI has a 31-second deadline.
+All operations use `human` access, a 30-second timeout, and the header `Authorization: Bearer <human-jwt>`. Mutations also require `Content-Type: application/json` and an `Idempotency-Key` header with a fresh `idempotency_key_<ulid>`. The mutation body limit is 64 KiB. The HTTP client of the CLI has a 31-second deadline.
 
 | Command   | Method and path                                  | Operation ID               | Mutation |
 | --------- | ------------------------------------------------ | -------------------------- | -------- |
@@ -178,7 +178,7 @@ The body and its objects are closed; an unknown field fails validation.
 ```sh
 curl -s -X PUT http://127.0.0.1:31415/api/agent/enablement/swe@1 \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"agent_providers":[{"name":"main","provider":"anthropic","credential":"<credential-name>"}],"default_configuration":{"agent_provider":"main","model_identifier":"claude-sonnet-4-5","reasoning_effort":"high"},"fallback_configurations":[{"agent_provider":"main","model_identifier":"claude-haiku-4-5","reasoning_effort":"off"}]}'
 ```
@@ -192,7 +192,7 @@ curl -s -X PUT http://127.0.0.1:31415/api/agent/enablement/swe@1 \
 ```sh
 curl -s -X POST http://127.0.0.1:31415/api/agent/enablement/swe@1/disable \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   -d '{"expected_revision":1}'
 ```
@@ -202,10 +202,10 @@ curl -s -X POST http://127.0.0.1:31415/api/agent/enablement/swe@1/disable \
 ```text
 kanthord agent enablement list [--limit <count>] [--cursor <cursor>]
 kanthord agent enablement get <agent-name>
-kanthord agent enablement put <agent-name> --file <path> [--idempotency-key <ulid>]
-kanthord agent enablement enable <agent-name> --expected-revision <revision> [--idempotency-key <ulid>]
-kanthord agent enablement disable <agent-name> --expected-revision <revision> [--idempotency-key <ulid>]
-kanthord agent enablement remove <agent-name> --expected-revision <revision> [--idempotency-key <ulid>]
+kanthord agent enablement put <agent-name> --file <path> [--idempotency-key <key>]
+kanthord agent enablement enable <agent-name> --expected-revision <revision> [--idempotency-key <key>]
+kanthord agent enablement disable <agent-name> --expected-revision <revision> [--idempotency-key <key>]
+kanthord agent enablement remove <agent-name> --expected-revision <revision> [--idempotency-key <key>]
 ```
 
 Each command also accepts `--token <jwt>` and `--endpoint <url>`.
@@ -255,7 +255,7 @@ The `--file` of `put` holds the request body as one JSON object:
 | `--cursor <cursor>`              | list                    | None                                                                        | Sets `cursor`.                                                     |
 | `--file <path>`                  | put                     | Required                                                                    | UTF-8 JSON file with the request body.                             |
 | `--expected-revision <revision>` | enable, disable, remove | Required                                                                    | Sets `expected_revision`.                                          |
-| `--idempotency-key <ulid>`       | Mutations               | A generated canonical ULID                                                  | Sets the `Idempotency-Key` header; supply the same key on a retry. |
+| `--idempotency-key <key>`        | Mutations               | A generated `idempotency_key_<ulid>`                                        | Sets the `Idempotency-Key` header; supply the same key on a retry. |
 | `--token <jwt>`                  | All                     | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                           |
 | `--endpoint <url>`               | All                     | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                   |
 

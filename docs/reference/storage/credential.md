@@ -100,20 +100,20 @@ The mutation commands (`create`, `rotate`, `update-metadata`, `revoke` and `arch
 }
 ```
 
-| Property                 | Type                  | Purpose                                                                                              |
-| ------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `name`                   | string                | Credential name.                                                                                     |
-| `platform`               | string                | Platform of the credential, `s3`.                                                                    |
-| `holder`                 | string                | Always `server`. Only an LLM credential has [instance copies](../llm/credential.md#instance-copies). |
-| `sealed_to`              | `null`                | Always `null`.                                                                                       |
-| `sealed_current`         | boolean               | Always `true`.                                                                                       |
-| `revisions`              | array                 | Every revision of the credential, newest first.                                                      |
-| `revisions[].id`         | string                | Revision identity, `credential_<ulid>`.                                                              |
-| `revisions[].revision`   | positive integer      | Revision number, 1 for the first revision.                                                           |
-| `revisions[].metadata`   | object or `null`      | Metadata of the revision.                                                                            |
-| `revisions[].created_at` | integer               | Creation time in Unix milliseconds.                                                                  |
-| `revisions[].ended_at`   | integer or `null`     | End time in Unix milliseconds; `null` while the revision is live.                                    |
-| `idempotency_key`        | canonical ULID string | CLI only, mutations only. The key of this request; keep it for retries.                              |
+| Property                 | Type                            | Purpose                                                                                              |
+| ------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `name`                   | string                          | Credential name.                                                                                     |
+| `platform`               | string                          | Platform of the credential, `s3`.                                                                    |
+| `holder`                 | string                          | Always `server`. Only an LLM credential has [instance copies](../llm/credential.md#instance-copies). |
+| `sealed_to`              | `null`                          | Always `null`.                                                                                       |
+| `sealed_current`         | boolean                         | Always `true`.                                                                                       |
+| `revisions`              | array                           | Every revision of the credential, newest first.                                                      |
+| `revisions[].id`         | string                          | Revision identity, `credential_<ulid>`.                                                              |
+| `revisions[].revision`   | positive integer                | Revision number, 1 for the first revision.                                                           |
+| `revisions[].metadata`   | object or `null`                | Metadata of the revision.                                                                            |
+| `revisions[].created_at` | integer                         | Creation time in Unix milliseconds.                                                                  |
+| `revisions[].ended_at`   | integer or `null`               | End time in Unix milliseconds; `null` while the revision is live.                                    |
+| `idempotency_key`        | `idempotency_key_<ulid>` string | CLI only, mutations only. The key of this request; keep it for retries.                              |
 
 #### list
 
@@ -328,7 +328,7 @@ Local failures before a request:
 | `cli.pagination.limit_invalid`                   | `list`                                                                    | `--limit` is not a positive decimal integer.                                                           |
 | `cli.pagination.limit_out_of_range`              | `list`                                                                    | `--limit` is greater than 1000.                                                                        |
 | `cli.storage.credential.revoke.invalid_revision` | `revoke`                                                                  | `<revision>` is not a positive decimal integer.                                                        |
-| `cli.idempotency_key.invalid`                    | Mutations                                                                 | `--idempotency-key` is not a canonical ULID.                                                           |
+| `cli.idempotency_key.invalid`                    | Mutations                                                                 | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                          |
 | `cli.file.invalid_path`                          | `create`, `rotate`, `update-metadata`, `check`                            | `--file` is `-`; the CLI does not read stdin.                                                          |
 | `cli.file.not_found`                             | `create`, `rotate`, `update-metadata`, `check`                            | The file does not exist.                                                                               |
 | `cli.file.not_regular`                           | `create`, `rotate`, `update-metadata`, `check`                            | The path is not a regular file.                                                                        |
@@ -352,11 +352,11 @@ All operations on this page share these values:
 | Timeout | 30 seconds; the `verify` and `check` probes have a 10-second deadline inside it |
 | Query   | Closed; only `list` accepts query parameters                                    |
 
-| Header            | Required            | Purpose                                                                      |
-| ----------------- | ------------------- | ---------------------------------------------------------------------------- |
-| `Authorization`   | Yes                 | `Bearer <human-jwt>`.                                                        |
-| `Idempotency-Key` | Yes, mutations only | Fresh canonical ULID for a new mutation; reuse it to retry the same request. |
-| `Content-Type`    | Yes, with a body    | `application/json`.                                                          |
+| Header            | Required            | Purpose                                                                                |
+| ----------------- | ------------------- | -------------------------------------------------------------------------------------- |
+| `Authorization`   | Yes                 | `Bearer <human-jwt>`.                                                                  |
+| `Idempotency-Key` | Yes, mutations only | Fresh `idempotency_key_<ulid>` for a new mutation; reuse it to retry the same request. |
+| `Content-Type`    | Yes, with a body    | `application/json`.                                                                    |
 
 The path parameter `credential_name` is a nonempty string. Encode it as a URL path segment. The routes `/api/storage/credential/platform` and `/api/storage/credential/check` match before `/:credential_name`. For this reason, `platform` and `check` are reserved names.
 
@@ -451,7 +451,7 @@ The component checks the name form first, then the platform, the name availabili
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/storage/credential \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   --data '{"name":"backup-store","platform":"s3","secret":{"access_key_id":"<access-key-id>","secret_access_key":"<secret-access-key>"},"metadata":{"endpoint":"https://s3.eu-central-1.amazonaws.com","bucket":"kanthord-backup","region":"eu-central-1"}}'
 ```
@@ -475,7 +475,7 @@ curl -i -X POST http://127.0.0.1:31415/api/storage/credential \
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/storage/credential/backup-store/revision \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   --data '{"expected_revision":1,"secret":{"access_key_id":"<access-key-id>","secret_access_key":"<secret-access-key>"}}'
 ```
@@ -500,7 +500,7 @@ The body accepts no secret and no platform.
 ```sh
 curl -i -X PUT http://127.0.0.1:31415/api/storage/credential/backup-store/metadata \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   --data '{"expected_revision":2,"metadata":{"endpoint":"https://s3.eu-central-1.amazonaws.com","bucket":"kanthord-archive","region":"eu-central-1"}}'
 ```
@@ -518,7 +518,7 @@ curl -i -X PUT http://127.0.0.1:31415/api/storage/credential/backup-store/metada
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/storage/credential/backup-store/revision/1/revoke \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ### archive
@@ -534,7 +534,7 @@ curl -i -X POST http://127.0.0.1:31415/api/storage/credential/backup-store/revis
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/storage/credential/backup-store/archive \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'
 ```
 
 ### check
@@ -565,11 +565,11 @@ kanthord storage credential list [--platform <platform>] [--include-archived] [-
 kanthord storage credential get <credential-name> [--token <jwt>] [--endpoint <url>]
 kanthord storage credential verify <credential-name> [--token <jwt>] [--endpoint <url>]
 kanthord storage credential platforms [--token <jwt>] [--endpoint <url>]
-kanthord storage credential create --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord storage credential rotate <credential-name> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord storage credential update-metadata <credential-name> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord storage credential revoke <credential-name> <revision> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
-kanthord storage credential archive <credential-name> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord storage credential create --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord storage credential rotate <credential-name> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord storage credential update-metadata <credential-name> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord storage credential revoke <credential-name> <revision> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
+kanthord storage credential archive <credential-name> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord storage credential check --file <path> [--token <jwt>] [--endpoint <url>]
 ```
 
@@ -586,9 +586,9 @@ Both options belong to the `storage` group. They are valid before or after the c
 
 The mutation commands also accept this option. The read commands `list`, `get`, `verify`, `platforms` and `check` reject it.
 
-| Option                     | Default / resolution       | Purpose                                                                |
-| -------------------------- | -------------------------- | ---------------------------------------------------------------------- |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets the `Idempotency-Key` header. Supply the same key when you retry. |
+| Option                    | Default / resolution                 | Purpose                                                                |
+| ------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header. Supply the same key when you retry. |
 
 ### File rules
 
@@ -652,7 +652,7 @@ There are no positional arguments and no command options.
 ```sh
 kanthord storage credential create \
   --file ./backup-store.json \
-  --idempotency-key 01M34JC4BJ66JHP41M4MYY6PST
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 ```
 
 The file holds the `create` body. All four members are required:

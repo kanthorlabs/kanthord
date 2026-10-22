@@ -99,7 +99,7 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `cli.mission.criterion.set.token_required`  | No nonblank token resolves.                                                                                                                              |
 | `cli.mission.criterion.set.indeterminate`   | A transport failure, a timeout or a malformed answer. Retry with the printed key.                                                                        |
 | `cli.file.*`                                | `--file` is absent, not a regular file, `-`, not UTF-8, not JSON, has a repeated key, is not an object, or fails the schema (`cli.file.schema_invalid`). |
-| `cli.idempotency_key.invalid`               | `--idempotency-key` is not a canonical ULID.                                                                                                             |
+| `cli.idempotency_key.invalid`               | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                                                                            |
 
 ## API shape
 
@@ -124,17 +124,17 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 
 The body accepts no unknown field.
 
-| Header            | Required | Purpose                                            |
-| ----------------- | -------- | -------------------------------------------------- |
-| `Authorization`   | Yes      | `Bearer <human-jwt>`.                              |
-| `Content-Type`    | Yes      | `application/json`.                                |
-| `Idempotency-Key` | Yes      | Canonical ULID; retain it to retry the same write. |
+| Header            | Required | Purpose                                                      |
+| ----------------- | -------- | ------------------------------------------------------------ |
+| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                        |
+| `Content-Type`    | Yes      | `application/json`.                                          |
+| `Idempotency-Key` | Yes      | `idempotency_key_<ulid>`; retain it to retry the same write. |
 
 ```sh
 curl -i -X PUT http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/criterion \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
   -d '{"criterion":"A user with valid credentials reaches the dashboard, and the audit log records the login.","verifications":["pnpm test","pnpm test:audit"],"reason":"Require an audit log entry","expected_revision":3,"expected_mission_version":9}'
 ```
 
@@ -143,23 +143,23 @@ The Gateway keeps the answer of a mutation for its idempotency key in process me
 ## CLI shape
 
 ```text
-kanthord mission criterion set <node-id> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord mission criterion set <node-id> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
 kanthord mission criterion set node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file criterion.json \
-  --idempotency-key 01M4C5J3SBXJ52XQ9FSFRTK4PR
+  --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR
 ```
 
 | Positional argument | Purpose                 |
 | ------------------- | ----------------------- |
 | `<node-id>`         | Required `node_<ulid>`. |
 
-| Option                     | Default / resolution                                                        | Purpose                                               |
-| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `--file <path>`            | Required; no default                                                        | JSON file with the complete request body.             |
-| `--idempotency-key <ulid>` | A generated canonical ULID                                                  | Sets `Idempotency-Key`; supply the same key to retry. |
-| `--token <jwt>`            | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.              |
-| `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                      |
+| Option                    | Default / resolution                                                        | Purpose                                               |
+| ------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `--file <path>`           | Required; no default                                                        | JSON file with the complete request body.             |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>`                                        | Sets `Idempotency-Key`; supply the same key to retry. |
+| `--token <jwt>`           | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.              |
+| `--endpoint <url>`        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                      |
 
 The CLI validates the ID, the token, the key and the file before it sends a request. Each option is accepted once. See [client configuration](../README.md#client-configuration). The HTTP client has a 31-second deadline.

@@ -151,7 +151,7 @@ A read prints `<code>: request failed` and the row `status`. A mutation prints `
 ```text
 credential.name.conflict: request failed
 status:          409
-idempotency_key: 01M34JC4BJ66JHP41M4MYY6PST
+idempotency_key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
 details:         {"id":"credential_01K6ZB3Q8X2M4N5P6R7S8T9V0W"}
 ```
 

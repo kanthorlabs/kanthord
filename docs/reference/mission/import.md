@@ -190,7 +190,7 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `cli.file.invalid_path`                                                                           | `--file` is `-`; the CLI does not read stdin.                                                 |
 | `cli.file.encoding_invalid`, `cli.file.not_json`, `cli.file.duplicate_key`, `cli.file.not_object` | `--file` is not UTF-8, not JSON, has a repeated key, or is not an object.                     |
 | `cli.file.schema_invalid`                                                                         | The completed body fails the request schema.                                                  |
-| `cli.idempotency_key.invalid`                                                                     | `--idempotency-key` is not a canonical ULID.                                                  |
+| `cli.idempotency_key.invalid`                                                                     | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                                 |
 
 `<action>` is `preview` or `apply`.
 
@@ -249,17 +249,17 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 
 The body accepts no unknown field.
 
-| Header            | Required   | Purpose                                            |
-| ----------------- | ---------- | -------------------------------------------------- |
-| `Authorization`   | Yes        | `Bearer <human-jwt>`.                              |
-| `Content-Type`    | Yes        | `application/json`.                                |
-| `Idempotency-Key` | Apply only | Canonical ULID; retain it to retry the same apply. |
+| Header            | Required   | Purpose                                                      |
+| ----------------- | ---------- | ------------------------------------------------------------ |
+| `Authorization`   | Yes        | `Bearer <human-jwt>`.                                        |
+| `Content-Type`    | Yes        | `application/json`.                                          |
+| `Idempotency-Key` | Apply only | `idempotency_key_<ulid>`; retain it to retry the same apply. |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/import \
   -H 'Authorization: Bearer <human-jwt>' \
   -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: 01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
   -d '{"format":"json","mission_id":"mission_01M4C5J3SA6W8RBBC92HA9SSDS","mission_version":7,"reason":"Add sign-up","entries":[],"preview_digest":"<digest>","confirmed_retirements":[]}'
 ```
 
@@ -269,13 +269,13 @@ The Gateway keeps the answer of a mutation for its idempotency key in process me
 
 ```text
 kanthord mission import preview <mission-id> [plan-file...] --file <path> [--token <jwt>] [--endpoint <url>]
-kanthord mission import apply <mission-id> [plan-file...] --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord mission import apply <mission-id> [plan-file...] --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
 kanthord mission import preview mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --file import.json
 kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md \
-  --file apply.json --idempotency-key 01M4C5J3SBXJ52XQ9FSFRTK4PR
+  --file apply.json --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR
 ```
 
 | Positional argument | Purpose                                                             |
@@ -283,12 +283,12 @@ kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md \
 | `<mission-id>`      | Required `mission_<ulid>`.                                          |
 | `[plan-file...]`    | Markdown plan files in import order. Only for `format: "markdown"`. |
 
-| Option                     | Default / resolution                                                        | Purpose                                                             |
-| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `--file <path>`            | Required; no default                                                        | JSON file with the import controls and, for JSON format, `entries`. |
-| `--idempotency-key <ulid>` | Apply only; a generated canonical ULID                                      | Sets `Idempotency-Key`; supply the same key to retry.               |
-| `--token <jwt>`            | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                            |
-| `--endpoint <url>`         | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                    |
+| Option                    | Default / resolution                                                        | Purpose                                                             |
+| ------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `--file <path>`           | Required; no default                                                        | JSON file with the import controls and, for JSON format, `entries`. |
+| `--idempotency-key <key>` | Apply only; a generated `idempotency_key_<ulid>`                            | Sets `Idempotency-Key`; supply the same key to retry.               |
+| `--token <jwt>`           | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.                            |
+| `--endpoint <url>`        | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                                                    |
 
 The CLI builds the request body from `--file` as follows:
 

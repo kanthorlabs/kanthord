@@ -84,15 +84,15 @@ The CLI adds the retry key, writes one JSON line to stdout and exits `0` (shown 
 {
   "runtime_identity": "worker_registration_01M34JC4BJ66JHP41M4MYY6PST",
   "registered": false,
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PSD"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD"
 }
 ```
 
-| Property           | Type                  | Surface     | Purpose                                                 |
-| ------------------ | --------------------- | ----------- | ------------------------------------------------------- |
-| `runtime_identity` | string                | API and CLI | Runtime identity from the request path.                 |
-| `registered`       | boolean               | API and CLI | `true` after resume; `false` after deregister.          |
-| `idempotency_key`  | canonical ULID string | CLI only    | Key used for this request; supply it again for a retry. |
+| Property           | Type                            | Surface     | Purpose                                                 |
+| ------------------ | ------------------------------- | ----------- | ------------------------------------------------------- |
+| `runtime_identity` | string                          | API and CLI | Runtime identity from the request path.                 |
+| `registered`       | boolean                         | API and CLI | `true` after resume; `false` after deregister.          |
+| `idempotency_key`  | `idempotency_key_<ulid>` string | CLI only    | Key used for this request; supply it again for a retry. |
 
 ### Failures
 
@@ -182,15 +182,15 @@ The list and get operations take only the `Authorization: Bearer <human-jwt>` he
 | Query parameters | None                                                          |
 | Request body     | None                                                          |
 
-| Header            | Required | Purpose                                                        |
-| ----------------- | -------- | -------------------------------------------------------------- |
-| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                          |
-| `Idempotency-Key` | Yes      | Fresh canonical ULID for a new request; retain it for retries. |
+| Header            | Required | Purpose                                                                  |
+| ----------------- | -------- | ------------------------------------------------------------------------ |
+| `Authorization`   | Yes      | `Bearer <human-jwt>`.                                                    |
+| `Idempotency-Key` | Yes      | Fresh `idempotency_key_<ulid>` for a new request; retain it for retries. |
 
 ```sh
 curl -i -X POST http://127.0.0.1:31415/api/worker/registration/<runtime-identity>/resume \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PSD'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD'
 ```
 
 ### `worker registration deregister`
@@ -206,15 +206,15 @@ curl -i -X POST http://127.0.0.1:31415/api/worker/registration/<runtime-identity
 | Query parameters | None                                                               |
 | Request body     | None                                                               |
 
-| Header            | Required | Purpose                                                          |
-| ----------------- | -------- | ---------------------------------------------------------------- |
-| `Authorization`   | Yes      | `Bearer <machine-jwt>` of the client that owns the registration. |
-| `Idempotency-Key` | Yes      | Fresh canonical ULID for a new request; retain it for retries.   |
+| Header            | Required | Purpose                                                                  |
+| ----------------- | -------- | ------------------------------------------------------------------------ |
+| `Authorization`   | Yes      | `Bearer <machine-jwt>` of the client that owns the registration.         |
+| `Idempotency-Key` | Yes      | Fresh `idempotency_key_<ulid>` for a new request; retain it for retries. |
 
 ```sh
 curl -i -X DELETE http://127.0.0.1:31415/api/worker/registration/<runtime-identity> \
   -H 'Authorization: Bearer <machine-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PSD'
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD'
 ```
 
 After the registration ends, a retry with the same key replays the recorded `200` answer. A new key answers `404 worker.registration.not_found`.
@@ -275,16 +275,16 @@ kanthord worker registration resume <runtime-identity> [--idempotency-key <key>]
 
 ```sh
 kanthord worker registration resume worker_registration_01M34JC4BJ66JHP41M4MYY6PST \
-  --idempotency-key 01M34JC4BJ66JHP41M4MYY6PSD
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD
 ```
 
 | Argument             | Purpose                                   |
 | -------------------- | ----------------------------------------- |
 | `<runtime-identity>` | Canonical `worker_registration` identity. |
 
-| Option                    | Default / resolution       | Purpose                                                             |
-| ------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| `--idempotency-key <key>` | A generated canonical ULID | Sets the `Idempotency-Key` header; supply the same key for a retry. |
+| Option                    | Default / resolution                 | Purpose                                                             |
+| ------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header; supply the same key for a retry. |
 
 An invalid identity fails with `cli.worker.registration.resume.invalid_runtime_identity`. A missing token fails with `cli.worker.registration.resume.token_required`. A malformed key fails with `cli.idempotency_key.invalid`.
 
@@ -297,16 +297,16 @@ kanthord worker registration deregister <runtime-identity> [--idempotency-key <k
 ```sh
 kanthord worker registration deregister worker_registration_01M34JC4BJ66JHP41M4MYY6PST \
   --token '<machine-jwt>' \
-  --idempotency-key 01M34JC4BJ66JHP41M4MYY6PSD
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD
 ```
 
 | Argument             | Purpose                                   |
 | -------------------- | ----------------------------------------- |
 | `<runtime-identity>` | Canonical `worker_registration` identity. |
 
-| Option                    | Default / resolution       | Purpose                                                             |
-| ------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| `--idempotency-key <key>` | A generated canonical ULID | Sets the `Idempotency-Key` header; supply the same key for a retry. |
+| Option                    | Default / resolution                 | Purpose                                                             |
+| ------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets the `Idempotency-Key` header; supply the same key for a retry. |
 
 An invalid identity fails with `cli.worker.registration.deregister.invalid_runtime_identity`. A missing token fails with `cli.worker.registration.deregister.token_required`. A malformed key fails with `cli.idempotency_key.invalid`.
 

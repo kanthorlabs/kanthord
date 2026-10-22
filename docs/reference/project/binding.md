@@ -277,17 +277,17 @@ The response is one binding record with the fields of the list items.
   "changes": [
     { "kind": "revised", "binding_id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4" }
   ],
-  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property              | Type                  | Surface     | Purpose                                                                 |
-| --------------------- | --------------------- | ----------- | ----------------------------------------------------------------------- |
-| `project_id`          | string                | API and CLI | Project ID.                                                             |
-| `binding_set_version` | positive integer      | API and CLI | Binding set version after the apply.                                    |
-| `bindings`            | object                | API and CLI | Map from name to the binding record of each current binding.            |
-| `changes`             | array                 | API and CLI | One `{ "kind", "binding_id" }` item for each submitted or removed name. |
-| `idempotency_key`     | canonical ULID string | CLI only    | Key of this request. Supply it again to retry the same request.         |
+| Property              | Type                            | Surface     | Purpose                                                                 |
+| --------------------- | ------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| `project_id`          | string                          | API and CLI | Project ID.                                                             |
+| `binding_set_version` | positive integer                | API and CLI | Binding set version after the apply.                                    |
+| `bindings`            | object                          | API and CLI | Map from name to the binding record of each current binding.            |
+| `changes`             | array                           | API and CLI | One `{ "kind", "binding_id" }` item for each submitted or removed name. |
+| `idempotency_key`     | `idempotency_key_<ulid>` string | CLI only    | Key of this request. Supply it again to retry the same request.         |
 
 ### project binding revision list
 
@@ -450,7 +450,7 @@ The CLI checks its input before it sends a request. Each local failure exits `1`
 | `cli.project.binding.list.invalid_state`           | `list`                                                | `--state` is not `current`, `removed` or `all`.                                        |
 | `cli.pagination.limit_invalid`                     | `list`, `revision list`                               | `--limit` is not a positive decimal integer.                                           |
 | `cli.pagination.limit_out_of_range`                | `list`, `revision list`                               | `--limit` is more than `1000`.                                                         |
-| `cli.idempotency_key.invalid`                      | `apply`                                               | `--idempotency-key` is not a canonical ULID.                                           |
+| `cli.idempotency_key.invalid`                      | `apply`                                               | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                          |
 | `cli.file.invalid_path`                            | `apply`, `check`                                      | `--file` is `-`. The CLI does not read stdin.                                          |
 | `cli.file.not_found`                               | `apply`, `check`                                      | The file does not exist.                                                               |
 | `cli.file.not_regular`                             | `apply`, `check`                                      | The path is not a regular file.                                                        |
@@ -498,11 +498,11 @@ Every operation has `human` access: it requires a human bearer JWT.
 
 The body limit is 10 MiB.
 
-| Header            | Required         | Purpose                                                                |
-| ----------------- | ---------------- | ---------------------------------------------------------------------- |
-| `Authorization`   | Yes              | `Bearer <human-jwt>`.                                                  |
-| `Idempotency-Key` | `apply`          | Fresh canonical ULID for a new request. Keep it to retry that request. |
-| `Content-Type`    | `apply`, `check` | `application/json`.                                                    |
+| Header            | Required         | Purpose                                                                          |
+| ----------------- | ---------------- | -------------------------------------------------------------------------------- |
+| `Authorization`   | Yes              | `Bearer <human-jwt>`.                                                            |
+| `Idempotency-Key` | `apply`          | Fresh `idempotency_key_<ulid>` for a new request. Keep it to retry that request. |
+| `Content-Type`    | `apply`, `check` | `application/json`.                                                              |
 
 ```sh
 curl -i 'http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding?kind=repository&kind=worker&state=all' \
@@ -513,7 +513,7 @@ curl -i http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/bi
 
 curl -i -X PUT http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding-set \
   -H 'Authorization: Bearer <human-jwt>' \
-  -H 'Idempotency-Key: 01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
   --data-binary @bindings.json
 
@@ -603,7 +603,7 @@ An example `repository.json` for `check`, with the configuration of `app` above:
 kanthord project binding list <project-id> [--kind <kind>]... [--state <state>] [--limit <count>] [--cursor <cursor>] [--token <jwt>] [--endpoint <url>]
 kanthord project binding get <project-id> <binding-id> [--token <jwt>] [--endpoint <url>]
 kanthord project binding export <project-id> [--token <jwt>] [--endpoint <url>]
-kanthord project binding apply <project-id> --file <path> [--idempotency-key <ulid>] [--token <jwt>] [--endpoint <url>]
+kanthord project binding apply <project-id> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord project binding revision list <project-id> <binding-id> [--limit <count>] [--cursor <cursor>] [--token <jwt>] [--endpoint <url>]
 kanthord project binding verify <project-id> <binding-id> [--token <jwt>] [--endpoint <url>]
 kanthord project binding instruction-files <project-id> <binding-id> [--token <jwt>] [--endpoint <url>]
@@ -644,10 +644,10 @@ There are no command options.
 
 ### project binding apply
 
-| Option                     | Default / resolution       | Purpose                                                            |
-| -------------------------- | -------------------------- | ------------------------------------------------------------------ |
-| `--file <path>`            | Required                   | JSON file with the complete binding set: `version` and `bindings`. |
-| `--idempotency-key <ulid>` | A generated canonical ULID | Sets `Idempotency-Key`. Supply the same key to retry.              |
+| Option                    | Default / resolution                 | Purpose                                                            |
+| ------------------------- | ------------------------------------ | ------------------------------------------------------------------ |
+| `--file <path>`           | Required                             | JSON file with the complete binding set: `version` and `bindings`. |
+| `--idempotency-key <key>` | A generated `idempotency_key_<ulid>` | Sets `Idempotency-Key`. Supply the same key to retry.              |
 
 The CLI reads the file as UTF-8 JSON, refuses repeated keys, and checks it against the request schema before it sends the request. The output of `export` is a valid input file.
 
