@@ -49,7 +49,7 @@ The binary contains the server, the CLI and the dashboard. It needs no Node.js a
 
 Get the binary for your machine and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases): `kanthord-darwin-arm64`, `kanthord-linux-x64` or `kanthord-linux-arm64`. To build the binary from a checkout of this repository instead, run `make bootstrap`, then `make release-build`. The build needs an official Node.js 24 build, 24.15 or later, and `pnpm`. On a Mac, it also needs `codesign` and refuses a Node.js of Homebrew. The file is then `dist/kanthord-<os>-<arch>` of the checkout, for example `dist/kanthord-darwin-arm64`. Run the install commands below in `dist/`.
 
-If you downloaded the file, check it against `SHA256SUMS`. On a Mac:
+If you downloaded the file, check it against `SHA256SUMS` and unlock it. A file that you built needs neither step. On a Mac:
 
 ```sh
 shasum -a 256 --ignore-missing -c SHA256SUMS
@@ -85,7 +85,7 @@ The worker passes only these variables of the server to a command: `PATH`, `HOME
 GIT_AUTHOR_NAME="<git name>" GIT_AUTHOR_EMAIL="<git email>" GIT_COMMITTER_NAME="<git name>" GIT_COMMITTER_EMAIL="<git email>" kanthord serve
 ```
 
-- The `GIT_*` variables set the identity of the commits that the agents make. The worker reads no git configuration of your machine. Without the variables, a commit has the author and the committer `kanthord <kanthord@localhost>`. The worker makes every commit of the node branch, so your `~/.gitconfig` does not set the identity. A `git` command that an agent runs itself can still read `~/.gitconfig`, because the command gets your `HOME`.
+- The `GIT_*` variables set the identity of the commits that the agents make. The worker reads no git configuration of your machine. Without the variables, a commit has the author and the committer `kanthord <kanthord@localhost>`. The worker makes every commit of the node branch, so your `~/.gitconfig` does not set the identity. A `git` command that an agent runs itself can still read `~/.gitconfig`, because the command gets your `HOME`. An agent commit does not stay on the branch: after each turn, the worker folds it into the worker commit, with the identity of the `GIT_*` variables.
 - Keep this terminal open. The server writes its log records to this terminal. To stop the server, press `Ctrl+C`.
 
 The record `"msg":"Gateway Service started. A loopback bind accepts connections from this host only."` has the level `info`, that is `"level":30`, and the fields `bind` and `port`. On your machine, `bind` is `127.0.0.1` and `port` is `31415`.
