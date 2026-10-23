@@ -119,6 +119,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A rebuildable artifact uses the cache directory, because the deletion of that directory costs nothing.
 - The state directory holds the log file under the `file` destination.
 - The server writes no file in the cache directory today.
+- The state directory holds `environments/` of the [Onboarding component](project-service.impl.md#the-onboarding-component): one directory for each identity path with the proof file of each digest, and one `run-<id>/` directory for each active run.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
 - The SSH agent directory of a network git operation lives in the system temporary directory. The reason: its socket path holds at most 100 bytes.
 
@@ -1424,6 +1425,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 | Worker bindings    | The binding set holds a worker binding.                                                                       | `Open bindings` opens the Bindings tab.                                                                                                                                                                                                                           |
 | Live registrations | One worker binding or more asks for an instance, and each of them holds a live registration.                  | `Open workers` opens `/workers?project=<project>`.                                                                                                                                                                                                                |
 | Enabled agents     | The project holds a worker binding, and each agent of a hosted worker that a worker binding names is enabled. | With each named agent enabled, `Open agents` opens `/agents`. With an agent LLM credential, `Enable agents` opens `/llm/<credential>#enable-agents`. Otherwise `Enable <agent>` opens `/agents/<agent>#enablement` for the first named agent that is not enabled. |
+| Environment        | Each repository binding holds an environment with the status `none` or `ready`.                               | `Open bindings` opens the Bindings tab. A failed environment opens the sheet of its binding at its `Environment` section.                                                                                                                                         |
 | Plan import        | The mission holds one node or more.                                                                           | `Open mission` opens the Mission tab.                                                                                                                                                                                                                             |
 | Project active     | The project is not paused.                                                                                    | No link. The `Resume` button of the project page resumes it.                                                                                                                                                                                                      |
 
@@ -1431,11 +1433,27 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - A live registration is not draining and carries the resource identity of the worker binding.
 - At the `worker` placement, a listed instance with no connection sets the detail "Instance <name> is not connected. Start kanthord serve worker with its configuration."
 - A project whose worker bindings name no agent of a hosted worker shows `Enabled agents` as `Done`.
+- The item `Environment` takes the environment states of the [environment bar](#the-environment-bar). Its detail names each binding that is not `none` or `ready`, with its status and, for `failed`, its class, for example "engine: failed, command_absent".
 - The panel reads the binding set, the worker bindings, the registrations, the worker instance records, the agents, the LLM credentials, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change shows only after a browser reload or a new open of the project page. A plan import and a new live registration are examples. Until then the item keeps its old state, for example `Plan import` stays `Open`.
 - A failed read shows in an alert with `Retry`. An item of that read shows `Open`. Its detail line does not state the failed read. It states an absence, for example "The project holds no repository binding."
 - The links of the panel pass no `return_to`. After the save of the `Enable agents` sheet, the human stays on the detail of the LLM credential.
 - The `Enable agents` sheet lists every agent that is not enabled, also an agent that no worker binding of the project names.
 - [The onboarding steps](#the-onboarding-steps) define an agent LLM credential. `<credential>` is the first agent LLM credential in name order.
+
+### The environment bar
+
+- The project page shows the environment bar while an environment of the project onboards or failed. The bar tracks the [Onboarding component](project-service.impl.md#the-onboarding-component), which runs in the background.
+- The page reads `project.environment.list` with `usePolledResource`: every 5 seconds while a state is `pending`, `building` or `proving`, and every 30 seconds otherwise. A hidden document reads nothing. No route streams.
+- The bar sticks to the top of the content area, below the top bar of the shell, above the header of the project. It stays on both tabs of the project page.
+- The bar shows one environment: the first `failed` state, else the state with the earliest `run_started_at` among `pending`, `building` and `proving`. With more states that are not `none` or `ready`, it adds "and <n> more".
+- It shows the status badge `Pending`, `Building`, `Proving`, `Ready` or `Failed`, the binding name, the step line and the elapsed time of the step, for example "engine · Building the image · 2 min".
+- The step lines are "Reading the repository", "Building the image", "Proving on the base branch head" and "Ready". A failed state shows "Failed: <class>" and the command, for example "Failed: command_absent · pnpm".
+- A `Progress` of shadcn shows the step: at the `image` target, read, build and proof are steps 1 to 3 of 3; at the `host` target, read and proof are steps 1 and 2 of 2. A failed state shows no progress.
+- The bar holds `Details`. It opens `/projects/<project>?tab=bindings&environment=<binding name>`.
+- The text of the bar is a polite live region, so a screen reader hears each change of the step.
+- When every state becomes `none` or `ready` while the page is open, the bar shows `Ready` for 10 seconds and then hides. A page that opens with every state `none` or `ready` shows no bar.
+- Below `md`, the bar takes two rows: the badge, the binding name and the elapsed time, then the step line and the progress. `Details` takes the full width below `sm`. No content scrolls sideways.
+- The Overview lists each failed environment in the group `Fixes` with the cause "Environment failed". The text reads "<binding> of <project> failed: <class>. Workers claim no node of it." Its action `Open project` opens the project page.
 
 ## The dashboard toasts
 
