@@ -46,11 +46,11 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 
 ## 1. Start KanthorD
 
-KanthorD contains the server, the CLI and the dashboard. It needs no container runtime.
+The npm package and the single binary contain the server, the CLI and the dashboard. Neither needs a container runtime.
 
 ### 1.1 Install KanthorD
 
-Today the package is not published. A server that starts from a build of the package stops with `worker.start.tool_missing`, because the package holds no `rg` or `fd`. The package also serves no dashboard. Until the first release, use the single binary below.
+Today the package is not published. Until the first release, use the single binary below.
 
 After the first release, install the npm package:
 
