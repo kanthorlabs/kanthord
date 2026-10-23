@@ -2,22 +2,25 @@
 
 [Tutorials](README.md)
 
-This tutorial starts with the install of the KanthorD binary on your machine and ends with the first task of a mission complete. You follow the Onboarding page of the dashboard. The dashboard leads you through each setup step and returns to Onboarding after each save.
+This tutorial starts with the install of KanthorD on your machine and ends with the first task of a mission complete. You follow the Onboarding page of the dashboard. The dashboard leads you through each setup step and returns to Onboarding after each save.
 
 KanthorD runs on the machine where you already build and test your project. The workers of this tutorial use the `server` placement: the server runs each worker instance as a thread of the server process. The agent commands and the verifications therefore use the tools of your machine, for example `git`, `node` or `pytest`. You write no environment configuration.
 
 At the end, you have these results:
 
-- KanthorD runs from the single binary on your machine.
+- KanthorD runs on your machine, from the npm package or the single binary.
 - Two agents are enabled: `swe@1` writes the code, and `re@1` reviews it.
 - A project binds your GitHub repository and two workers: `coder@1` and `reviewer@1`.
 - A plan of one node is imported. `coder@1` pushed a commit to the branch `kanthord/<node_id>` of your repository, and `reviewer@1` passed it. The node is `Completed`.
+
+**Status today:** KanthorD has no public release yet. Until the first release, only a contributor who builds the single binary can do step 1. Steps 2 to 11 are the same for every install.
 
 In KanthorD, a **node** is one unit of work of a mission. A **task** is one step of a node. The plan of this tutorial has one `implement` node with no task file. Such a node is its own single work unit, so "the first task" of this tutorial is that node.
 
 ## What you need
 
-- A Mac with Apple silicon, or a Linux machine with an x64 or arm64 CPU. No binary exists for a Mac with an Intel CPU. A browser on the same machine.
+- A Mac with Apple silicon, or a Linux machine with an x64 or arm64 CPU. KanthorD supports no Mac with an Intel CPU, with the npm package or with the single binary. A browser on the same machine.
+- For the npm package: Node.js 24, version 24.15.0 or later, with `npm`. Node.js 25 and later do not run KanthorD. Check it with `node --version`. [The single binary](#install-the-single-binary-instead) needs no Node.js.
 - On that machine: `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent`, `ssh-add` and `ssh-keyscan`. The server does not start without them. Check them with `git --version` and `ssh -V`. On a Mac, an older Apple git fails the check. Install a newer git, for example with Homebrew.
 - The tools that your project needs to build and test, on the `PATH` of the terminal that starts the server. The sample plan of step 10 needs only `head` and `grep`.
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
@@ -43,11 +46,24 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 
 ## 1. Start KanthorD
 
-The binary contains the server, the CLI and the dashboard. It needs no Node.js and no container runtime.
+The npm package and the single binary contain the server, the CLI and the dashboard. Neither needs a container runtime.
 
-### 1.1 Install the binary
+### 1.1 Install KanthorD
 
-Get the binary for your machine and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases): `kanthord-darwin-arm64`, `kanthord-linux-x64` or `kanthord-linux-arm64`.
+Today the package is not published. Until the first release, use the single binary below.
+
+After the first release, install the npm package:
+
+```sh
+npm i -g @kanthorlabs/kanthord
+kanthord --help
+```
+
+The package installs the command `kanthord`. The first release of the package holds the dashboard and the pinned `rg` and `fd` tools of your platform.
+
+#### Install the single binary instead
+
+The single binary needs no Node.js. Get the binary for your machine and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases): `kanthord-darwin-arm64`, `kanthord-linux-x64` or `kanthord-linux-arm64`.
 
 Today the releases page holds no release. Until the first release, only a contributor can build the binary from a checkout of this repository. See [Contribute](https://github.com/kanthorlabs/kanthord#contribute).
 
