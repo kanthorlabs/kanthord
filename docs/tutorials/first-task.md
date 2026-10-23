@@ -13,11 +13,13 @@ At the end, you have these results:
 - A project binds your GitHub repository and two workers: `coder@1` and `reviewer@1`.
 - A plan of one node is imported. `coder@1` pushed a commit to the branch `kanthord/<node_id>` of your repository, and `reviewer@1` passed it. The node is `Completed`.
 
+**Status today:** KanthorD has no public release yet. Until the first release, only a contributor who builds the single binary can do step 1. Steps 2 to 11 are the same for every install.
+
 In KanthorD, a **node** is one unit of work of a mission. A **task** is one step of a node. The plan of this tutorial has one `implement` node with no task file. Such a node is its own single work unit, so "the first task" of this tutorial is that node.
 
 ## What you need
 
-- A Mac with Apple silicon, or a Linux machine with an x64 or arm64 CPU. KanthorD supports no Mac with an Intel CPU. A browser on the same machine.
+- A Mac with Apple silicon, or a Linux machine with an x64 or arm64 CPU. KanthorD supports no Mac with an Intel CPU, with the npm package or with the single binary. A browser on the same machine.
 - For the npm package: Node.js 24, version 24.15.0 or later, with `npm`. Node.js 25 and later do not run KanthorD. Check it with `node --version`. [The single binary](#install-the-single-binary-instead) needs no Node.js.
 - On that machine: `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent`, `ssh-add` and `ssh-keyscan`. The server does not start without them. Check them with `git --version` and `ssh -V`. On a Mac, an older Apple git fails the check. Install a newer git, for example with Homebrew.
 - The tools that your project needs to build and test, on the `PATH` of the terminal that starts the server. The sample plan of step 10 needs only `head` and `grep`.
@@ -48,7 +50,9 @@ KanthorD contains the server, the CLI and the dashboard. It needs no container r
 
 ### 1.1 Install KanthorD
 
-Install the npm package:
+Today the package is not published. A server that starts from a build of the package stops with `worker.start.tool_missing`, because the package holds no `rg` or `fd`. The package also serves no dashboard. Until the first release, use the single binary below.
+
+After the first release, install the npm package:
 
 ```sh
 npm i -g @kanthorlabs/kanthord
@@ -56,8 +60,6 @@ kanthord --help
 ```
 
 The package installs the command `kanthord`. The first release of the package holds the dashboard and the pinned `rg` and `fd` tools of your platform.
-
-Today the package is not published. A server that starts from a build of the package stops with `worker.start.tool_missing`, because the package holds no `rg` or `fd`. The package also serves no dashboard. Until the first release, use the single binary below.
 
 #### Install the single binary instead
 
