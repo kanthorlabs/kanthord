@@ -365,7 +365,8 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - Before the Onboarding component, a refused repository file fails the slot start and logs `project.environment.key_refused` with the key and the reason. From the Onboarding component on, a refused repository file or a refused build ends the run with the class `build_failed` and the key in the output tail.
 - `project.binding.environment.get` at `GET /api/project/:project_id/binding/:binding_id/environment` is a `human` read. It answers `{ source, commit, environment, reason }` of the target of the binding. `source` is a value of [the environment source](project-service.vocabulary.md#environment-source). `reason` holds the parse failure of a repository file, or null.
 - `project.binding.environment.set` at `PUT /api/project/:project_id/binding/:binding_id/environment` is a `human` mutation with the body `{ environment }`. It writes the whole current binding set with the new key, so the change is a binding revision. A change of the key alone skips the `ls-remote` check of [the network git operations](#the-network-git-operations).
-- `kanthord project environment show <project-id> <binding-id>` and `kanthord project environment set <project-id> <binding-id> --file <path>` call the two routes. `set` reads JSONC.
+- `project.binding.environment.set` with `{ environment: null }` removes the key, so the source returns to the repository file or the next source.
+- `kanthord project environment show <project-id> <binding-id>`, `kanthord project environment set <project-id> <binding-id> --file <path>` and `kanthord project environment unset <project-id> <binding-id>` call the two routes. `set` reads JSONC.
 - `kanthord project environment export <project-id> <binding-id>` prints the `environment` of `show` as indented JSON. A user who wants one file for KanthorD and the CI commits that output. KanthorD never commits it.
 - The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a slot reads the same revision. A node that pins an earlier revision therefore runs the current environment.
 - At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there. The docs of `environment show` name them as ignored, and the answer holds no field for them. The repository devcontainer applies only at the `container` placement.
@@ -409,7 +410,7 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 The component computes the status of a group in this order. The first rule that applies decides.
 
 1. A run of the group is active: `building` or `proving`, the step of that run.
-2. The last read of the inputs failed, or the component holds no record of the group: `pending`.
+2. No read of the inputs of the group succeeded yet, or the component holds no record of the group: `pending`.
 3. The proof file of the digest holds the outcome `failed`: `failed`.
 4. At the `image` target, `<tag>-proved` exists: `ready`. At the `host` target, the proof file of the digest holds the outcome `passed`: `ready`.
 5. The source is `none`: `none`.
@@ -417,6 +418,7 @@ The component computes the status of a group in this order. The first rule that 
 
 - At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
 - At the `image` target with the source `none`, a slot runs on `worker.container_image`, and the status is `none` or `failed`.
+- After a failed read, the group keeps its last status and digest and sets only `reason`. A transient fetch failure thus never closes the gate of a `ready` environment.
 - A run that waits in the queue shows the status of its first step, and its `run_started_at` stays null until it starts.
 - A claim gate or a read of a group with no record starts the computation of the group in the background and answers `pending`.
 
@@ -438,7 +440,7 @@ The component computes the status of a group in this order. The first rule that 
 - It then builds `<tag>` when the tag is absent, under [the image build](#the-image-build), with the status `building`. It then proves the image, with the status `proving`.
 - At the `host` target, the run computes the digest and proves on the server host, with the status `proving`. A source `none` runs no proof.
 - The run writes the proof file. After a passed proof at the `image` target, it tags `<tag>-proved`.
-- After the run, the component collects the garbage of the group, wakes the work pulls of the project through `wake(projectId)` of the Scheduler, and asks the Worker Service to restart the slots that run another image of the group.
+- After the run, the component collects the garbage of the group. It then calls `environmentReady` of the Worker Service, which drains the slots that run another image of the group. Only after that call returns, it wakes the work pulls of the project through `wake(projectId)` of the Scheduler.
 - A run has a deadline of 30 minutes. A run that reaches it during the build ends with the class `build_failed`. During the proof, the stopped command goes through the classification of [the proof](#the-proof).
 - The stop of the server cancels the run, and the cancellation kills the process group of each child. A cancelled run writes no proof file.
 - The component logs `project.onboarding.run_started` and `project.onboarding.run_ended` with the binding, the digest, the target, the status and the class.
@@ -469,13 +471,14 @@ The component computes the status of a group in this order. The first rule that 
 
 ### The failure of an execution
 
-- The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node and the stop.
-- For each group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
+- The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node, the stop and `digests`: the digest of each environment that the execution set up, from the stop detail.
+- A group whose current digest differs from the digest of the execution keeps its status, because a late stop of an old slot says nothing about a newer environment.
+- For each other group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
 - The status of the group is then `failed`, and its nodes wait.
 
 ### The triggers
 
-- After the commit of a binding-set write, also of `environment set`, the component computes each repository binding of the project again.
+- After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each repository binding whose row the write changed to `pending` synchronously. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A pull between the commit and the computation therefore claims no node of a changed binding.
 - At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
 - At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
@@ -561,7 +564,7 @@ The component computes the status of a group in this order. The first rule that 
 - A binding-set write without the variable removes it. The credential stays.
 - The KanthorD layer mounts each secret into each `onCreateCommand` step with `--secret id=<variable>,src=<file>` and `RUN --mount=type=secret,id=<variable>`. The step exports the variable from the mounted file before the command. The source file has mode `0600` and the run removes it.
 - The digest holds the variable names and the revision of each credential, never a value. A rotation is a new digest. A rotation through the route group writes no binding set, so it takes effect at the next computation of the group.
-- The release of a secret pins the revision of the digest. A pinned revision that is no longer live at the release ends the run with `build_failed`. A secret value in an output tail becomes `[redacted]` before it reaches the proof file or a log.
+- At the release, the component compares the newest live revision of each credential with the revision of the digest. On a mismatch, it ends the run with no proof file and computes the group again. A secret value in an output tail becomes `[redacted]` before it reaches the proof file or a log.
 - The operations are `project.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`. The route group registers before every route whose path holds `:project_id`. The CLI holds only the leaf `project environment secret set`, and the other operations are API only.
 - No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, a slot or a log. A private-registry install in a checkout runs in the slot, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
 
@@ -595,7 +598,7 @@ The component computes the status of a group in this order. The first rule that 
 - The container takes `<tag>`, else `<tag>-base` of the last digest. With neither, `probe` answers "no image". The command runs as an argument list and never through a shell. It has a limit of 30 seconds and answers at most 4096 bytes of output.
 - A `<word>` matches `^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`. A `<path>` starts with no `-` and holds no `..` segment.
 - Each call of `environment_write` is one attempt, a refused call too. The component runs the run of the new digest and answers the outcome, the class and the tail to the session.
-- A session ends at a passed proof, after 5 attempts or after 64 tool calls. The sixth `environment_write` answers `attempt_limit`, and it writes nothing and runs nothing.
+- A session ends at a passed proof, after 5 attempts or after 64 tool calls. The sixth `environment_write` answers the reason `attempt_limit`, and it writes nothing and runs nothing. The 65th tool call answers `tool_limit`, and a refused write answers `write_refused`. These reasons are tool answers to the session, not codes of an operation.
 - A group holds at most one session at a time. Sessions of different groups run at once and share the queue of [the run](#the-run).
 - Only a failure event starts a session: a run that writes a failed proof file, or [the failure of an execution](#the-failure-of-an-execution). A failure inside a session and the end of a session start none.
 - The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `env@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
@@ -624,6 +627,9 @@ The first layer of the build builds the image at the slot start, before the Onbo
 | 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                   |
 | log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                        |
 | log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                 |
+| log  | `project.onboarding.run_started`                         | A run of a group starts. It names the binding, the digest and the target.                                                 |
+| log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                       |
+| log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                               |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                  |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                 |
 

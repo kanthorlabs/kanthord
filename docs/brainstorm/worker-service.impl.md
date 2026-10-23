@@ -825,7 +825,7 @@ Tests of the slot driver:
 - At each slot start, `ContainerDriver` calls `imageFor(runtime, slot)`. It calls `slotImage(projectId, workerResourceIdentity, signal)` of the Onboarding component. The slot starts only when the promise resolves: on `<tag>` of a `ready` environment, or on `<worker.container_image>:<version>` of an environment with the status `none`.
 - A slot of an environment that is not ready waits and starts no container. It pulls no work, so the nodes of that repository wait with no backoff loop and no log line for each retry. A stop or a drain of the slot ends the wait.
 - The driver records the image of each slot.
-- After a run makes an environment `ready`, the Onboarding component calls `environmentReady(projectId, resourceIdentity, tag)` of the Worker Service. The Worker Service restarts each slot of the worker bindings that name the environment and run another image: the slot drains after its execution, and the pool host starts it again on the new image.
+- After a run makes an environment `ready`, the Onboarding component calls `environmentReady(projectId, resourceIdentity, tag)` of the Worker Service. The Worker Service marks each slot of the worker bindings that name the environment and run another image as draining before the call returns. A draining slot takes no new claim, ends its execution, and the pool host starts it again on the new image.
 - The image of a slot is fixed for the life of the slot. The reviewer runs on the current digest, as the coder does.
 
 ### Names, labels and stale containers
@@ -1442,7 +1442,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - A verification with exit 127 reruns once on the base head, in the base-head clone after its setup. Exit 127 on both heads stops the execution with `environment_failed` and the code `command_absent`. Exit 127 on the node head only is a code failure.
 - A base setup that fails stops with `setup_failed`. A base setup or a rerun that ends by the budget is a budget end.
 - The worker caches the base result for the execution by the base commits, the environment digests and the command.
-- The stop detail holds the JSON of the exit code, the signal, `timed_out` and the command.
+- The stop detail holds the JSON of the exit code, the signal, `timed_out`, the command and `digests`, the map from each resource identity to the environment digest that the execution set up.
 - An `environment_failed` stop never becomes a revision turn of `swe@1`.
 
 ## Workspace
