@@ -233,14 +233,14 @@ For each unit, in the order of the plan, the first matching row decides:
 
 A revision that changes the content of one task changes its digest, so only that task is pending again. The done record lives in the pushed branch, so a fresh clone on another host reads the same records.
 
-After the units, the worker decides the **verdict unit**: one more run of the **node unit**, with the verdict or the cleared text as its instruction. The node unit is the unit that holds the node content and the task list as its work prompt, and the node verifications as its commands. The first matching row decides:
+After the units, the worker decides the **verdict unit**. The **node unit** is the unit that holds the node content and the task list as its work prompt, and the node verifications as its commands. The **verdict unit** is one run of the node unit with the verdict or the cleared text as its instruction. This page uses that term for both texts. In a node with tasks, the node unit gets no work turn. It runs only as the verdict unit, or when the release gate routes a failed node command to it. The first matching row decides:
 
 | #   | Condition                                                                | Result                                                                 |
 | --- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | 1   | A verdict exists, and the **verdict rule** holds now.                    | No verdict unit. The work after the review already exists.             |
 | 2   | A verdict exists, and at least one judged commit is on the node history. | Verdict unit, with the verdict rule. It runs after the pending units.  |
 | 3   | A verdict exists, and no judged commit is on the node history.           | Verdict unit, with no rule. Its verification decides, as for any unit. |
-| 4   | No verdict, and a cleared assessment gives a text.                       | Node unit with the cleared text, with no rule. A pass completes it.    |
+| 4   | No verdict, and a cleared assessment gives a text.                       | Verdict unit with the cleared text, with no rule. A pass completes it. |
 | 5   | Neither exists.                                                          | No verdict unit.                                                       |
 
 A judged commit is **on the node history** when the checkout holds it and it is an ancestor of the head. A judged commit that fails this check drops out of the rule, and the worker logs `judged commit off the node history`.
@@ -346,7 +346,9 @@ Every worker commit has the header `<commit_type>: <subject>`, with no scope. Th
 | Checkpoint commit  | The `name` of the current unit | `feat: document the route`    |
 | Pull request title | The `name` of the node         | `feat: add a health endpoint` |
 
-Every worker commit of the node uses the `commit_type` of the node, the merge commit and the checkpoint commit included: a node with `commit_type: fix` merges its base as `fix: merge main`. The first letter of the subject becomes lowercase. The worker cuts the subject so that the header holds at most 100 characters, and then removes every final full stop and space. The body holds the unit id on its own line, and the done record after a pass. The worker writes no other trailer.
+Every worker commit of the node uses the `commit_type` of the node, the merge commit and the checkpoint commit included: a node with `commit_type: fix` merges its base as `fix: merge main`. The first letter of the subject becomes lowercase. The worker first replaces each run of whitespace with one space. It then cuts the subject to `100` minus the length of `<commit_type>: ` UTF-16 characters, removes a final half of a split surrogate pair, and then removes every final full stop and space. The body is the id of the unit after a blank line: the task id for a task commit, and the node id for a node unit commit, a verdict commit and a merge commit. A checkpoint commit takes the id of the current unit. A done record follows the id after a blank line on a passed unit. The worker writes no other trailer.
+
+In a node with tasks, the node unit commit appears only for the verdict unit or for a routed node command.
 
 The design requires that every commit of the execution is attributable to its task and its attempt. Today the body names the unit and no attempt, and the evidence of the attempt names the head commit.
 
@@ -360,6 +362,8 @@ The worker writes the done record right after the unit passes step 7:
 
 When no checkout holds a commit of the unit in this execution, the worker writes no record and logs `done record skipped`. This happens when the unit passes with no change, for example a task whose verifications already pass on the base. The next execution then runs a work turn for that unit again. Correctness rests on the release gate. The records only save turns.
 
+A unit **completed** in this execution when this execution wrote a new done record for it and step 6 found no record for it, or when the verdict unit passed. Only an `implement` execution counts completed units. The count decides the `budget_end` stop of [a budget end](#how-the-execution-ends).
+
 ### The verdict unit
 
 The verdict unit runs like any other unit, with three differences:
@@ -368,7 +372,7 @@ The verdict unit runs like any other unit, with three differences:
 - With the verdict rule, the worker checks the rule after each turn. While the rule fails, the turn counts as unchanged, also when it changed a file of a checkout that holds no judged commit, and the worker sends the verdict instruction again. It runs no verification until the rule holds.
 - It runs the node verifications only.
 
-A pass of the verdict unit always counts as a completed unit, also when it writes no new done record. With the verdict rule, two verdict turns in a row with no new work in a judged checkout stop the execution with `no_progress`, so the same head never goes back to review unchanged. With no rule, the progress rule of any unit applies.
+A pass of the verdict unit always counts as [completed](#the-done-record), also when it writes no new done record. With the verdict rule, two verdict turns in a row with no new work in a judged checkout stop the execution with `no_progress`, so the same head never goes back to review unchanged. With no rule, the progress rule of any unit applies.
 
 ### Steps 8 and 9: the release gate
 
@@ -398,14 +402,16 @@ A failure of the release gate never resets the head. The live checkout stays the
 
 The release body decides the next state of the node. A release with `further_work: true` returns the node to `Available` for the next `coder@1` execution. A release with `further_work: false` moves the node to `Waiting` for `reviewer@1`.
 
-| End                                                                | What the worker does                                                                                          | Release body                                                                                  | Next node state                                          |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| The release gate passes                                            | Push, submit the head commit                                                                                  | `further_work: false`, `stop: null`                                                           | `Waiting`                                                |
-| The budget ends, and at least one unit completed in this execution | Abort the agent, remove the release clones, run gate G in checkpoint mode, push                               | `further_work: true`, `stop: null`                                                            | `Available`                                              |
-| The budget ends, and no unit completed in this execution           | The same                                                                                                      | `further_work: true`, `stop` with the reason `budget_end` and the code `turns` or `wall_time` | `Available`, or `Paused` at `mission.further_work_limit` |
-| Gate G finds a violation of the git state                          | Restore each checkout to `before`, make no checkpoint commit, push                                            | `further_work: true`, `stop` with `operation_failed`, the code `worker.turn.*` and the detail | `Available`, or `Paused` at the failure limit            |
-| A stop: `provider_failed`, `no_progress`, `operation_failed`       | Abort the agent, run gate G in checkpoint mode, push. A violation there restores `before` and commits nothing | `further_work: true`, `stop` with the reason, the code and the detail when one exists         | `Available`, or `Paused` at the failure limit            |
-| The claim is revoked, for example by a pause                       | Abort the agent. No gate, no push                                                                             | No release. The execution counts as no failure and resets the failure and stall counts        | Set by the human act                                     |
+The table below covers an `implement` execution. An `examine` execution ends as [An examine node](#an-examine-node-the-report) explains.
+
+| End                                                                  | What the worker does                                                                                          | Release body                                                                                  | Next node state                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| The release gate passes                                              | Push, submit the head commit                                                                                  | `further_work: false`, `stop: null`                                                           | `Waiting`                                                |
+| The budget ends, and at least one unit [completed](#the-done-record) | Abort the agent, remove the release clones, run gate G in checkpoint mode, push                               | `further_work: true`, `stop: null`                                                            | `Available`                                              |
+| The budget ends, and no unit [completed](#the-done-record)           | The same                                                                                                      | `further_work: true`, `stop` with the reason `budget_end` and the code `turns` or `wall_time` | `Available`, or `Paused` at `mission.further_work_limit` |
+| Gate G finds a violation of the git state                            | Restore each checkout to `before`, make no checkpoint commit, push                                            | `further_work: true`, `stop` with `operation_failed`, the code `worker.turn.*` and the detail | `Available`, or `Paused` at the failure limit            |
+| A stop: `provider_failed`, `no_progress`, `operation_failed`         | Abort the agent, run gate G in checkpoint mode, push. A violation there restores `before` and commits nothing | `further_work: true`, `stop` with the reason, the code and the detail when one exists         | `Available`, or `Paused` at the failure limit            |
+| The claim is revoked, for example by a pause                         | Abort the agent. No gate, no push                                                                             | No release. The execution counts as no failure and resets the failure and stall counts        | Set by the human act                                     |
 
 The failure limit is `mission.consecutive_failure_limit`. A `provider_failed` stop with a busy code does not count toward it, as [Limits that stop a loop](worker.md#limits-that-stop-a-loop) explains.
 
@@ -434,7 +440,7 @@ Four rules of the end need attention:
 
 - **A budget end always gives further work.** Only the release gate releases with `further_work: false`. A budget end during a verification, or during the release gate, also releases with `further_work: true`. The next execution plans the units again from the done records and runs the release gate.
 - **The checkpoint commit is not a result.** At a budget end or a stop, gate G in checkpoint mode commits the work in progress with the message of the current unit, for example `feat: document the route`. It writes no done record. The next execution finds the unit pending at step 6 and continues it. Two exceptions apply. A checkpoint commit of the verdict unit is new work after the judged commit, so the verdict rule holds at the next step 6, and the verdict unit does not run again. A checkpoint commit of a routed unit that already holds a matching done record leaves that unit done. In both cases, the release gate of the next execution decides. Today a checkpoint commit therefore can satisfy the verdict rule.
-- **The `budget_end` stop marks a stalled execution.** The release carries `stop: { "reason": "budget_end", "code": "turns" }` only when no unit completed in that execution. The code is `wall_time` when the wall time ended first. A unit **completed** when this execution wrote a new done record for it and step 6 found no record for it, or when the verdict unit passed. Such releases count toward `mission.further_work_limit`. A release without that stop resets the count.
+- **The `budget_end` stop marks a stalled execution.** The release carries `stop: { "reason": "budget_end", "code": "turns" }` only when no unit [completed](#the-done-record) in that `implement` execution. The code is `wall_time` when the wall time ended first. Such releases count toward `mission.further_work_limit`. A release without that stop resets the count.
 - **A violation wins over a budget end.** When the budget ends inside a turn, the worker runs no write-mode gate. The checkpoint gate then checks the git state. A violation there restores `before` and ends the execution with the violation stop, not with the budget end.
 
 All cleanup after a budget end or a stop runs under `expired_at`, not under the spent budget: every git command of gate G, the restore sequence, the push and the release. The claim keeps a reserve of 10 minutes after the budget for this cleanup.
@@ -458,7 +464,7 @@ All cleanup after a budget end or a stop runs under `expired_at`, not under the 
 | A rework after a `criterion-not-met` assessment           | The verdict unit runs with the rationale of the assessment. It ends when the head holds new work after the judged commit.                                                                           |
 | A rework whose review changes nothing                     | With the verdict rule, two verdict turns with no new work stop with `no_progress`. The same head never returns to review.                                                                           |
 | An unblock after a change request on the pull request     | The verdict unit runs with the requested-changes text.                                                                                                                                              |
-| An unblock after any other review                         | The node unit runs with the rationale of the cleared assessment, with no rule. A pass completes it.                                                                                                 |
+| An unblock after any other review                         | The verdict unit runs with the rationale of the cleared assessment, with no rule. A pass completes it.                                                                                              |
 | A unit passes with no change                              | No done record. The unit does not count as completed, and the next execution runs a work turn for it again.                                                                                         |
 | A model call fails at the provider                        | The turn ends with the error, and the worker stops with `provider_failed`, its code and the provider text as `detail`.                                                                              |
 | A commit hook of the repository refuses commits           | No effect. The worker runs git with no hook.                                                                                                                                                        |
@@ -571,7 +577,7 @@ Unmet:
 - task_01JZ8Q1A…: The body of GET /healthz is the text ok.
 ```
 
-The worker sends the whole text, the task id included, to the node unit. It routes no work to the task by that id.
+The worker sends the whole text, the task id included, to the verdict unit. It routes no work to the task by that id.
 
 `swe@1` fixes the body. Gate G commits `feat: add a health endpoint`, and the verdict rule now holds. The worker runs `npm run build`, which passes, writes the done record of the node unit and runs the release gate. When `swe@1` brings no new work in two verdict turns in a row, the worker stops with `no_progress` instead, and the unchanged head never goes back to review.
 
@@ -608,6 +614,8 @@ An `examine` node has no tasks and no node branch. `coder@1` claims it in `Avail
 2. When the node names a repository binding, it runs the verifications of the node, for example an end-to-end suite.
 3. It sends `swe@1` the direct dependencies, their outcomes, their evidence and the verification results, and asks for its findings.
 4. It submits the findings as produced evidence with the subject `Report on current dependency outcomes`, and releases with `further_work: false`.
+
+A budget end of an `examine` execution releases with `further_work: true` and `stop: null`. It never carries the `budget_end` stop, because an `examine` execution has no unit to complete.
 
 `reviewer@1` then judges the `examine` node from the report and the outcomes of its direct dependencies.
 
@@ -673,7 +681,7 @@ The worker process also writes one JSON log line to stderr for each event of the
 - **One review, at the node.** `coder@1` judges no criterion. Only `reviewer@1` reviews the work, and only after the release.
 - **No atomic landing across repositories.** The head commit of a node with two or more repository bindings is the set of the heads of its node branches. Each required external action resolves on its own. An action with the end state other blocks the node, and the landed commit of a sibling action stays a record of its attempt.
 - **No memory in the agent.** Each execution starts a new agent conversation. Only the node branch with its done records, and the records of the Mission Service, carry over. The workspace saves clones and installed dependencies, and decides nothing.
-- **A stalled node pauses.** An execution that completes no unit before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`. An `examine` budget end releases with no stop and does not count.
+- **A stalled node pauses.** An `implement` execution that completes no unit before its budget ends counts toward `mission.further_work_limit`. At the limit, the node moves to `Paused`. An `examine` execution has no unit. Its budget end releases with `further_work: true` and `stop: null`, so it does not count and resets the stall count.
 - **The agent can use git.** `swe@1` has `bash`, and its commands run with the git and SSH configuration of the host user. Gate G makes an agent commit, a branch switch, a history rewrite and an open operation harmless. Nothing blocks a `git push` by the agent. The push of the worker is not forced, so an agent push that diverges from the node branch fails the push of the worker with a visible cause. KanthorD removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID` from each command, so a command reaches no SSH agent of the host user. During a network git operation of KanthorD on the same host, a command of the same user can still sign through the SSH agent socket of that operation. A `git push` of the agent can also use a key under `~/.ssh` of the host user. KanthorD has no sandbox; see [where a worker runs](worker.md#where-a-worker-runs).
 - **The worker commit has no content filter.** Gate G commits every file that the agent leaves outside `.kanthord-scratch/` and the ignored files. `reviewer@1` judges the added files.
 - **Workspace reuse by a superseded process.** The worker holds the workspace of an `implement` node for one execution at a time. Each worker instance holds its own `workspaces/` in its data directory, so two instances share no workspace. One case stays. A second process with the same instance configuration takes the connection of the instance. Until the first process kills its tool process group, both processes can act in the same workspace. That time is at most one heartbeat interval of 15 s.
