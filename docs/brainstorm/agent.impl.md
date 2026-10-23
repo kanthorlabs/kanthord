@@ -18,6 +18,7 @@ A mechanism here never overrides a rule there.
 - The catalog is a static server module that holds one declaration per agent name, with options, a whole-configuration constraint and prompts.
 - Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
 - `swe@1` and `re@1` declare an empty option schema.
+- A declaration holds `workbench`. The Workbench lists and opens only the agents with `workbench: true`, and it refuses another agent with the unknown-agent code. [`env@1`](project-service.impl.md#the-agent-env1) holds `workbench: false`.
 - The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker owns the commit, the branch, the push, the verification and the release. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
 - The shipped role of `re@1` judges the evidence against the criterion and changes no file.
 - The declaration supplies no provider, model identifier or reasoning-effort default.

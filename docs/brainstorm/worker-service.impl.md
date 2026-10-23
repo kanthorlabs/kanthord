@@ -819,6 +819,15 @@ Tests of the slot driver:
 - A project toolchain comes from a derived image `FROM docker.io/kanthorlabs/kanthord:<version>`. [Add a toolchain to the worker image](../how-to-guides/add-a-toolchain-to-the-worker-image.md) describes it. A binding names no image.
 - The pull policy is `--pull=missing`. The first start of a slot pulls the image, and the pull output goes to `stderr.log`.
 
+### The slot image
+
+- The image of a slot is the image of the environment that its worker binding names in `environment`, under [the Onboarding component](project-service.impl.md#the-onboarding-component).
+- At each slot start, `ContainerDriver` calls `imageFor(runtime, slot)`. It calls `slotImage(projectId, workerResourceIdentity, signal)` of the Onboarding component. The slot starts only when the promise resolves: on `<tag>` of a `ready` environment, or on `<worker.container_image>:<version>` of an environment with the status `none`.
+- A slot of an environment that is not ready waits and starts no container. It pulls no work, so the nodes of that repository wait with no backoff loop and no log line for each retry. A stop or a drain of the slot ends the wait.
+- The driver records the image of each slot.
+- After a run makes an environment `ready`, the Onboarding component calls `environmentReady(projectId, resourceIdentity, tag)` of the Worker Service. The Worker Service marks each slot of the worker bindings that name the environment and run another image as draining before the call returns. A draining slot takes no new claim, ends its execution, and the pool host starts it again on the new image.
+- The image of a slot is fixed for the life of the slot. The reviewer runs on the current digest, as the coder does.
+
 ### Names, labels and stale containers
 
 - The owner value is the Crockford base32 form of the first 128 bits of `deriveKey(master_key, "worker/container-owner")`. Nothing stores it.
@@ -1387,7 +1396,7 @@ A test checks the same for an `implement` node with an evidence snapshot.
 Both tests check that each checkout stays clean and that each asset path is relative to the agent root.
 A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
-The runner classifies each command result. The first matching rule decides: a spent budget, a kill at the wall deadline or no start before the deadline is a budget end; a kill at `COMMAND_LIMIT_MS` (`timed_out: true`) or a cancellation is a code failure; a spawn error, a signal or an exit code from 129 to 192 is an infrastructure failure; exit code 0 is a pass; any other exit code, 127 included, is a code failure.
+The runner classifies each command result. The first matching rule decides: a spent budget, a kill at the wall deadline or no start before the deadline is a budget end; a kill at `COMMAND_LIMIT_MS` (`timed_out: true`) or a cancellation is a code failure; a spawn error, a signal or an exit code from 129 to 192 is an infrastructure failure; exit code 0 is a pass; exit code 127 follows [the environment classification](#the-environment-classification); any other exit code is a code failure.
 An infrastructure failure runs once more, unless the deadline passed or the context ended. The rerun result takes the same rules, and a pass on it is a pass.
 A second infrastructure failure stops the execution with `operation_failed`, the code `worker.verification.infrastructure_failed` and a detail with the JSON of the exit code, the signal, `timed_out` and the command. `infrastructureStop` builds it. The coder and the reviewer apply these rules.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
@@ -1411,6 +1420,30 @@ Missing-branch tests delete a pushed node branch at the remote and assert `repos
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
 Rework tests assert that a verdict with no task id still runs a verdict turn, that an unchanged verdict ends with `no_progress`, and that a base move gives no new work under the verdict rule.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
+
+## The environment setup
+
+- The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected" | "universal", document, digest }` at the `image` target, or null.
+- `digest` is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
+- `worker/unit/environment-setup.ts` runs the setup of each checkout: each script of `updateContentCommand`, then each script of `postCreateCommand`. The object form runs its values one after another in key order.
+- The setup runs at the prepare, in each release clone, in the reviewer checkouts and in the examine checkouts.
+- Each command has the command limit of a verification, and the setup uses the wall deadline of the execution. Its time counts toward the budget of the execution.
+- At the `server` and the `worker` placements, only the setup commands of a stored environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
+- After a setup passes in a checkout, the worker appends each untracked path to `.git/info/exclude`, so no task commit takes the setup output.
+- A setup that changes a tracked file stops the execution with `environment_failed`, the code `setup_failed` and the paths in the detail, because KanthorD commits no change that the agent did not make.
+- The setup writes only inside the checkout, `$HOME` and `/tmp`, because the slot root is read-only. A system install belongs in `onCreateCommand`, which runs at the build as root.
+- Commands that a feature contributes do not run at the setup.
+- Each verification span records `environment.digest`: the digest of the single repository binding of the node, or the digests of its repository bindings joined by `,` in binding order.
+
+## The environment classification
+
+- A setup failure on the node head reruns the setup on a base-head clone at `<node key>/base`. A failure there too, or a node head equal to the base head, stops the execution with `environment_failed` and the code `setup_failed`.
+- A setup failure on the node head that passes on the base head is a code failure of the node unit. At the release gate it routes a revision to the node unit. At the prepare, the agent receives the setup output as its first revision instruction, and the setup runs again before the next verification.
+- A verification with exit 127 reruns once on the base head, in the base-head clone after its setup. Exit 127 on both heads stops the execution with `environment_failed` and the code `command_absent`. Exit 127 on the node head only is a code failure.
+- A base setup that fails stops with `setup_failed`. A base setup or a rerun that ends by the budget is a budget end.
+- The worker caches the base result for the execution by the base commits, the environment digests and the command.
+- The stop detail holds the JSON of the exit code, the signal, `timed_out`, the command and `digests`, the map from the resource identity of each repository binding of the node to its current digest at the setup, from `environmentDigestOf`. A binding with a null environment, for example the source `none` or a `server` placement with no stored environment, also takes its entry.
+- An `environment_failed` stop never becomes a revision turn of `swe@1`.
 
 ## Workspace
 

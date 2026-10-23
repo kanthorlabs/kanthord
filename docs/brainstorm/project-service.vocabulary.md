@@ -25,6 +25,75 @@ A human pauses project `atlas` while `coder-main` executes "Add password reset".
 That execution continues to its release, and the node returns to `Available` with a job.
 No instance of `coder-main` or `reviewer-main` claims a node of `atlas` until the human resumes `atlas`.
 
+## environment
+
+The toolchain of a repository binding in the `devcontainer.json` format: an image, features, environment variables, lifecycle commands and the check commands of the proof.
+The environment of `engine` names `mcr.microsoft.com/devcontainers/javascript-node:24-bookworm`, runs `pnpm install --frozen-lockfile` in each checkout and checks `pnpm --version`.
+
+## environment source
+
+The origin of the environment of a repository binding. The source is a closed set, and the first source that exists decides.
+
+- **stored**: The key `environment` of the repository binding configuration.
+- **repository**: The file `.devcontainer/devcontainer.json` of the repository at the base-branch head.
+- **detected**: A draft that detection writes from the version files, the lockfiles and the CI workflows of the repository.
+- **universal**: The universal environment of KanthorD, when detection finds no stack.
+- **none**: No source applies to the target.
+
+## environment target
+
+The place where the slots of a repository binding run their commands. The target is a closed set.
+
+- **image**: A worker binding at the `container` placement names the repository binding. The Onboarding component builds an image.
+- **host**: The server host runs the commands. The Onboarding component builds no image and proves on the server host.
+- **remote**: Only worker bindings at the `worker` placement serve the project. The Onboarding component runs no proof, and the first execution proves the environment.
+
+## environment status
+
+The computed state of the environment of a repository binding. The status is a closed set.
+
+- **none**: The environment holds no source and no failure. Its nodes claim as before.
+- **pending**: The Onboarding component has not read the current inputs yet, or the last read failed.
+- **building**: A run builds the image.
+- **proving**: A run proves the environment on the base-branch head.
+- **ready**: The proof passed for the current digest.
+- **failed**: The proof or an execution failed for the current digest.
+
+A human adds `engine` with a stored environment. The status moves `building`, `proving`, `ready` in about two minutes, and the first node of `engine` claims after that.
+
+## environment digest
+
+The SHA-256 of the canonical inputs of an environment: the resource identity, the target, the source, the resolved document, the repository files that the resolution read, the base image, the slot image and the server version.
+A change of an input is a new digest, and a new digest runs the onboarding again.
+
+## proof
+
+The run of the setup commands and the check commands of an environment on the base-branch head.
+A setup failure or an exit 127 of a check fails the environment. Another failed check records a [red baseline](#red-baseline) and does not block.
+
+## red baseline
+
+The check commands that fail on the base-branch head in a passed proof, with their exit codes.
+The binding shows `pnpm test` with exit 1 as a red check, and the nodes of the binding claim.
+
+## proof file
+
+The file `environments/<identity path>/<digest>.json` of the state directory. It caches the last result of a digest for display: the outcome, the failure class, the last 4 KiB of output, the reproduce command and the red baseline.
+A lost file costs one more run, because the next run writes it again.
+
+## Onboarding component
+
+The component of the Project Service that resolves, builds and proves the environment of each repository binding in the server, in the background. It holds no worker and no claim.
+
+## repair counter
+
+The count of the agent repairs of one failed digest, kept in its proof file. The agent `env@1` repairs a failed environment at most 3 times.
+
+## environment secret
+
+A credential of the platform `environment_secret` that a repository binding names. It reaches only the image build, as a build secret.
+The binding `api` names the environment secret `registry-auth` as `REGISTRY_AUTH`, so the build installs from the private registry.
+
 ## capability
 
 One class of authenticated operation on a resource.
