@@ -18,7 +18,7 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 ## What you need
 
 - A Mac with Apple silicon, or a Linux machine with an x64 or arm64 CPU. KanthorD supports no Mac with an Intel CPU. A browser on the same machine.
-- For the npm package: Node.js 24.15 or later, but not 25, with `npm`. Check it with `node --version`. The single binary of [1.1](#11-install-kanthord) needs no Node.js.
+- For the npm package: Node.js 24, version 24.15.0 or later, with `npm`. Node.js 25 and later do not run KanthorD. Check it with `node --version`. [The single binary](#install-the-single-binary-instead) needs no Node.js.
 - On that machine: `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent`, `ssh-add` and `ssh-keyscan`. The server does not start without them. Check them with `git --version` and `ssh -V`. On a Mac, an older Apple git fails the check. Install a newer git, for example with Homebrew.
 - The tools that your project needs to build and test, on the `PATH` of the terminal that starts the server. The sample plan of step 10 needs only `head` and `grep`.
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
@@ -55,9 +55,9 @@ npm i -g @kanthorlabs/kanthord
 kanthord --help
 ```
 
-The package installs the command `kanthord`. The package holds the dashboard and the pinned `rg` and `fd` tools of your platform.
+The package installs the command `kanthord`. The first release of the package holds the dashboard and the pinned `rg` and `fd` tools of your platform.
 
-Today the package is not published. A server that starts from a build of the package also serves no dashboard and finds no `rg` or `fd`. Until the first release, use the single binary below.
+Today the package is not published. A server that starts from a build of the package stops with `worker.start.tool_missing`, because the package holds no `rg` or `fd`. The package also serves no dashboard. Until the first release, use the single binary below.
 
 #### Install the single binary instead
 
