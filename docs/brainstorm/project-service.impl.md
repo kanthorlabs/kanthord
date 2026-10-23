@@ -487,7 +487,8 @@ The component computes the status of a group in this order. The first rule that 
 ### The environment list
 
 - `project.environment.list` at `GET /api/project/:project_id/environment` is a `human` read. It answers `{ items }` with one environment state for each current repository binding, in binding name order.
-- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `failure`, `checks` and `repairs`.
+- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `failure`, `checks`, `repairs` and `repairing`.
+- `repairing` is true while a session of [the agent `env@1`](#the-agent-env1) runs for the group, and false otherwise.
 - `failure` is null unless the status is `failed`. It holds `class`, `origin`, `execution_id`, `command`, `exit_code`, `tail`, `reproduce` and `ended_at` of the proof file.
 - `checks` is the red baseline of the proof file of the digest. `tag` is null outside the `image` target.
 - The read answers from the records and the proof files. It reads no repository and starts no build.
