@@ -128,6 +128,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - A release for a workbench session names the human identity of the message that started the run as the requester, the workbench session as the entity and `workbench` as the operation.
 - The Workbench Service grants that release while the workbench session exists, the enablement of its agent is enabled and the configuration of the session is valid.
 - A release for an [`env@1` session](project-service.impl.md#the-agent-env1) names the service identity of the Project Service as the requester, the session as the entity and `environment_agent` as the operation. The Project Service grants it while the session runs and the enablement of `env@1` is enabled. A human or a machine requester is refused.
+- A release for an environment secret names the service identity of the Project Service as the requester, the binding and the variable as the entity and `environment_secret` as the operation. It pins the revision that the digest of the run holds. The facility refuses another requester, an archived credential and a credential of another platform.
 - A run whose human identity no longer passes the Gateway checks stops at its next release.
 - Human and machine identities pass the checks of [Gateway identity verification](gateway-service.impl.md#the-jwt).
 - A service identity passes `isServiceIdentity` of the kernel.

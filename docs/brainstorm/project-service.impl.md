@@ -393,8 +393,8 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 
 ### The digest and the tag
 
-- The digest is the SHA-256 of the canonical JSON `{ resource_identity, target, source, document, files, base_image, slot_image, version }`, under [the canonical form](architecture.impl.md#the-canonical-form-and-the-digest).
-- `files` lists each repository file that the resolution read, as `{ path, state, text }`. `document` is the resolved document, or null.
+- The digest is the SHA-256 of the canonical JSON `{ resource_identity, target, source, document, files, secrets, base_image, slot_image, version }`, under [the canonical form](architecture.impl.md#the-canonical-form-and-the-digest).
+- `files` lists each repository file that the resolution read, as `{ path, state, text }`. `document` is the resolved document, or null. `secrets` lists each entry of `environment_secrets` as `{ variable, credential, revision }` with the newest live revision, sorted by `variable`.
 - `base_image` is the image identity of the `image` key at the `image` target. The run pulls a missing base image before it computes the digest. Every other case holds null.
 - `slot_image` is the image identity of the slot image `worker.container_image` at the `image` target, and null elsewhere.
 - `version` is the version of the server.
@@ -517,9 +517,12 @@ The component computes the status of a group in this order. The first rule that 
 - Detection reads these files at the base-branch head: `.nvmrc`, `.node-version`, `package.json`, `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `.python-version`, `pyproject.toml`, `requirements.txt`, `uv.lock`, `poetry.lock`, `go.mod`, `Cargo.toml`, `rust-toolchain.toml`, `rust-toolchain`, `pom.xml`, `mvnw`, `build.gradle`, `build.gradle.kts`, `gradlew`, `.java-version`, `.tool-versions`, `flake.nix` and `flake.lock`.
 - It also reads at most 20 files `.github/workflows/*.yml` and `*.yaml`. It takes the version input of `actions/setup-node`, `actions/setup-python`, `actions/setup-go` and `actions/setup-java`. It reads no `run:` step.
 - A stack is present when its manifest exists: `package.json` for Node, `pyproject.toml` or `requirements.txt` for Python, `go.mod` for Go, `Cargo.toml` for Rust, `pom.xml`, `build.gradle` or `build.gradle.kts` for Java.
-- The version of a stack comes from the first input that holds it: the version file of the stack, `.tool-versions`, the CI setup input, `engines.node` of `package.json`, the `go` line of `go.mod`. With none, the default is Node 24, Python 3.12, Rust 1 and Java 21.
+- The version of a stack comes from the first input that holds it: the version file of the stack, `.tool-versions`, the CI setup input, `engines.node` of `package.json`, the `go` line of `go.mod`. With none, the default is Node 24, Python 3.12, Go 1, Rust 1 and Java 21.
 - One stack drafts its image: `mcr.microsoft.com/devcontainers/javascript-node:<major>-bookworm`, `mcr.microsoft.com/devcontainers/python:<major.minor>-bookworm`, `mcr.microsoft.com/devcontainers/go:<major.minor>-bookworm`, `mcr.microsoft.com/devcontainers/rust:1-bookworm` or `mcr.microsoft.com/devcontainers/java:<major>-bookworm`.
 - Two stacks or more draft `mcr.microsoft.com/devcontainers/base:bookworm` with one feature `ghcr.io/devcontainers/features/<stack>:1` and its `version` for each stack.
+- With two stacks or more, the setup commands join with `&&` in the order Node, Python, Go, Rust, Java, and the checks join in the same order.
+- A Rust feature with the default version takes the feature version `latest`.
+- A Java stack without a wrapper takes the feature `ghcr.io/devcontainers/features/java:1` with `installMaven: "true"` for `pom.xml` or `installGradle: "true"` for `build.gradle*`. A single Java stack sets the feature version `none`, because its image holds the JDK.
 - The setup command and the checks of each stack are below. A tool that the image lacks installs in `onCreateCommand` at the build.
 
 | Stack  | Input                        | `onCreateCommand`               | `updateContentCommand`                                                    | `checks`                               |
@@ -536,7 +539,8 @@ The component computes the status of a group in this order. The first rule that 
 | Java   | `gradlew` or `build.gradle*` | none                            | `./gradlew --no-daemon dependencies` or `gradle --no-daemon dependencies` | `java -version`                        |
 
 - `<version>` of a package manager comes from `packageManager` of `package.json`, else `latest`.
-- The draft sets `containerEnv` so that every cache and every tool home lies in `/var/lib/kanthord`: `PATH` with `/var/lib/kanthord/.local/bin` first, `GOPATH=/var/lib/kanthord/go` and `CARGO_HOME=/var/lib/kanthord/.cargo`, because the root of a slot is read-only.
+- A Node stack with no lock file and a Python stack with `pyproject.toml` and no lock file take no setup command. Their checks are `node --version` and `npm --version`, or `python --version`.
+- The draft sets `containerEnv` so that every cache and every tool home lies in `/var/lib/kanthord`: `PATH` with `/var/lib/kanthord/.local/bin` first, `GOPATH=/var/lib/kanthord/go` and `CARGO_HOME=/var/lib/kanthord/.cache/cargo`, because the root of a slot is read-only.
 - `flake.nix` takes precedence over every stack. A repository with only `flake.nix` counts as detected. It drafts `mcr.microsoft.com/devcontainers/base:bookworm` with the feature `ghcr.io/devcontainers/features/nix:1` and the option `multiUser: false`, the `onCreateCommand` `nix --extra-experimental-features 'nix-command flakes' print-dev-env /etc/kanthord-flake > /etc/kanthord-nix-env.sh` and `containerEnv` `BASH_ENV=/etc/kanthord-nix-env.sh`, so each `bash -c` of a slot loads the development shell. It checks `nix --version`.
 - The KanthorD layer copies `flake.nix` and `flake.lock` of the workspace, when they exist, to `/etc/kanthord-flake/` before the first `onCreateCommand`. The build of a document without `flake.nix` copies nothing.
 - A repository with no manifest has no detected source.
@@ -554,7 +558,9 @@ The component computes the status of a group in this order. The first rule that 
 - `kanthord project environment secret set <project-id> <binding-id> <variable> --credential <name> --file <path>` creates the credential when it is absent, rotates it when it exists, and writes the binding key.
 - A binding-set write without the variable removes it. The credential stays.
 - The KanthorD layer mounts each secret into each `onCreateCommand` step with `--secret id=<variable>,src=<file>` and `RUN --mount=type=secret,id=<variable>`. The step exports the variable from the mounted file before the command. The source file has mode `0600` and the run removes it.
-- The digest holds the variable names and the revision of each credential, never a value. A rotation is a new digest.
+- The digest holds the variable names and the revision of each credential, never a value. A rotation is a new digest. A rotation through the route group writes no binding set, so it takes effect at the next computation of the group.
+- The release of a secret pins the revision of the digest. A pinned revision that is no longer live at the release ends the run with `build_failed`. A secret value in an output tail becomes `[redacted]` before it reaches the proof file or a log.
+- The operations are `project.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`. The route group registers before every route whose path holds `:project_id`. The CLI holds only the leaf `project environment secret set`, and the other operations are API only.
 - No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, a slot or a log. A private-registry install in a checkout runs in the slot, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
 
 ### The cache volume
