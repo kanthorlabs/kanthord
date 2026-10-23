@@ -245,6 +245,12 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 - The [co-location contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) holds both calls inside the write transaction.
 - The Project Service offers `workerBindingsOf(tx, projectId)` to the Scheduler Service through its `contract.ts`. It answers `{ binding_id, worker_name, tags }` for each current worker binding that is no tombstone. `workerBindingOf` answers `tags` with the pinned row.
 - A change of `tags` creates the next revision of the binding. A live execution keeps the tags of the row that its claim pins.
+- A worker binding at the `container` placement holds the optional key `environment`: the binding name of one repository binding of the project. The slots of the binding run the image of that environment, and the binding claims only the nodes that name that repository binding.
+- An absent `environment` names the only repository binding of the project. With two repository bindings or more, an absent key refuses the write with 400 `project.bindings.worker.environment_required` and `details: { binding }`.
+- A name that is no repository binding of the submitted set refuses the write with 400 `project.bindings.worker.environment_unknown` and `details: { binding, environment }`.
+- `environment` on a binding at another placement refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`.
+- The write stores the key as written. The default resolves at each read, so a write that adds a second repository binding refuses each `container` binding with no key.
+- `workerBindingsOf` and `workerBindingOf` answer `environment`: the resource identity of the named repository binding, or null at another placement.
 
 ## The credential dependents of a binding
 
@@ -342,6 +348,260 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores nothing in the database.
 
+## The environment of a repository binding
+
+- The stored environment is the key `environment` of the repository binding configuration. Its value is one `devcontainer.json` document.
+- DECIDED 2026-10-23 by Aelita, pending Ulrich: the keys of the devcontainer specification keep their camelCase inside `environment`, for example `containerEnv` and `onCreateCommand`. The `devcontainer.json` specification is the external requirement that [the naming rule](architecture.impl.md#the-operation-ids) asks for. Every key that KanthorD adds stays snake_case.
+- `kernel/devcontainer.ts` of the `engine` repository parses the document. It accepts JSONC: `//` and `/* */` comments and trailing commas. It holds no package for JSONC.
+- DECIDED 2026-10-23 by Aelita, pending Ulrich: the document accepts only these keys: `image`, `build.dockerfile`, `build.context`, `build.args`, `build.target`, `features`, `containerEnv`, `remoteEnv`, `onCreateCommand`, `updateContentCommand`, `postCreateCommand` and `customizations.kanthord`.
+- These inert keys are accepted and dropped from the build document, because no step of KanthorD acts on them: `name`, `customizations` of another tool, `forwardPorts`, `portsAttributes`, `otherPortsAttributes`, `remoteUser`, `containerUser`, `updateRemoteUserUID`, `userEnvProbe`, `overrideCommand`, `shutdownAction`, `hostRequirements`, `waitFor`, `postStartCommand` and `postAttachCommand`.
+- Every other key refuses the document with a code that names the key, for example `build.options`, `dockerComposeFile`, `initializeCommand`, `privileged`, `runArgs`, `mounts`, `capAdd`, `securityOpt` and `workspaceMount`.
+- A value that holds `${localEnv:` or `${env:` refuses the document with a code that names the key.
+- `build.dockerfile`, `build.context` and each local feature resolve with `realpath` inside the workspace copy of the build. A path outside it refuses the build.
+- A name of `containerEnv` or `remoteEnv` matches `^[A-Za-z_][A-Za-z0-9_]*$`, and a value holds no control character. Another name or value refuses the document.
+- `customizations.kanthord` holds one key, `checks`: a list of 0 to 32 nonblank commands. The proof runs them. An absent key reads as `[]`.
+- A refused document answers 400 `project.environment.invalid` with the key in the message at `environment set`. A refused repository file or a refused build ends the run with the class `build_failed` and the key in the output tail.
+- `project.binding.environment.get` at `GET /api/project/:project_id/binding/:binding_id/environment` is a `human` read. It answers `{ source, commit, environment, reason }` of the target of the binding. `source` is a value of [the environment source](project-service.vocabulary.md#environment-source). `reason` holds the parse failure of a repository file, or null.
+- `project.binding.environment.set` at `PUT /api/project/:project_id/binding/:binding_id/environment` is a `human` mutation with the body `{ environment }`. It writes the whole current binding set with the new key, so the change is a binding revision. A change of the key alone skips the `ls-remote` check of [the network git operations](#the-network-git-operations).
+- `kanthord project environment show <project-id> <binding-id>` and `kanthord project environment set <project-id> <binding-id> --file <path>` call the two routes. `set` reads JSONC.
+- `kanthord project environment export <project-id> <binding-id>` prints the `environment` of `show` as indented JSON. A user who wants one file for KanthorD and the CI commits that output. KanthorD never commits it.
+- The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a slot reads the same revision. A node that pins an earlier revision therefore runs the current environment.
+- At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there, and `environment show` names them as ignored. The repository devcontainer applies only at the `container` placement.
+
+## The Onboarding component
+
+The Onboarding component of the Project Service lives in `src/project/onboarding.ts`. It resolves, builds and proves the environment of each repository binding in the server process. It holds no table, no column, no worker and no claim.
+
+### The group of an environment
+
+- The component keys each environment by its binding group: `project_id` and `resource_identity` of the repository binding.
+- It holds one record of each group in process memory: the target, the source, the digest, the status, the start times of the run and its step, and the reason of a failed read.
+- A server start loses the records. The component computes each record again from the binding set, the container runtime and the proof files.
+
+### The target
+
+- The target of a group is `image` when a current worker binding at the `container` placement names the repository binding in its `environment` key, also through the default of that key.
+- The target is `remote` when the project holds one worker binding or more, and each of them is at the `worker` placement or is the binding of an external harness.
+- In every other case the target is `host`. A project with no worker binding has the target `host`.
+- One group has one target. A worker binding at the `server` placement next to a `container` binding that names the group runs on the host with the status of the image.
+
+### The source of each target
+
+- At the `image` target, the first source that exists decides: `stored`, `repository`, `detected`, `universal`.
+- At the `host` and the `remote` targets, the first source that exists decides: `stored`, `detected`, then `none`. The repository devcontainer and the universal environment never apply there, because their commands assume their image.
+- A `detected` document at the `host` and the `remote` targets contributes only its `checks`. It runs no setup in a checkout.
+
+### The digest and the tag
+
+- The digest is the SHA-256 of the canonical JSON `{ resource_identity, target, source, document, files, base_image, slot_image, version }`, under [the canonical form](architecture.impl.md#the-canonical-form-and-the-digest).
+- `files` lists each repository file that the resolution read, as `{ path, state, text }`. `document` is the resolved document, or null.
+- `base_image` is the image identity of the `image` key at the `image` target. The run pulls a missing base image before it computes the digest. Every other case holds null.
+- `slot_image` is the image identity of the slot image `worker.container_image` at the `image` target, and null elsewhere.
+- `version` is the version of the server.
+- The tag of an image is `localhost/kanthord-env/<identity path>:<digest>`. The identity path splits the resource identity at `:` and `/`, lowercases each part, replaces each run of other characters with `-` and replaces an empty part with `x`. A path above 200 characters keeps its first 180 characters and adds `-` and the first 16 hex characters of the SHA-256 of the resource identity.
+- `<tag>-base` names the image of `devcontainer build`. `<tag>-proved` names the image after a passed proof. Each image carries the label `io.kanthord.owner`.
+- Every actor computes the tag from the same inputs, so no actor stores it.
+
+### The status
+
+The component computes the status of a group in this order. The first rule that applies decides.
+
+1. A run of the group is active: `building` or `proving`, the step of that run.
+2. The last read of the inputs failed, or the component holds no record of the group: `pending`.
+3. The proof file of the digest holds the outcome `failed`: `failed`.
+4. At the `image` target, `<tag>-proved` exists: `ready`. At the `host` target, the proof file of the digest holds the outcome `passed`: `ready`.
+5. The source is `none`: `none`.
+6. Otherwise the component starts a run, and the status is the step of that run.
+
+- At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
+- At the `image` target with the source `none`, a slot runs on `worker.container_image`, and the status is `none` or `failed`.
+
+### The proof file
+
+- The proof file of a digest is `environments/<identity path>/<digest>.json` of the state directory. The component writes it to a temporary file of the same directory with mode `0600` and renames it.
+- It holds `digest`, `outcome` (`passed` or `failed`), `class`, `origin` (`onboarding` or `execution`), `execution_id`, `command`, `exit_code`, `tail`, `reproduce`, `checks`, `repairs` and `ended_at`.
+- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed` or `command_absent`.
+- `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
+- `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`.
+- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0.
+- The file is a cache for display and the gate of the `host` target. A lost file costs one run.
+
+### The run
+
+- A run onboards one group for one digest. The component runs at most one run at a time on the server, and the others wait in arrival order.
+- A trigger for a group with an active run marks the group. The component computes the group again after the run ends.
+- At the `image` target, the run reads the inputs at the base-branch head, pulls a missing base image, computes the digest, and stops when rule 3 or rule 4 of [the status](#the-status) applies.
+- It then builds `<tag>` when the tag is absent, under [the image build](#the-image-build), with the status `building`. It then proves the image, with the status `proving`.
+- At the `host` target, the run computes the digest and proves on the server host, with the status `proving`. A source `none` runs no proof.
+- The run writes the proof file. After a passed proof at the `image` target, it tags `<tag>-proved`.
+- After the run, the component collects the garbage of the group, wakes the work pulls of the project through `wake(projectId)` of the Scheduler, and asks the Worker Service to restart the slots that run another image of the group.
+- A run has a deadline of 30 minutes. The stop of the server cancels the run, and the cancellation kills the process group of each child.
+- The component logs `project.onboarding.run_started` and `project.onboarding.run_ended` with the binding, the digest, the target, the status and the class.
+
+### The image build
+
+- The host exports the repository at the base-branch head into `environments/run-<id>/workspace` of the state directory.
+- The component writes the build document to `environments/run-<id>/devcontainer.json`, outside the workspace, with the flag `wx`. The build document holds the accepted keys only.
+- It runs `node <@devcontainers/cli>/devcontainer.js build --docker-path <runtime> --workspace-folder <workspace> --config <build document> --image-name <tag>-base --label io.kanthord.owner=<owner>`.
+- The build gets only the variables `PATH`, `HOME`, `XDG_*`, `CONTAINER_HOST` and `DOCKER_HOST` of the server. It gets no SSH key, no Gateway token and no other secret.
+- The KanthorD layer then builds `<tag>-unchecked` from `<tag>-base`. It runs each `onCreateCommand` of the `devcontainer.metadata` label as root in `/`, then copies `/usr/local/bin/kanthord` and the static `tini` as `/usr/bin/tini`, then adds the passwd and the group entries of uid 10001 with the home `/var/lib/kanthord`, then writes each `containerEnv` and `remoteEnv` variable into `ENV`.
+- The image check runs in a container of `<tag>-unchecked` as uid 10001 with `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--network=none` and the owner label. It checks `bash`, glibc, git 2.40 or later, OpenSSH 9.0 or later, the passwd entry, `tini` and `kanthord`.
+- A passed check tags `<tag>` and removes `<tag>-unchecked`. A failed check removes `<tag>-unchecked` and ends with the class `image_invalid`. A failed build ends with the class `build_failed`.
+- The build needs the npm install of `kanthord`. The single binary ends the build with `build_failed` and the reason in the tail.
+- The run removes `environments/run-<id>/` at its end. A server start removes each stale `environments/run-*` directory.
+
+### The proof
+
+- The proof runs the setup commands, `updateContentCommand` then `postCreateCommand`, then each command of `checks`, on the base-branch head.
+- Each command runs with `bash -c` in the checkout and has the command limit of a verification.
+- A setup command that ends with an exit code other than 0, or that exceeds its limit, fails the proof with the class `setup_failed`.
+- A check that ends with exit 127 fails the proof with the class `command_absent`.
+- A check that ends with another exit code other than 0 joins the red baseline, and the proof passes.
+- At the `image` target, the proof starts one container of `<tag>` with the flags of a slot: uid 10001, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, a `tmpfs` at `/tmp`, the owner label, and a new volume at `/var/lib/kanthord`. The container idles under `tini`.
+- The host feeds the base-branch head into the container as a git bundle on standard input, and the container clones it into its home. Each command runs through `<runtime> exec`. The run removes the container and the volume at its end.
+- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a thread slot of the `server` placement gives its commands.
+- The proof runs no agent and spends no LLM budget.
+
+### The failure of an execution
+
+- The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node and the stop.
+- For each group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
+- The status of the group is then `failed`, and its nodes wait.
+
+### The triggers
+
+- After the commit of a binding-set write, also of `environment set`, the component computes each repository binding of the project again.
+- At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
+- At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
+- While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
+- `project.binding.environment.rebuild` starts a run.
+
+### The rebuild
+
+- `project.binding.environment.rebuild` at `POST /api/project/:project_id/binding/:binding_id/environment/rebuild` is a `human` mutation with no body.
+- It removes the proof file of the current digest and the tags `<tag>`, `<tag>-base` and `<tag>-proved`. At the `image` target with an `image` key, it pulls that image again. It then starts a run and answers the environment state of the group.
+- A rebuild during an active run of the group answers 409 `project.environment.run_active`.
+- A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
+- `kanthord project environment rebuild <project-id> <binding-id>` calls it.
+
+### The environment list
+
+- `project.environment.list` at `GET /api/project/:project_id/environment` is a `human` read. It answers `{ items }` with one environment state for each current repository binding, in binding name order.
+- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `failure`, `checks` and `repairs`.
+- `failure` is null unless the status is `failed`. It holds `class`, `origin`, `execution_id`, `command`, `exit_code`, `tail`, `reproduce` and `ended_at` of the proof file.
+- `checks` is the red baseline of the proof file of the digest. `tag` is null outside the `image` target.
+- The read answers from the records and the proof files. It reads no repository and starts no build.
+- `kanthord project environment list <project-id>` calls it.
+
+### The gate collaborations
+
+- The component implements `environmentsClaimable(projectId, resourceIdentities): boolean` for the [claim selection](scheduler-service.impl.md#the-environment-gate). It answers true when the status of each group is `none` or `ready`.
+- A group with no record answers false, and the component computes it.
+- It reads only process memory, so it runs inside the claim transaction.
+- It implements `environmentsMixed(projectId, resourceIdentities): boolean` for [the node content](mission-service.impl.md#the-node-content). It answers true when two of the groups hold the `image` target and documents with different canonical JSON.
+- It implements `slotImage(projectId, workerResourceIdentity, signal): Promise<string>` for [the slot image](worker-service.impl.md#the-slot-image). The promise resolves with `<tag>` when the group of the worker binding is `ready`, and with `worker.container_image` when it is `none`. It waits through every other status. The signal ends the wait.
+
+### Garbage collection
+
+- After each run, the component lists the images with the owner label and the reference `localhost/kanthord-env/<identity path>`. It removes each image whose tag is not the current digest, `<digest>-base` or `<digest>-proved`.
+- A removal that fails, for example for an image that a slot still runs, leaves the image to the next collection.
+- It removes each proof file of the identity path whose digest is not the current digest.
+- A repository that fails again and again therefore keeps one digest on the disk.
+
+### Detection
+
+- Detection reads these files at the base-branch head: `.nvmrc`, `.node-version`, `package.json`, `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `.python-version`, `pyproject.toml`, `requirements.txt`, `uv.lock`, `poetry.lock`, `go.mod`, `Cargo.toml`, `rust-toolchain.toml`, `rust-toolchain`, `pom.xml`, `mvnw`, `build.gradle`, `build.gradle.kts`, `gradlew`, `.java-version`, `.tool-versions` and `flake.nix`.
+- It also reads at most 20 files `.github/workflows/*.yml` and `*.yaml`. It takes the version input of `actions/setup-node`, `actions/setup-python`, `actions/setup-go` and `actions/setup-java`. It reads no `run:` step.
+- A stack is present when its manifest exists: `package.json` for Node, `pyproject.toml` or `requirements.txt` for Python, `go.mod` for Go, `Cargo.toml` for Rust, `pom.xml`, `build.gradle` or `build.gradle.kts` for Java.
+- The version of a stack comes from the first input that holds it: the version file of the stack, `.tool-versions`, the CI setup input, `engines.node` of `package.json`, the `go` line of `go.mod`. With none, the default is Node 24, Python 3.12, Rust 1 and Java 21.
+- One stack drafts its image: `mcr.microsoft.com/devcontainers/javascript-node:<major>-bookworm`, `mcr.microsoft.com/devcontainers/python:<major.minor>-bookworm`, `mcr.microsoft.com/devcontainers/go:<major.minor>-bookworm`, `mcr.microsoft.com/devcontainers/rust:1-bookworm` or `mcr.microsoft.com/devcontainers/java:<major>-bookworm`.
+- Two stacks or more draft `mcr.microsoft.com/devcontainers/base:bookworm` with one feature `ghcr.io/devcontainers/features/<stack>:1` and its `version` for each stack.
+- The setup command and the checks of each stack are below. A tool that the image lacks installs in `onCreateCommand` at the build.
+
+| Stack  | Input                        | `onCreateCommand`               | `updateContentCommand`                                                    | `checks`                               |
+| ------ | ---------------------------- | ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
+| Node   | `pnpm-lock.yaml`             | `npm install -g pnpm@<version>` | `pnpm install --frozen-lockfile`                                          | `node --version`, `pnpm --version`     |
+| Node   | `yarn.lock`                  | `npm install -g yarn@<version>` | `yarn install --immutable`                                                | `node --version`, `yarn --version`     |
+| Node   | `package-lock.json`          | none                            | `npm ci`                                                                  | `node --version`, `npm --version`      |
+| Python | `uv.lock`                    | `pip install uv`                | `uv sync --frozen`                                                        | `python --version`, `uv --version`     |
+| Python | `poetry.lock`                | `pip install poetry`            | `poetry install --no-interaction`                                         | `python --version`, `poetry --version` |
+| Python | `requirements.txt`           | none                            | `pip install --user -r requirements.txt`                                  | `python --version`                     |
+| Go     | `go.mod`                     | none                            | `go mod download`                                                         | `go version`                           |
+| Rust   | `Cargo.toml`                 | none                            | `cargo fetch`                                                             | `cargo --version`                      |
+| Java   | `mvnw` or `pom.xml`          | none                            | `./mvnw -B -q dependency:go-offline` or `mvn -B -q dependency:go-offline` | `java -version`                        |
+| Java   | `gradlew` or `build.gradle*` | none                            | `./gradlew --no-daemon dependencies` or `gradle --no-daemon dependencies` | `java -version`                        |
+
+- `<version>` of a package manager comes from `packageManager` of `package.json`, else `latest`.
+- The draft sets `containerEnv` so that every cache and every tool home lies in `/var/lib/kanthord`: `PATH` with `/var/lib/kanthord/.local/bin` first, `GOPATH=/var/lib/kanthord/go` and `CARGO_HOME=/var/lib/kanthord/.cargo`, because the root of a slot is read-only.
+- `flake.nix` takes precedence over every stack. It drafts `mcr.microsoft.com/devcontainers/base:bookworm` with the feature `ghcr.io/devcontainers/features/nix:1`, the `onCreateCommand` `nix print-dev-env > /etc/kanthord-nix-env.sh` and `containerEnv` `BASH_ENV=/etc/kanthord-nix-env.sh`, so each `bash -c` of a slot loads the development shell. It checks `nix --version`.
+- A repository with no manifest has no detected source.
+
+### The universal environment
+
+- The universal environment is the document `static/environment/universal.json` of the `engine` repository. It holds `mcr.microsoft.com/devcontainers/base:bookworm` with the features of Node 24, Python 3.12, Go and Java 21, each at a pinned version.
+- It applies only at the `image` target, when no other source exists.
+
+### Environment secrets
+
+- `environment_secret` is a credential platform of the Project Service. Its value is one secret text. It has the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) `/api/project/environment-secret`.
+- The repository binding key `environment_secrets` maps a variable name to a credential name, for example `{ "NODE_AUTH_TOKEN": "npm-token" }`. A name matches `^[A-Z_][A-Z0-9_]*$`, and a binding holds at most 16 names.
+- A credential that is absent, archived or of another platform refuses the write with 400 `project.bindings.repository.environment_secret_invalid` and `details: { binding, variable, credential }`.
+- `kanthord project environment secret set <project-id> <binding-id> <variable> --credential <name> --file <path>` creates the credential when it is absent, rotates it when it exists, and writes the binding key.
+- The KanthorD layer mounts each secret into each `onCreateCommand` step with `--secret id=<variable>,src=<file>` and `RUN --mount=type=secret,id=<variable>`. The step exports the variable from the mounted file before the command. The source file has mode `0600` and the run removes it.
+- The digest holds the variable names and the revision of each credential, never a value. A rotation is a new digest.
+- No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, a slot or a log. A private-registry install in a checkout runs in the slot, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
+
+### The cache volume
+
+- Each group at the `image` target holds one volume `kanthord_cache_<id>`, with `<id>` derived from the owner, the project and the resource identity. It carries the owner label.
+- Each slot of a worker binding that names the group and each proof container mount it at `/var/lib/kanthord/.cache`.
+- The KanthorD layer writes `npm_config_cache`, `npm_config_store_dir`, `PIP_CACHE_DIR`, `GOMODCACHE` and `CARGO_HOME` below that path into `ENV`, unless the document sets the variable.
+- The volume key is the group and not the digest, so a new digest keeps the cache warm. Garbage collection removes the volume of a group that no current binding holds.
+
+### The limits of a run
+
+- The `project` section of the configuration holds `environment_build_timeout_ms`, default 1800000, and `environment_memory_mb`, default 4096.
+- The layer build, the image check and the proof container take `--memory <environment_memory_mb>m`. `devcontainer build` takes no memory flag.
+
+### The environment trace
+
+- The Tracking Service admits a server trace that names no execution. Each run opens the trace root `project.environment` with the attributes `project.id`, `project.binding.name`, `environment.target`, `environment.source` and `environment.digest`.
+- The run adds the child spans `environment.build`, `environment.setup` and `environment.proof`. A failed step ends its span with the status `Error` and `error.type` set to the class.
+- The trace decides nothing. The status never reads it.
+
+### The agent `env@1`
+
+- `env@1` is a one-shot agent session that the Onboarding component starts in the server, as the Workbench Service runs a session. It holds no worker, no registration and no claim.
+- Its model comes from the enablement of the agent `env@1` with the holder `server`. With no enabled `env@1`, the component starts no session, and the failure stays for the human.
+- The session reads the files of the base-branch head through read-only tools. It writes only the stored environment of its binding, through the tool `environment_write`. The write is a binding revision under the service identity of the Project Service.
+- The tool `probe` runs one command of a fixed read-only allowlist in a throwaway container of the last built image, with `--network=none`, `--read-only` and the checkout mounted read-only: `cat /etc/os-release`, `uname -a`, `command -v <word>`, `<word> --version`, `ls <path>`, `dpkg -l` and `apk info`.
+- Each `environment_write` is one attempt. The component runs the run of the new digest and answers the outcome, the class and the tail to the session. A session ends at a passed proof or after 5 attempts.
+- At the `image` target, the component starts a session when the first run of a group fails and the source is `detected`, `universal` or `none`.
+- After a failure of a digest whose `repairs` is below 3, the component starts a repair session with the proof file as its input, and it increments `repairs` of that file.
+- The waiting nodes continue when the status is `ready`.
+
+### The slot build before the Onboarding component
+
+The first layer of the build builds the image at the slot start, before the Onboarding component exists. These rules hold until the Onboarding component replaces them.
+
+- `EnvironmentImages` of `src/apps/server/environment-image.ts` builds the image synchronously at a slot start of the `container` placement when the tag is absent. One build runs for each tag.
+- DECIDED 2026-10-23 by Aelita, pending Ulrich: a stored environment wins over the repository devcontainer of the other repository bindings of the project. Two stored environments in one project fail the slot start with `project.environment.ambiguous`. The `environment` key of a worker binding replaces this rule.
+- A failed build logs `worker.pool.environment_image_failed` with the class `build_failed` or `image_invalid`, the tag and the last 4 KiB. The server keeps the failure of a tag for 15 minutes or until the next binding revision. The Onboarding run replaces this code with the proof file.
+
+### The error codes of an environment
+
+| HTTP | Code                                                     | Condition                                                                                                                 |
+| ---- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `project.environment.invalid`                            | The environment document is no JSON object, holds a refused key, a refused value or a wrong type.                         |
+| 400  | `project.bindings.worker.environment_required`           | A worker binding at the `container` placement omits `environment`, and the project holds two repository bindings or more. |
+| 400  | `project.bindings.worker.environment_unknown`            | `environment` names no repository binding of the submitted set.                                                           |
+| 400  | `project.bindings.worker.field_forbidden`                | A worker binding at another placement holds `environment`.                                                                |
+| 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                   |
+| log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                        |
+| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                 |
+| 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                  |
+| 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                 |
+
 ## The client identity
 
 The Project Service holds no table of client identities and no secret of a client identity.
@@ -370,7 +630,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - A repository with no instruction file shows one line that names the four files and the base branch.
 - The last row of the list is `Project prompt`. It expands to its Markdown like a file row. Its `Edit` dialog writes the draft only, and the Save of the binding stores it.
 - Each row holds the switch of its `working_layer` source. The switch edits the draft, and the Save of the binding stores it. An absent file keeps its switch. A row with its switch off is dimmed and shows `off`.
-- The binding draft carries `working_layer` unchanged from the read to the write.
+- The binding draft carries `working_layer`, `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
 - A refused read shows an inline alert with its code, `Retry` and a link to the SSH credential. It hides the rows.
 - A new binding, or a draft that changes the address, the SSH credential or the base branch, shows `Save the binding to read its instruction files.` and makes no read.
 - The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
@@ -397,6 +657,13 @@ At the `worker` placement, the server derives the client identity of an instance
 - The row of a repository binding holds a Verify icon. It calls `project.binding.verify` and shows one badge for the address, one for the SSH credential and one for the credential.
 - Verify and Save of the binding form stay disabled until every required field holds a value. A line above the action row names the missing fields.
 - The form of a repository binding holds Verify on the left of its action row. It calls `project.binding.check` with the draft configuration and shows the same three badges. A change of the platform, the address, the SSH credential, the credential or the action resets the badges.
+- The row of a repository binding shows the badge `Environment · <status>` for each status other than `none`, from [the environment list](#the-environment-list) that the project page polls.
+- The sheet of a saved repository binding holds the section `Environment`. It shows the source, the target, the status badge, the short digest and the red baseline as one line for each check, for example `pnpm test · exit 1`.
+- A failed environment shows its class, its command and exit code, the tail in a scrollable block with `Copy`, and the reproduce command with `Copy`.
+- The section holds `Run onboarding again`, `Edit environment` and `Copy environment`. `Run onboarding again` calls `project.binding.environment.rebuild` and shows a toast with the result. `Copy environment` copies the `environment` of `project.binding.environment.get` as indented JSON.
+- `Edit environment` opens a sheet with one text field that holds the stored environment as indented JSON. `Save environment` calls `project.binding.environment.set`. The sheet checks before the send that the text is one JSON object, and it shows "The environment is not a JSON object." otherwise. A refusal of the server shows its message under the field.
+- The path `/projects/<project>?tab=bindings&environment=<binding name>` opens the sheet of that binding at its `Environment` section.
+- The form of a worker binding at the `container` placement holds the select `Environment`. It lists the repository bindings of the draft set. With one repository binding, it preselects it. With two or more, the form marks the field as required.
 
 ## Repository layout, build, test and release
 
