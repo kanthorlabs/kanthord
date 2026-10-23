@@ -1303,7 +1303,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The timeline is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
 - A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`.
 - A span with a start and no end shows `Running` and a bar to the axis end while the trace is `open`. In a trace that is not `open`, it shows `No end recorded` and a bar of zero width at its start.
-- An `agent.turn` row shows its tokens and `Est. cost`. A `worker.task`, a `worker.judgement` and an `agent.session` row show the sums of the turns below them.
+- An `agent.turn` row shows its tokens and `Est. cost`. A `worker.task` and an `agent.session` row show the sums of the turns below them.
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
 - The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.

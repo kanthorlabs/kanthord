@@ -29,7 +29,7 @@ A `stop` can also carry `detail`, the cause text of the stop. A native worker se
 - the text of a git state violation after an agent turn, with the reason `operation_failed` and a code `worker.turn.*`;
 - the JSON result of a verification that failed twice because of the infrastructure, with the reason `operation_failed` and the code `worker.verification.infrastructure_failed`.
 
-An error with a code gives the code and no `detail`. A `budget_end` stop, a `no_progress` stop and the code `worker.merge.markers_left` carry no `detail`. The worker removes the secrets of the credential, bearer values, JWTs and tokens of 32 or more characters, and cuts the text to 300 characters. A file path stays visible when it holds at least three `/`, no segment of 32 or more characters, and no `+` or `=`. `detail` is optional, a nonempty string of at most 300 characters, and changes no count. The server stores the whole `stop`, `detail` included, as JSON in the `stop` column of the execution row, so `detail` needs no new column.
+Any other error with a code, for example `repository.node_branch.missing`, gives the code and no `detail`. A `budget_end` stop, a `no_progress` stop and the code `worker.merge.markers_left` carry no `detail`. The worker removes the secrets of the credential, bearer values, JWTs and tokens of 32 or more characters, and cuts the text to 300 characters. A file path stays visible when it holds at least three `/`, no segment of 32 or more characters, and no `+` or `=`. `detail` is optional, a nonempty string of at most 300 characters, and changes no count. The server stores the whole `stop`, `detail` included, as JSON in the `stop` column of the execution row, so `detail` needs no new column.
 
 | `stop.reason`                                                                                     | `stop.code`                                                                     |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -40,15 +40,15 @@ An error with a code gives the code and no `detail`. A `budget_end` stop, a `no_
 
 A native steps execution sends `operation_failed` with these codes of its own:
 
-| `stop.code`                                 | Cause                                                                                    |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `repository.node_branch.missing`            | The node branch is missing at the repository after a recorded push.                      |
-| `worker.turn.branch_changed`                | An agent turn left a checkout off the node branch.                                       |
-| `worker.turn.history_rewritten`             | An agent turn moved the head to a commit that does not contain the head before the turn. |
-| `worker.turn.git_in_progress`               | An agent turn left a merge, rebase, `am`, cherry-pick or revert in progress.             |
-| `worker.turn.merge_missing`                 | A conflict turn ended with no open merge of the base.                                    |
-| `worker.merge.markers_left`                 | A conflicted file still holds a conflict marker after the conflict turn.                 |
-| `worker.verification.infrastructure_failed` | A verification failed because of the infrastructure on its run and on its rerun.         |
+| `stop.code`                                 | Cause                                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repository.node_branch.missing`            | The node branch is missing at the repository after a recorded push.                                                                                            |
+| `worker.turn.branch_changed`                | An agent turn left a checkout off the node branch.                                                                                                             |
+| `worker.turn.history_rewritten`             | An agent turn moved the head to a commit that does not contain the head before the turn.                                                                       |
+| `worker.turn.git_in_progress`               | An agent turn left a merge, `am`, cherry-pick or revert in progress on the node branch. An open rebase detaches `HEAD` and gives `worker.turn.branch_changed`. |
+| `worker.turn.merge_missing`                 | A conflict turn ended with no open merge of the base.                                                                                                          |
+| `worker.merge.markers_left`                 | A conflicted file still holds a conflict marker after the conflict turn.                                                                                       |
+| `worker.verification.infrastructure_failed` | A verification failed because of the infrastructure on its run and on its rerun.                                                                               |
 
 A native evaluation execution also sends `worker.verification.infrastructure_failed`. [How the coder@1 worker works](../../explanation/coder-worker.md#how-the-execution-ends) explains each end of a steps execution.
 

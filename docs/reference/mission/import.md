@@ -27,7 +27,7 @@ A plan file is a node file or a task file. It holds exactly one of `intent` and 
 
 - A node file holds `intent`: `implement` or `examine`. It takes the optional `id` (`node_<ulid>`), `depends_on`, `tags`, `commit_type`, `bindings` and `verifications`.
 - A task file holds `node`: the plan file name of a node file of the import set with `intent: implement`. It takes the optional `id` (`task_<ulid>`), `bindings: []` and `verifications`.
-- A task file refuses `depends_on`, `tags` and `intent`, and `commit_type` as an unknown key. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
+- A task file refuses `depends_on`, `tags`, `intent` and `commit_type` with `mission.import.plan_invalid`. `details.reason` is `depends_on_forbidden`, `tags_forbidden`, `form_invalid` or `unknown_key`. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
 - After the front matter, one H1 supplies `name`, one `## Requirement` section supplies `requirement`, and one `## Criterion` section supplies `criterion`.
 - An absent `tags` reads `[]`.
 - `commit_type` names the type of every worker commit of the node and of its pull request title: `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore`. An absent `commit_type` stays absent, and the worker uses `feat`. Another value fails with `mission.node.content_invalid`. [The commit names](../../explanation/coder-worker.md#the-commit-names) shows the headers.

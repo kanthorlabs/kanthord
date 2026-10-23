@@ -41,15 +41,15 @@ The release body holds `further_work` and an optional `stop`. A `stop` requires 
 
 A native steps execution sends `operation_failed` with these codes of its own:
 
-| `stop.code`                                 | Cause                                                                                    |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `repository.node_branch.missing`            | The node branch is gone after a recorded push.                                           |
-| `worker.turn.branch_changed`                | An agent turn left a checkout off the node branch.                                       |
-| `worker.turn.history_rewritten`             | An agent turn moved the head to a commit that does not contain the head before the turn. |
-| `worker.turn.git_in_progress`               | An agent turn left a merge, rebase, `am`, cherry-pick or revert in progress.             |
-| `worker.turn.merge_missing`                 | A conflict turn ended with no open merge of the base.                                    |
-| `worker.merge.markers_left`                 | A conflicted file still holds a conflict marker after the conflict turn.                 |
-| `worker.verification.infrastructure_failed` | A verification failed because of the infrastructure on its run and on its rerun.         |
+| `stop.code`                                 | Cause                                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repository.node_branch.missing`            | The node branch is gone after a recorded push.                                                                                                                 |
+| `worker.turn.branch_changed`                | An agent turn left a checkout off the node branch.                                                                                                             |
+| `worker.turn.history_rewritten`             | An agent turn moved the head to a commit that does not contain the head before the turn.                                                                       |
+| `worker.turn.git_in_progress`               | An agent turn left a merge, `am`, cherry-pick or revert in progress on the node branch. An open rebase detaches `HEAD` and gives `worker.turn.branch_changed`. |
+| `worker.turn.merge_missing`                 | A conflict turn ended with no open merge of the base.                                                                                                          |
+| `worker.merge.markers_left`                 | A conflicted file still holds a conflict marker after the conflict turn.                                                                                       |
+| `worker.verification.infrastructure_failed` | A verification failed because of the infrastructure on its run and on its rerun.                                                                               |
 
 [How the coder@1 worker works](coder-worker.md#how-the-execution-ends) explains each end. `reviewer@1` also sends `worker.verification.infrastructure_failed`.
 
@@ -65,12 +65,14 @@ The Scheduler opens the root span of an execution after the claim. Every span of
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
 flowchart TB
     accTitle: The span tree of one execution
-    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and git spans. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add session, turn and tool spans. An external harness adds progress spans.
+    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and git spans, and a phase holds the release-gate verifications and the conflict turns. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add session, turn and tool spans. An external harness adds progress spans.
     root(["Root span<br/>Scheduler"])
     root --> phase["worker.phase<br/>native"]
     phase --> task["worker.task<br/>native"]
     task --> verify["worker.verification<br/>native"]
     phase --> git["worker.git<br/>native"]
+    phase --> verify
+    phase --> turn
     root --> evaluation["worker.evaluation<br/>native"]
     evaluation --> verify2["worker.verification<br/>native"]
     task --> turn["agent.turn<br/>both"]
