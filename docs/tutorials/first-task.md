@@ -47,7 +47,15 @@ The binary contains the server, the CLI and the dashboard. It needs no Node.js a
 
 ### 1.1 Install the binary
 
-Get the binary for your machine and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases): `kanthord-darwin-arm64`, `kanthord-linux-x64` or `kanthord-linux-arm64`. To build the binary from a checkout of this repository instead, run `make bootstrap`, then `make release-build`. The build needs an official Node.js 24 build, 24.15 or later, and `pnpm`. On a Mac, it also needs `codesign` and refuses a Node.js of Homebrew. The file is then `dist/kanthord-<os>-<arch>` of the checkout, for example `dist/kanthord-darwin-arm64`. Run the install commands below in `dist/`.
+Get the binary for your machine and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases): `kanthord-darwin-arm64`, `kanthord-linux-x64` or `kanthord-linux-arm64`.
+
+Today the releases page holds no release. Until the first release, only a contributor can build the binary from a checkout of this repository. See [Contribute](https://github.com/kanthorlabs/kanthord#contribute).
+
+A contributor build works as follows:
+
+- Run `make bootstrap`, then `make release-build`.
+- The build needs an official Node.js 24 build, 24.15 or later, and `pnpm`. On a Mac, it also needs `codesign`, and it refuses a Node.js of Homebrew.
+- The file is then `dist/kanthord-<os>-<arch>` of the checkout, for example `dist/kanthord-darwin-arm64`. Run the install commands below in `dist/`.
 
 If you downloaded the file, check it against `SHA256SUMS` and unlock it. A file that you built needs neither step. On a Mac:
 
@@ -56,11 +64,12 @@ shasum -a 256 --ignore-missing -c SHA256SUMS
 xattr -d com.apple.quarantine kanthord-darwin-arm64
 ```
 
-The `xattr` command removes the macOS quarantine flag. Otherwise macOS refuses to start the binary. On Linux, run `sha256sum --ignore-missing -c SHA256SUMS`.
+The `xattr` command removes the macOS quarantine flag. Otherwise macOS refuses to start the binary. A file with no quarantine flag, for example a download with `curl`, makes `xattr` print `No such xattr`. That message is harmless. On Linux, run `sha256sum --ignore-missing -c SHA256SUMS`.
 
 Copy the binary to a directory on your `PATH`. On a Mac:
 
 ```sh
+sudo mkdir -p /usr/local/bin
 sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord
 kanthord --help
 ```
@@ -79,7 +88,7 @@ The command writes `~/.config/kanthord/kanthord.yaml`. The default configuration
 
 Start the server from a terminal whose `PATH` holds the tools of your project. For example, activate the virtualenv of a Python project first, then start the server in that terminal. The worker instances of the `server` placement inherit the `PATH` of the server.
 
-The worker passes only these variables of the server to a command: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR` and the `GIT_*` variables. A tool that needs another variable, for example `JAVA_HOME`, does not get it.
+The worker passes only these variables of the server to a command: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`. A tool that needs another variable, for example `JAVA_HOME`, does not get it. The worker sets `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` to directories of the instance. A tool that reads its configuration through these variables therefore does not find your configuration.
 
 ```sh
 GIT_AUTHOR_NAME="<git name>" GIT_AUTHOR_EMAIL="<git email>" GIT_COMMITTER_NAME="<git name>" GIT_COMMITTER_EMAIL="<git email>" kanthord serve
@@ -231,7 +240,7 @@ Add the `coder` binding from Onboarding:
 3. Enter a **Name**: `coder`.
 4. Choose the **Worker** `coder@1`.
 5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Placement** then shows `Server` selected. **Save binding** stays off until the agents load.
-6. Keep **Placement** `Server` and **Instance count** `1`. Leave **Advanced settings** closed. The **Container** card is on when rootless Podman or Docker runs on your machine. Otherwise it shows `Off.` and the cause. Keep `Server` in both cases.
+6. Keep **Placement** `Server` and **Instance count** `1`. Leave **Advanced settings** closed. The **Container** card is on when rootless Podman or Docker runs on your machine. Otherwise it shows the cause. Keep `Server` in both cases.
 7. Select **Save binding**.
 
 Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**. Onboarding counts one worker binding as enough, but the first task needs both. Add the `reviewer` binding now.
@@ -251,7 +260,12 @@ At the `server` placement, an agent command can read every file that your OS use
 The other placements:
 
 - `container`: each instance runs in its own container on this machine, with Podman or Docker. The container holds no file of your machine, and its image holds only the tools of the image. Use it when an agent command must not read the files of your user. See [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md).
-- `worker`: each instance is a `kanthord serve worker` process on this or another host. Use it to run the instance on another machine, for example one with the toolchain of the project. See [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement). That guide starts from a server in a container. With the binary, read the version with `kanthord --version`. For an instance on another host, set `gateway.bind` in `~/.config/kanthord/kanthord.yaml` to an address of your network, then start the server again.
+- `worker`: each instance is a `kanthord serve worker` process on this or another host. Use it to run the instance on another machine, for example one with the toolchain of the project. See [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement).
+
+That guide starts from a server in a container. With the binary, two steps differ:
+
+- Read the version with `kanthord --version`.
+- For an instance on another host, set `gateway.bind` in `~/.config/kanthord/kanthord.yaml` to an address of your network. Then start the server again.
 
 Add both bindings before the import. The import refuses a node when no worker binding can claim one of its states. `coder@1` claims a node in `Available`. `reviewer@1` claims it in `Waiting`, and in `External.Requested` after an external action such as a pull request.
 
