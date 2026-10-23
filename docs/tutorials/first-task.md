@@ -18,7 +18,7 @@ In KanthorD, a **node** is one unit of work of a mission. A **task** is one step
 ## What you need
 
 - A Mac with Apple silicon, or a Linux machine with an x64 or arm64 CPU. A browser on the same machine.
-- On that machine: `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent`, `ssh-add` and `ssh-keyscan`. The server does not start without them.
+- On that machine: `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent`, `ssh-add` and `ssh-keyscan`. The server does not start without them. Check them with `git --version` and `ssh -V`. On a Mac, an older Apple git fails the check. Install a newer git, for example with Homebrew.
 - The tools that your project needs to build and test, on the `PATH` of the terminal that starts the server. The sample plan of step 10 needs only `head` and `grep`.
 - A GitHub repository that you can administer. Use a test repository: the agent pushes a branch to it. The repository needs a default branch, for example `main`.
 - An account at an LLM provider of one of these platforms: `anthropic`, `openrouter`, `openai-compatible`, `openai-codex`, `anthropic-subscription` or `github-copilot`. The dashboard enables an agent only with a credential of these six platforms.
@@ -73,11 +73,13 @@ On Linux, use the name of your file, for example `kanthord-linux-x64`.
 kanthord config init
 ```
 
-The command writes `~/.config/kanthord/kanthord.yaml`. The default configuration listens on `127.0.0.1:31415` and accepts the `Host` values `127.0.0.1:31415` and `localhost:31415`. See [config init](../reference/config/init.md).
+The command writes `~/.config/kanthord/kanthord.yaml`. The default configuration listens on `127.0.0.1:31415` and accepts the `Host` values `127.0.0.1:31415` and `localhost:31415`. `config init` does not replace an existing file. See [config init](../reference/config/init.md).
 
 ### 1.3 Start the server
 
 Start the server from a terminal whose `PATH` holds the tools of your project. The worker instances of the `server` placement inherit the `PATH` of the server.
+
+The worker passes only these variables of the server to a command: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR` and the `GIT_*` variables. A tool that needs another variable, for example `JAVA_HOME`, does not get it.
 
 ```sh
 GIT_AUTHOR_NAME="<git name>" GIT_AUTHOR_EMAIL="<git email>" GIT_COMMITTER_NAME="<git name>" GIT_COMMITTER_EMAIL="<git email>" kanthord serve
@@ -86,7 +88,7 @@ GIT_AUTHOR_NAME="<git name>" GIT_AUTHOR_EMAIL="<git email>" GIT_COMMITTER_NAME="
 - The `GIT_*` variables set the identity of the commits that the agents make. The worker reads no git configuration of your machine. Without the variables, a commit has the author `kanthord <kanthord@localhost>`.
 - Keep this terminal open. The server writes its log records to this terminal. To stop the server, press `Ctrl+C`.
 
-The record "Gateway Service started" has the level `info`, that is `"level":30`, and the fields `bind` and `port`. On your machine, `bind` is `127.0.0.1` and `port` is `31415`.
+The record `"msg":"Gateway Service started. A loopback bind accepts connections from this host only."` has the level `info`, that is `"level":30`, and the fields `bind` and `port`. On your machine, `bind` is `127.0.0.1` and `port` is `31415`.
 
 ### 1.4 Sign in
 
@@ -146,7 +148,7 @@ When the badge shows `Unhealthy`, the form shows a hint below it. For a refused 
 
 For `openai-codex`:
 
-1. Select **Start sign-in**, then choose the mode.
+1. In **Sign-in Mode**, choose the mode, then select **Start sign-in**. The mode cannot change after the sign-in starts.
    - **Browser**: the server listens on `127.0.0.1:1455` of your machine. The provider sends the browser back to `http://localhost:1455/auth/callback`. The provider fixes the port, so the mode needs port 1455 free. A Codex CLI sign-in on the same machine uses the same port, so do not run both at the same time.
    - **Headless (device code)**: the mode needs no port 1455. Use it when port 1455 is not free.
 2. Select **Open sign-in page**, and sign in at the provider.
@@ -229,7 +231,7 @@ Add the `coder` binding from Onboarding:
 3. Enter a **Name**: `coder`.
 4. Choose the **Worker** `coder@1`.
 5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Placement** then shows `Server` selected. **Save binding** stays off until the agents load.
-6. Keep **Placement** `Server` and **Instance count** `1`. Leave **Advanced settings** closed.
+6. Keep **Placement** `Server` and **Instance count** `1`. Leave **Advanced settings** closed. The **Container** card is on when rootless Podman or Docker runs on your machine. Otherwise it shows `Off.` and the cause. Keep `Server` in both cases.
 7. Select **Save binding**.
 
 Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**. Onboarding counts one worker binding as enough, but the first task needs both. Add the `reviewer` binding now.
@@ -244,12 +246,12 @@ Add the `reviewer` binding on the project page:
 
 At the `server` placement, the server runs each instance as a thread. You start no process and generate no token. The agent commands and the verifications run as your OS user, with the tools on the `PATH` of the server.
 
-At the `server` placement, an agent command can read every file that your OS user can read. That includes the database and the configuration of the server, and the keys under `~/.ssh`. KanthorD removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID` from each command, so a command reaches no SSH agent of your user. Use a test repository, and bind only a repository that you trust. See [Where a worker runs](../explanation/worker.md#where-a-worker-runs).
+At the `server` placement, an agent command can read every file that your OS user can read. That includes the database and the configuration of the server, and the keys under `~/.ssh`. The configuration holds the `master_key`, so a command can read every credential of the server. A command can also stop the server process. KanthorD removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID` from each command, so a command does not find the SSH agent of your user through its environment. A command can still open the agent socket by its path. Use a test repository, and bind only a repository that you trust. See [Where a worker runs](../explanation/worker.md#where-a-worker-runs).
 
 The other placements:
 
-- `container`: each instance runs in its own container on this machine, with Podman or Docker. The container holds no file of your machine, and its image holds only the tools of the image. See [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md).
-- `worker`: each instance is a `kanthord serve worker` process on this or another host. See [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement).
+- `container`: each instance runs in its own container on this machine, with Podman or Docker. The container holds no file of your machine, and its image holds only the tools of the image. Use it when an agent command must not read the files of your user. See [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md).
+- `worker`: each instance is a `kanthord serve worker` process on this or another host. Use it to run the instance on another machine, for example one with the toolchain of the project. See [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement). That guide starts from a server in a container. With the binary, read the version with `kanthord --version`. For an instance on another host, set `gateway.bind` in `~/.config/kanthord/kanthord.yaml` to an address of your network, then start the server again.
 
 Add both bindings before the import. The import refuses a node when no worker binding can claim one of its states. `coder@1` claims a node in `Available`. `reviewer@1` claims it in `Waiting`, and in `External.Requested` after an external action such as a pull request.
 
@@ -387,6 +389,7 @@ See [Agent cooldowns](../reference/agent/cooldown.md).
 | The node returns to `Available` again and again, then moves to `Blocked` or `Paused`                                                              | A verification fails on every run. Run the verification command in a checkout of the repository, in a terminal with the same `PATH` as the server. Exit code `127` means that the command is not on that `PATH`. Install the tool, stop the server with `Ctrl+C`, and start it again from a terminal whose `PATH` holds the tool. At the `container` placement, add the tool with [Add a toolchain to the worker image](../how-to-guides/add-a-toolchain-to-the-worker-image.md). |
 | The **Attempts** tab shows **Provider failed: rate limited**, **quota exhausted** or **unavailable**, and the node stays `Available` or `Waiting` | The LLM credential has a cooldown. The **Cooldown** section of the credential page shows its end time. The node does not pause. It runs again when the cooldown ends. The **Cause:** line names the provider error. See [Provider failures](#provider-failures).                                                                                                                                                                                                                  |
 | The **Attempts** tab shows **Provider failed: unauthorized** or **bad request**                                                                   | The provider refused the call. The **Cause:** line names the refusal. Each such execution counts as a failed execution, and three in a row pause the node. For a refused API key, select **Rotate secret** on the credential page.                                                                                                                                                                                                                                                |
+| `kanthord serve` exits with `repository.connector.tool_missing` or `repository.connector.tool_version`                                            | A required tool is missing or older than its minimum. The `tool` field names it. Install the tool on the `PATH` of the terminal, then start the server again.                                                                                                                                                                                                                                                                                                                     |
 | **Live registrations** stays `Open`                                                                                                               | Select **Open workers** on the item. The Workers page shows the live registrations of the project.                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Read next
