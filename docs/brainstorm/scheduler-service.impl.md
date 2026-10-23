@@ -58,9 +58,9 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean, and `stop` as `null` or `{ reason, code, detail? }`. `detail` is a string of 1 to 300 characters.
   `false` states that the execution of the attempt requires no further work.
-  `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress`.
+  `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed`.
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
-  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`.
+  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent`.
   A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance).
   A `stop` requires `further_work: true`, and a `stop` with `further_work: false` answers 400 `gateway.request.validation_failed`.
   The Mission Service reads both fields for routing in the release transaction. The execution row stores `stop`, and nothing stores `further_work`.
@@ -189,7 +189,9 @@ The Scheduler Service implements the [match](scheduler-service.md#match) in `mat
 function admits(claimant: Claimant, facts: ClaimFacts): boolean {
   return (
     claimant.declared_intents.includes(facts.intent) &&
-    facts.tags.every((tag) => claimant.tags.includes(tag))
+    facts.tags.every((tag) => claimant.tags.includes(tag)) &&
+    (claimant.environment === null ||
+      facts.repositories.includes(claimant.environment))
   );
 }
 
@@ -206,7 +208,8 @@ function covered(
 ```
 
 - A `Claimant` holds `declared_node_states` and `declared_intents` from the worker declaration, and `tags` from the worker binding row that the claim pins.
-- `ClaimFacts` holds `intent` and `tags` at the node revision that the claim pins.
+- `ClaimFacts` holds `intent`, `tags` and `repositories` at the node revision that the claim pins. `repositories` holds the resource identity of each repository binding of the node.
+- A `Claimant` also holds `environment`: the resource identity of the repository binding that the `environment` key of a worker binding at the `container` placement names, or null. A worker binding with an environment claims only the nodes that name that repository binding. Tags do not route environments.
 - The claim walk calls `claimFacts` for each job, applies `admits`, then calls `transitions.claim` of the Mission Service. The on-demand path applies the same `admits`.
 - `declarationOf` answers `null` for a worker name with no declaration. The claim then has no claimant and answers `{ kind: "no-work" }`. It asserts nothing.
 - `unmatchedClaims` computes `covered` for each pair of a node and a claimable state. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores `instance_count`.
@@ -214,13 +217,24 @@ function covered(
 
 The collaborations of the match are below.
 
-| Owner     | Signature                                                                    | Invariant                                                                                                                                                                                                 |
-| --------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mission   | `claimFacts(tx, nodeId): { intent, tags } \| null`                           | It reads the node revision that the claim pins. It writes nothing.                                                                                                                                        |
-| Mission   | `claimFactsOf(tx, projectId): { node_id, revision, intent, tags, claims }[]` | It answers each node that is not terminal and not retired, at its current revision and at the revision of its open attempt.                                                                               |
-| Project   | `workerBindingsOf(tx, projectId): { binding_id, worker_name, tags }[]`       | It answers the current worker bindings that are no tombstone. `workerBindingOf` also answers `tags`.                                                                                                      |
-| Worker    | `declarationOf(workerName)`                                                  | It answers `declared_node_states` and `declared_intents`, or `null` for an unknown worker.                                                                                                                |
-| Scheduler | `unmatchedClaims(tx, projectId): { node_id, revision, claim }[]`             | A node write or a binding-set write never adds an unmatched pair. The caller reads it before and after its write in one `BEGIN IMMEDIATE` transaction under [architecture.impl.md](architecture.impl.md). |
+| Owner     | Signature                                                                                  | Invariant                                                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission   | `claimFacts(tx, nodeId): { intent, tags, repositories } \| null`                           | It reads the node revision that the claim pins. It writes nothing.                                                                                                                                        |
+| Mission   | `claimFactsOf(tx, projectId): { node_id, revision, intent, tags, repositories, claims }[]` | It answers each node that is not terminal and not retired, at its current revision and at the revision of its open attempt.                                                                               |
+| Project   | `workerBindingsOf(tx, projectId): { binding_id, worker_name, tags, environment }[]`        | It answers the current worker bindings that are no tombstone. `workerBindingOf` also answers `tags`.                                                                                                      |
+| Worker    | `declarationOf(workerName)`                                                                | It answers `declared_node_states` and `declared_intents`, or `null` for an unknown worker.                                                                                                                |
+| Scheduler | `unmatchedClaims(tx, projectId): { node_id, revision, claim }[]`                           | A node write or a binding-set write never adds an unmatched pair. The caller reads it before and after its write in one `BEGIN IMMEDIATE` transaction under [architecture.impl.md](architecture.impl.md). |
+
+## The environment gate
+
+- The stop reason `environment_failed` ends an execution whose environment fails, under [the environment classification](worker-service.impl.md#the-environment-classification). Its `stop.code` is `setup_failed` or `command_absent`, the closed set `EnvironmentFailure` of `src/scheduler/contract.ts`.
+- An `environment_failed` stop neither counts nor ends the count of [the loss settlement](#loss-settlement), and it sets no `available_at`. The node returns to `Available` or `Waiting`.
+- DECIDED 2026-10-23 by Aelita, pending Ulrich: before the Onboarding component exists, consecutive `environment_failed` releases of a node take the growing stop backoff, and the node moves to `Paused` at `mission.consecutive_failure_limit`. The gate below replaces this rule.
+- After the commit of an `environment_failed` release, the release calls `environmentFailed(input)` of the [Onboarding component](project-service.impl.md#the-failure-of-an-execution) with the resource identities of the repository bindings of the node. The environment of each binding is then `failed`.
+- The claim selection skips a job whose node names a repository binding with an environment that is not claimable. `environmentsClaimable(projectId, resourceIdentities)` of the Project Service answers it from process memory inside the claim transaction. The node and the job stay unchanged.
+- An environment is claimable when its status is `none` or `ready`. The gate holds at every placement, because a thread slot of the `server` placement serves every repository of the project.
+- The Onboarding component calls `wake(projectId)` when an environment of the project becomes `none` or `ready`, so the parked work pulls claim at once.
+- `unmatchedClaims` reads no environment status, because a status is temporary and a write never refuses for it.
 
 ## Configuration
 
