@@ -214,13 +214,15 @@ The base branch can move while the node waits. **Merge step M** brings the newes
 2. Otherwise the worker runs `git merge --no-edit --no-ff` with the merge message `feat: merge main`, for a node with no `commit_type` and the base `main`.
 3. A merge with no conflict ends the step. The merge commit is the new head.
 4. A merge with a conflict sends `swe@1` one **conflict turn**. The instruction names the binding, the directory, the base branch and the conflicted files. It asks the agent to resolve every conflict and to remove every marker. It tells the agent that the worker commits.
-5. Gate G then runs in conflict mode. It scans only the conflicted files for a line that starts with `<<<<<<<` or `>>>>>>>`, followed by a space or the end of the line. A marker aborts the merge and stops the execution with `operation_failed` and the code `worker.merge.markers_left`. With no marker, the gate concludes the merge with the merge message.
+5. Gate G then runs in conflict mode. It scans only the conflicted files for a line that starts with `<<<<<<<` or `>>>>>>>`, followed by a space or the end of the line. A marker aborts the merge and stops the execution with `operation_failed` and the code `worker.merge.markers_left`, with no `detail`. With no marker, the gate concludes the merge with the merge message.
+
+After a `worker.merge.markers_left` stop, the node branch holds no part of the merge and no part of the resolution. Its head is the commit before the merge. The stop path runs gate G in checkpoint mode, which finds no open merge and nothing to commit, and pushes the node branch at that head. At step 5, that head is the pushed head. At step 8, the push carries the unit commits of this execution. The next execution merges the base again at step 5 and sends a new conflict turn.
 
 ### Step 6: plan the units
 
 The node branch survives between executions. Step 6 decides which units still need work, from records on the node branch only. It runs no verification and asks the agent nothing.
 
-The worker reads the **done records** of each checkout: the `Kanthord-Done` trailers of the commits on `origin/<base_branch>..HEAD`. It takes the union over the checkouts. A done record has the form `Kanthord-Done: <unit id> <digest>`. The digest is the SHA-256 hex of the canonical JSON, with sorted keys, of the content of the unit.
+The worker reads the **done records** of each checkout: the `Kanthord-Done` trailers of the commits on `origin/<base_branch>..HEAD`. It takes the union over the checkouts. A done record has the form `Kanthord-Done: <unit id> <digest>`. The digest is the SHA-256 hex of the canonical JSON, with sorted keys, of the content of the unit. For a task, the content is the object `{ name, requirement, criterion, verifications, bindings }` of the task, with `bindings` always `[]`. For the node unit, the content is the node content: `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent`, `tags`, and `commit_type` when the node sets it. The id and the plan file name are not part of the content, so a rename of the plan file reopens no unit.
 
 For each unit, in the order of the plan, the first matching row decides:
 
@@ -242,6 +244,8 @@ After the units, the worker decides the **verdict unit**: one more run of the **
 | 5   | Neither exists.                                                          | No verdict unit.                                                       |
 
 A judged commit is **on the node history** when the checkout holds it and it is an ancestor of the head. A judged commit that fails this check drops out of the rule, and the worker logs `judged commit off the node history`.
+
+Only a binding with a judged commit takes part in the rule. Change requests give a judged commit only to a binding that holds a change request. An assessment gives one only to a binding with a `repository` address in `tested_input`. A binding with no judged commit is ignored by the rule, so a verdict turn that changes only that binding counts as unchanged.
 
 The **verdict rule** holds when at least one checkout with a judged commit holds new work after it: `git rev-list --first-parent --ancestry-path --no-merges <judged commit>..HEAD` is not empty. A merge commit never counts. A base merge therefore never satisfies the rule, also when the base brings commits of its own.
 
@@ -293,10 +297,12 @@ The worker classifies the result of each verification command. The first matchin
 | #   | Condition                                                                                                    | Class                  | What the worker does                                             |
 | --- | ------------------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------------------------------------------- |
 | 1   | The budget is spent, the wall deadline killed the command, or the command did not start before the deadline. | Budget end             | Ends the unit loop and takes the budget end.                     |
-| 2   | The limit of 10 minutes killed the command (`timed_out: true`), or a stop of the execution cancelled it.     | Code failure           | Sends a revision instruction.                                    |
+| 2   | The limit of 10 minutes killed the command, or a stop of the execution cancelled it.                         | Code failure           | Sends a revision instruction.                                    |
 | 3   | The command did not spawn, a signal ended it, or it exited with a code from 129 to 192.                      | Infrastructure failure | Runs the command once more, and classifies the new result.       |
 | 4   | Exit code 0.                                                                                                 | Pass                   | Runs the next command, or completes the unit after the last one. |
 | 5   | Any other exit code, 127 included.                                                                           | Code failure           | Sends a revision instruction.                                    |
+
+The limit of 10 minutes kills the whole process group of the command with `SIGKILL`. The result then holds `"exit_code": null`, `"signal": "SIGKILL"` and `"timed_out": true`. Row 2 decides before row 3, so this signal is a code failure, and the revision instruction says that the command reached its deadline. A kill at the wall deadline gives the same result values, and row 1 makes it a budget end.
 
 A pass on the rerun of an infrastructure failure is a pass. A second infrastructure failure stops the execution with `operation_failed`, the code `worker.verification.infrastructure_failed`, and a detail that holds the command and its result. That stop counts toward `mission.consecutive_failure_limit`. The rerun does not start when the deadline already passed: the result is then a budget end. When the execution is already stopping, the rerun does not start, and the result is a code failure. An exit code from 129 to 192 is the code of a shell after a signal, for example 137 after an out-of-memory kill.
 
@@ -326,7 +332,7 @@ In the checkpoint of any other stop, a violation also restores `before` on every
 
 A rebase in progress detaches `HEAD`. G1 therefore finds it first and reports `worker.turn.branch_changed`. An open merge, `am`, cherry-pick or revert keeps `HEAD` on the node branch, so G3 reports `worker.turn.git_in_progress`.
 
-Every git command of the worker runs with the hooks of the repository turned off (`core.hooksPath=/dev/null`), and with no global or system git configuration. A `commit-msg` hook of the target repository therefore cannot refuse a worker commit. The verifications of the node run the checks of the repository instead.
+Every git command of the worker runs in an isolated git environment: `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_ATTR_NOSYSTEM=1`, and through `GIT_CONFIG_COUNT=3` the keys `core.hooksPath`, `core.excludesFile` and `core.attributesFile`, each `/dev/null`. The worker removes `GIT_CONFIG_PARAMETERS` of the host, the pager, editor and askpass variables, and the SSH agent variables. When the environment names no author or committer, the identity is `kanthord <kanthord@localhost>`. The hooks of the repository therefore never run, and no global or system git configuration applies. A `commit-msg` hook of the target repository therefore cannot refuse a worker commit. The verifications of the node run the checks of the repository instead.
 
 ### The commit names
 
@@ -340,7 +346,7 @@ Every worker commit has the header `<commit_type>: <subject>`, with no scope. Th
 | Checkpoint commit  | The `name` of the current unit | `feat: document the route`    |
 | Pull request title | The `name` of the node         | `feat: add a health endpoint` |
 
-The first letter of the subject becomes lowercase. The worker cuts the subject so that the header holds at most 100 characters, and then removes every final full stop and space. The body holds the unit id on its own line, and the done record after a pass. The worker writes no other trailer.
+Every worker commit of the node uses the `commit_type` of the node, the merge commit and the checkpoint commit included: a node with `commit_type: fix` merges its base as `fix: merge main`. The first letter of the subject becomes lowercase. The worker cuts the subject so that the header holds at most 100 characters, and then removes every final full stop and space. The body holds the unit id on its own line, and the done record after a pass. The worker writes no other trailer.
 
 The design requires that every commit of the execution is attributable to its task and its attempt. Today the body names the unit and no attempt, and the evidence of the attempt names the head commit.
 
@@ -399,7 +405,7 @@ The release body decides the next state of the node. A release with `further_wor
 | The budget ends, and no unit completed in this execution           | The same                                                                                                      | `further_work: true`, `stop` with the reason `budget_end` and the code `turns` or `wall_time` | `Available`, or `Paused` at `mission.further_work_limit` |
 | Gate G finds a violation of the git state                          | Restore each checkout to `before`, make no checkpoint commit, push                                            | `further_work: true`, `stop` with `operation_failed`, the code `worker.turn.*` and the detail | `Available`, or `Paused` at the failure limit            |
 | A stop: `provider_failed`, `no_progress`, `operation_failed`       | Abort the agent, run gate G in checkpoint mode, push. A violation there restores `before` and commits nothing | `further_work: true`, `stop` with the reason, the code and the detail when one exists         | `Available`, or `Paused` at the failure limit            |
-| The claim is revoked, for example by a pause                       | Abort the agent. No gate, no push                                                                             | No release                                                                                    | Set by the human act                                     |
+| The claim is revoked, for example by a pause                       | Abort the agent. No gate, no push                                                                             | No release. The execution counts as no failure and resets the failure and stall counts        | Set by the human act                                     |
 
 The failure limit is `mission.consecutive_failure_limit`. A `provider_failed` stop with a busy code does not count toward it, as [Limits that stop a loop](worker.md#limits-that-stop-a-loop) explains.
 
