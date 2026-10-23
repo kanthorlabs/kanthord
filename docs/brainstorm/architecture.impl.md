@@ -1129,11 +1129,11 @@ The import boundaries follow the public files.
 
 ## The credential route group of a component
 
-- The LLM, Repository and Storage components each declare one credential route group in their own `contract.ts`.
+- The LLM, Repository, Storage and Project components each declare one credential route group in their own `contract.ts`.
 - The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credential_name`, `POST /api/<component>/credential/:credential_name/revision`, `PUT /api/<component>/credential/:credential_name/metadata`, `POST /api/<component>/credential/:credential_name/revision/:revision/revoke`, `POST /api/<component>/credential/:credential_name/archive`, `POST /api/<component>/credential/:credential_name/verify` and `POST /api/<component>/credential/check`.
 - The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`.
 - Every route uses the `human` access policy. The LLM routes that a worker instance calls are the exception, and [llm.impl.md](llm.impl.md) declares them with the `human_or_worker` or the `worker` policy.
-- An LLM credential row has a holder: `server` or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule. A row of the Repository or the Storage component holds `server` only.
+- An LLM credential row has a holder: `server` or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule. A row of the Repository, the Storage or the Project component holds `server` only.
 - Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
 - A create of a platform of another component answers 400 `credential.platform.unsupported`.
 - A read or a write of a name whose platform belongs to another component answers 404 `credential.credential.not_found`.
@@ -1433,7 +1433,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - A live registration is not draining and carries the resource identity of the worker binding.
 - At the `worker` placement, a listed instance with no connection sets the detail "Instance <name> is not connected. Start kanthord serve worker with its configuration."
 - A project whose worker bindings name no agent of a hosted worker shows `Enabled agents` as `Done`.
-- The item `Environment` takes the environment states of the [environment bar](#the-environment-bar). Its detail names each binding that is not `none` or `ready`, with its status and, for `failed`, its class, for example "engine: failed, command_absent".
+- The item `Environment` takes the environment states of the [environment bar](#the-environment-bar). Its detail names each binding that is not `none` or `ready`, with its status and, for `failed`, its class, for example "engine: failed, command_absent". The detail joins several bindings with "; ". The done detail is "Each repository binding holds a ready environment or needs none." With no read answer, the detail is "No environment state is known."
 - The panel reads the binding set, the worker bindings, the registrations, the worker instance records, the agents, the LLM credentials, the mission and its nodes. It reads them again when the binding set version of the project changes. Any other change shows only after a browser reload or a new open of the project page. A plan import and a new live registration are examples. Until then the item keeps its old state, for example `Plan import` stays `Open`.
 - A failed read shows in an alert with `Retry`. An item of that read shows `Open`. Its detail line does not state the failed read. It states an absence, for example "The project holds no repository binding."
 - The links of the panel pass no `return_to`. After the save of the `Enable agents` sheet, the human stays on the detail of the LLM credential.
@@ -1447,6 +1447,8 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The bar sticks to the top of the content area, below the top bar of the shell, above the header of the project. It stays on both tabs of the project page.
 - The bar shows one environment: the first `failed` state, else the state with the earliest `run_started_at` among `pending`, `building` and `proving`. With more states that are not `none` or `ready`, it adds "and <n> more".
 - It shows the status badge `Pending`, `Building`, `Proving`, `Ready` or `Failed`, the binding name, the step line and the elapsed time of the step, for example "engine · Building the image · 2 min".
+- The elapsed time shows "<n> s" below one minute, else "<n> min" in whole minutes. It changes at each poll.
+- A failed read of the list keeps the last answer and shows no error.
 - The step lines are "Reading the repository", "Building the image", "Proving on the base branch head" and "Ready". While `repairing` is true, the step line is "Repairing with env@1 · repair <repairs> of 3". A failed state shows "Failed: <class>" and the command, for example "Failed: command_absent · pnpm".
 - A `Progress` of shadcn shows the step: at the `image` target, read, build and proof are steps 1 to 3 of 3; at the `host` target, read and proof are steps 1 and 2 of 2. A failed state shows no progress.
 - The bar holds `Details`. It opens `/projects/<project>?tab=bindings&environment=<binding name>`.

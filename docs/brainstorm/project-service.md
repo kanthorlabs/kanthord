@@ -93,7 +93,7 @@ Onboarding resolves the environment, builds its image when a slot runs in a cont
 A node whose repository binding holds an environment that is not ready waits. It changes no state while it waits, and it continues when the environment is ready.
 An environment failure of an execution stops that execution with its own reason, `environment_failed`. It never becomes a revision turn of the coder agent, and it never counts toward the failure limit of the node.
 The human acts only when the proof or an execution fails. The human then stores a fixed environment or runs the onboarding again.
-Only a human with the project scope changes the stored environment. A push to the repository changes the environment only through the repository files that the sources read.
+Only a human with the project scope and the agent `env@1` change the stored environment. `env@1` changes only an environment that it wrote or that no one stored. A push to the repository changes the environment only through the repository files that the sources read.
 
 ## Execution configuration and instance count
 

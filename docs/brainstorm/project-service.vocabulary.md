@@ -92,7 +92,7 @@ The count of the agent repairs of one failed digest, kept in its proof file. The
 ## environment secret
 
 A credential of the platform `environment_secret` that a repository binding names. It reaches only the image build, as a build secret.
-The binding `api` names the environment secret `npm-token` as `NODE_AUTH_TOKEN`, so the build installs from the private registry.
+The binding `api` names the environment secret `registry-auth` as `REGISTRY_AUTH`, so the build installs from the private registry.
 
 ## capability
 
