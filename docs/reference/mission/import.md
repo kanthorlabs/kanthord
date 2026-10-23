@@ -25,11 +25,13 @@ The import set has one of two formats:
 
 A plan file is a node file or a task file. It holds exactly one of `intent` and `node`.
 
-- A node file holds `intent`: `implement` or `examine`. It takes the optional `id` (`node_<ulid>`), `depends_on`, `tags`, `bindings` and `verifications`.
+- A node file holds `intent`: `implement` or `examine`. It takes the optional `id` (`node_<ulid>`), `depends_on`, `tags`, `commit_type`, `bindings` and `verifications`.
 - A task file holds `node`: the plan file name of a node file of the import set with `intent: implement`. It takes the optional `id` (`task_<ulid>`), `bindings: []` and `verifications`.
-- A task file refuses `depends_on`, `tags` and `intent`. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
+- A task file refuses `depends_on`, `tags` and `intent`, and `commit_type` as an unknown key. An `id` with the prefix of the other file form fails with `mission.import.plan_invalid`.
 - After the front matter, one H1 supplies `name`, one `## Requirement` section supplies `requirement`, and one `## Criterion` section supplies `criterion`.
 - An absent `tags` reads `[]`.
+- `commit_type` names the type of every worker commit of the node and of its pull request title: `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore`. An absent `commit_type` stays absent, and the worker uses `feat`. Another value fails with `mission.node.content_invalid`. [The commit names](../../explanation/coder-worker.md#the-commit-names) shows the headers.
+- `name` becomes the commit subject of the node or the task. A `name` that leaves no subject after the final full stops and spaces are removed, for example `.`, fails with `mission.node.content_invalid`.
 
 An `implement` node with no task file is its own single work unit. An `implement` node with one or more task files covers its verifications with its tasks. Each verification of such a node equals a verification of one of its tasks in the import set. Another verification fails with `mission.import.verification_uncovered`.
 
@@ -235,17 +237,18 @@ The CLI exits `1` on every failure and writes `<code>: <message>` to stderr. A d
 | `preview_digest`        | 64 lower-case hex chars          | Apply only | Digest from the preview.                                                               |
 | `confirmed_retirements` | array of `node_<ulid>`           | Apply only | Exactly the `retirements` set of the preview.                                          |
 
-| Entry field                        | Type                           | Required   | Purpose                                                                                       |
-| ---------------------------------- | ------------------------------ | ---------- | --------------------------------------------------------------------------------------------- |
-| `filename`                         | string                         | Yes        | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                     |
-| `intent`                           | `implement` or `examine`       | Node entry | Intent of the node. A task entry forbids it.                                                  |
-| `node`                             | plan file name                 | Task entry | The `implement` node entry of the task. A node entry forbids it.                              |
-| `name`, `requirement`, `criterion` | nonblank string                | Yes        | Node content.                                                                                 |
-| `verifications`                    | array of nonblank strings      | Yes        | At least one verification.                                                                    |
-| `bindings`                         | array of binding names         | Yes        | Binding names; see [Bindings of a node](#bindings-of-a-node). A task entry holds `[]`.        |
-| `id`                               | `node_<ulid>` or `task_<ulid>` | No         | Current node or task to keep.                                                                 |
-| `tags`                             | array of tags                  | No         | Tags that a worker binding needs to claim the node; `[]` by default. A task entry forbids it. |
-| `depends_on`                       | array of plan file names       | No         | Dependency targets. A task entry forbids it.                                                  |
+| Entry field                        | Type                                                          | Required   | Purpose                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `filename`                         | string                                                        | Yes        | Plan file name, `^[a-z][a-z0-9_-]*\.md$`.                                                                          |
+| `intent`                           | `implement` or `examine`                                      | Node entry | Intent of the node. A task entry forbids it.                                                                       |
+| `node`                             | plan file name                                                | Task entry | The `implement` node entry of the task. A node entry forbids it.                                                   |
+| `name`, `requirement`, `criterion` | nonblank string                                               | Yes        | Node content.                                                                                                      |
+| `verifications`                    | array of nonblank strings                                     | Yes        | At least one verification.                                                                                         |
+| `bindings`                         | array of binding names                                        | Yes        | Binding names; see [Bindings of a node](#bindings-of-a-node). A task entry holds `[]`.                             |
+| `id`                               | `node_<ulid>` or `task_<ulid>`                                | No         | Current node or task to keep.                                                                                      |
+| `tags`                             | array of tags                                                 | No         | Tags that a worker binding needs to claim the node; `[]` by default. A task entry forbids it.                      |
+| `commit_type`                      | `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore` | No         | Type of the worker commits and of the pull request title of the node; `feat` when absent. A task entry forbids it. |
+| `depends_on`                       | array of plan file names                                      | No         | Dependency targets. A task entry forbids it.                                                                       |
 
 The body accepts no unknown field.
 
