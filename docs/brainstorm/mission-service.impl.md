@@ -39,6 +39,8 @@ An execution assessment is the exception: it stores the execution identity, and 
 - The same rules apply to an import, a node write and an unblock content change.
 - `intent` is a closed enum in code with the values `implement` and `examine`, and every node holds it.
 - `tags` is a list of unique tags under the [tag](project-service.vocabulary.md#tag) form, and an absent list reads `[]`.
+- `commit_type` is an optional closed enum in code on the node content: `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore`. The service validates it before the write, and the store keeps `null` when it is absent. The worker reads an absent value as `feat` under [Commit attribution](worker-service.impl.md#commit-attribution). A task holds no `commit_type`.
+- `name` gives the commit subject of its node or task. A `name` that leaves no subject after the final full stops and spaces are removed answers `mission.node.content_invalid`.
 - `tasks` is the list of the tasks of an `implement` node, with zero or more entries on every write path. Each task holds `id`, `filename` and its content. An `examine` node holds an empty list on every write path.
 - `name` is nonblank text, a title with no identity or uniqueness requirement.
 - `requirement` is nonblank text.
@@ -61,7 +63,7 @@ A new binding kind adds a row.
 | Storage      | 0 or more   | 0 or more |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
-An absent or unknown `intent`, a nonlist `tags`, a repeated or malformed tag, and a task on an `examine` node answer `mission.node.content_invalid`.
+An absent or unknown `intent`, a nonlist `tags`, a repeated or malformed tag, a `commit_type` outside its closed set, and a task on an `examine` node answer `mission.node.content_invalid`.
 A write that changes `intent` of a node whose attempt reads 1 or more answers 409 `mission.node.intent_locked` with `details: { node_id, attempt }`.
 A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.tags_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, a rebind, an unblock with a change and a proposal approval.
 Each of these writes reads `unmatchedClaims` of the Scheduler Service before and after its change, in its own `BEGIN IMMEDIATE` transaction.
@@ -134,6 +136,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
   - `intent`: `implement` or `examine`; required.
   - `depends_on`: a list of plan file names of node files.
   - `tags`: a list of tags; absent reads `[]`.
+  - `commit_type`: one value of the closed set of the node content; absent stays absent.
   - `bindings`: the project binding names under the node content rules, in order. An `implement` node file names one or more repository bindings.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
 - The front matter of a task file permits only these keys:
@@ -174,12 +177,12 @@ The service derives one `FrozenAction` for each configured action of each reposi
 ## Export and the two formats
 
 - `mission.export` uses `GET /api/mission/:mission_id/export?format=markdown|json` with `human` access.
-- The JSON answer is `{ mission_id, mission_version, entries: [{ filename, id, intent, node, name, requirement, criterion, verifications, bindings, tags, depends_on }] }`.
+- The JSON answer is `{ mission_id, mission_version, entries: [{ filename, id, intent, node, name, requirement, criterion, verifications, bindings, tags, commit_type, depends_on }] }`. A node entry holds `commit_type` only when the node sets it.
 - The Markdown answer is `{ mission_id, mission_version, files: [{ filename, content }] }`.
 - Each Markdown `content` follows the plan file grammar.
 - JSON entries use the same node content, task and dependency rules as Markdown.
 - `node` and `depends_on` name plan files in the import set, not node identities.
-- A node entry omits `node`, and a task entry omits `intent`, `tags` and `depends_on` in both formats.
+- A node entry omits `node`, and a task entry omits `intent`, `tags`, `commit_type` and `depends_on` in both formats.
 - Each answer is the exact plan payload that the import of its format accepts.
 - The import accepts `format: markdown` with raw `files: { filename, content }[]`, which the Mission Service parses.
 - The import accepts `format: json` with `entries`.
@@ -635,7 +638,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - An import writes no node revision on a node that it retires. The last revision of that node holds its tasks.
 - When a task moves out of a node that the import retires, the new node takes a node revision with a `moved-in` task change. The import writes no `moved-out` on the retired node.
 - `change.previous_revision` is the previous revision, or null on revision 1.
-- `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent`, `tags` and `tasks`.
+- `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent`, `tags`, `commit_type` and `tasks`.
 - `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node. An import that omits a task of a node that it does not retire writes it. A node update that drops the task also writes it.
 - The result of the change is the `content` of the same record.
 

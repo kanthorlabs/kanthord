@@ -164,7 +164,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
   6. The worker unit installs and checks the [pi tool binaries](#pi-tool-binaries), checks the server package version and registers each binding entry.
 - The wrapper does not install the pi tools.
 - The worker unit checks `ssh-agent` and `ssh-add` for presence at its start. A spawn that answers `ENOENT` refuses the start with `repository.connector.tool_missing`.
-- The application logs one info record for each task start, task commit, task verification, task judgement, task choice, node verification, node judgement and base merge. A record holds identities and results, and no agent content.
+- The application logs one info record for each task start, task commit, task verification, done record, planning of the units and of the verdict, verdict rule check, release verification, routed release failure, turn violation, node judgement and base merge. A record holds identities and results, and no agent content.
 - When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`. When the stop has a cause text, the record also adds `detail`.
 - The worker unit keeps the agent sessions of each execution in `pi/sessions/execution/<execution identity>/` of its data directory, under [Traces](#traces). It keeps the newest 50 execution directories.
 - After each registration, the worker unit logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
@@ -392,7 +392,8 @@ The Docker form of `Container on this host`:
 - A unit that drains before its first pull makes one resume pull. `resume_pull_wait_ms` (default 5000) bounds that pull, so that a running execution resumes.
 - `instanceHealthcheck` refuses a draining slot, so that pull claims no new work. The claim returns a `running` execution before the healthcheck.
 - The modules of `src/worker/` that only the worker unit runs move to `src/worker/unit/`. `src/worker/unit/index.ts` is their one entry.
-- Today these modules are `execution-run`, `native-agent`, `native-method`, `steps-implement`, `steps-examine`, `judgement`, `judged-tasks`, `evaluation` and `evaluation-input`.
+- Today these modules are `execution-run`, `native-agent`, `native-method`, `steps-implement`, `steps-examine`, `judgement`, `evaluation` and `evaluation-input`.
+- They also include `turn-gate`, `release-gate`, `verdict-rule` and `done-record`, the modules of [the coder flow](#the-coder-flow).
 - They also include `base-refresh`, `verification`, `local-git`, `workspace`, `budget`, `model-runtime`, `tool-table`, `host-tools` and `method-clients`.
 - They also include `method-telemetry`, `telemetry`, `agent-telemetry`, `session-entries`, `report-facts` and `node-reads`.
 - `toolDeclarations` moves out of `tool-table` and stays in `src/worker/`, because the server reads it.
@@ -1212,14 +1213,155 @@ The tool register and the abstraction layer for tool instances manage the four s
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
 
+## The coder flow
+
+The steps method of `coder@1` on an `implement` node runs only coding turns of the agent. `src/worker/unit/steps-implement.ts` holds the flow.
+
+- A **unit** is one item of work with a work prompt and a list of verifications. Each task is one unit. A node with no task is one unit, the **node unit**, with the node identity as its id. `workUnitsOf` builds the list.
+- The node unit holds the node content and the task list as its work prompt, and the node verifications as its commands. `nodeUnitOf` of `release-gate.ts` builds it.
+- A **turn** is one call of `prompt` or `instruct` on the agent: a work turn, a revision turn or a conflict turn. The execution runs no answer turn: no start-check judgement, no task judgement, no task choice and no repair turn.
+- One `swe@1` session serves every turn of the execution.
+
+The flow of one execution:
+
+1. Read the pinned revision. Read the verdict or the cleared assessment under [The unblock reads](#the-unblock-reads).
+2. Prepare each checkout under [Workspace](#workspace), then run the restore sequence of [Gate G](#gate-g) to the head that the checkout step read.
+3. Open the `swe@1` session.
+4. Run merge step M under [The base merge](#the-base-merge).
+5. Plan the units under [The done record](#the-done-record) and [The verdict unit](#the-verdict-unit).
+6. For each pending unit, in plan order: check the claim, run a work turn or a revision turn, run gate G in write mode, apply the progress rule, verify the unit in the live checkout, run the restore sequence, and write the done record on a pass. A code failure sends a revision turn.
+7. Run the verdict unit when step 5 planned one.
+8. Run [The release gate](#the-release-gate). A routed failure goes back to step 6 with one unit.
+9. Push the node branch of each checkout. The push is not forced.
+10. Submit the head commit of each checkout as one evidence, in binding order.
+11. Release with `further_work: false`.
+
+The progress rule:
+
+- `changed` from gate G is the only measure of progress. A worker commit alone is not progress.
+- The unchanged-turn counter `unchangedTurns` lives in the state of the execution.
+- A revision turn with `changed` false adds one. A verdict turn that leaves the verdict rule false adds one.
+- A turn with `changed` true sets the counter to zero. No other event sets it to zero.
+- At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification.
+- A work turn with `changed` false adds nothing. The verification of the unit decides.
+
 ## The further-work release
 
-- A budget-end release of an execution that passed no new task sends the stop `{ reason: "budget_end", code }`. `code` names the limit that ran out: `turns` or `wall_time`.
-- `startCheck` stores the judged task commit of each task in `judged-tasks.json` of `workspaces/<node identity>/`. The key is the task identity, and the node identity for an `implement` node with no task. The value is the commit for one repository binding, else the canonical head set `<binding name>=<commit>,...` in binding order. At a resume, it reruns the verifications of each task and skips the judgement of a task whose judged task commit equals the current heads, unless the rationale of the latest rework names the task.
+- A budget end always releases with `further_work: true`. Only the release gate releases with `further_work: false`.
+- At a budget end, the execution aborts the agent, removes the release clones, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases.
+- The budget-end release sends the stop `{ reason: "budget_end", code }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
+- A unit completed when the execution wrote a new done record for it and step 5 found no record for it. A pass of the verdict unit, or of the node unit with the cleared text, always counts as completed.
+- A violation that the checkpoint gate of a budget end finds stops the execution with that violation, not with the budget end.
+
+## The base merge
+
+Merge step M brings `origin/<base_branch>` into the node branch of each checkout. `refreshAtClaim` of `src/worker/unit/base-refresh.ts` runs it at the start, and `refreshAtRelease` fetches the base and runs it again in the release gate.
+
+- When `origin/<base_branch>` is an ancestor of `HEAD`, the step does nothing.
+- Otherwise the step runs `git merge --no-edit --no-ff --message <merge message> origin/<base_branch>`. The merge message comes from [Commit attribution](#commit-attribution).
+- A merge with no conflict ends the step, and the merge commit is the new head.
+- A conflict sends one conflict turn with the `conflict` template: the binding, the directory, the base branch and the unmerged files. The template states that the worker commits.
+- Gate G then runs in conflict mode with the merged commit and the unmerged files of the step.
+- The step logs `base merged` with the binding, the base branch, the head and the conflict count.
+- A budget end during the conflict turn ends the step. The checkpoint gate aborts the merge.
+
+## Gate G
+
+Gate G is the worker step after every agent turn. `src/worker/unit/turn-gate.ts` holds it.
+
+- `gatedAgent` wraps `prompt` and `instruct` of the agent of the steps method. The wrapper records `before`, the head of each checkout, runs the turn, then runs the gate. A new call site cannot skip it.
+- The wrapper skips the gate when the budget ends inside the turn. The checkpoint gate of the budget end then runs.
+- Modes: `write` after a work turn or a revision turn, `conflict` after a conflict turn, `checkpoint` at a budget end or a stop. No other mode exists.
+- Every git command of the gate runs under the cleanup context of the budget, bounded by `expired_at`.
+- Every git command of the worker runs under `isolatedGitEnvironment` of `src/kernel/git-environment.ts`. `ISOLATION` sets `GIT_CONFIG_COUNT` 3: `core.excludesFile`, `core.attributesFile` and `core.hooksPath`, each `/dev/null`. No hook of the target repository runs.
+
+The steps for each checkout:
+
+| #   | Mode       | Check or act                                                                                                                                                                          |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G0  | checkpoint | When `MERGE_HEAD` exists, run `git merge --abort`.                                                                                                                                    |
+| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                          |
+| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                              |
+| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                      |
+| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                |
+| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                         |
+| G5  | all        | Stage with `git add --all`. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode. |
+| G6  | conflict   | Scan only the unmerged paths of step M with `git grep --no-index -l -E '^(<{7}\|>{7})( \|$)'`. A match aborts the merge and stops with `worker.merge.markers_left`.                   |
+| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                              |
+| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                 |
+| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                             |
+
+- Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files, and no git operation is in progress.
+- A turn with `changed` true sets the unchanged-turn counter to zero.
+- The gated agent keeps the set of commits that its gate made. [The done record](#the-done-record) reads it.
+
+The violation path:
+
+- A failure of G1, G2 or G3 runs the restore sequence to `before` on every checkout and logs `turn violation` with the code and the detail.
+- The detail names the checkout and the cause, and passes through `reasonOf`, so the redaction of `redactReason` applies.
+- In write mode, in conflict mode and in the checkpoint of a budget end, the gate stops with `operation_failed`, the code and the detail.
+- In the checkpoint of a stop, the gate restores and commits nothing. The stop keeps its own reason.
+- The stop path skips the checkpoint after a violation stop and pushes the node branch at `before`.
+
+The restore sequence brings a checkout back to invariant I from any state. `restoreCheckout` runs it:
+
+1. For each operation whose state exists, run `git rebase --quit`, `git am --quit`, `git cherry-pick --quit`, `git revert --quit` or `git merge --abort`.
+2. Run `git checkout --force -B <node branch> <target> --`.
+3. Run `git reset --hard HEAD` and `git clean -ffd`.
+4. Assert invariant I.
+
+The target is `before` in the violation path, the head of the checkout step in prepare, and `checkout.head` after each live verification. Prepare keeps its `git clean -ffdx` on a branch switch under [Workspace](#workspace).
+
+## The done record
+
+- Format: the trailer `Kanthord-Done: <unit id> <digest>`.
+- Digest: `digest` of `src/kernel/json.ts`, the SHA-256 hex of the canonical JSON with sorted keys, of the content of the unit. For a task, the content is the task content. For the node unit, the content is the node content.
+- Write: after a unit passes its live verification, `writeDoneRecord` takes each checkout whose head is in the commit set of the gated agent of that unit run. It runs `git commit --amend --no-edit --trailer "Kanthord-Done: <id> <digest>"` on it and reads `HEAD` again. It logs `done recorded`.
+- A unit run whose gate made no commit writes no record and logs `done record skipped`.
+- Read: `readDoneRecords` runs `git log --format=%(trailers:key=Kanthord-Done,valueonly) origin/<base_branch>..HEAD --` in each checkout and takes the union.
+- A unit is done when a record matches its id and its current digest. A revision that changes a task content reopens only that task.
+- Only the worker writes the trailer. G4 removes the messages of agent commits.
+- The amend targets only a commit of the current unit run, which no push holds yet, because the execution pushes only at the finish and at a stop.
+- The record lives in the pushed branch, so a fresh clone on another host reads it.
+- Correctness rests on the release gate. The records only save turns.
+- The planning logs `units planned` with the head set and the pending unit ids.
+
+## The release gate
+
+`releaseGate` of `src/worker/unit/release-gate.ts` is the only entry to `further_work: false`.
+
+1. `refreshAtRelease` fetches the base of each checkout and runs merge step M. A budget end ends the gate.
+2. `verificationCommands(revision)` gives the node commands, then the commands of each task in plan order. `commandOwners` gives one owner for each index: the node unit for a node command, the task for a task command.
+3. The gate removes `workspaces/<node identity>/release/`, then builds one clone for each checkout in the layout of the agent root under it. For each checkout it runs `git clone --local --no-checkout -- <live checkout> <dir>`, fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, and runs `git checkout --detach <checkout.head>`.
+4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline, with no rerun of a code failure.
+5. It removes the release directory after the run, in a `finally` block, so a budget end and a stop also remove it.
+6. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
+7. When every command passes, the gate logs `release verified` and the flow goes to the push.
+8. Otherwise the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
+
+- The release gate compares no trees. The verdict rule applies at the unit level.
+- A failure of the release gate never resets the head.
+- The live checkout stays the place of the unit loop, so installed dependencies persist between turns.
+
+## The verdict unit
+
+The verdict is the latest review that asks for more work. `readPrior` of `src/worker/unit/node-reads.ts` reads it, under [The unblock reads](#the-unblock-reads).
+
+- A verdict holds a text and a judged commit for each binding that the review saw.
+- The judged commit of an assessment is the commit of each `repository` address of its `tested_input`. The judged commit of change requests is the `commit_id` of the latest change request of each binding, by `submitted_at`.
+- `judgedCheckouts` keeps a judged commit only when the checkout holds it and it is an ancestor of `HEAD`. It logs `judged commit off the node history` for each other one.
+- The verdict rule holds when at least one kept checkout gives a nonempty `git rev-list --first-parent --ancestry-path --no-merges --max-count=1 <judged commit>..HEAD`. A merge commit never satisfies the rule. `verdictRuleHolds` of `src/worker/unit/verdict-rule.ts` checks it.
+- At planning, a verdict whose rule holds plans no verdict unit. Any other verdict plans the node unit with the `criterion-revision` text of the verdict, after the pending units. The planning logs `verdict planned`.
+- With no kept judged commit, the verdict unit has no rule, and its verification decides.
+- While the rule fails after a verdict turn, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
+- When the rule holds, the flow runs the node verifications. A failure sends the `task-revision` text.
+- A cleared assessment that is not `success` plans the node unit with its rationale as plain instruction text, with no rule. A pass completes the unit.
+- No substring of a verdict routes work to a task.
+- A pass of the verdict unit counts as completed, also with no new done record.
 
 ## The unblock reads
 
-- At the start of the steps method on an `implement` node, the execution reads the prior rationale. The rationale of the latest rework assessment of the attempt comes first.
+- At the start of the steps method on an `implement` node, the execution reads the verdict. The rework assessment of the attempt, from `mission.execution.rework_assessment.get`, comes first. Its rationale is the verdict text.
 - With no rework assessment, an execution of attempt 2 or later reads `mission.execution.clearedOutcome.get`.
 - When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
 - `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
@@ -1227,26 +1369,10 @@ The [Repository implementation](repository.impl.md#platform-connector-and-platfo
 - Each item of `worker.execution.change_request.get` holds `binding_id`, the repository binding of its `pull_request` action.
 - The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request, and it names the repository binding of each change request. It also holds the path, the line and the body of each review comment of that change request.
 - The requested-changes text stops at 4 KiB.
-- The requested-changes text is the prior rationale. It enters the task judgement of the start check and the criterion revision of each task that the agent judges unmet.
-- When the read finds no current change request, the prior rationale is the rationale of the cleared assessment.
-- A change request forces no task revision. The agent judgement decides each task. When the agent judges every task met, the execution pushes an unchanged head. The change request stays current on that head, so the next node check blocks the node again on the same change request.
+- The requested-changes text is the verdict text. It enters [The verdict unit](#the-verdict-unit).
+- When the read finds no current change request, an execution of attempt 2 or later reads `mission.execution.cleared_assessment.get`. A cleared assessment that is not `success` gives its rationale as plain instruction text.
+- A change request routes no task. The verdict unit sends the whole text to the agent, and the verdict rule keeps an unchanged head from the next review.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
-
-## The node check of a rework
-
-- A rework is an execution of an attempt that has a `criterion-not-met` assessment. `mission.execution.rework_assessment.get` answers that assessment.
-- The start check of a rework runs the node verifications once, before the task checks. Another execution runs no node verification at its start.
-- The run uses the verification runner of the task checks, with `COMMAND_LIMIT_MS` per command and one `worker.verification` span per command. It runs no rerun.
-- The run logs `node verified` with the head commit, the result and the exit codes.
-- When every node verification passes, the start check continues as before.
-- When a node verification fails, the failure text is the failed verification report: the failed command, its result and the last 4 KiB of its output.
-- The agent receives one `task-choice` instruction with the failure text and the filename, the name and the criterion of each task. The reply names one task by its filename.
-- The worker parses the reply once, with no repair turn. A reply with no valid marker line, or with a filename outside the task set, selects the last task in plan order.
-- The run logs `task chosen` with the task identity, the head commit and `fallback`.
-- For an `implement` node with no task, the run sends no `task-choice` instruction. The node work unit is pending with the failure text.
-- The chosen task is pending with the criterion revision of the failure text. It gets no judgement at the start check, and its judged commit does not skip it.
-- Every other task keeps the rules of the start check.
-- When the budget ends during the node check or the choice turn, the execution releases with further work and no checkpoint commit.
 
 ## The verifications
 
@@ -1261,28 +1387,29 @@ A test checks the same for an `implement` node with an evidence snapshot.
 Both tests check that each checkout stays clean and that each asset path is relative to the agent root.
 A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
+The runner classifies each command result. The first matching rule decides: a spent budget, a kill at the wall deadline or no start before the deadline is a budget end; a kill at `COMMAND_LIMIT_MS` (`timed_out: true`) or a cancellation is a code failure; a spawn error, a signal or an exit code from 129 to 192 is an infrastructure failure; exit code 0 is a pass; any other exit code, 127 included, is a code failure.
+An infrastructure failure runs once more, unless the deadline passed or the context ended. The rerun result takes the same rules, and a pass on it is a pass.
+A second infrastructure failure stops the execution with `operation_failed`, the code `worker.verification.infrastructure_failed` and a detail with the JSON of the exit code, the signal, `timed_out` and the command. `infrastructureStop` builds it. The coder and the reviewer apply these rules.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
-The reviewer reruns a failed item up to 2 times on the same commit, unless the item timed out. The item still fails.
+The reviewer reruns a code failure up to 2 times on the same commit, unless the item timed out. The item still fails. The coder runs no rerun of a code failure.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
-Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
-Steps tests run every task verification at the heads of the node branches at the start of an execution, and skip each task that passes.
-Steps tests run an `implement` node with no task as one work unit, with the node verifications and the node criterion, under the node identity as the judged key.
+Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
+Steps tests skip each unit whose done record matches, also on a fresh clone, and run a work turn for every other unit, also when its verifications pass on the base.
+Steps tests run an `implement` node with no task as one work unit, with the node verifications, under the node identity as the done-record id.
+Steps tests count zero answer turns in an `implement` execution.
 Steps tests with two repository bindings commit only the checkouts with a change.
-They merge every checkout before a release, and they reset every checkout on one conflict.
+They merge every checkout before a release in the release gate, and route a failure of the release gate to the owner of the first failed command.
 They push every node branch before the evidence, and they submit one evidence with one asset per binding.
 Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
-Tests permit judgement only after every verification passes.
 Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
 Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
 Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`. A test asserts that a prepare keeps an unpushed local commit when the remote node branch is missing and no record shows a push.
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
-Tests assert that a judgement of attempt k-1 is not reused in attempt k.
-Rework tests assert that a failed node verification revises the chosen task only, that an invalid choice revises the last task, and that passing node verifications change nothing.
-Tests assert that an execution that is not a rework runs no node verification at its start.
+Rework tests assert that a verdict with no task id still runs a verdict turn, that an unchanged verdict ends with `no_progress`, and that a base move gives no new work under the verdict rule.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
 
 ## Workspace
@@ -1406,8 +1533,15 @@ The tool of the action performer takes the execution identity only.
 
 ## Commit attribution
 
-The page requires that every commit of the execution is attributable to its task and its attempt.
-The carrier of that attribution is an epic decision.
+[worker-service.md](worker-service.md#executions) requires that every commit of the execution is attributable to its task and its attempt.
+
+- `src/kernel/commit-message.ts` builds every worker commit message and the pull request title of `src/intake/action-perform.ts`.
+- `commit_type` is an optional closed enum on the node content: `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore`. `commitTypeOf` gives `feat` when it is absent. The Mission Service validates it before the write, and the store keeps `null` when it is absent.
+- The header is `<commit_type>: <subject>` with no scope. The subject of a task commit is the task `name`. The subject of a node unit commit and of a verdict commit is the node `name`. The subject of a merge commit is `merge <base_branch>`. The subject of a checkpoint commit is the `name` of the current unit. The pull request title uses the node `name`.
+- The builder replaces each run of whitespace with one space, writes the first letter in lowercase, cuts the subject so that the header holds at most `COMMIT_HEADER_MAX_LENGTH` (100) characters, keeps a surrogate pair whole, and removes every final full stop and space.
+- `isCommitHeader` checks `^(<type>)(\(<scope>\))?: \S.*$`, the length and the final full stop before each commit. A node or task `name` that gives no valid subject for some type fails the write with `mission.node.content_invalid` and `details.field` `name`.
+- The body holds the unit id on its own line. The done record follows after a blank line. The worker writes no other trailer.
+- Today the body names the unit and no attempt. The evidence of the attempt names the head commit.
 
 ## Stop and budget
 
@@ -1423,8 +1557,13 @@ The carrier of that attribution is an epic decision.
 - The worker keeps the last 4 KiB of the combined stdout and stderr of each item. The output is not evidence. The task revision carries the output of the last item that ran.
 - An agent turn that ends with a provider error stops the execution with `provider_failed`. pi retries a transient error before the turn ends.
 - The stop code names the provider failure: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
-- The stop `detail` holds the cause text: the error text of a provider error reply, or `<error name>: <message>` of an error that a prompt to the agent session throws, with the reason `operation_failed`. `redactReason` removes the credential secrets read at the open and at the stop, bearer values, JWTs and tokens of 32 or more characters, keeps a file path, and cuts the text to 300 characters. Other stops carry no `detail`.
-- A task revision after a failed verification that changes no file twice in a row stops the execution with `no_progress`. The second unchanged revision runs no verification.
+- The stop `detail` holds the cause text. `redactReason` removes the credential secrets read at the open and at the stop, bearer values, JWTs and tokens of 32 or more characters, keeps a file path, and cuts the text to 300 characters. The sources are:
+  - the error text of a provider error reply, with `provider_failed`;
+  - `<error name>: <message>` of an uncoded error that a prompt to the agent session or any step of the execution throws, with `operation_failed`;
+  - the violation text of gate G, with `operation_failed` and the code `worker.turn.*`;
+  - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`.
+- A `CodedError` gives its code and no `detail`. `no_progress`, `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
 - Tests cover native and external-harness defaults, overrides for every worker binding, and positive safe integers.
@@ -1444,17 +1583,20 @@ The [Repository implementation](repository.impl.md#repository-connector) states 
 The execution enforces the turn budget on pi turn events and aborts the agent when either budget ends.
 An agent that reaches its wall-time deadline ends the wall-time budget of the execution. The execution then takes the budget end, not a failure.
 The bash timeout of an agent command stays below the remaining wall-time budget and below the 10-minute command limit of a verification item. A lower timeout that the model sets stays.
-After the agent stops at budget end, the execution code, not the agent, writes the checkpoint commit, pushes and releases with further work.
-The boundary is the task commit: work that the budget ends before its task commit, or during the judgement of a passing run, takes the checkpoint; a task commit whose run failed or left an item unrun, with no later task work, takes the head-commit evidence and the release with no further work.
+After the agent stops at budget end, the execution code, not the agent, runs gate G in checkpoint mode, pushes and releases with further work.
+Every budget end releases with further work. Only the release gate releases with no further work.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 A stop for a reason other than `revoked` aborts the agent and runs the same cleanup under a fresh context bounded by `expired_at`.
-A steps execution writes the checkpoint commit when the workspace holds uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code }`.
+A steps execution runs gate G in checkpoint mode, which commits the uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code, detail? }`.
+After a violation stop of gate G, the execution makes no checkpoint commit and pushes the node branch at `before`.
+A failed checkpoint or push of a stop logs `checkpoint failed` with the redacted reason.
 A reviewer execution writes no commit and releases with the `stop` only.
 A failed push still releases with the `stop`, and the next execution starts from the pushed head.
 A failed release ends the execution with no release, and the loss settlement routes the node.
-A reply with no valid marker line gets one repair turn, for the task judgement, the evaluation judgement and the review reply.
+A reply with no valid marker line gets one repair turn, for the evaluation judgement and the review reply of `reviewer@1`.
 The repair instruction is `The reply holds no valid <marker> line. Reply again with exactly one such line.`
 A second invalid judgement stops the execution with `judgement_invalid`, and a second invalid review reply ends the review of that task.
+The steps method of `coder@1` parses no reply on an `implement` node.
 Tests stop a steps execution with each reason and assert the checkpoint commit, the push and the release with the `stop`. Tests stop a reviewer execution and assert the release with the `stop`. Tests send one invalid reply and assert the repair turn, and send two and assert the stop.
 
 ## Trust boundary
@@ -1488,14 +1630,14 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - After each session event, the worker sends each entry beyond the count that it already sent.
 - The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.
-- An `agent.turn` span stays a child of its enclosing `worker.task` or `worker.judgement` span. Its `gen_ai.conversation.id` names its session.
+- An `agent.turn` span stays a child of its enclosing worker span: `worker.task` for a turn on a unit, `worker.phase` for a conflict turn, and `worker.evaluation` for the reviewer. Its `gen_ai.conversation.id` names its session.
 - The worker replaces the secrets of the LLM credential of the agent with `[redacted]` in each entry before it sends the entry. It matches the exact secret strings only.
 - The session file stays on the host as a convenience. A stateless container loses it, and the Tracking Service still holds every entry that reached it.
 - The span identity of a worker span hashes the execution identity, a run key and the local key. The run key is 8 random hexadecimal characters, new in each process run of the execution. A resumed execution therefore writes new spans and keeps the spans of the earlier run.
 
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The finish of the steps method on an `implement` node writes one `worker.git` span for each git step. `kanthord.git.step` is `commit`, `fetch_base`, `merge_base` or `push`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The steps method on an `implement` node writes one `worker.git` span for each base merge (`merge_base`), each fetch of the release gate (`fetch_base`), the checkpoint commit of a budget end (`commit`) and the push of the finish or of a budget end (`push`). The commits of gate G after a turn and the checkpoint and the push of a stop have no `worker.git` span. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 

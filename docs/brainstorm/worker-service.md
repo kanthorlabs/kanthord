@@ -382,49 +382,53 @@ A human restores the branch at the repository, or restarts the attempt from the 
 No act deletes, renames or force-pushes a node branch.
 The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
 Every commit that the execution makes is attributable to its task and its attempt.
+Today the commit names its unit and no attempt, under [Commit attribution](worker-service.impl.md#commit-attribution).
 The execution uses the [node-branch push](repository.md#write-operations) of the Repository component before every release.
 
 The steps method chooses the order of the tasks of the pinned revision.
-An `implement` node with no task is its own single work unit.
-The agent then works from the requirement of the node, the execution runs the verifications of the node, and the agent judges the criterion of the node.
-The commit message of the single work unit names the node identity.
-For each work unit the agent performs the steps in the workspace, and the execution commits the changes of each checkout that holds a change, with the task commit message.
-The task commit is the set of heads of the node branches after the last commit of the task work in the attempt that executed the task.
+Each task is one work unit. An `implement` node with no task is its own single work unit, the node unit, with the node identity as its id.
+The node unit holds the content of the node and its task list as its work prompt, and the verifications of the node.
+The agent runs only coding turns: a work turn, a revision turn and a merge conflict turn. The execution asks the agent for no judgement.
+For each work unit the agent performs the steps in the workspace.
+After every agent turn, the execution runs gate G: it checks that each checkout is on its node branch, holds the head before the turn in its history and has no git operation in progress, and then commits every change of the turn.
+A violation of the git state restores the head before the turn and stops the execution with `operation_failed` and a code that names the violation.
+The execution is the only author of the commits on the node branch, and a commit of the agent becomes part of the commit of the execution.
 A checkout with no change keeps its head, and a revision that changes no checkout counts as no progress.
-The execution code, never the agent, runs the verifications of the task against the task commit.
+Two revision turns in a row with no progress stop the execution with `no_progress`.
+The execution code, never the agent, runs the verifications of the unit against the committed heads.
 It discards every change that the verifications make.
-A failed verification leads the agent to revise the task within the resource budget.
-The execution commits a revision as a new commit and runs the verifications again.
-The agent judges the result against the criterion only after every verification passes.
-A task is complete when its verifications pass and the agent judges its criterion met.
+A failed verification leads the agent to revise the unit within the resource budget.
+A verification that a signal ends, or that fails to start, runs once more, and a second such failure stops the execution with `operation_failed`.
+A unit whose verifications pass is complete, and the execution writes a done record on its commit.
+The done record names the unit and the digest of its content, and it lives in the node branch.
 The execution writes no evidence, no assessment and no outcome for a task.
 
 At each steps claim on an `implement` node, the execution first merges `origin/<base_branch>` into the node branch of each checkout, with the base branch of that binding.
-`swe@1` resolves a merge conflict as task work.
-A conflict that stays unresolved in one checkout aborts that merge and stops the execution with `operation_failed`.
+`swe@1` resolves a merge conflict in a conflict turn, and the execution commits the merge.
+A conflict marker that stays in a conflicted file aborts that merge and stops the execution with `operation_failed`.
 
-At its start, every execution runs the verifications of each work unit of the pinned revision against the heads of the node branches.
-A work unit whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
-The execution executes every other work unit.
-No record of an earlier attempt decides that a task is complete.
-Inside one attempt, a task whose last judged task commit equals the current heads of every node branch keeps that judgement, unless the rationale of the latest rework names the task.
-Its verifications still run.
-The judgement of a task at the start reads the rationale of the assessment that caused the latest rework of the attempt, or else the cause of the outcome of the cleared attempt.
-A task that the agent judges unmet with that rationale is revised with the rationale as the revision instruction.
-At the start of a rework, the execution also runs the verifications of the node against the heads of the node branches.
-When a node verification fails, the agent chooses the task that is most related to the failure, and the execution revises that task with the failure.
+At its start, every execution reads the done records of the node branch.
+A work unit with a done record for its id and its current digest is complete, and the execution skips it.
+The execution executes every other work unit, also when its verifications pass on the base.
+No record of an earlier attempt decides that a task is complete, unless the attempt continues the same node branch.
+The verdict of a rework is the rationale of the assessment that caused the latest rework of the attempt, or else the change requests of the pull request of the cleared attempt.
+The verdict names the commit that the review judged in each binding.
+When no checkout holds new work after the judged commit, the execution sends the whole verdict to the agent in a revision turn of the node unit, and repeats it until new work exists.
+A merge commit is no new work.
+A turn of the verdict that brings no new work counts as no progress.
+No part of the verdict routes work to a task by name.
+After a human unblock with no verdict, a cleared assessment that does not pass gives its rationale to the node unit as one instruction.
 
-Before a release with evidence, the execution merges `origin/<base_branch>` again in every checkout and runs the verifications of every work unit on the merged heads.
-A conflict in one checkout or a failed verification resets every checkout to its head before that merge, and the release carries further work.
+Before a release with evidence, the execution runs the release gate.
+The release gate merges `origin/<base_branch>` again in every checkout and runs every verification of the node and of each task in a clean local clone of each checkout.
+A failed verification of the release gate sends a revision turn to the unit that owns the command, and the release gate runs again after that unit passes.
+The release gate is the only path to a release with no further work.
 The execution pushes the node branch of every checkout before every release, and it submits the evidence only after every push succeeds.
-Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding, whatever the task results establish.
-When every work unit of the revision is complete, the execution releases with no further work.
-The boundary of the budget end is the task commit.
-A task commit whose verification run failed or left an item unrun, with no later task work when the resource budget ends, ends the task work, and the execution releases with no further work.
-Otherwise, when the resource budget ends before the task commit of the current task work or during the judgement of a passing run, the agent stops and the execution performs cleanup.
+Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding.
+When the resource budget ends, the agent stops and the execution performs cleanup.
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
 Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
-A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
+A checkpoint commit establishes no completion and no verification result, and the next execution continues the unit.
 An execution that stops for a reason other than a revocation performs the same cleanup and releases with further work and a `stop` that names the reason.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
@@ -467,10 +471,11 @@ sequenceDiagram
         end
         rect rgb(248, 215, 218)
             A-->>E: steps done in the workspace, revised within the resource budget
-            E->>E: task commit, run the verifications against it, discard their changes, the agent judges
+            E->>E: gate G commits the turn, run the verifications, discard their changes, write the done record
         end
     end
     rect rgb(248, 215, 218)
+        E->>E: release gate: merge the base, run every verification in a clean clone
         E->>RG: push the node branch
     end
     rect rgb(212, 237, 218)
@@ -821,12 +826,14 @@ sequenceDiagram
         IN-->>E: the change request
         E->>RG: reuse the workspace of the node and its repository binding, same node branch
         loop for each task
-            alt the verifications of the task pass at the head of the node branch and the agent judges its criterion met
+            alt a done record of the node branch matches the task
                 E->>E: skip the task
             else
-                E->>E: execute the task, new task commit
+                E->>E: execute the task, new commit and done record
             end
         end
+        E->>E: verdict unit with the requested changes
+        E->>E: release gate
         E->>RG: push the node branch
         E->>M: evidence: the head commit
         Note over E: release with no further work
