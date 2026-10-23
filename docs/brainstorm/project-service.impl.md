@@ -526,8 +526,8 @@ The component computes the status of a group in this order. The first rule that 
 - One stack drafts its image: `mcr.microsoft.com/devcontainers/javascript-node:<major>-bookworm`, `mcr.microsoft.com/devcontainers/python:<major.minor>-bookworm`, `mcr.microsoft.com/devcontainers/go:<major.minor>-bookworm`, `mcr.microsoft.com/devcontainers/rust:1-bookworm` or `mcr.microsoft.com/devcontainers/java:<major>-bookworm`.
 - Two stacks or more draft `mcr.microsoft.com/devcontainers/base:bookworm` with one feature `ghcr.io/devcontainers/features/<stack>:1` and its `version` for each stack.
 - With two stacks or more, the setup commands join with `&&` in the order Node, Python, Go, Rust, Java, and the checks join in the same order.
-- A Rust feature with the default version takes the feature version `latest`.
-- A Java stack without a wrapper takes the feature `ghcr.io/devcontainers/features/java:1` with `installMaven: "true"` for `pom.xml` or `installGradle: "true"` for `build.gradle*`. A single Java stack sets the feature version `none`, because its image holds the JDK.
+- A Rust or a Go feature with the default version takes the feature version `latest`.
+- A Java stack without a wrapper takes the feature `ghcr.io/devcontainers/features/java:1` with `installMaven: true` for `pom.xml` or `installGradle: true` for `build.gradle*`. A single Java stack sets the feature version `none`, because its image holds the JDK.
 - The setup command and the checks of each stack are below. A tool that the image lacks installs in `onCreateCommand` at the build.
 
 | Stack  | Input                        | `onCreateCommand`                                               | `updateContentCommand`                                                     | `checks`                               |
