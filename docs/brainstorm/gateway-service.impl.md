@@ -685,7 +685,7 @@ The Gateway Service source sits under `src/gateway/` of the `engine` repository.
 `static/openapi/` of that repository holds the emitted OpenAPI directory, and the released package ships the `static` directory.
 A test file sits beside its source as `*.test.ts`.
 `node --test` runs the tests.
-`tsc -p tsconfig.build.json` builds into `dist/`.
+`tsrs -p tsconfig.build.json --checkers 2` builds into `dist/`.
 The `kanthord` bin of `package.json` releases it.
 
 `pnpm run test:e2e:jwt` builds the engine and runs `scripts/e2e-jwt.py` with Python 3 and its standard-library PTY support.
