@@ -161,7 +161,7 @@ The same order, as a table:
 | 5   | Pinned message | Work prompt                          | —                                    |
 | 6   | Conversation   | Later instructions and replies       | Human messages and replies           |
 
-The model receives the work prompt once, at row 5. Row 6 holds what comes after it: the revision instructions, the judgement instructions and the replies of the agent. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
+The model receives the work prompt once, at row 5. Row 6 holds what comes after it: the revision instructions, the judgement instructions of `reviewer@1` and the replies of the agent. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
 
 ### The three layers
 
@@ -259,11 +259,11 @@ A Worker execution opens one session per claim, in a workspace that the worker p
 - `prompt(work)` sends the work prompt as the user message.
 - `instruct(work, text)` pins the work prompt and sends another instruction, for example a revision request.
 
-After each call, the worker reads the last reply of the agent. The worker, not the agent, decides when the work is done. When the worker needs a decision from the agent, for example a judgement of a criterion, the instruction asks for one last line that starts with `kanthord-judgement:` and holds JSON. A reply that does not parse gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`.
+The worker, not the agent, decides when the work is done. Only `reviewer@1` asks its agent for a decision: a judgement of a criterion. That instruction asks for one last line that starts with `kanthord-judgement:` and holds JSON. A reply that does not parse gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`. `coder@1` reads no reply of `swe@1` in an `implement` execution, and reads the last reply of an `examine` execution as the report.
 
 Each method uses the session in its own way:
 
-- **Steps** (`coder@1` with `swe@1`). The agent works on each task, and the worker commits, verifies and asks for a judgement. [How the coder@1 worker works](coder-worker.md#tasks-step-7) shows the loop.
+- **Steps** (`coder@1` with `swe@1`). The agent works on each unit of the node. After each turn, the worker commits the change and verifies the unit itself. [How the coder@1 worker works](coder-worker.md#step-7-the-unit-loop) shows the loop.
 - **Evaluation** (`reviewer@1` with `re@1`). The worker runs the verification commands first. A failure ends the evaluation without the agent. On success, the agent receives the evidence and returns a JSON judgement.
 - **Examine** (`coder@1` with `swe@1`). The agent checks out the base-branch head of each repository binding of the node. It runs tools and the verifications, and reads the outcome and the evidence of each direct dependency. It writes its findings as produced evidence.
 
