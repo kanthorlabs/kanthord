@@ -109,7 +109,7 @@ The command prints `token: <jwt>`. It prints a token only to a terminal, so keep
 
 See [auth jwt generate](../reference/auth/jwt.md).
 
-For the first task, follow [From a fresh install to the first task](../tutorials/first-task.md) from its [step 2](../tutorials/first-task.md#2-read-the-onboarding-page). The Onboarding page of the dashboard replaces steps 5 and 6 of this guide. The tutorial links to them only for the screen details.
+For the first task, follow [From a fresh install to the first task](../tutorials/first-task.md) from its [step 2](../tutorials/first-task.md#2-read-the-onboarding-page). The Onboarding page of the dashboard replaces steps 5 and 6 of this guide. The tutorial links to them only for the screen details. In a container, the `server` placement of the tutorial runs each verification inside the server container. The container holds only the tools of the image, so use the sample plan or [add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md).
 
 ## 5. Connect a repository
 
