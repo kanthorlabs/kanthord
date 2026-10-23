@@ -598,6 +598,7 @@ The host kind `Container` runs the instance on a container platform with no writ
 - Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
 - Set the `GIT_*` variables of step 3.
 - Run the container with no health check, for example with `podman run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
+- Set a memory limit, for example with `podman run --memory=4g`. Without a limit, an out-of-memory kill can stop any process of the host, the server included. Give the host at least 1 GiB for the server plus the limit of each instance. Two instances with `--memory=4g` and one server need 9 GiB. On a rootless host, the limit needs cgroup v2 with the memory controller delegated to the user. Without it, Podman ignores the limit and prints only a warning. To check the limit, run `podman inspect --format '{{.HostConfig.Memory}}' kanthord-worker-<name>`. The command prints `4294967296` for 4 GiB.
 - Run one replica. A second replica takes the connection, and the first exits with status `3`. A restart loop with `worker.instance.superseded` means two deployments of one instance configuration.
 - Publish no port. The instance opens every connection to the server.
 
@@ -630,7 +631,7 @@ This example runs the container with Podman or Docker on a host of your network.
 4. Start the instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -638,7 +639,7 @@ This example runs the container with Podman or Docker on a host of your network.
    With Docker, start the instance with the env file:
 
    ```sh
-   docker run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   docker run -d --name kanthord-worker-<name> --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -704,7 +705,7 @@ The host kind `Container on this host` runs the instance in a second container b
 6. Start the instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -712,7 +713,7 @@ The host kind `Container on this host` runs the instance in a second container b
    With Docker, start the instance with the env file:
 
    ```sh
-   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -840,7 +841,7 @@ For an instance in a container on the same host, do these steps. See [Run a work
 3. Start the instance with the new version. The Podman secret `kanthord-worker-<name>` stays.
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
    ```
 
    The command prints the ID of the new container.
@@ -848,7 +849,7 @@ For an instance in a container on the same host, do these steps. See [Run a work
    With Docker, start the instance with the env file, then delete the file:
 
    ```sh
-   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<new version> serve worker
    rm <name>.env
    ```
 

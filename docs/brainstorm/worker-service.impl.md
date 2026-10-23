@@ -310,6 +310,7 @@ A container host kind adds the field **Container runtime** with the values `Podm
 - Store the instance configuration as a secret of the platform, and expose it to the container as the env value `KANTHORD_WORKER_CONFIG`.
 - Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
 - Run the container with no health check, for example with `podman run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
+- Set a memory limit on the container, for example with `podman run --memory=4g`. Give the host 1 GiB for the server plus the limit of each instance. An out-of-memory kill then stops a process of this container only.
 - Run one replica. A second replica supersedes the first, under [The instance exchange](#the-instance-exchange).
 - Publish no port. The instance opens every connection to the server.
 
@@ -328,16 +329,17 @@ A container host kind adds the field **Container runtime** with the values `Podm
    podman secret create kanthord-worker-<name> -
    ```
 
-3. Start the instance. `<git name>` and `<git email>` set the identity of the commits that the agents make:
+3. Start the instance. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
-The Docker form of `Container` replaces the first bullet and the health check bullet:
+The Docker form of `Container` replaces the first bullet, the health check bullet and the memory bullet:
 
 - Write the line `KANTHORD_WORKER_CONFIG=<value>` to an env file of mode 0600. Give the file to `docker run` with `--env-file`, then delete the file. `docker inspect` shows the value to every user that can run `docker`.
 - Run the container with no health check, for example with `docker run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
+- Set a memory limit on the container, for example with `docker run --memory=4g`. Give the host 1 GiB for the server plus the limit of each instance. An out-of-memory kill then stops a process of this container only.
 
 The Docker form of `Container on this host`:
 
@@ -354,10 +356,10 @@ The Docker form of `Container on this host`:
    (umask 077 && cat > <name>.env)
    ```
 
-3. Start the instance. `docker run` reads the env file once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make:
+3. Start the instance. `docker run` reads the env file once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
 
    ```sh
-   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
 4. Delete the env file. The container keeps the value:
