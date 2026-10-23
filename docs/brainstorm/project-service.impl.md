@@ -530,24 +530,26 @@ The component computes the status of a group in this order. The first rule that 
 - A Java stack without a wrapper takes the feature `ghcr.io/devcontainers/features/java:1` with `installMaven: "true"` for `pom.xml` or `installGradle: "true"` for `build.gradle*`. A single Java stack sets the feature version `none`, because its image holds the JDK.
 - The setup command and the checks of each stack are below. A tool that the image lacks installs in `onCreateCommand` at the build.
 
-| Stack  | Input                        | `onCreateCommand`               | `updateContentCommand`                                                    | `checks`                               |
-| ------ | ---------------------------- | ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| Node   | `pnpm-lock.yaml`             | `npm install -g pnpm@<version>` | `pnpm install --frozen-lockfile`                                          | `node --version`, `pnpm --version`     |
-| Node   | `yarn.lock`                  | `npm install -g yarn@<version>` | `yarn install --immutable`                                                | `node --version`, `yarn --version`     |
-| Node   | `package-lock.json`          | none                            | `npm ci`                                                                  | `node --version`, `npm --version`      |
-| Python | `uv.lock`                    | `pip install uv`                | `uv sync --frozen`                                                        | `python --version`, `uv --version`     |
-| Python | `poetry.lock`                | `pip install poetry`            | `poetry install --no-interaction`                                         | `python --version`, `poetry --version` |
-| Python | `requirements.txt`           | none                            | `pip install --user -r requirements.txt`                                  | `python --version`                     |
-| Go     | `go.mod`                     | none                            | `go mod download`                                                         | `go version`                           |
-| Rust   | `Cargo.toml`                 | none                            | `cargo fetch`                                                             | `cargo --version`                      |
-| Java   | `mvnw` or `pom.xml`          | none                            | `./mvnw -B -q dependency:go-offline` or `mvn -B -q dependency:go-offline` | `java -version`                        |
-| Java   | `gradlew` or `build.gradle*` | none                            | `./gradlew --no-daemon dependencies` or `gradle --no-daemon dependencies` | `java -version`                        |
+| Stack  | Input                        | `onCreateCommand`                                               | `updateContentCommand`                                                     | `checks`                               |
+| ------ | ---------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------- |
+| Node   | `pnpm-lock.yaml`             | `npm install -g pnpm@<version>`                                 | `pnpm install --frozen-lockfile`                                           | `node --version`, `pnpm --version`     |
+| Node   | `yarn.lock`                  | `corepack enable && corepack prepare yarn@<version> --activate` | `yarn install --immutable`, or `yarn install --frozen-lockfile` for yarn 1 | `node --version`, `yarn --version`     |
+| Node   | `package-lock.json`          | none                                                            | `npm ci`                                                                   | `node --version`, `npm --version`      |
+| Python | `uv.lock`                    | `pip install uv`                                                | `uv sync --frozen`                                                         | `python --version`, `uv --version`     |
+| Python | `poetry.lock`                | `pip install poetry`                                            | `poetry install --no-interaction`                                          | `python --version`, `poetry --version` |
+| Python | `requirements.txt`           | none                                                            | `pip install --user -r requirements.txt`                                   | `python --version`                     |
+| Go     | `go.mod`                     | none                                                            | `go mod download`                                                          | `go version`                           |
+| Rust   | `Cargo.toml`                 | none                                                            | `cargo fetch`                                                              | `cargo --version`                      |
+| Java   | `mvnw` or `pom.xml`          | none                                                            | `./mvnw -B -q dependency:go-offline` or `mvn -B -q dependency:go-offline`  | `java -version`                        |
+| Java   | `gradlew` or `build.gradle*` | none                                                            | `./gradlew --no-daemon dependencies` or `gradle --no-daemon dependencies`  | `java -version`                        |
 
 - `<version>` of a package manager comes from `packageManager` of `package.json`, else `latest`.
+- A `yarn.lock` that holds a line `__metadata:` is a lock file of yarn 2 or later, and its default version is `stable`. Another `yarn.lock` is a lock file of yarn 1, and its default version is `1.22.22`. The npm package `yarn` ends at 1.x, so the draft installs yarn through corepack.
+- A yarn draft sets `COREPACK_HOME=/usr/local/share/corepack` in `containerEnv`, so the slot user finds the version that the build prepared.
 - A Node stack with no lock file and a Python stack with `pyproject.toml` and no lock file take no setup command. Their checks are `node --version` and `npm --version`, or `python --version`.
 - The draft sets `containerEnv` so that every cache and every tool home lies in `/var/lib/kanthord`: `PATH` with `/var/lib/kanthord/.local/bin` first, `GOPATH=/var/lib/kanthord/go` and `CARGO_HOME=/var/lib/kanthord/.cache/cargo`, because the root of a slot is read-only.
 - `flake.nix` takes precedence over every stack. A repository with only `flake.nix` counts as detected. It drafts `mcr.microsoft.com/devcontainers/base:bookworm` with the feature `ghcr.io/devcontainers/features/nix:1` and the option `multiUser: false`, the `onCreateCommand` `nix --extra-experimental-features 'nix-command flakes' print-dev-env /etc/kanthord-flake > /etc/kanthord-nix-env.sh` and `containerEnv` `BASH_ENV=/etc/kanthord-nix-env.sh`, so each `bash -c` of a slot loads the development shell. It checks `nix --version`.
-- The KanthorD layer copies `flake.nix` and `flake.lock` of the workspace, when they exist, to `/etc/kanthord-flake/` before the first `onCreateCommand`. The build of a document without `flake.nix` copies nothing.
+- When the workspace holds `flake.nix`, the KanthorD layer copies the whole workspace to `/etc/kanthord-flake/` before the first `onCreateCommand`, so a flake that imports a local file finds it. The copy skips `.git`. The build of a document without `flake.nix` copies nothing.
 - A repository with no manifest has no detected source.
 
 ### The universal environment
@@ -567,6 +569,7 @@ The component computes the status of a group in this order. The first rule that 
 - At the release, the component compares the newest live revision of each credential with the revision of the digest. On a mismatch, it ends the run with no proof file and computes the group again. A secret value in an output tail becomes `[redacted]` before it reaches the proof file or a log.
 - The operations are `project.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`. The route group registers before every route whose path holds `:project_id`. The CLI holds only the leaf `project environment secret set`, and the other operations are API only.
 - No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, a slot or a log. A private-registry install in a checkout runs in the slot, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
+- A command must not write a secret to a file of the image, because every slot of the image holds that file. The docs give the form `npm install -g <package> --//<registry>/:_authToken="$<variable>"`, which passes the secret to one command, and they name `npm config set` as the form that leaks.
 
 ### The cache volume
 
@@ -592,9 +595,10 @@ The component computes the status of a group in this order. The first rule that 
 - `env@1` is one declaration of [the agent catalog](agent.impl.md#the-agent-catalog), with the tools `read`, `grep`, `find` and `ls`, no host tool, no overridable field and the prompt `static/prompt/env@1.md`. Its declaration holds `workbench: false`.
 - Its provider, its credential and its model come from the agent enablement of `env@1`. The agent page `/agents/env@1` holds that enablement, as for any agent. With no enabled `env@1`, the component starts no session, and the failure stays for the human.
 - Custody releases the model credential under [the release for an `env@1` session](custody.impl.md#the-protected-facility).
-- The session reads the files of the base-branch head in `environments/run-<session id>/checkout` through read-only tools. It writes only the stored environment of its binding, through the tool `environment_write`.
+- The session reads the files of the base-branch head in `environments/run-<session id>/checkout` through read-only tools.
+- A `tool_call` hook of the session resolves each path argument of `read`, `grep`, `find` and `ls` with `realpath` against the checkout. A path that is absolute, starts with `~`, holds a `..` segment or resolves outside the checkout, also through a symbolic link, answers a tool error and reads nothing. The session runs on the server host with the server user, so the hook keeps a prompt-injected file from reading a key file or the state directory. It writes only the stored environment of its binding, through the tool `environment_write`.
 - `environment_write` validates the document with the rules of [the environment of a repository binding](#the-environment-of-a-repository-binding). It writes it under the service identity of the Project Service as a binding revision.
-- The tool `probe` runs one command of a fixed allowlist in a throwaway container as uid 10001, with `--network=none`, `--read-only` and the checkout mounted read-only: `cat /etc/os-release`, `uname -a`, `command -v <word>`, `<word> --version`, `ls <path>`, `dpkg -l` and `apk info`.
+- The tool `probe` runs one command of a fixed allowlist in a throwaway container as uid 10001, with `--network=none`, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--pids-limit 256` and the checkout mounted read-only: `cat /etc/os-release`, `uname -a`, `command -v <word>`, `<word> --version`, `ls <path>`, `dpkg -l` and `apk info`.
 - The container takes `<tag>`, else `<tag>-base` of the last digest. With neither, `probe` answers "no image". The command runs as an argument list and never through a shell. It has a limit of 30 seconds and answers at most 4096 bytes of output.
 - A `<word>` matches `^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`. A `<path>` starts with no `-` and holds no `..` segment.
 - Each call of `environment_write` is one attempt, a refused call too. The component runs the run of the new digest and answers the outcome, the class and the tail to the session.
