@@ -1442,7 +1442,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - A verification with exit 127 reruns once on the base head, in the base-head clone after its setup. Exit 127 on both heads stops the execution with `environment_failed` and the code `command_absent`. Exit 127 on the node head only is a code failure.
 - A base setup that fails stops with `setup_failed`. A base setup or a rerun that ends by the budget is a budget end.
 - The worker caches the base result for the execution by the base commits, the environment digests and the command.
-- The stop detail holds the JSON of the exit code, the signal, `timed_out`, the command and `digests`, the map from each resource identity to the environment digest that the execution set up.
+- The stop detail holds the JSON of the exit code, the signal, `timed_out`, the command and `digests`, the map from the resource identity of each repository binding of the node to its current digest at the setup, from `environmentDigestOf`. A binding with a null environment, for example the source `none` or a `server` placement with no stored environment, also takes its entry.
 - An `environment_failed` stop never becomes a revision turn of `swe@1`.
 
 ## Workspace

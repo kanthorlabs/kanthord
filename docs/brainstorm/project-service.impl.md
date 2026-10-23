@@ -472,7 +472,7 @@ The component computes the status of a group in this order. The first rule that 
 ### The failure of an execution
 
 - The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node, the stop and `digests`: the digest of each environment that the execution set up, from the stop detail.
-- A group whose current digest differs from the digest of the execution keeps its status, because a late stop of an old slot says nothing about a newer environment.
+- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old slot says nothing about a newer environment. A group with no entry counts as the current digest, so a failure always closes the gate of some group and never loops the node.
 - For each other group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
 - The status of the group is then `failed`, and its nodes wait.
 
@@ -569,7 +569,7 @@ The component computes the status of a group in this order. The first rule that 
 - At the release, the component compares the newest live revision of each credential with the revision of the digest. On a mismatch, it ends the run with no proof file and computes the group again. A secret value in an output tail becomes `[redacted]` before it reaches the proof file or a log.
 - The operations are `project.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`. The route group registers before every route whose path holds `:project_id`. The CLI holds only the leaf `project environment secret set`, and the other operations are API only.
 - No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, a slot or a log. A private-registry install in a checkout runs in the slot, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
-- A command must not write a secret to a file of the image, because every slot of the image holds that file. The docs give the form `npm install -g <package> --//<registry>/:_authToken="$<variable>"`, which passes the secret to one command, and they name `npm config set` as the form that leaks.
+- A command must not write a secret to a file of the image, because every slot of the image holds that file. The docs give the form `npm install -g @<scope>/<package> --@<scope>:registry=https://<registry>/ --//<registry>/:_authToken="$<variable>"`, which passes the secret to one command, and they name `npm config set` as the form that leaks.
 
 ### The cache volume
 
