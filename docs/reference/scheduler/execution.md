@@ -20,9 +20,16 @@ Each `execution list` call reads one page. The CLI does not follow `next_cursor`
 | `Executing`  | `true`         | None.                                                                                                                                                                                                                     | `Available`              |
 | `Evaluating` | Either value   | A current successful assessment; otherwise `assessment`. No eligible action without a request; otherwise `request`.                                                                                                       | `External.Requested`     |
 
-The release body can carry a `stop`, which tells why the execution ended early. A `stop` requires `further_work: true`. A `stop` with a reason other than `budget_end` counts as a failure toward `mission.consecutive_failure_limit`, except a `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable`. Such a stop neither counts nor ends the count. A `budget_end` stop counts toward `mission.further_work_limit`. A release without a `budget_end` stop resets that count. [ERD 2](../erd/02-execution.md) holds the exact count rules.
+The release body can carry a `stop`, which tells why the execution ended early. A `stop` requires `further_work: true`. A `stop` with a reason other than `budget_end` counts as a failure toward `mission.consecutive_failure_limit`, except a `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable`. Such a stop neither counts nor ends the count. A lost claim also counts as a failure. An execution that ends before `expired_at` with no stop or with the stop `budget_end` resets the failure count: a release with no stop, a `budget_end` release and a revoked claim. A `budget_end` stop counts toward `mission.further_work_limit`. Any other end of an execution resets that count: a release with no stop, a release with any other stop, a revoked claim and a lost claim. A revoked claim, for example after a human pause, ends the execution with no stop and is no failure. [ERD 2](../erd/02-execution.md) holds the exact count rules.
 
-A `stop` can also carry `detail`, the cause text of the stop. The worker sets it from the error text of a provider error reply, or from `<error name>: <message>` of an error that a prompt to the agent session throws. The second case has the reason `operation_failed`. Other stops carry no `detail`. The worker removes the secrets of the credential, bearer values, JWTs and tokens of 32 or more characters, and cuts the text to 300 characters. A file path stays visible when it holds at least three `/`, no segment of 32 or more characters, and no `+` or `=`. `detail` is optional, a nonempty string of at most 300 characters, and changes no count. The server stores the whole `stop`, `detail` included, as JSON in the `stop` column of the execution row, so `detail` needs no new column.
+A `stop` can also carry `detail`, the cause text of the stop. A native worker sets it from one of these sources:
+
+- the error text of a provider error reply, with the reason `provider_failed`;
+- `<error name>: <message>` of an error with no code that a prompt to the agent session or another step of the execution throws, with the reason `operation_failed`;
+- the text of a git state violation after an agent turn, with the reason `operation_failed` and a code `worker.turn.*`;
+- the JSON result of a verification that failed twice because of the infrastructure, with the reason `operation_failed` and the code `worker.verification.infrastructure_failed`.
+
+Any other error with a code, for example `repository.node_branch.missing`, gives the code and no `detail`. A `budget_end` stop, a `no_progress` stop and the code `worker.merge.markers_left` carry no `detail`. The worker removes the secrets of the credential, bearer values, JWTs and tokens of 32 or more characters, and cuts the text to 300 characters. A file path stays visible when it holds at least three `/`, no segment of 32 or more characters, and no `+` or `=`. `detail` is optional, a nonempty string of at most 300 characters, and changes no count. The server stores the whole `stop`, `detail` included, as JSON in the `stop` column of the execution row, so `detail` needs no new column.
 
 | `stop.reason`                                                                                     | `stop.code`                                                                     |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -31,7 +38,19 @@ A `stop` can also carry `detail`, the cause text of the stop. The worker sets it
 | `no_progress`                                                                                     | `null`                                                                          |
 | `operation_failed`, `judgement_invalid`, `report_absent`, `action_unsettled`, `assessment_absent` | A nonempty string or `null`                                                     |
 
-A steps execution whose node branch is missing at the repository after a recorded push sends `operation_failed` with the code `repository.node_branch.missing`.
+A native steps execution sends `operation_failed` with these codes of its own:
+
+| `stop.code`                                 | Cause                                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repository.node_branch.missing`            | The node branch is missing at the repository after a recorded push.                                                                                            |
+| `worker.turn.branch_changed`                | An agent turn left a checkout off the node branch.                                                                                                             |
+| `worker.turn.history_rewritten`             | An agent turn moved the head to a commit that does not contain the head before the turn.                                                                       |
+| `worker.turn.git_in_progress`               | An agent turn left a merge, `am`, cherry-pick or revert in progress on the node branch. An open rebase detaches `HEAD` and gives `worker.turn.branch_changed`. |
+| `worker.turn.merge_missing`                 | A conflict turn ended with no open merge of the base.                                                                                                          |
+| `worker.merge.markers_left`                 | A conflicted file still holds a conflict marker after the conflict turn.                                                                                       |
+| `worker.verification.infrastructure_failed` | A verification failed because of the infrastructure on its run and on its rerun.                                                                               |
+
+A native evaluation execution also sends `worker.verification.infrastructure_failed`. [How the coder@1 worker works](../../explanation/coder-worker.md#how-the-execution-ends) explains each end of a steps execution.
 
 A successful release sets `ended_at`, so `claim_state` becomes `finished`, and frees the live count of the binding. It wakes the pulls that wait in the project. A refused release changes no execution, node or job.
 

@@ -2,7 +2,7 @@
 
 [Explanations](README.md)
 
-A native agent is an LLM agent that KanthorD runs inside its own process. A worker drives it: the worker sends it a task, the agent edits files with its tools, and the worker reads its last reply. An external harness, for example `claude-code@1`, runs a third-party agent program instead.
+A native agent is an LLM agent that KanthorD runs inside its own process. A worker drives it: the worker sends it a task, and the agent edits files with its tools. `reviewer@1` and an `examine` execution read the last reply of the agent. An external harness, for example `claude-code@1`, runs a third-party agent program instead.
 
 Read [How a worker works](worker.md) first. That page explains where the agent sits in an execution. This page explains how KanthorD builds the agent, what the agent can see and do, and where its limits are.
 
@@ -15,7 +15,7 @@ KanthorD does not implement the agent loop itself. It embeds [pi](https://www.np
 - When a provider is busy, the next execution uses the next model of a fallback chain.
 - The prompt has three layers: the system layer, the agent layer and the working layer. The model reads them in that order, and the task comes last.
 - The tool set, not the prompt, limits what an agent can do. A tool outside the set does not exist for the agent.
-- In a worker execution, the agent has a budget of 200 turns and 2 hours. pi persists its conversation to a session file, and the Tracking Service holds its entries.
+- In a worker execution, the agent has a budget of 200 model turns and 2 hours. pi persists its conversation to a session file, and the Tracking Service holds its entries.
 
 ## The two agents
 
@@ -45,7 +45,7 @@ Both consumers use the same open path. They differ in these points:
 | Last pinned message  | The work prompt of the task or the node                                  | None                                                 |
 | Extra tools          | `evidence-upload` for `swe@1`                                            | KanthorD operation tools                             |
 | Approval of a change | None, because no human is present                                        | The human approves each operation that changes state |
-| Budget               | 200 turns and 2 hours                                                    | None                                                 |
+| Budget               | 200 model turns and 2 hours                                              | None                                                 |
 | Conversation storage | A pi session file of the execution, and the session entries of its trace | A pi session file that survives a restart            |
 
 ## Configuration: which model answers
@@ -161,7 +161,7 @@ The same order, as a table:
 | 5   | Pinned message | Work prompt                          | —                                    |
 | 6   | Conversation   | Later instructions and replies       | Human messages and replies           |
 
-The model receives the work prompt once, at row 5. Row 6 holds what comes after it: the revision instructions, the judgement instructions and the replies of the agent. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
+The model receives the work prompt once, at row 5. Row 6 holds what comes after it: the revision instructions, the judgement instructions of `reviewer@1` and the replies of the agent. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
 
 ### The three layers
 
@@ -259,17 +259,17 @@ A Worker execution opens one session per claim, in a workspace that the worker p
 - `prompt(work)` sends the work prompt as the user message.
 - `instruct(work, text)` pins the work prompt and sends another instruction, for example a revision request.
 
-After each call, the worker reads the last reply of the agent. The worker, not the agent, decides when the work is done. When the worker needs a decision from the agent, for example a judgement of a criterion, the instruction asks for one last line that starts with `kanthord-judgement:` and holds JSON. A reply that does not parse gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`.
+The worker, not the agent, decides when the work is done. Only `reviewer@1` asks its agent for a decision: a judgement of a criterion. That instruction asks for one last line that starts with `kanthord-judgement:` and holds JSON. A reply that does not parse gets one repair turn. A second invalid reply ends the execution with `judgement_invalid`. `coder@1` reads no reply of `swe@1` in an `implement` execution, and reads the last reply of an `examine` execution as the report.
 
 Each method uses the session in its own way:
 
-- **Steps** (`coder@1` with `swe@1`). The agent works on each task, and the worker commits, verifies and asks for a judgement. [How the coder@1 worker works](coder-worker.md#tasks-step-7) shows the loop.
+- **Steps** (`coder@1` with `swe@1`). The agent works on each unit of the node. After each turn, the worker commits the change and verifies the unit itself. [How the coder@1 worker works](coder-worker.md#step-7-the-unit-loop) shows the loop.
 - **Evaluation** (`reviewer@1` with `re@1`). The worker runs the verification commands first. A failure ends the evaluation without the agent. On success, the agent receives the evidence and returns a JSON judgement.
 - **Examine** (`coder@1` with `swe@1`). The agent checks out the base-branch head of each repository binding of the node. It runs tools and the verifications, and reads the outcome and the evidence of each direct dependency. It writes its findings as produced evidence.
 
 ### Budget
 
-Each native worker has a resource budget of 200 turns and 2 hours of wall time. A worker binding can override both values. One turn is one reply of the model with the tool calls of that reply. The wall time counts from the claim, and the wall deadline is also capped by the expiry of the claim. When the budget ends:
+Each native worker has a resource budget of 200 model turns and 2 hours of wall time. A worker binding can override both values. One model turn is one reply of the model with the tool calls of that reply. The wall time counts from the claim, and the wall deadline is also capped by the expiry of the claim. When the budget ends:
 
 - pi stops after the current turn, and KanthorD aborts the session.
 - Each later `bash` command is refused.

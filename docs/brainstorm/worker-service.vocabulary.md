@@ -410,17 +410,17 @@ Attempt 1 and attempt 2 both work on that branch when attempt 2 records the star
 When attempt 2 records the start point `base_branch`, attempt 2 starts the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2` from the base branch.
 A revision of the node that names another repository binding starts a new node branch in that repository.
 
-## task commit
+## done record
 
-The task commit is the set of heads of the node branches after the last commit of the task work in the attempt that executed the task.
-Task "Add reset token expiry" of "Add password reset" ends with two commits on the node branch: the commit of the first task work and the commit of the revision after the first verification failed, and the second one is the task commit.
-No record of the Mission Service names that commit.
+A done record is the trailer `Kanthord-Done: <unit id> <digest>` that the execution adds to the commit of a work unit after its verifications pass.
+Task "Add reset token expiry" of "Add password reset" passes its verifications, so Execution 1 adds `Kanthord-Done: task_01ARZ3NDEKTSV4RRFFQ69G5FAW <digest>` to its last commit.
+Execution 2 reads the trailer on the node branch and skips the task. A revision that changes the content of the task changes the digest, so the task runs again.
 
 ## checkpoint commit
 
-A checkpoint commit is the commit of the task work in progress that the execution makes before a release with further work.
+A checkpoint commit is the commit of the work in progress that the execution makes before a release with further work.
 The resource budget of Execution 1 ends while task "Add reset token expiry" is half done, so the execution commits the changed files as a checkpoint commit, pushes the node branch and releases with further work.
-Execution 2 runs the task verifications at the head of the node branch and continues the task from that commit.
+The checkpoint commit has no done record, so Execution 2 continues the task from that commit.
 
 ## resource budget
 

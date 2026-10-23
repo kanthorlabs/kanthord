@@ -135,6 +135,7 @@ erDiagram
         text bindings "JSON list of binding identities"
         text intent "implement | examine"
         text tags "JSON set of tags"
+        text commit_type "feat | fix | docs | style | refactor | test | chore, or null"
         text tasks "JSON task content, [] for an examine node"
         text change "JSON: write, previous_revision, changed_fields, tasks"
         text reason
@@ -319,6 +320,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
 - `name`, `requirement` and `criterion` are nonblank text. `verifications` is a nonempty ordered list of nonblank bash commands.
 - `tags` holds unique tags under the [tag](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.vocabulary.md#tag) form. An absent list reads `[]`.
+- `commit_type` holds the commit type of the node, or `null` when the node sets none. The owning service validates the closed set before the write. The worker reads `null` as `feat`.
 - `bindings` obeys the rule table of [the node content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-node-content). A node names every binding that it uses, and no node takes a binding from the project. The storage bindings of `bindings` form an ordered upload list in the order of the write. An `implement` node names one or more repository bindings, and the convention is one binding. An `implement` node with no repository binding answers `mission.node.bindings_invalid`. A task names no binding.
 
   | Binding kind | `implement` | `examine` |
