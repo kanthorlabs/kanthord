@@ -507,7 +507,7 @@ The component computes the status of a group in this order. The first rule that 
 - The component implements `environmentsClaimable(projectId, resourceIdentities): boolean` for the [claim selection](scheduler-service.impl.md#the-environment-gate). It answers true when the status of each group is `none` or `ready`.
 - A group with no record answers false, and the component computes it.
 - It reads only process memory, so it runs inside the claim transaction.
-- It implements `environmentsMixed(projectId, resourceIdentities): boolean` for [the node content](mission-service.impl.md#the-node-content). It answers true when two of the groups hold the `image` target and documents with different canonical JSON.
+- The Project Service, not the component, implements `environmentsMixed(projectId, resourceIdentities): boolean` for [the node content](mission-service.impl.md#the-node-content). It reads the stored `environment` documents of the binding set inside the write transaction and answers true when the worker bindings run at the `container` placement and two stored documents differ in canonical JSON.
 - It implements `slotImage(projectId, workerResourceIdentity, signal): Promise<string>` for [the slot image](worker-service.impl.md#the-slot-image). The promise resolves with `<tag>` when the group of the worker binding is `ready`, and with `worker.container_image` when it is `none`. It waits through every other status. The signal ends the wait.
 
 ### Garbage collection
