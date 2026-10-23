@@ -403,7 +403,7 @@ At the `worker` placement, the server derives the client identity of an instance
 The Project Service source sits under `src/project/` of the `engine` repository.
 A test file sits beside its source as `*.test.ts`.
 `node --test` runs the tests.
-`tsc -p tsconfig.build.json` builds into `dist/`.
+`tsrs -p tsconfig.build.json --checkers 2` builds into `dist/`.
 The `kanthord` bin of `package.json` releases it.
 
 ## Tests
