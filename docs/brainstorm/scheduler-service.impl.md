@@ -14,7 +14,8 @@ A ruling that names a package, a product or a version is deliberate.
 The identities follow the identity convention of [architecture.impl.md](architecture.impl.md#the-identity-and-the-time).
 
 - An execution uses `execution_<ulid>`. The claim operation mints it.
-- A job uses `job_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the job, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
+- A job uses `job_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the first job of a node, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
+- The table `scheduler_queue_place` holds the identity of the first job of each node. Each later insert of a job of that node takes that identity, so every re-queue of the node keeps its queue place.
 - A claim takes no identity of its own: the execution record is the record of the claim, and it holds the fixed deadline.
 - The trace identity and the root span identity of an execution are protocol-defined identities of the Tracking Service, and no entity identity of the Scheduler Service.
 
@@ -274,6 +275,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - The Scheduler Service exposes no delete of an execution record, so under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) it keeps every execution record, and no sweep deletes one.
 - `execution list` and `execution get` therefore return every execution of the project, live and ended.
 - The work queue holds current jobs only. The Mission Service inserts and removes a job with the claimable state of its node, so `queue list` and `queue peek` read a live view and no history.
+- A `scheduler_queue_place` row stays for the life of the node, because no service deletes a node.
 
 ## Tests
 
@@ -319,6 +321,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test asserts that no sweep deletes an execution record, and that an ended execution stays readable through `execution get` after a restart.
 - A test asserts that `queue list` returns no job of a node that left the claimable state.
 - A test pages `queue list` with a limit of 1 over jobs of several priorities and asserts the order of the work queue across the pages.
+- A test claims an older node, inserts a job of a newer node, and inserts the job of the older node again. It asserts the claim of the older node.
 - A test pauses a project with a claimable node and a waiting pull. It asserts `{ kind: "no-work" }` at the end of the wait window, no execution, and an unchanged node and job. After the resume, it asserts the claim of the waiting pull before the end of its window.
 - A test pauses a project during a live execution. It asserts that the execution stays `running`, that its release routes the node, and that no pull claims the node before the resume.
 - Tests read the eligibility report of a node in each of the twelve states, under each Mission condition that holds and that fails, with and without a job, with an active and a paused project, and with a `running`, a `lost` and a `finished` execution. They assert each check result, `claimable` and no write.

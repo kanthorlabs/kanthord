@@ -157,6 +157,11 @@ erDiagram
         integer available_at "end of the stop backoff, or null"
     }
 
+    scheduler_queue_place {
+        text node_id PK "node"
+        text job_id "job_ + ULID of the first job of the node"
+    }
+
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
     project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
@@ -174,6 +179,7 @@ erDiagram
 
     mission_node ||..o| scheduler_job : "ref, no FK"
     project_project ||..o{ scheduler_job : "ref, no FK"
+    mission_node ||..o| scheduler_queue_place : "ref, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
@@ -189,7 +195,7 @@ erDiagram
     class agent_enablement,agent_prompt agent
     class worker_instance worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
-    class scheduler_job scheduler
+    class scheduler_job,scheduler_queue_place scheduler
 ```
 
 ## Tables
@@ -212,6 +218,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `mission_node_revision` | Mission Service      | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions).                                                                                                                                            |
 | `mission_dependency`    | Mission Service      | Derived from the [dependency](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#dependency).                                                                                                                                        |
 | `scheduler_job`         | Scheduler Service    | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts).                                                                                            |
+| `scheduler_queue_place` | Scheduler Service    | Ruled: [the identities of the Scheduler Service](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service).                                                                                            |
 
 ## Keys and relationship notation
 
@@ -350,6 +357,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `project_id` equals the project of the mission of the node. The Mission Service supplies both values at the insert.
 - The selection order is `priority` descending, then `id` ascending.
 - A priority change keeps the `id` of the job, so the job keeps its age.
+- `scheduler_queue_place` holds the `id` of the first job of each node. Each later job of the node takes that `id`, so a re-queue keeps the queue place of the node.
 - The Mission Service inserts and deletes the rows through the public insert and delete of the work queue, in the transaction of its accepted fact.
 - In this group every job is for a node in `Available`. An evaluation job comes with [ERD 2](02-execution.md).
 
@@ -367,3 +375,4 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `credential.holder`                | `worker_instance.name`             | Reference by name, no FK. `server` names no row.                                                                                                |
 | `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                               |
 | `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                               |
+| `scheduler_queue_place.node_id`    | `mission_node.id`                  | Reference, no FK.                                                                                                                               |

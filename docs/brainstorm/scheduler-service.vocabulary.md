@@ -89,7 +89,7 @@ An entry of the work queue for one claimable node. The claim deletes it.
 The Mission Service inserts a job for "Add password reset" when the node becomes `Available`.
 A `tdd@1` instance of worker binding `tdd-main` claims the node, and the claim deletes that job.
 No job exists for "Add password reset" while Execution 1 executes it.
-A release with further work inserts a new job with a new identity.
+A release with further work inserts a new job with the identity of the first job of the node.
 
 ## work queue
 
