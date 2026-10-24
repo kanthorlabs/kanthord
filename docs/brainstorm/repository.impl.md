@@ -340,6 +340,7 @@ The classifier `src/repository/git-failure.ts` reads the stderr of ssh and of th
 | "Could not resolve hostname", "Connection timed out", "Connection refused"                                 | `host_unreachable`     |
 | Address host outside the SSH host set of the platform                                                      | `address_invalid`      |
 | `repository.credential.ssh_key_legacy`, `repository.connector.ssh_agent_failed`, a key that does not parse | `identity_unavailable` |
+| The git operation exceeds its deadline (`Git deadline exceeded`)                                           | `deadline_exceeded`    |
 | Any other text                                                                                             | `unclassified`         |
 
 - `host_key_changed` means that the host presented a key other than the pinned key. The human compares the published fingerprint before a new pin.

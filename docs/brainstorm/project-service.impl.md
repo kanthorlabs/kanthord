@@ -321,7 +321,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `project.binding.verify` checks one repository binding at `POST /api/project/:project_id/binding/:binding_id/verify`. It is a read under `human` access. It takes no body and no mutation key.
 - It checks the configuration of the revision that `binding_id` names.
 - It runs the host set check, the pin check and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `ssh_credential` and of the `credential` of the binding.
-- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check that exceeds its deadline answers `unknown` with `failure_reason: unclassified`.
+- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check whose git read exceeds its deadline answers `unknown` with `failure_reason: deadline_exceeded`.
 - A refusal of the record verify refuses the request with the code of the record verify.
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores no result.
@@ -338,12 +338,15 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `project.binding.instruction_files.get` reads the instruction files of one repository binding at `GET /api/project/:project_id/binding/:binding_id/instruction_files`. It is a read under `human` access.
 - The instruction files are `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the root of the repository.
 - It reads the configuration of the revision that `binding_id` names. An unsaved configuration has no read.
-- The repository connector resolves the commit of the base branch with `ls-remote`. It fetches that commit at depth 1 with no blobs into a temporary directory, reads the four paths with `git show`, and deletes the directory.
+- The repository connector resolves the commit of the base branch with `ls-remote`. It fetches that commit at depth 1 with no blobs into a temporary directory.
+- It lists the four paths and fetches the blobs of all regular files in one fetch. Then it reads the files and deletes the directory.
 - The read applies the text validation of the [working layer](agent.md#prompt-composer) to each file.
 - It answers `{ commit, read_at, files }`. Each entry of `files` holds `{ source, path, state, reason, text }`. `state` is `present`, `absent` or `invalid`.
 - The service caches the answer in memory per binding revision and commit. Each request runs `ls-remote`, so a new commit of the base branch replaces the answer.
-- The deadline of the resource healthcheck bounds the read.
-- A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable`.
+- The read deadline is 30 s, because the read opens several SSH sessions. The resource healthcheck keeps its 10 s deadline.
+- The route timeout is 36 s: the read deadline, the 5 s SSH agent cleanup and 1 s. A read that exceeds its deadline therefore answers 422 and not 504.
+- A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable` with `details: { failure_reason }`. A read that exceeds its deadline carries `deadline_exceeded`.
+- A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level with `project_id`, `binding_id`, `failure_reason` and `reason`. `reason` is the git failure text with the user information of a URL redacted.
 - A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`.
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores nothing in the database.
@@ -393,6 +396,7 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 - At the `image` target, the first source that exists decides: `stored`, `repository`, `detected`, `universal`.
 - At the `host` and the `remote` targets, the first source that exists decides: `stored`, `detected`, then `none`. The repository devcontainer and the universal environment never apply there, because their commands assume their image.
 - A `detected` document at the `host` and the `remote` targets contributes only its `checks`. It runs no setup in a checkout.
+- One read deadline of 30 s bounds all repository reads of one resolution, the detection read included. `binding.environment.get` has a route timeout of 36 s.
 
 ### The digest and the tag
 
@@ -640,6 +644,7 @@ The first layer of the build builds the image at the slot start, before the Onbo
 | log  | `project.onboarding.cache_collection_failed`             | The list or the removal of a cache volume fails. A removal names the project and the resource identity.                                     |
 | log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.     |
 | log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                 |
+| log  | `project.binding.instruction_files.read_failed`          | A read of the instruction files fails. It names the project, the binding, the failure reason and the redacted git failure text.             |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                    |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                   |
 
@@ -688,6 +693,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - The hint of `repository_not_found` is "The repository host does not find the repository. Check the owner and the name in the address. A deploy key of another repository also gives this result."
 - The hint of `host_unreachable` is "The server cannot reach the repository host. Check the host in the address and the network of the server."
 - The hint of `address_invalid` is "The address is not valid, or its host is not a host of the platform. Use the form git@<host>:<owner>/<repository>.git."
+- The hint of `deadline_exceeded` is "The repository host did not answer before the deadline. Verify again. If the failure stays, check the network of the server."
 - The hint of `unclassified` is "The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log."
 - A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 - On a verify or a binding check, the hint shows under the `address` entry only. The `ssh_credential` and `credential` entries and the credential Verify show the status badge only.
