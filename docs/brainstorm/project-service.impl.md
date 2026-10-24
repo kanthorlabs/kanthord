@@ -417,7 +417,7 @@ The component computes the status of a group in this order. The first rule that 
 6. Otherwise the component starts a run, and the status is the step of that run.
 
 - At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
-- At the `image` target with the source `none`, a slot runs on `worker.container_image`, and the status is `none` or `failed`.
+- At the `image` target, the `universal` source always exists, so the status is never `none`. A slot runs on `worker.container_image` only when its worker binding names no group.
 - After a failed read, the group keeps its last status and digest and sets only `reason`. A transient fetch failure thus never closes the gate of a `ready` environment.
 - A run that waits in the queue shows the status of its first step, and its `run_started_at` stays null until it starts.
 - A claim gate or a read of a group with no record starts the computation of the group in the background and answers `pending`.
@@ -510,7 +510,7 @@ The component computes the status of a group in this order. The first rule that 
 - A group with no record answers false, and the component computes it.
 - It reads only process memory, so it runs inside the claim transaction.
 - The Project Service, not the component, implements `environmentsMixed(projectId, resourceIdentities): boolean` for [the node content](mission-service.impl.md#the-node-content). It reads the stored `environment` documents of the binding set inside the write transaction and answers true when the worker bindings run at the `container` placement and two stored documents differ in canonical JSON.
-- It implements `slotImage(projectId, workerResourceIdentity, signal): Promise<string>` for [the slot image](worker-service.impl.md#the-slot-image). The promise resolves with `<tag>` when the group of the worker binding is `ready`, and with `worker.container_image` when it is `none`. It waits through every other status. The signal ends the wait.
+- It implements `slotImage(projectId, workerResourceIdentity, signal): Promise<string>` for [the slot image](worker-service.impl.md#the-slot-image). The group of a worker binding is the repository binding that its `environment` key names. With no key, the group is the only repository binding of the project. With no key and zero or several repository bindings, the worker binding names no group. The promise resolves with `<worker.container_image>:<version>` when the worker binding names no group, and with `<tag>` when its group is `ready`. It waits through every other status. The signal ends the wait.
 
 ### Garbage collection
 

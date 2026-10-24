@@ -816,13 +816,13 @@ Tests of the slot driver:
 - `worker.container_image` holds an image name with no tag and no digest. The default is `docker.io/kanthorlabs/kanthord`.
 - A value that holds `@`, or a `:` after its last `/`, fails with `system.config.invalid_field`. `localhost:5000/kanthord` is valid.
 - The image holds `/usr/local/bin/kanthord` of the server version, `/usr/bin/tini`, `/bin/sh`, the user 10001 with an `/etc/passwd` entry, and `/var/lib/kanthord` owned by uid 10001. Every image `FROM docker.io/kanthorlabs/kanthord:<version>` holds them.
-- A project toolchain comes from a derived image `FROM docker.io/kanthorlabs/kanthord:<version>`. [Add a toolchain to the worker image](../how-to-guides/add-a-toolchain-to-the-worker-image.md) describes it. A binding names no image.
+- A project toolchain comes from the environment of the repository binding, under [the Onboarding component](project-service.impl.md#the-onboarding-component). The environment image takes `kanthord` and `tini` from this image. A binding names no image.
 - The pull policy is `--pull=missing`. The first start of a slot pulls the image, and the pull output goes to `stderr.log`.
 
 ### The slot image
 
 - The image of a slot is the image of the environment that its worker binding names in `environment`, under [the Onboarding component](project-service.impl.md#the-onboarding-component).
-- At each slot start, `ContainerDriver` calls `imageFor(runtime, slot)`. It calls `slotImage(projectId, workerResourceIdentity, signal)` of the Onboarding component. The slot starts only when the promise resolves: on `<tag>` of a `ready` environment, or on `<worker.container_image>:<version>` of an environment with the status `none`.
+- At each slot start, `ContainerDriver` calls `imageFor(runtime, slot)`. It calls `slotImage(projectId, workerResourceIdentity, signal)` of the Onboarding component. The slot starts only when the promise resolves: on `<tag>` of a `ready` environment, or on `<worker.container_image>:<version>` when the worker binding names no repository group.
 - A slot of an environment that is not ready waits and starts no container. It pulls no work, so the nodes of that repository wait with no backoff loop and no log line for each retry. A stop or a drain of the slot ends the wait.
 - The driver records the image of each slot.
 - After a run makes an environment `ready`, the Onboarding component calls `environmentReady(projectId, resourceIdentity, tag)` of the Worker Service. The Worker Service marks each slot of the worker bindings that name the environment and run another image as draining before the call returns. A draining slot takes no new claim, ends its execution, and the pool host starts it again on the new image.
