@@ -91,6 +91,14 @@ A `tdd@1` instance of worker binding `tdd-main` claims the node, and the claim d
 No job exists for "Add password reset" while Execution 1 executes it.
 A release with further work inserts a new job with the identity of the first job of the node.
 
+## queue place
+
+The position of a node inside its priority. The identity of the first job of the node sets it.
+
+"Add password reset" enters the queue before "Add recovery codes", both at priority 0.
+The evaluator returns "Add password reset" for rework, and its new job keeps the identity of its first job.
+"Add password reset" therefore stays ahead of "Add recovery codes".
+
 ## work queue
 
 The work queue holds jobs for "Add password reset" and "Add recovery codes", both at priority 0.
@@ -103,7 +111,7 @@ A peek reads the job of "Add password reset" and removes nothing.
 
 The actor `ulrich` sets the priority of "Add password reset" to 1 through the node API.
 Its job moves ahead of "Add recovery codes" at priority 0.
-The priority change preserves the identity of the job.
+The priority change keeps the identity of the job.
 
 ## claim
 

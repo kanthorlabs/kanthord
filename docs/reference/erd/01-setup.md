@@ -155,6 +155,7 @@ erDiagram
         text node_id UK "node"
         integer priority "copy of the Mission priority"
         integer available_at "end of the stop backoff, or null"
+        integer queued_at "time of the insert of this job"
     }
 
     scheduler_queue_place {
@@ -180,6 +181,7 @@ erDiagram
     mission_node ||..o| scheduler_job : "ref, no FK"
     project_project ||..o{ scheduler_job : "ref, no FK"
     mission_node ||..o| scheduler_queue_place : "ref, no FK"
+    scheduler_queue_place ||..o| scheduler_job : "job_id = id, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
@@ -218,7 +220,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `mission_node_revision` | Mission Service      | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions).                                                                                                                                            |
 | `mission_dependency`    | Mission Service      | Derived from the [dependency](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#dependency).                                                                                                                                        |
 | `scheduler_job`         | Scheduler Service    | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts).                                                                                            |
-| `scheduler_queue_place` | Scheduler Service    | Ruled: [the identities of the Scheduler Service](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service).                                                                                            |
+| `scheduler_queue_place` | Scheduler Service    | Ruled: [the identities of the Scheduler Service](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service); the columns are derived.                                                                   |
 
 ## Keys and relationship notation
 
@@ -357,7 +359,8 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `project_id` equals the project of the mission of the node. The Mission Service supplies both values at the insert.
 - The selection order is `priority` descending, then `id` ascending.
 - A priority change keeps the `id` of the job, so the job keeps its age.
-- `scheduler_queue_place` holds the `id` of the first job of each node. Each later job of the node takes that `id`, so a re-queue keeps the queue place of the node.
+- `scheduler_queue_place` holds the `id` of the first job of each node. Each later job of the node keeps that `id` and thus the queue place of the node.
+- `queued_at` holds the time of the insert of the current job, and not the time of the first job.
 - The Mission Service inserts and deletes the rows through the public insert and delete of the work queue, in the transaction of its accepted fact.
 - In this group every job is for a node in `Available`. An evaluation job comes with [ERD 2](02-execution.md).
 

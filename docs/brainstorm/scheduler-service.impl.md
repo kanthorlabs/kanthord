@@ -15,7 +15,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 - An execution uses `execution_<ulid>`. The claim operation mints it.
 - A job uses `job_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the first job of a node, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
-- The table `scheduler_queue_place` holds the identity of the first job of each node. Each later insert of a job of that node takes that identity, so every re-queue of the node keeps its queue place.
+- The table `scheduler_queue_place` holds the identity of the first job of each node. Each later job of that node keeps that identity and thus the queue place of the node.
 - A claim takes no identity of its own: the execution record is the record of the claim, and it holds the fixed deadline.
 - The trace identity and the root span identity of an execution are protocol-defined identities of the Tracking Service, and no entity identity of the Scheduler Service.
 
@@ -36,8 +36,9 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
 
-- `Job` holds `job_id`, `project_id`, `node_id` and `priority`.
+- `Job` holds `job_id`, `project_id`, `node_id`, `priority` and `queued_at`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
+  - `queued_at` is the time of the insert of the job. Each later job of a node holds the time of its own insert.
 - `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `node_branch`, `credentials`, `agent_selections`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `stop`, `trace_id` and `root_span_id`.
   - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service.
   - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
