@@ -68,7 +68,7 @@ Probe a stored repository binding revision without a write. The revision must be
 - `ssh_credential`: the Repository component verifies the `ssh` credential with its local key check, with a 10-second deadline.
 - `credential`: the Credential Service checks the optional platform credential. The entry is `null` when the binding has no `credential`.
 
-A failed probe reports `unhealthy` and is not an error. A probe that exceeds its deadline reports `unknown`. Each entry carries a `failure_reason`: `null` for a `healthy` entry only, and a value for every other entry. Every entry carries `deadline_exceeded` when its probe exceeds the budget.
+A failed probe reports `unhealthy` and is not an error. A probe that exceeds its deadline reports `unknown`. Each entry carries a `failure_reason`: `null` for a `healthy` entry only, and a value for every other entry. Every entry carries `deadline_exceeded` when its probe exceeds its deadline.
 
 ### project binding check
 
@@ -83,7 +83,7 @@ Read the instruction files of a stored repository binding revision from its base
 3. The service lists `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the repository root. It fetches the blobs of all regular files in one fetch.
 4. The service reads the files, then deletes the directory.
 
-The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 30-second budget. The route timeout is 36 seconds: the budget, the 5-second SSH agent cleanup and 1 second. A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level.
+The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 30-second deadline. The route timeout is 36 seconds: the read deadline, the 5-second SSH agent cleanup and 1 second. A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level.
 
 Before step 1, the service checks the address host, its pin and the SSH key as the apply does. A failure refuses the read with `400 project.bindings.repository.address_invalid`, `409 repository.host_key.unpinned` or `409 repository.credential.ssh_key_legacy`. No git process starts.
 
