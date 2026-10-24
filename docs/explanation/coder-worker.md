@@ -562,7 +562,14 @@ The worker commits the second task and runs `grep -q '/healthz' docs/api.md`. Th
 `npm test -- healthz` fails. `swe@1` answers two revision instructions in a row and changes no file. After the second one, the worker stops and does not verify the same head again:
 
 ```json
-{ "further_work": true, "stop": { "reason": "no_progress", "code": null } }
+{
+  "further_work": true,
+  "stop": {
+    "reason": "no_progress",
+    "code": null,
+    "detail": "{\"rule\":\"unchanged_revision\",\"count\":2,\"limit\":2,\"verification\":{\"passed\":false,\"ran\":1,\"exit_code\":1}}"
+  }
+}
 ```
 
 ### A rework
@@ -669,7 +676,7 @@ The target is `before` after a violation, and the head of the checkout after a v
 `coder@1` reports on the two channels of the [worker contract](worker-contract.md). On the state channel, it checks its claim, submits the head commit as evidence and releases. On the telemetry channel, it writes these spans:
 
 - A `worker.phase` span for each phase: `prepare` covers step 3, `start` covers steps 5 and 6, `tasks` covers steps 7 to 9, and `finish` covers steps 10 and 11 and the checkpoint of a budget end.
-- A `worker.task` span for each run of a unit. `kanthord.task.id` is the task id, or the node id for the node unit. `kanthord.task.result` is `complete` or `budget_end`.
+- A `worker.task` span for each run of a unit. `kanthord.task.id` is the task id, or the node id for the node unit. `kanthord.task.result` is `complete` or `budget_end`. A `no_progress` stop adds `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
 - A `worker.verification` span for each command run. The spans of the release gate have the `tasks` phase span as their parent.
 - A `worker.git` span for the merge of step M (`merge_base`), the fetch of step 8 (`fetch_base`), the checkpoint commit of a budget end (`commit`) and the push of step 10 or of a budget end (`push`). The commits of gate G after a turn, and the checkpoint and the push of a stop, have no `worker.git` span.
 - `agent.turn` and `agent.tool` spans below the span that encloses the turn. An external harness writes the same `agent.turn` and `agent.tool` spans.
