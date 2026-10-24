@@ -1255,7 +1255,7 @@ The progress rule:
 - The stop `detail` names the rule that fired and its counts, as a JSON object:
   - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_unmet` for a verdict turn that leaves the verdict rule false.
   - `count` is the counter at the stop, and `limit` is `NO_PROGRESS_LIMIT`.
-  - `verification` is the last verification of any unit of the execution, or `null` before the first verification. It holds `passed`, `ran` (the count of commands that ran) and `exit_code` (the exit code of the last command that ran). A verification stops at the first command that does not pass, so these facts keep a fixed size.
+  - `verification` is the last verification of any unit of the execution, or `null` before the first verification. It holds `passed`, `ran` (the count of commands that ran) and `exit_code` (the exit code of the last command that ran). `exit_code` is `null` when the command has no exit code or no command ran. A verification stops at the first command that does not pass, so these facts keep a fixed size.
 - The `worker.task` span that the stop ends carries `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
 - A work turn with `changed` false adds nothing. The verification of the unit decides.
 
