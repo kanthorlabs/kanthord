@@ -321,7 +321,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `project.binding.verify` checks one repository binding at `POST /api/project/:project_id/binding/:binding_id/verify`. It is a read under `human` access. It takes no body and no mutation key.
 - It checks the configuration of the revision that `binding_id` names.
 - It runs the host set check, the pin check and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `ssh_credential` and of the `credential` of the binding.
-- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check that exceeds its deadline answers `unknown` with `failure_reason: unclassified`.
+- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability, failure_reason }`. The `address` entry has the capability `network git read`. A host outside the set, an unpinned host or a failed read answers `unhealthy` with its `failure_reason`. A check whose git read exceeds its deadline answers `unknown` with `failure_reason: deadline_exceeded`.
 - A refusal of the record verify refuses the request with the code of the record verify.
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores no result.
@@ -343,8 +343,8 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - The read applies the text validation of the [working layer](agent.md#prompt-composer) to each file.
 - It answers `{ commit, read_at, files }`. Each entry of `files` holds `{ source, path, state, reason, text }`. `state` is `present`, `absent` or `invalid`.
 - The service caches the answer in memory per binding revision and commit. Each request runs `ls-remote`, so a new commit of the base branch replaces the answer.
-- A read deadline of 30 s bounds the read. The resource healthcheck keeps its 10 s deadline, because the read opens several SSH sessions.
-- The route timeout is 35 s, so a read that exceeds its deadline answers 422 and not 504.
+- The read deadline is 30 s, because the read opens several SSH sessions. The resource healthcheck keeps its 10 s deadline.
+- The route timeout is 36 s: the read deadline, the 5 s SSH agent cleanup and 1 s. A read that exceeds its deadline therefore answers 422 and not 504.
 - A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable` with `details: { failure_reason }`. A read that exceeds its deadline carries `deadline_exceeded`.
 - A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level with `project_id`, `binding_id`, `failure_reason` and `reason`. `reason` is the git failure text with the user information of a URL redacted.
 - A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`.
@@ -396,7 +396,7 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 - At the `image` target, the first source that exists decides: `stored`, `repository`, `detected`, `universal`.
 - At the `host` and the `remote` targets, the first source that exists decides: `stored`, `detected`, then `none`. The repository devcontainer and the universal environment never apply there, because their commands assume their image.
 - A `detected` document at the `host` and the `remote` targets contributes only its `checks`. It runs no setup in a checkout.
-- One read deadline of 30 s bounds all repository reads of one resolution, the detection read included. `binding.environment.get` has a route timeout of 35 s.
+- One read deadline of 30 s bounds all repository reads of one resolution, the detection read included. `binding.environment.get` has a route timeout of 36 s.
 
 ### The digest and the tag
 

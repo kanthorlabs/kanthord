@@ -26,7 +26,7 @@ The checks run under these rules:
 
 1. The server checks each target once. Two entries with the same target, for example two bindings of one address, show the same result.
 2. At most 32 checks run at the same time across all owners.
-3. Each check has a deadline of 10 seconds from its start. A check that exceeds its deadline reports `unknown` with the `failure_reason` `unclassified`.
+3. Each check has a deadline of 10 seconds from its start. A check that exceeds its deadline reports `unknown`. A git check, the check of a repository binding entry, carries `deadline_exceeded`. Every other check carries `unclassified`.
 4. The report has a deadline of 115 seconds after the start: the route timeout of 120 seconds minus a margin of 5 seconds. At that deadline, every entry without a result reports `unknown` with `unclassified`, a check that did not start included.
 5. A failure of a check is not a failure of the request. The request answers HTTP `200` with `unhealthy` and `unknown` entries.
 
@@ -101,7 +101,7 @@ The API returns HTTP `200` with JSON. This report holds one project `shop` with 
 | An agent provider of `agent`      | A value of the LLM credential check of its credential. A credential that only worker instances hold reports `unknown` with `held_by_instance`. |
 | An entry of `intake` or `worker`  | `unclassified`.                                                                                                                                |
 
-A check that exceeds its deadline carries `unclassified` in every entry. The answer holds no remote text, no secret and no endpoint URL with credentials. The server log record `resource.health.check` keeps the redacted remote text of each failed check under `reason`.
+A repository binding entry whose git check exceeds its deadline carries `deadline_exceeded`. Every other entry whose check exceeds its deadline carries `unclassified`. The answer holds no remote text, no secret and no endpoint URL with credentials. The server log record `resource.health.check` keeps the redacted remote text of each failed check under `reason`.
 
 ### Failures
 

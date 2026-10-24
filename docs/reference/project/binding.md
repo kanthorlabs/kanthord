@@ -68,7 +68,7 @@ Probe a stored repository binding revision without a write. The revision must be
 - `ssh_credential`: the Repository component verifies the `ssh` credential with its local key check, with a 10-second budget.
 - `credential`: the Credential Service checks the optional platform credential. The entry is `null` when the binding has no `credential`.
 
-A failed probe reports `unhealthy` and is not an error. A probe that exceeds its budget reports `unknown`. Each entry carries a `failure_reason`: `null` for a `healthy` entry only, and a value for every other entry. A probe that exceeds its budget carries `unclassified`.
+A failed probe reports `unhealthy` and is not an error. A probe that exceeds its budget reports `unknown`. Each entry carries a `failure_reason`: `null` for a `healthy` entry only, and a value for every other entry. The `address` entry carries `deadline_exceeded` when its git read exceeds the budget. Every other entry carries `unclassified` when its probe exceeds the budget.
 
 ### project binding check
 
@@ -83,7 +83,7 @@ Read the instruction files of a stored repository binding revision from its base
 3. The service lists `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the repository root. It fetches the blobs of all regular files in one fetch.
 4. The service reads the files, then deletes the directory.
 
-The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 30-second budget, and the route timeout is 35 seconds. A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level.
+The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 30-second budget. The route timeout is 36 seconds: the budget, the 5-second SSH agent cleanup and 1 second. A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level.
 
 Before step 1, the service checks the address host, its pin and the SSH key as the apply does. A failure refuses the read with `400 project.bindings.repository.address_invalid`, `409 repository.host_key.unpinned` or `409 repository.credential.ssh_key_legacy`. No git process starts.
 
@@ -312,13 +312,13 @@ The response has the page form of `project binding list`. Each item is one revis
 }
 ```
 
-| Property           | Type           | Purpose                                                                                                                       |
-| ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `address`          | object         | Address probe. `capability` is `network git read`.                                                                            |
-| `ssh_credential`   | object         | `ssh` credential probe. The Credential Service gives `capability`.                                                            |
-| `credential`       | object or null | Platform credential probe; `null` when the configuration has no `credential`.                                                 |
-| `*.status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                                                          |
-| `*.failure_reason` | string or null | `null` for a `healthy` entry only. Every other entry carries a value. A probe that exceeds its budget carries `unclassified`. |
+| Property           | Type           | Purpose                                                                                                                                                                                                          |
+| ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `address`          | object         | Address probe. `capability` is `network git read`.                                                                                                                                                               |
+| `ssh_credential`   | object         | `ssh` credential probe. The Credential Service gives `capability`.                                                                                                                                               |
+| `credential`       | object or null | Platform credential probe; `null` when the configuration has no `credential`.                                                                                                                                    |
+| `*.status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                                                                                                                                             |
+| `*.failure_reason` | string or null | `null` for a `healthy` entry only. Every other entry carries a value. A git read of `address` that exceeds its budget carries `deadline_exceeded`. Another probe that exceeds its budget carries `unclassified`. |
 
 The `ssh_credential` and `credential` entries are the answers of the credential verify. Their values are in the [repository credential check](../repository/credential.md#verify-and-check).
 
@@ -478,7 +478,7 @@ A declared server failure exits `1`. The CLI writes `<code>: request failed` and
 | `apply`             | `PUT /api/project/:project_id/binding-set`                           | `project.bindingSet.write`              | Yes      | 30 seconds |
 | `revision list`     | `GET /api/project/:project_id/binding/:binding_id/revision`          | `project.bindingRevision.list`          | No       | 30 seconds |
 | `verify`            | `POST /api/project/:project_id/binding/:binding_id/verify`           | `project.binding.verify`                | No       | 30 seconds |
-| `instruction-files` | `GET /api/project/:project_id/binding/:binding_id/instruction_files` | `project.binding.instruction_files.get` | No       | 35 seconds |
+| `instruction-files` | `GET /api/project/:project_id/binding/:binding_id/instruction_files` | `project.binding.instruction_files.get` | No       | 36 seconds |
 | `check`             | `POST /api/project/:project_id/binding/check`                        | `project.binding.check`                 | No       | 30 seconds |
 
 Every operation has `human` access: it requires a human bearer JWT.
