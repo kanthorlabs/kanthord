@@ -58,14 +58,15 @@ The result that a resource healthcheck reports. The set is closed and holds thre
 
 The cause of a resource status other than healthy. The set is closed and holds 15 values.
 
-- **git values**: `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid`, `identity_unavailable` and `deadline_exceeded`.
-- **deadline_exceeded**: a git operation that exceeds its deadline. The host answers too slowly or not at all.
+- **git values**: `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid` and `identity_unavailable`.
+- **deadline_exceeded**: a check of any kind or a git read that exceeds its deadline, or a check without a result at the report deadline. The remote host or service answers too slowly or not at all, or the server runs too many checks.
 - **HTTP values**: `unauthorized`, `forbidden`, `rate_limited`, `unreachable` and `invalid_response`.
 - **instance copy value**: `held_by_instance`, a credential copy that a worker instance holds. The server holds no secret of that copy, so the check reports `unknown`.
-- **unclassified**: a failure with no reported cause. Git checks and HTTP checks both report it. An HTTP check that exceeds its deadline reports it.
+- **unclassified**: a failure with no reported cause. Every check can report it. A cancel by the caller reports it, because a cancel is not a deadline.
 
 The check of LLM credential `team-openai` gets HTTP 401 and reports `unhealthy` with the failure reason `unauthorized`.
 The `git ls-remote` of the repository binding `app` exceeds its deadline and reports `unknown` with the failure reason `deadline_exceeded`.
+The `HeadBucket` check of storage credential `team-s3` exceeds its deadline and reports `unknown` with the failure reason `deadline_exceeded`.
 
 ## health scope
 

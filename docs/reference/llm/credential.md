@@ -102,7 +102,7 @@ A provider failure with the code `rate_limited`, `unavailable` or `quota_exhaust
 - `check` tests a typed secret against its platform before a `create`. It stores nothing. It accepts only `verifiable` platforms with the secret shape `api_key`.
 - `verify` tests the current revision of a stored credential. It stores no result. It accepts every `verifiable` platform.
 
-`check` and `verify` run the provider check of the platform with a 10-second deadline. The connection result maps to a status: `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` or `invalid_response` to `unknown`. A check that exceeds its deadline answers `unknown` with the failure reason `unclassified`. No check refreshes OAuth. An expired access token of `openai-codex` or `anthropic-subscription` answers `unhealthy` with the failure reason `unauthorized`, without a remote call. The `github-copilot` check sends the stored GitHub token and ignores the stored expiry, so the remote decides.
+`check` and `verify` run the provider check of the platform with a 10-second deadline. The connection result maps to a status: `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` or `invalid_response` to `unknown`. A check that exceeds its deadline answers `unknown` with the failure reason `deadline_exceeded`. No check refreshes OAuth. An expired access token of `openai-codex` or `anthropic-subscription` answers `unhealthy` with the failure reason `unauthorized`, without a remote call. The `github-copilot` check sends the stored GitHub token and ignores the stored expiry, so the remote decides.
 
 ## Expected response
 
@@ -233,27 +233,29 @@ The CLI fetches no further page.
 | `capability`     | string           | Capability of the platform check, as in the health report.                                 |
 | `failure_reason` | string or `null` | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
 
-| `failure_reason`   | Cause                                                                                                   | Status      |
-| ------------------ | ------------------------------------------------------------------------------------------------------- | ----------- |
-| `unauthorized`     | The provider answered `401`, or the `openai-codex` or `anthropic-subscription` access token is expired. | `unhealthy` |
-| `forbidden`        | The provider answered `403`.                                                                            | `unhealthy` |
-| `rate_limited`     | The provider answered `429`.                                                                            | `unknown`   |
-| `invalid_response` | The provider answered another status or a redirect, or a model list that the check cannot read.         | `unknown`   |
-| `unreachable`      | The request failed before an HTTP answer, or a failed model call carries no HTTP status.                | `unknown`   |
-| `unclassified`     | Any other failure, a check that exceeds its deadline included.                                          | `unknown`   |
+| `failure_reason`    | Cause                                                                                                   | Status      |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | ----------- |
+| `unauthorized`      | The provider answered `401`, or the `openai-codex` or `anthropic-subscription` access token is expired. | `unhealthy` |
+| `forbidden`         | The provider answered `403`.                                                                            | `unhealthy` |
+| `rate_limited`      | The provider answered `429`.                                                                            | `unknown`   |
+| `invalid_response`  | The provider answered another status or a redirect, or a model list that the check cannot read.         | `unknown`   |
+| `unreachable`       | The request failed before an HTTP answer, or a failed model call carries no HTTP status.                | `unknown`   |
+| `deadline_exceeded` | The check exceeded its 10-second deadline.                                                              | `unknown`   |
+| `unclassified`      | Any other failure.                                                                                      | `unknown`   |
 
 The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`.
 
 The dashboard shows a hint under a check result that carries a `failure_reason`. The hint texts of this component:
 
-| `failure_reason`   | Hint                                                                                                                                                                                                        |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unauthorized`     | The provider refused the API key or the access token. Correct the key, or sign in again for a new token. Then verify again.                                                                                 |
-| `forbidden`        | The provider accepted the key or the token but refused the access. Check the permissions and the plan of the account.                                                                                       |
-| `rate_limited`     | The provider limited the requests. Wait some minutes, or check the quota of the plan. Then verify again.                                                                                                    |
-| `unreachable`      | The server cannot reach the provider. Check the network of the server and the base URL of an openai-compatible credential. For an OAuth platform, sign in again.                                            |
-| `invalid_response` | The provider sent an answer that the check does not expect, for example a server error. Verify again later. For an openai-compatible credential, check that the base URL points to the API of the provider. |
-| `unclassified`     | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                                                |
+| `failure_reason`    | Hint                                                                                                                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unauthorized`      | The provider refused the API key or the access token. Correct the key, or sign in again for a new token. Then verify again.                                                                                 |
+| `forbidden`         | The provider accepted the key or the token but refused the access. Check the permissions and the plan of the account.                                                                                       |
+| `rate_limited`      | The provider limited the requests. Wait some minutes, or check the quota of the plan. Then verify again.                                                                                                    |
+| `unreachable`       | The server cannot reach the provider. Check the network of the server and the base URL of an openai-compatible credential. For an OAuth platform, sign in again.                                            |
+| `invalid_response`  | The provider sent an answer that the check does not expect, for example a server error. Verify again later. For an openai-compatible credential, check that the base URL points to the API of the provider. |
+| `deadline_exceeded` | The remote host or service did not answer before the deadline. Verify again. If the failure stays, check the network of the server.                                                                         |
+| `unclassified`      | The check failed for an unknown cause. Verify again. If the failure stays, read the server log.                                                                                                             |
 
 A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 

@@ -201,7 +201,7 @@ The `github` check reads the rate limit with the token. The `ssh` check runs onl
 
 | Result                                             | `status`    | `failure_reason`       |
 | -------------------------------------------------- | ----------- | ---------------------- |
-| The check exceeds its deadline                     | `unknown`   | `unclassified`         |
+| The check exceeds its deadline                     | `unknown`   | `deadline_exceeded`    |
 | `github`: HTTP `200`                               | `healthy`   | `null`                 |
 | `github`: HTTP `401`                               | `unhealthy` | `unauthorized`         |
 | `github`: HTTP `403`                               | `unknown`   | `forbidden`            |
@@ -223,7 +223,8 @@ The dashboard shows a hint under a check result that carries a `failure_reason`.
 | `unreachable`          | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
 | `invalid_response`     | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
 | `identity_unavailable` | The server cannot load the SSH key. Rotate the key. If the fault stays, read the server log.                                                                                   |
-| `unclassified`         | The check failed for an unknown cause, or it exceeded its deadline. Verify again. If the failure stays, read the server log.                                                   |
+| `deadline_exceeded`    | The remote host or service did not answer before the deadline. Verify again. If the failure stays, check the network of the server.                                            |
+| `unclassified`         | The check failed for an unknown cause. Verify again. If the failure stays, read the server log.                                                                                |
 
 A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 
