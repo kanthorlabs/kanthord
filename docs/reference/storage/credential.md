@@ -195,18 +195,18 @@ The Project service answers this list. A binding in this list blocks [`archive`]
 
 The `s3` probe maps the `HeadBucket` result to a status and a `failure_reason`. The first row that matches decides.
 
-| `HeadBucket` result                     | `status`    | `failure_reason`    |
-| --------------------------------------- | ----------- | ------------------- |
-| A 10-second timeout                     | `unknown`   | `deadline_exceeded` |
-| A cancel by the caller                  | `unknown`   | `unclassified`      |
-| HTTP `200`                              | `healthy`   | `null`              |
-| HTTP `404`                              | `unhealthy` | `invalid_response`  |
-| HTTP `401`                              | `unknown`   | `unauthorized`      |
-| HTTP `403`                              | `unknown`   | `forbidden`         |
-| HTTP `429`                              | `unknown`   | `rate_limited`      |
-| Another HTTP status                     | `unknown`   | `invalid_response`  |
-| A transport failure with no HTTP status | `unknown`   | `unreachable`       |
-| Any other failure                       | `unknown`   | `unclassified`      |
+| `HeadBucket` result                      | `status`    | `failure_reason`    |
+| ---------------------------------------- | ----------- | ------------------- |
+| The check exceeds its 10-second deadline | `unknown`   | `deadline_exceeded` |
+| A cancel by the caller                   | `unknown`   | `unclassified`      |
+| HTTP `200`                               | `healthy`   | `null`              |
+| HTTP `404`                               | `unhealthy` | `invalid_response`  |
+| HTTP `401`                               | `unknown`   | `unauthorized`      |
+| HTTP `403`                               | `unknown`   | `forbidden`         |
+| HTTP `429`                               | `unknown`   | `rate_limited`      |
+| Another HTTP status                      | `unknown`   | `invalid_response`  |
+| A transport failure with no HTTP status  | `unknown`   | `unreachable`       |
+| Any other failure                        | `unknown`   | `unclassified`      |
 
 A key that can only write can get `unknown` from a forbidden probe and still work. The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`, without key material.
 
@@ -219,7 +219,7 @@ The dashboard shows a hint under a check result that carries a `failure_reason`.
 | `rate_limited`      | The remote service limited the requests. Wait some minutes, or check the quota of the account. Then verify again.                                                              |
 | `unreachable`       | The server cannot reach the remote service. Check the network of the server and the endpoint of a storage credential.                                                          |
 | `invalid_response`  | The remote service sent an answer that the check does not expect, for example a server error. Verify again later. For a storage credential, check the endpoint and the bucket. |
-| `deadline_exceeded` | The remote host or service did not answer before the check deadline. Verify again. If the failure stays, check the network of the server.                                      |
+| `deadline_exceeded` | The remote host or service did not answer before the deadline. Verify again. If the failure stays, check the network of the server.                                            |
 | `unclassified`      | The check failed for an unknown cause. Verify again. If the failure stays, read the server log.                                                                                |
 
 A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."

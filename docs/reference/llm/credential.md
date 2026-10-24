@@ -254,7 +254,7 @@ The dashboard shows a hint under a check result that carries a `failure_reason`.
 | `rate_limited`      | The provider limited the requests. Wait some minutes, or check the quota of the plan. Then verify again.                                                                                                    |
 | `unreachable`       | The server cannot reach the provider. Check the network of the server and the base URL of an openai-compatible credential. For an OAuth platform, sign in again.                                            |
 | `invalid_response`  | The provider sent an answer that the check does not expect, for example a server error. Verify again later. For an openai-compatible credential, check that the base URL points to the API of the provider. |
-| `deadline_exceeded` | The remote host or service did not answer before the check deadline. Verify again. If the failure stays, check the network of the server.                                                                   |
+| `deadline_exceeded` | The remote host or service did not answer before the deadline. Verify again. If the failure stays, check the network of the server.                                                                         |
 | `unclassified`      | The check failed for an unknown cause. Verify again. If the failure stays, read the server log.                                                                                                             |
 
 A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."

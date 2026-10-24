@@ -700,7 +700,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - The hint of `repository_not_found` is "The repository host does not find the repository. Check the owner and the name in the address. A deploy key of another repository also gives this result."
 - The hint of `host_unreachable` is "The server cannot reach the repository host. Check the host in the address and the network of the server."
 - The hint of `address_invalid` is "The address is not valid, or its host is not a host of the platform. Use the form git@<host>:<owner>/<repository>.git."
-- The hint of `deadline_exceeded` is "The remote host or service did not answer before the check deadline. Verify again. If the failure stays, check the network of the server."
+- The hint of `deadline_exceeded` is "The remote host or service did not answer before the deadline. Verify again. If the failure stays, check the network of the server."
 - The hint of `unclassified` is "The check failed for an unknown cause. Verify again. If the failure stays, read the server log."
 - A value with no hint shows "The check failed with the reason <value>. Verify again. If the failure stays, read the server log."
 - On a verify or a binding check, the hint shows under the `address` entry only. The `ssh_credential` and `credential` entries and the credential Verify show the status badge only.

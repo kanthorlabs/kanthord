@@ -64,11 +64,11 @@ List every retained revision of the resource identity of one binding revision, h
 
 Probe a stored repository binding revision without a write. The revision must be a repository binding of the project that no later tombstone follows. The service probes three resources:
 
-- `address`: the service checks the address host and its pin, releases the SSH key, and runs `git ls-remote`, with a 10-second budget.
-- `ssh_credential`: the Repository component verifies the `ssh` credential with its local key check, with a 10-second budget.
+- `address`: the service checks the address host and its pin, releases the SSH key, and runs `git ls-remote`, with a 10-second deadline.
+- `ssh_credential`: the Repository component verifies the `ssh` credential with its local key check, with a 10-second deadline.
 - `credential`: the Credential Service checks the optional platform credential. The entry is `null` when the binding has no `credential`.
 
-A failed probe reports `unhealthy` and is not an error. A probe that exceeds its budget reports `unknown`. Each entry carries a `failure_reason`: `null` for a `healthy` entry only, and a value for every other entry. Every entry carries `deadline_exceeded` when its probe exceeds the budget.
+A failed probe reports `unhealthy` and is not an error. A probe that exceeds its deadline reports `unknown`. Each entry carries a `failure_reason`: `null` for a `healthy` entry only, and a value for every other entry. Every entry carries `deadline_exceeded` when its probe exceeds the budget.
 
 ### project binding check
 
@@ -312,19 +312,19 @@ The response has the page form of `project binding list`. Each item is one revis
 }
 ```
 
-| Property           | Type           | Purpose                                                                                                                            |
-| ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `address`          | object         | Address probe. `capability` is `network git read`.                                                                                 |
-| `ssh_credential`   | object         | `ssh` credential probe. The Credential Service gives `capability`.                                                                 |
-| `credential`       | object or null | Platform credential probe; `null` when the configuration has no `credential`.                                                      |
-| `*.status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                                                               |
-| `*.failure_reason` | string or null | `null` for a `healthy` entry only. Every other entry carries a value. A probe that exceeds its budget carries `deadline_exceeded`. |
+| Property           | Type           | Purpose                                                                                                                              |
+| ------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `address`          | object         | Address probe. `capability` is `network git read`.                                                                                   |
+| `ssh_credential`   | object         | `ssh` credential probe. The Credential Service gives `capability`.                                                                   |
+| `credential`       | object or null | Platform credential probe; `null` when the configuration has no `credential`.                                                        |
+| `*.status`         | string         | `healthy`, `unhealthy` or `unknown`.                                                                                                 |
+| `*.failure_reason` | string or null | `null` for a `healthy` entry only. Every other entry carries a value. A probe that exceeds its deadline carries `deadline_exceeded`. |
 
 The `ssh_credential` and `credential` entries are the answers of the credential verify. Their values are in the [repository credential check](../repository/credential.md#verify-and-check).
 
 #### Failure reasons of the address entry
 
-The `address` entry reports a refusal before the read or a failed read as `unhealthy`, and a probe that exceeds its budget as `unknown`. The server reads only the lines of ssh and of the remote, because git translates its own lines. No remote text reaches the client. The first row that matches decides.
+The `address` entry reports a refusal before the read or a failed read as `unhealthy`, and a probe that exceeds its deadline as `unknown`. The server reads only the lines of ssh and of the remote, because git translates its own lines. No remote text reaches the client. The first row that matches decides.
 
 | `failure_reason`       | Cause                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

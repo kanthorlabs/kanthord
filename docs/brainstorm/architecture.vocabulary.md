@@ -59,7 +59,7 @@ The result that a resource healthcheck reports. The set is closed and holds thre
 The cause of a resource status other than healthy. The set is closed and holds 15 values.
 
 - **git values**: `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid` and `identity_unavailable`.
-- **deadline_exceeded**: a check of any kind that exceeds its deadline. The remote host or service answers too slowly or not at all.
+- **deadline_exceeded**: a check of any kind or a git read exceeds its deadline, or the report deadline ends before the check ends. The remote host or service answers too slowly or not at all, or the server runs too many checks.
 - **HTTP values**: `unauthorized`, `forbidden`, `rate_limited`, `unreachable` and `invalid_response`.
 - **instance copy value**: `held_by_instance`, a credential copy that a worker instance holds. The server holds no secret of that copy, so the check reports `unknown`.
 - **unclassified**: a failure with no reported cause. Every check can report it. A cancel by the caller reports it, because a cancel is not a deadline.

@@ -101,7 +101,7 @@ The API returns HTTP `200` with JSON. This report holds one project `shop` with 
 | An agent provider of `agent`      | A value of the LLM credential check of its credential. A credential that only worker instances hold reports `unknown` with `held_by_instance`. |
 | An entry of `intake` or `worker`  | `deadline_exceeded` or `unclassified`.                                                                                                         |
 
-Every entry whose check exceeds its deadline carries `deadline_exceeded`. The answer holds no remote text, no secret and no endpoint URL with credentials. The server log record `resource.health.check` keeps the redacted remote text of each failed check under `reason`.
+Every entry whose check exceeds its deadline carries `deadline_exceeded`. The answer holds no remote text, no secret and no endpoint URL with credentials. The server log record `resource.health.check` keeps the redacted remote text of each failed check under `reason`. An entry that exceeds its deadline logs `check deadline exceeded` under `reason`.
 
 ### Failures
 
