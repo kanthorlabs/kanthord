@@ -478,7 +478,7 @@ The component computes the status of a group in this order. The first rule that 
 
 ### The triggers
 
-- After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each changed repository binding to `pending` synchronously. A repository binding is changed when the write changed its row or its target. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A computation whose read runs during the call writes no record and reads the inputs again. A pull between the commit and the computation therefore claims no node of a changed binding.
+- After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each changed repository binding to `pending` synchronously. A repository binding is changed when the write changed its row or its target. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A computation of the project whose read runs during the call writes no record and reads the inputs again. A pull between the commit and the computation therefore claims no node of a changed binding.
 - At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
 - At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
@@ -608,6 +608,7 @@ The component computes the status of a group in this order. The first rule that 
 - A group holds at most one session at a time. Sessions of different groups run at once and share the queue of [the run](#the-run).
 - Only a failure event starts a session: a run that writes a failed proof file, or [the failure of an execution](#the-failure-of-an-execution). A failure inside a session and the end of a session start none.
 - The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `env@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
+- The last read of the group succeeded, and no binding-set write changed the binding or its target after that read. A failure at an old target thus starts no session.
 - A session starts while `repairs` of the failed digest is below 3. The component increments `repairs` before the session starts. A new write of the same digest keeps the count, and `project.binding.environment.rebuild` resets it to 0.
 - The environment state holds `repairing: true` while a session of the group runs. The stop of the server aborts each session before it cancels the runs.
 - The waiting nodes continue when the status is `ready`.
