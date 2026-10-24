@@ -73,6 +73,49 @@ The preview digest covers the mission ID, the mission version, the normalized en
 
 The import does not unblock a node, reopen an attempt or change priority. It records the human that submits the import as the actor of each revision.
 
+### Re-import an applied plan
+
+The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`.
+
+To edit an applied plan:
+
+1. Export the plan as Markdown. Each exported file holds the `id` of its node or task.
+2. Edit the exported files. Keep each `id` line.
+3. Preview the edited files. Make sure that `retirements` and `creates` hold only the intended entries.
+4. Apply the same files. Set `preview_digest` to the digest of the preview, and set `confirmed_retirements` to its `retirements`.
+
+```sh
+kanthord mission export mission_01M4C5J3SA6W8RBBC92HA9SSDS --format markdown --out ./plan
+kanthord mission import preview mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --file import.json
+kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --file apply.json
+```
+
+The `import.json` of the preview:
+
+```json
+{
+  "format": "markdown",
+  "mission_version": 7,
+  "reason": "Tighten the login verification"
+}
+```
+
+An edit of one verification in `plan/login.md` previews `updates: ["node_01M4C5J3SAMS4Z4KZD8DQ9GFTB"]`, `retirements: []` and `creates: []`.
+
+The `apply.json` of the apply:
+
+```json
+{
+  "format": "markdown",
+  "mission_version": 7,
+  "reason": "Tighten the login verification",
+  "preview_digest": "4f0c2e6a9b1d3c5e7f8a0b2c4d6e8f0a1b3c5d7e9f1a2b4c6d8e0f1a3b5c7d9e",
+  "confirmed_retirements": []
+}
+```
+
+The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path.
+
 ## Expected response
 
 ### import preview
