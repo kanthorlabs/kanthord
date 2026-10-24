@@ -381,7 +381,7 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 ### The group of an environment
 
 - The component keys each environment by its binding group: `project_id` and `resource_identity` of the repository binding.
-- It holds one record of each group in process memory: the target, the source, the digest, the status, the start times of the run and its step, and the reason of a failed read.
+- It holds one record of each group in process memory: the target, the source, the digest, the status, the start times of the run and its step, the reason of a failed read and the time when that reason started.
 - A server start loses the records. The component computes each record again from the binding set, the container runtime and the proof files.
 
 ### The target
@@ -415,7 +415,7 @@ The component computes the status of a group in this order. The first rule that 
 
 1. A run of the group is active: `building` or `proving`, the step of that run.
 2. No read of the inputs of the group succeeded yet, or the component holds no record of the group: `pending`.
-3. The proof file of the digest holds the outcome `failed`: `failed`.
+3. The proof file of the digest holds the outcome `failed` and the commit of the last read: `failed`. A failure at another commit does not count.
 4. At the `image` target, `<tag>-proved` exists: `ready`. At the `host` target, the proof file of the digest holds the outcome `passed`: `ready`.
 5. The source is `none`: `none`.
 6. Otherwise the component starts a run, and the status is the step of that run.
@@ -429,11 +429,12 @@ The component computes the status of a group in this order. The first rule that 
 ### The proof file
 
 - The proof file of a digest is `environments/<identity path>/<digest>.json` of the state directory. The component writes it to a temporary file of the same directory with mode `0600` and renames it.
-- It holds `digest`, `outcome` (`passed` or `failed`), `class`, `origin` (`onboarding` or `execution`), `execution_id`, `command`, `exit_code`, `tail`, `reproduce`, `checks`, `repairs` and `ended_at`.
+- It holds `digest`, `outcome` (`passed` or `failed`), `class`, `origin` (`onboarding` or `execution`), `execution_id`, `command`, `exit_code`, `tail`, `reproduce`, `checks`, `repairs`, `ended_at` and `commit`.
+- `commit` is the base-branch commit of the read that started the run. For the origin `execution`, it is the commit of the last read of the group.
 - `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed` or `command_absent`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
-- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0.
+- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.
 - The file is a cache for display and the gate of the `host` target. A lost file costs one run.
 
 ### The run
@@ -486,7 +487,12 @@ The component computes the status of a group in this order. The first rule that 
 - At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
 - At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
-- A failed read logs `project.onboarding.read_failed` at the `error` level with the project, the binding, the resource identity, the reason and the failure reason. A failed read with the reason of the last logged record of the group logs no record. A successful read, a change of the binding, a change of its target and a removal of the binding clear the last logged record, so the next failed read logs again.
+- While the status of a group is `failed`, the component reads the commit of its base branch every 60 seconds (`COMMIT_CHECK_MS`). The read is one `git ls-remote` through the Repository component.
+  - A changed commit reads the inputs again. The failure of the old commit no longer counts under rule 3 of [the status](#the-status). Each reader of the proof file treats that failure as absent and ignores `<tag>-proved` for that read, so a run proves the environment again at the new commit. The file stays on disk until the new run writes the file of the digest. At the `image` target, the run builds only a missing `<tag>`. At the `remote` target, the status becomes `none`.
+  - An unchanged commit starts no read and no run.
+  - The component skips the commit read during a run, a computation or a session of `env@1` of the group, and after a change of its target.
+  - A failed commit read keeps the status `failed` and logs `project.onboarding.read_failed` under the rules of a failed read.
+- A failed read logs `project.onboarding.read_failed` at the `error` level with the project, the binding, the resource identity, the reason and the failure reason. A failed read with the reason of the last logged record of the group logs no record. A successful read, a successful commit read, a change of the binding, a change of its target and a removal of the binding clear the last logged record, so the next failed read logs again.
 - The `reason` of a failed SSH read ends with the sentence `The failure reason is <failure_reason>.`, and `<failure_reason>` is the value of [the failure reason](repository.impl.md#the-failure-reason-of-a-git-operation). Any other failure has a null failure reason.
 - `project.binding.environment.rebuild` starts a run.
 
@@ -501,7 +507,8 @@ The component computes the status of a group in this order. The first rule that 
 ### The environment list
 
 - `project.environment.list` at `GET /api/project/:project_id/environment` is a `human` read. It answers `{ items }` with one environment state for each current repository binding, in binding name order.
-- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `failure`, `checks`, `repairs` and `repairing`.
+- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `reason_started_at`, `failure`, `checks`, `repairs` and `repairing`.
+- `reason_started_at` is the time when `reason` changed from null to a message, and null while `reason` is null. A later message keeps the time.
 - `repairing` is true while a session of [the agent `env@1`](#the-agent-env1) runs for the group, and false otherwise.
 - `failure` is null unless the status is `failed`. It holds `class`, `origin`, `execution_id`, `command`, `exit_code`, `tail`, `reproduce` and `ended_at` of the proof file.
 - `checks` is the red baseline of the proof file of the digest. `tag` is null outside the `image` target.
