@@ -593,7 +593,7 @@ The current connection:
 - The cancellation aborts a running bash tool. The bash tool ends its child tree through `killChildTree`, under [Enforcement of the worker boundary](#enforcement-of-the-worker-boundary).
 - The process then exits with status 3 and `worker.instance.superseded`. The diagnostic names the `connection_name` of the current connection.
 - The template unit sets `RestartPreventExitStatus=3`, so systemd does not restart a superseded process. A restart loop on a container platform means two deployments of one instance configuration.
-- Two processes can act in the same workspace of one host between a supersede and the next heartbeat of the old process. That time is one heartbeat interval, plus the time of the heartbeat request.
+- Two processes can act in the same workspace of one host between a supersede and the next heartbeat of the old process. That time is at most one heartbeat interval, plus the time of the heartbeat request.
 
 The heartbeat and the renewal:
 
