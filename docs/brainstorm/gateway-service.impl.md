@@ -472,7 +472,7 @@ Its `error.details` holds `{"missing_inventories":["<owner>"]}`, with each owner
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
 - The request runs at most 32 checks concurrently across all owners.
 - Each check receives a child `Context` with a deadline of 10 s from its start.
-- A check that exceeds its deadline reports `unknown`. Its failure reason is `deadline_exceeded` when its git operation reports the deadline first, else `unclassified`.
+- A check that exceeds its deadline reports `unknown`. A git check carries `deadline_exceeded`, because it observes the deadline when the deadline fires. Every other check carries `unclassified`.
 - The [route timeout](gateway-service.impl.md#cancellation) bounds the whole request.
 - The report deadline is the handler start plus the route timeout minus a margin of 5 s (`REPORT_MARGIN_MS`), because the route deadline does not reach the caller context.
 - At the report deadline, the report includes `unknown` with `failure_reason: unclassified` for every entry whose check has no result, a check without a start included.
