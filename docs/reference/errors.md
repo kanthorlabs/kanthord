@@ -87,7 +87,7 @@ Responses and OpenAPI use the same error-code format. Bare uppercase codes are n
 
 A health entry is the object `{ status, capability, failure_reason }`. The [resource healthcheck](gateway/healthcheck.md), the [binding verify and check](project/binding.md#project-binding-verify-and-project-binding-check) and the credential `verify` and `check` answer it. `details.failure_reason` of `project.bindings.repository.ssh_unreachable` carries the same values.
 
-`failure_reason` is `null` if and only if `status` is `healthy`. Every entry that is not healthy carries a value. A failure with no reported cause carries `unclassified`. A check that exceeds its deadline reports `unknown` with `unclassified`.
+`failure_reason` is `null` if and only if `status` is `healthy`. Every entry that is not healthy carries a value. A failure with no reported cause carries `unclassified`. A git operation that exceeds its deadline carries `deadline_exceeded`. An HTTP check that exceeds its deadline reports `unknown` with `unclassified`.
 
 A failure reason is not an error code. It is a value of one closed list:
 
@@ -100,13 +100,14 @@ A failure reason is not an error code. It is a value of one closed list:
 | `repository_not_found` | git  | The repository host does not find the repository, or the key has no access to it.                                                                                             |
 | `host_unreachable`     | git  | ssh cannot resolve or reach the repository host.                                                                                                                              |
 | `identity_unavailable` | git  | The server cannot load the [SSH key](repository/ssh-key.md): a legacy `ssh` credential, a key that does not parse, or an SSH agent that does not start or load.               |
+| `deadline_exceeded`    | git  | A git operation exceeds its deadline. The repository host answers too slowly or not at all.                                                                                   |
 | `held_by_instance`     | none | Only worker instances hold live copies of the LLM credential, so the server holds no secret to check. No read runs. See [instance copies](llm/credential.md#instance-copies). |
 | `unauthorized`         | HTTP | The remote answers `401`, or a stored OAuth access token is expired.                                                                                                          |
 | `forbidden`            | HTTP | The remote answers `403`.                                                                                                                                                     |
 | `rate_limited`         | HTTP | The remote answers `429`.                                                                                                                                                     |
 | `invalid_response`     | HTTP | The remote answers another status, or a body that the check cannot read.                                                                                                      |
 | `unreachable`          | HTTP | The request fails before an HTTP answer.                                                                                                                                      |
-| `unclassified`         | both | Any other failure, a check that exceeds its deadline included.                                                                                                                |
+| `unclassified`         | both | Any other failure. An HTTP check that exceeds its deadline is included.                                                                                                       |
 
 The same value can map to a different status for each check. For example, `rate_limited` is `unhealthy` for a `github` credential and `unknown` for an `s3` credential. Each check page states its own mapping: [project binding](project/binding.md#failure-reasons-of-the-address-entry), [LLM credential](llm/credential.md#check-and-verify-answer), [repository credential](repository/credential.md#verify-and-check) and [storage credential](storage/credential.md#verify-and-check). No answer holds remote text. The server log keeps the redacted remote text under `reason`.
 

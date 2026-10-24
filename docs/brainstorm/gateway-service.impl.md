@@ -446,10 +446,11 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - `capability` is a nonempty string that names the capability of the check, not a claim about other capabilities.
 - `failure_reason` is null or a value of the closed enum `ResourceFailureReason` in `src/kernel/health.ts`. No remote text reaches the client.
 - `failure_reason` is null if and only if `status` is `healthy`. An entry that is not healthy and has no reported value carries `unclassified`.
-- The git values of `ResourceFailureReason` are `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid` and `identity_unavailable`. [The failure reason of a git operation](repository.impl.md#the-failure-reason-of-a-git-operation) maps each git failure to a value.
+- The git values of `ResourceFailureReason` are `host_key_unknown`, `host_key_changed`, `key_refused`, `repository_not_found`, `host_unreachable`, `address_invalid`, `identity_unavailable` and `deadline_exceeded`. [The failure reason of a git operation](repository.impl.md#the-failure-reason-of-a-git-operation) maps each git failure to a value.
 - The HTTP values of `ResourceFailureReason` are `unauthorized`, `forbidden`, `rate_limited`, `unreachable` and `invalid_response`. The credential checks of the LLM, Repository and Storage components report them. The [failure reason of an HTTP check](#the-failure-reason-of-an-http-check) maps each failure to a value.
 - The value `held_by_instance` marks a credential copy that a worker instance holds. The server holds no secret of that copy, so the check reports `unknown` with no release. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) states the rule.
-- `unclassified` belongs to the git checks and the HTTP checks. It names a failure with no reported cause, a check that exceeds its deadline included.
+- `unclassified` belongs to the git checks and the HTTP checks. It names a failure with no reported cause. An HTTP check that exceeds its deadline carries it.
+- `deadline_exceeded` names a git operation that exceeds its deadline.
 - A repository binding entry carries a git value. A credential entry and an agent provider entry carry the value of the credential check. The value is an HTTP value or `unclassified`, or `identity_unavailable` for an `ssh` record. An Intake Service entry and a Worker Service entry that is not healthy carry `unclassified`.
 - The value of a failure is the same in every component. The check of each component maps it to a status. For example, `rate_limited` is `unknown` for an LLM credential and `unhealthy` for a `github` credential. `forbidden` is `unhealthy` for an LLM credential and `unknown` for a `github` or `s3` credential.
 - A resource name of the LLM, Repository or Storage component is its credential name.
@@ -471,7 +472,7 @@ Its `error.details` holds `{"missing_inventories":["<owner>"]}`, with each owner
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
 - The request runs at most 32 checks concurrently across all owners.
 - Each check receives a child `Context` with a deadline of 10 s from its start.
-- A check that exceeds its deadline reports `unknown` with `failure_reason: unclassified`.
+- A check that exceeds its deadline reports `unknown`. Its failure reason is `deadline_exceeded` when its git operation reports the deadline first, else `unclassified`.
 - The [route timeout](gateway-service.impl.md#cancellation) bounds the whole request.
 - The report deadline is the handler start plus the route timeout minus a margin of 5 s (`REPORT_MARGIN_MS`), because the route deadline does not reach the caller context.
 - At the report deadline, the report includes `unknown` with `failure_reason: unclassified` for every entry whose check has no result, a check without a start included.

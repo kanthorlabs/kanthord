@@ -80,9 +80,10 @@ Read the instruction files of a stored repository binding revision from its base
 
 1. `git ls-remote` resolves the commit of the base branch.
 2. The service fetches that commit at depth 1 without blobs into a temporary directory.
-3. The service reads `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the repository root, then deletes the directory.
+3. The service lists `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the repository root. It fetches the blobs of all regular files in one fetch.
+4. The service reads the files, then deletes the directory.
 
-The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 10-second budget.
+The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 30-second budget, and the route timeout is 35 seconds. A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level.
 
 Before step 1, the service checks the address host, its pin and the SSH key as the apply does. A failure refuses the read with `400 project.bindings.repository.address_invalid`, `409 repository.host_key.unpinned` or `409 repository.credential.ssh_key_legacy`. No git process starts.
 
@@ -335,7 +336,8 @@ The `address` entry reports a refusal before the read or a failed read as `unhea
 | `key_refused`          | ssh writes "Permission denied (publickey)".                                                                                                                                                                                                                                                                                                                                                                              |
 | `repository_not_found` | The remote writes "Repository not found", or GitLab writes "The project you were looking for could not be found". A deploy key of another repository also gives this value.                                                                                                                                                                                                                                              |
 | `host_unreachable`     | ssh writes "Could not resolve hostname", "Connection timed out", "Connection refused", "Operation timed out", "No route to host" or "Network is unreachable".                                                                                                                                                                                                                                                            |
-| `unclassified`         | Any other failure, a probe that exceeds its budget included.                                                                                                                                                                                                                                                                                                                                                             |
+| `deadline_exceeded`    | The git read exceeds its deadline. The host answers too slowly or not at all. Verify again.                                                                                                                                                                                                                                                                                                                              |
+| `unclassified`         | Any other failure.                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 The same values appear in `details.failure_reason` of `project.bindings.repository.ssh_unreachable`, and in the [resource healthcheck](../gateway/healthcheck.md) entry of the binding.
 
@@ -476,7 +478,7 @@ A declared server failure exits `1`. The CLI writes `<code>: request failed` and
 | `apply`             | `PUT /api/project/:project_id/binding-set`                           | `project.bindingSet.write`              | Yes      | 30 seconds |
 | `revision list`     | `GET /api/project/:project_id/binding/:binding_id/revision`          | `project.bindingRevision.list`          | No       | 30 seconds |
 | `verify`            | `POST /api/project/:project_id/binding/:binding_id/verify`           | `project.binding.verify`                | No       | 30 seconds |
-| `instruction-files` | `GET /api/project/:project_id/binding/:binding_id/instruction_files` | `project.binding.instruction_files.get` | No       | 30 seconds |
+| `instruction-files` | `GET /api/project/:project_id/binding/:binding_id/instruction_files` | `project.binding.instruction_files.get` | No       | 35 seconds |
 | `check`             | `POST /api/project/:project_id/binding/check`                        | `project.binding.check`                 | No       | 30 seconds |
 
 Every operation has `human` access: it requires a human bearer JWT.
