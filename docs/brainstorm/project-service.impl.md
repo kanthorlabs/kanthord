@@ -434,7 +434,7 @@ The component computes the status of a group in this order. The first rule that 
 - `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed` or `command_absent`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
-- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits: the next file of the digest after a changed commit holds the count of the removed file.
+- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.
 - The file is a cache for display and the gate of the `host` target. A lost file costs one run.
 
 ### The run
@@ -488,7 +488,7 @@ The component computes the status of a group in this order. The first rule that 
 - At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
 - While the status of a group is `failed`, the component reads the commit of its base branch every 60 seconds (`COMMIT_CHECK_MS`). The read is one `git ls-remote` through the Repository component.
-  - A changed commit reads the inputs again. The failure of the old commit no longer counts under rule 3 of [the status](#the-status). The component removes that proof file and ignores `<tag>-proved` for that read, so a run proves the environment again at the new commit. At the `image` target, the run builds only a missing `<tag>`. At the `remote` target, the status becomes `none`.
+  - A changed commit reads the inputs again. The failure of the old commit no longer counts under rule 3 of [the status](#the-status). Each reader of the proof file treats that failure as absent and ignores `<tag>-proved` for that read, so a run proves the environment again at the new commit. The file stays on disk until the new run writes the file of the digest. At the `image` target, the run builds only a missing `<tag>`. At the `remote` target, the status becomes `none`.
   - An unchanged commit starts no read and no run.
   - The component skips the commit read during a run, a computation or a session of `env@1` of the group, and after a change of its target.
   - A failed commit read keeps the status `failed` and logs `project.onboarding.read_failed` under the rules of a failed read.
