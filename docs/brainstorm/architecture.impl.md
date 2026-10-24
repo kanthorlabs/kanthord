@@ -1458,6 +1458,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - When every state becomes `none` or `ready` while the page is open, the bar shows `Ready` for 10 seconds and then hides. A page that opens with every state `none` or `ready` shows no bar.
 - Below `md`, the bar keeps one row: the badge, the binding name and the step line, which truncates. `Details` becomes an icon button with the label `Details`. The progress takes a thin line below the row. No content scrolls sideways.
 - The Overview lists each failed environment in the group `Fixes` with the cause "Environment failed". The text reads "<binding> of <project> failed: <class>. Workers claim no node of it." Its action `Open project` opens the project page.
+- The Overview also lists each `pending` environment whose `reason_started_at` is more than 10 minutes old (`PENDING_FIX_AFTER_MS` in `apps/src/lib/fix-attention.ts`). The cause is "Environment waiting". The text reads "<binding> of <project> waits: <reason> Workers claim no node of it. The server reads it again each minute." The item shows the age of `reason_started_at`. Its action `Open project` opens the project page. The retries of the Onboarding component continue.
 
 ## The dashboard toasts
 
