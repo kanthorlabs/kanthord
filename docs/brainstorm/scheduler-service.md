@@ -46,7 +46,8 @@ The identity carries the creation time of the first job of the node.
 The [Mission Service](mission-service.md#boundary) inserts the job when the node becomes claimable, and it removes the job when the node leaves that claimable state.
 A release with further work creates a new job when the node is claimable.
 Each new job of a node keeps the identity of the first job of that node.
-A rework, a retry after a stop, an evaluation job, a resume, an unblock and a return from `Pending` thus keep the [queue place](scheduler-service.vocabulary.md#queue-place) of the node.
+Each later job of the node keeps its [queue place](scheduler-service.vocabulary.md#queue-place).
+Examples are a rework, a retry after a stop, an evaluation job, a resume, an unblock and a return from `Pending`.
 A priority change keeps the identity.
 
 The Scheduler orders jobs by priority descending, then identity ascending.
