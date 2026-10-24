@@ -418,7 +418,7 @@ The component computes the status of a group in this order. The first rule that 
 
 - At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
 - At the `image` target, the `universal` source always exists, so the status is never `none`. A slot runs on `worker.container_image` only when its worker binding names no repository binding.
-- After a failed read, the group keeps its last status and digest and sets only `reason`. A transient fetch failure thus never closes the gate of a `ready` environment.
+- After a failed read, the group keeps its last status and digest and sets `reason`. A transient fetch failure thus never closes the gate of a `ready` environment. A failed read after a change of the target also writes the new target and clears the digest, the tag and the proof of the old target.
 - A run that waits in the queue shows the status of its first step, and its `run_started_at` stays null until it starts.
 - A claim gate or a read of a group with no record starts the computation of the group in the background and answers `pending`.
 
