@@ -482,7 +482,7 @@ The component computes the status of a group in this order. The first rule that 
 - At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
 - At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
-- A failed read logs `project.onboarding.read_failed` with the binding, the resource identity, the reason and the failure reason. A failed read with the `reason` of the record logs no record. A successful read logs no record and clears `reason`, so the next failed read logs again.
+- A failed read logs `project.onboarding.read_failed` at the `error` level with the project, the binding, the resource identity, the reason and the failure reason. A failed read with the reason of the last logged record of the group logs no record. A successful read, a change of the binding and a removal of the binding clear the last logged record, so the next failed read logs again.
 - The `reason` of a failed SSH read ends with the sentence `The failure reason is <failure_reason>.`, and `<failure_reason>` is the value of [the failure reason](repository.impl.md#the-failure-reason-of-a-git-operation). Any other failure has a null failure reason.
 - `project.binding.environment.rebuild` starts a run.
 
@@ -637,7 +637,7 @@ The first layer of the build builds the image at the slot start, before the Onbo
 | log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                                         |
 | log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`. |
 | log  | `project.onboarding.cache_collection_failed`             | The list or the removal of a cache volume fails. A removal names the project and the resource identity.                                     |
-| log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the binding, the resource identity, the reason and the failure reason.                  |
+| log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.     |
 | log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                 |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                    |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                   |
