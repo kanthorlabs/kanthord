@@ -72,7 +72,7 @@ An agent holds no repository credential.
 
 The system prompt of a native agent composes the Agent prompt, the Binding prompt and the framing. The [Agent component](agent.md#prompt-composer) rules both prompts.
 The composition places `base.md` first, then the Role of the agent, then one Binding prompt for each repository binding that holds a text, then the framing.
-The work prompt is the last message.
+The work prompt is the first user message.
 
 `base.md` states the conventions of the operator and the default standard of the work product, and it holds for every native agent of the server.
 A worker declares, for each of its agents, the Role of that agent.
@@ -94,11 +94,11 @@ An `examine` node takes every part for the bindings that it names.
 The worker reads no file of the workspace for the prompt, because an instruction file of the workspace is the work product of the candidate.
 KanthorD supports no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file in any form.
 
-The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Binding prompts and the framing, in that order. The work prompt is the first message.
+The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Binding prompts and the framing, in that order. The work prompt is the first user message.
 The precedence from the highest is the framing, the Binding prompt, the Role and the Standard. A later message governs an earlier message.
-The framing and the Role state the obligations of the worker.
+The framing states the obligations of the worker.
 No Binding prompt and no work prompt revokes one.
-An execution performs no conduct that its framing or its Role forbids, whatever another text states.
+An execution performs no conduct that its framing forbids, whatever another text states.
 The framing also states that an instruction for one repository governs only the work on the files of that repository, never the reply format that a message demands.
 The framing states the protocol conditions that hold for every native agent: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch file only under `.kanthord-scratch/` at the workspace root.
 A Binding prompt and a work prompt define no criterion.

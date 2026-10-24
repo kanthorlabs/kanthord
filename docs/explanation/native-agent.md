@@ -149,15 +149,15 @@ The system prompt holds the Standard, the role of the agent, the binding prompts
 
 The same order, as a table:
 
-| #   | Part           | Worker execution                     | Workbench session          |
-| --- | -------------- | ------------------------------------ | -------------------------- |
-| 1   | System prompt  | `base.md`                            | `base.md`                  |
-| 2   | System prompt  | `<agent>.md`                         | `<agent>.md`               |
-| 3   | System prompt  | None                                 | `workbench.md`             |
-| 4   | System prompt  | One part for each repository binding | None                       |
-| 5   | System prompt  | `framing-worker.md`                  | `framing-workbench.md`     |
-| 6   | Pinned message | Work prompt                          | None                       |
-| 7   | Conversation   | Later instructions and replies       | Human messages and replies |
+| #   | Part           | Worker execution                                                    | Workbench session          |
+| --- | -------------- | ------------------------------------------------------------------- | -------------------------- |
+| 1   | System prompt  | `base.md`                                                           | `base.md`                  |
+| 2   | System prompt  | `<agent>.md`                                                        | `<agent>.md`               |
+| 3   | System prompt  | None                                                                | `workbench.md`             |
+| 4   | System prompt  | One part for each repository binding with a nonblank binding prompt | None                       |
+| 5   | System prompt  | `framing-worker.md`                                                 | `framing-workbench.md`     |
+| 6   | Pinned message | Work prompt                                                         | None                       |
+| 7   | Conversation   | Later instructions and replies                                      | Human messages and replies |
 
 The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. The model receives it once, at row 6. Row 7 holds what comes after it: the revision instructions, the judgement instructions of `reviewer@1` and the replies of the agent.
 
@@ -223,7 +223,7 @@ Pinning has two effects. A pinned text survives when pi compacts a long conversa
 - **A change of a binding prompt** is a change of the binding configuration. It stores the next binding revision. A node keeps the text of the binding revision that it pins. Run `mission node rebind` to move the node to the current revision.
 - **Environment onboarding** treats the new binding ID of the revision as a changed binding. It clears `environment_from_agent`, the mark that a stored environment came from a session of `env@1`.
 - **Both agents** can need the same change. The binding prompts of `swe@1` and `re@1` diverge by design, so a human edits both.
-- **A deploy** moves the server and every worker host together. The execution setup contract no longer holds `project_prompt` and `working_layer`, and a worker of the old version cannot read the new setup.
+- **A deploy** upgrades the server and every worker host together, because they run the same execution setup contract.
 
 ### Reading the composed prompt
 

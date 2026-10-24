@@ -21,7 +21,7 @@ A mechanism here never overrides a rule there.
 - A declaration holds `workbench`. The Workbench lists and opens only the agents with `workbench: true`, and it refuses another agent with the unknown-agent code. [`env@1`](project-service.impl.md#the-agent-env1) holds `workbench: false`.
 - The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker runs the verifications after the turn. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
 - The worker framing holds the protocol conditions that apply to `swe@1`, `re@1` and `env@1`: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch, debug or probe file only under `.kanthord-scratch/` at the workspace root.
-- RULED 2026-10-24 by Ulrich (D14). A change of a shipped prompt text before the first tag keeps the agent names `swe@1`, `re@1` and `env@1` and the worker name `coder@1`. The name changes only when the contract of the agent changes.
+- RULED 2026-10-24 by Ulrich (D14). A change of a shipped prompt text before the first tag keeps the agent names `swe@1`, `re@1` and `env@1` and the worker name `coder@1`.
 - The shipped role of `re@1` judges the evidence against the criterion and changes no file.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
 - `agent list` answers one summary per catalog agent: `agent_name`, `worker_names` and `enablement`.
@@ -264,7 +264,7 @@ The Agent component owns these keys of the section `agent`.
 - Every reader refuses in the same way: `agent.get`, the execution setup, the Workbench session open and the `env@1` run. No reader replaces an invalid file with the shipped text.
 - The Binding prompt is the key `prompts` of the `config` JSON of a repository binding. The [Project Service](project-service.impl.md#validation) owns its validation.
 - The keys of `prompts` are the agent names of the catalog. The catalog is the only list, so no new enum exists.
-- `agent.prompt.system_file` and `agent.prompt.host_file` no longer exist. The upgrade step of the configuration deletes both keys.
+- The configuration holds no `agent.prompt.system_file` or `agent.prompt.host_file`. A config step deletes both.
 - Tests cover an empty and a nonempty `agent_directory`, a relative path, an absent file, each rejection and each reader that refuses.
 
 ## Prompt templates

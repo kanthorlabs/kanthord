@@ -157,7 +157,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A change of an agent file takes effect at the next composition. A change of a Binding prompt is a change of the binding configuration, so it stores the next binding revision. A node keeps the text of its pinned binding revision until `mission node rebind`.
 - A change of the Binding prompt gives the binding a new binding ID. Environment onboarding treats it as a changed binding and clears the mark that the stored environment came from `env@1`.
 - The agent page shows each part of the system prompt as one read-only row, with its origin, its path and its digest. The binding sheet of a repository edits the Binding prompt of each agent. The dashboard has no screen that edits an Agent prompt file.
-- The deploy moves the server and every worker host together, because the execution setup contract changed.
+- The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 
 ## Agent session
 

@@ -100,7 +100,7 @@ The server joins the text of `prompts[<agent>]` into the system prompt of that a
 - A change of `prompts` stores the next binding revision. A node keeps the text of the revision that it pins until `mission node rebind` moves the node to the current revision.
 - Environment onboarding treats the new binding ID as a changed binding and clears `environment_from_agent`, the mark that a stored environment came from a session of `env@1`.
 - The prompts of the agents are separate texts. `re@1` does not read the prompt of `swe@1`. Write a rule that relaxes the default standard into the prompts of both `swe@1` and `re@1`.
-- The execution setup contract no longer carries `project_prompt` and `working_layer`. Upgrade the server and every worker host together.
+- The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 
 The schema accepts `follows` type `action_end_state` with a `binding` name, but a refinement refuses it.
 

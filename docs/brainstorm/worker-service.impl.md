@@ -981,7 +981,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   - `src/kernel/`, except `caller-mint.ts`, `service-mint.ts`, `test-identity.ts` and `fatal.ts`;
   - the `contract.ts` of every service and component;
   - `src/agent/` files `pi.ts`, `pi-tools.ts`, `bash-process.ts`, `agent-session.ts`, `environment.ts`, `catalog.ts` and `prompt-composer.ts`;
-  - `src/agent/` files `prompt-files.ts`, `prompt-render.ts`, `prompt-templates.ts`, `prompt-source.ts`, `prompt-assets.ts`, `pinned-layers.ts` and `hooks/`;
+  - `src/agent/` files `prompt-render.ts`, `prompt-templates.ts`, `prompt-source.ts`, `prompt-assets.ts`, `pinned-layers.ts` and `hooks/`;
   - `src/llm/` files `model-connector.ts`, `platforms.ts` and `provider-failure.ts`;
   - `src/repository/index.ts`, `src/custody/client.ts`, `src/gateway/client.ts`, `src/gateway/client-result.ts` and `src/worker/catalog.ts`;
   - `src/worker/unit/` from `src/apps/worker`.
@@ -1070,7 +1070,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled or removed current enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
 - An invalid override file of the agent directory answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason`.
-- The execution setup contract no longer holds `project_prompt` and `working_layer` of an entry of `repositories`. The server and every worker host upgrade together.
+- An entry of `repositories` holds no `project_prompt` and no `working_layer`. The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
