@@ -622,23 +622,25 @@ The first layer of the build builds the image at the slot start, before the Onbo
 
 ### The error codes of an environment
 
-| HTTP | Code                                                     | Condition                                                                                                                  |
-| ---- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 400  | `project.environment.invalid`                            | The environment document is no JSON object or holds a wrong type.                                                          |
-| 400  | `project.environment.key_refused`                        | The environment document holds a refused key, a server variable or a path that leaves the checkout.                        |
-| log  | `project.environment.key_refused`                        | Before the Onboarding component: a repository devcontainer file of a slot start holds a refused key.                       |
-| 400  | `project.bindings.worker.environment_required`           | A worker binding at the `container` placement omits `environment`, and the project holds two repository bindings or more.  |
-| 400  | `project.bindings.worker.environment_unknown`            | `environment` names no repository binding of the submitted set.                                                            |
-| 400  | `project.bindings.worker.field_forbidden`                | A worker binding at another placement holds `environment`.                                                                 |
-| 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                    |
-| log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                         |
-| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                  |
-| log  | `project.onboarding.run_started`                         | A run of a group starts. It names the binding, the digest and the target.                                                  |
-| log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                        |
-| log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the binding, the resource identity, the reason and the failure reason. |
-| log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                |
-| 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                   |
-| 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                  |
+| HTTP | Code                                                     | Condition                                                                                                                                   |
+| ---- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `project.environment.invalid`                            | The environment document is no JSON object or holds a wrong type.                                                                           |
+| 400  | `project.environment.key_refused`                        | The environment document holds a refused key, a server variable or a path that leaves the checkout.                                         |
+| log  | `project.environment.key_refused`                        | Before the Onboarding component: a repository devcontainer file of a slot start holds a refused key.                                        |
+| 400  | `project.bindings.worker.environment_required`           | A worker binding at the `container` placement omits `environment`, and the project holds two repository bindings or more.                   |
+| 400  | `project.bindings.worker.environment_unknown`            | `environment` names no repository binding of the submitted set.                                                                             |
+| 400  | `project.bindings.worker.field_forbidden`                | A worker binding at another placement holds `environment`.                                                                                  |
+| 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                                     |
+| log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                                          |
+| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                                   |
+| log  | `project.onboarding.run_started`                         | A run of a group starts. It names the binding, the digest and the target.                                                                   |
+| log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                                         |
+| log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`. |
+| log  | `project.onboarding.cache_collection_failed`             | The list or the removal of a cache volume fails. A removal names the project and the resource identity.                                     |
+| log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the binding, the resource identity, the reason and the failure reason.                  |
+| log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                 |
+| 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                    |
+| 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                   |
 
 ## The client identity
 
