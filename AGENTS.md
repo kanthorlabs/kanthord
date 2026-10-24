@@ -110,6 +110,7 @@ The pages record only the decision. Read the owning page section before you prop
 ## Naming outside the code
 
 - Write every name outside the code in snake_case. This covers a table, a column, a property inside a JSON column, a stored key or value name, each part of an operation id or an error code, each key of a configuration file such as `kanthord.yaml` or `cli.yaml`, and each field of an HTTP payload or a CLI output.
+- As an exception, every key inside the `environment` key of a repository binding configuration keeps its given name, for example `postCreateCommand`. The Dev Container specification or the document author gives that name. A key that KanthorD adds, for example under `customizations.kanthord`, stays snake_case.
 - Write every field of a domain entity schema in the code in snake_case, for example `agent_name`, so that a contract uses that name with no rename.
 - Every other identifier inside the code, for example a local variable, a function or a type, follows the convention of its language.
 
@@ -120,7 +121,7 @@ The pages record only the decision. Read the owning page section before you prop
 - Never declare an index that is not a unique index.
 - The schema lives in `docs/reference/erd/` and records only ruled design. Keep HANDOFF items out of it.
 - `project_id` is the second key column only in project-scoped tables.
-- Write every table name, every column name and every property name inside a JSON column in snake_case. The name of an external library or protocol is no exception. Only a ruling of Ulrich that names the external requirement permits another case.
+- Write every table name, every column name and every property name inside a JSON column in snake_case. The name of an external library or protocol is no exception. Only a ruling of Ulrich that names the external requirement permits another case. The `environment` key of a repository binding configuration is such a ruled case. See [Naming outside the code](#naming-outside-the-code).
 - An Intake inbound event stays until a human deletes it. No automatic retention exists.
 - A rename of a table or a column also updates the map in `docs/reference/erd/README.md`.
 - `docs/viewer.html` pins mermaid 11.17.2. Never pin a version below 11, because the ERD views use `classDef` in an `erDiagram`.
