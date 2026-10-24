@@ -590,10 +590,10 @@ The current connection:
 - When another id is current, `connect` and the heartbeat answer 409 `worker.instance.connection_superseded`. A `client` request answers 401 `gateway.jwt.connection_superseded`, under [gateway-service.impl.md](gateway-service.impl.md#the-jwt).
 - On 401 `gateway.jwt.connection_superseded`, the wrapper sends one heartbeat. A 409 answer ends the process as superseded. A success makes the connection current again, and the process continues.
 - A superseded process calls `unit.abandon`. The unit keeps its registrations, cancels the context of the running execution and waits for the end of the execution.
-- The cancel aborts a running bash tool. The bash tool ends its child tree through `killChildTree`, under [Enforcement of the worker boundary](#enforcement-of-the-worker-boundary).
+- The cancellation aborts a running bash tool. The bash tool ends its child tree through `killChildTree`, under [Enforcement of the worker boundary](#enforcement-of-the-worker-boundary).
 - The process then exits with status 3 and `worker.instance.superseded`. The diagnostic names the `connection_name` of the current connection.
 - The template unit sets `RestartPreventExitStatus=3`, so systemd does not restart a superseded process. A restart loop on a container platform means two deployments of one instance configuration.
-- Two processes can act in the same workspace of one host between a supersede and the next heartbeat of the old process. That time is at most one heartbeat interval.
+- Two processes can act in the same workspace of one host between a supersede and the next heartbeat of the old process. That time is one heartbeat interval, plus the time of the heartbeat request.
 
 The heartbeat and the renewal:
 
