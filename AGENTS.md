@@ -110,6 +110,7 @@ The pages record only the decision. Read the owning page section before you prop
 ## Naming outside the code
 
 - Write every name outside the code in snake_case. This covers a table, a column, a property inside a JSON column, a stored key or value name, each part of an operation id or an error code, each key of a configuration file such as `kanthord.yaml` or `cli.yaml`, and each field of an HTTP payload or a CLI output.
+- As an exception, a devcontainer.json key keeps its camelCase name from the Dev Container specification inside the `environment` value, for example `postCreateCommand`.
 - Write every field of a domain entity schema in the code in snake_case, for example `agent_name`, so that a contract uses that name with no rename.
 - Every other identifier inside the code, for example a local variable, a function or a type, follows the convention of its language.
 
