@@ -328,7 +328,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.retention_days` defaults to 30. A sweep runs at the start and every hour, with at most 20 rows in each transaction and 50 transactions in one sweep.
 - RULED 2026-10-22 under the delegation of Ulrich. The entry bound is 61440 bytes, and the cut limits are 4096, 1024 and 256 characters.
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.facet.get` answers at most 200 values for each facet. The dashboard reads an open trace again every 5 seconds.
-- DECIDED 2026-10-24 by Aelita, pending Ulrich. The primary store is DuckDB through `@duckdb/node-api` `1.5.6-r.2` in `tracking.duckdb`. The store keeps no data of `tracking.db`, and the reset procedure replaces it.
+- RULED 2026-10-24 by Ulrich. The primary store is DuckDB through `@duckdb/node-api` `1.5.6-r.2` in `tracking.duckdb`. The store keeps no data of `tracking.db`, and the reset procedure replaces it.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. The instance runs with `threads` 2, `memory_limit` `1GB` and `temp_directory` `tracking.duckdb.tmp`, with one writer connection, one reader connection and one analytics connection.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. A batch holds at most 2000 records and starts at most 50 ms after its first record. The queue holds at most 10000 server contributions.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. `tracking_span` is the summary table of the span, and no view serves a read. A span row only gains values.
