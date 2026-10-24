@@ -1252,6 +1252,11 @@ The progress rule:
 - A revision turn with `changed` false adds one. A verdict turn that leaves the verdict rule false adds one.
 - A turn with `changed` true sets the counter to zero. No other event sets it to zero.
 - At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification.
+- The stop `detail` names the rule that fired and its counts, as a JSON object:
+  - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_holds` for a verdict turn that leaves the verdict rule false.
+  - `count` is the counter at the stop, and `limit` is `NO_PROGRESS_LIMIT`.
+  - `verification` is the last verification of the execution: `passed` and the `exit_codes` of its commands, or `null` before the first verification.
+- The `worker.task` span that the stop ends carries `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, with a verification, `kanthord.stop.verification.passed`.
 - A work turn with `changed` false adds nothing. The verification of the unit decides.
 
 ## The further-work release
@@ -1595,7 +1600,7 @@ The tool of the action performer takes the execution identity only.
   - `<error name>: <message>` of an uncoded error that a prompt to the agent session or any step of the execution throws, with `operation_failed`;
   - the violation text of gate G, with `operation_failed` and the code `worker.turn.*`;
   - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`.
-- A `CodedError` gives its code and no `detail`. `no_progress`, `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A `CodedError` gives its code and no `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
