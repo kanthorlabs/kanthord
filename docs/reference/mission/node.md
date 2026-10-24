@@ -44,6 +44,8 @@ A node write that adds an unmatched pair of a node and a claimable state fails w
 - An unknown `id`, a repeated `id` or the `id` of a task of another node fails with `mission.node.content_invalid`.
 - A change of `intent` while the attempt reads `1` or more fails with `mission.node.intent_locked`.
 - The node must be nonterminal. A node with an open attempt stays editable.
+- An update applies from the next attempt. The open attempt keeps its pinned revision, and each of its executions reads that revision. The node record shows that revision in `pinned_revision`.
+- To change the work of an open attempt, pause the node, block it, and unblock it with the change. [To redirect an open attempt](node-control.md#unblock) shows the steps.
 
 ### node retire preview and node retire
 
@@ -103,30 +105,32 @@ All operations return HTTP `200`. The CLI writes the API answer as one JSON line
   "pinned_by_attempts": [],
   "state": "Available",
   "attempt": 0,
+  "pinned_revision": null,
   "priority": 0,
   "depends_on": []
 }
 ```
 
-| Property             | Type                     | Purpose                                                                                                |
-| -------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `id`                 | `node_<ulid>`            | Node ID.                                                                                               |
-| `filename`           | plan file name           | Unique name among current nodes of the mission.                                                        |
-| `mission_id`         | `mission_<ulid>`         | Mission of the node.                                                                                   |
-| `intent`             | `implement` or `examine` | Intent at the claim revision: the revision that the open attempt pins, else the current revision.      |
-| `tags`               | array of tags            | Tags at the claim revision.                                                                            |
-| `visible_revision`   | positive integer         | Current revision of the node.                                                                          |
-| `content`            | object                   | Current content; `bindings` holds binding revision IDs.                                                |
-| `tasks`              | array                    | `{ id, filename, content }` of each task at the claim revision; `[]` for an `examine` node.            |
-| `retired_at`         | integer or `null`        | Retirement time in Unix milliseconds.                                                                  |
-| `pinned_by_attempts` | array of integers        | Attempts that pin the current revision of the node.                                                    |
-| `state`              | state name               | Current state of the node.                                                                             |
-| `attempt`            | integer                  | Current attempt number; `0` before the first attempt.                                                  |
-| `priority`           | safe integer             | Scheduling priority; `0` by default.                                                                   |
-| `depends_on`         | array of `node_<ulid>`   | Direct dependency targets.                                                                             |
-| `blocked_context`    | object                   | Only in state `Blocked`: the `outcome` that closed the attempt and its request evidence in `requests`. |
+| Property             | Type                     | Purpose                                                                                                        |
+| -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `id`                 | `node_<ulid>`            | Node ID.                                                                                                       |
+| `filename`           | plan file name           | Unique name among current nodes of the mission.                                                                |
+| `mission_id`         | `mission_<ulid>`         | Mission of the node.                                                                                           |
+| `intent`             | `implement` or `examine` | Intent at the claim revision: the revision that the open attempt pins, else the current revision.              |
+| `tags`               | array of tags            | Tags at the claim revision.                                                                                    |
+| `visible_revision`   | positive integer         | Current revision of the node.                                                                                  |
+| `content`            | object                   | Current content; `bindings` holds binding revision IDs.                                                        |
+| `tasks`              | array                    | `{ id, filename, content }` of each task at the claim revision; `[]` for an `examine` node.                    |
+| `retired_at`         | integer or `null`        | Retirement time in Unix milliseconds.                                                                          |
+| `pinned_by_attempts` | array of integers        | Attempts that pin the current revision of the node. An attempt that pins an older revision is not in the list. |
+| `state`              | state name               | Current state of the node.                                                                                     |
+| `attempt`            | integer                  | Current attempt number; `0` before the first attempt.                                                          |
+| `pinned_revision`    | integer or `null`        | Revision that the open attempt pins; `null` when no attempt is open. A node update does not change it.         |
+| `priority`           | safe integer             | Scheduling priority; `0` by default.                                                                           |
+| `depends_on`         | array of `node_<ulid>`   | Direct dependency targets.                                                                                     |
+| `blocked_context`    | object                   | Only in state `Blocked`: the `outcome` that closed the attempt and its request evidence in `requests`.         |
 
-The `tasks` of a node read can come from an older revision than `content`. To edit the tasks, read the current tasks with `node revision get` at `visible_revision`.
+The `tasks` of a node read can come from an older revision than `content`. That older revision is `pinned_revision`. To edit the tasks, read the current tasks with `node revision get` at `visible_revision`.
 
 ### Revision record
 

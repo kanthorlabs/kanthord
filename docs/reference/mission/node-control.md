@@ -10,7 +10,7 @@ A node has one of these states: `Pending`, `Available`, `Executing`, `Waiting`, 
 
 An attempt is one try to complete a node. The attempt number starts at `0`, which means no attempt. At most one attempt is open. An attempt pins the node revision that it opens with.
 
-Every state control sends the expected state and attempt. The service checks these values after it settles the Scheduler claims of the node. A control commits in one transaction, routes the mission, and wakes the Scheduler of the project. Controls do not change the mission version, except an `unblock` that changes content.
+Every state control except `unblock` sends the expected state and attempt. `unblock` sends `blocked_attempt` and `expected_revision` instead. The service checks these values after it settles the Scheduler claims of the node. A control commits in one transaction, routes the mission, and wakes the Scheduler of the project. Controls do not change the mission version, except an `unblock` that changes content.
 
 | Command    | Admitted states                                                                                                           | Effect                                                                                                 |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -53,7 +53,9 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 - `start_point` names where the next attempt starts. `node_branch`, the default, continues the node branch of the cleared attempt. `base_branch` starts a new node branch `kanthord/<node id>-a<attempt>` from the base branch. Another value answers 400 `gateway.request.validation_failed`, and nothing is written.
 - A start from the base branch deletes, renames and force-pushes no branch. An open pull request of the earlier node branch stays open, and a human closes it. The start point of an `examine` attempt has no effect.
 
-To redirect an open attempt, pause the node, block it, and unblock it with the changed content.
+A [node update](node.md#node-update) does not change the pinned revision of an open attempt. The update applies from the next attempt. The node record shows the pinned revision in `pinned_revision`.
+
+To redirect an open attempt, pause the node, block it, and unblock it with the changed content. An unblock without `change` also works after a node update, because the next attempt pins the current revision.
 To restart an open attempt from the base branch, pause the node, block it, and unblock it with `start_point: "base_branch"`.
 
 ### check
@@ -226,22 +228,22 @@ All operations use `POST`, access `human` (human bearer JWT), a 30-second timeou
 | `node discard`      | `/api/mission/node/:node_id/discard`  | `mission.node.discard`      | Human act                                   |
 | `node priority set` | `/api/mission/node/:node_id/priority` | `mission.node.priority.set` | `{ value, expected_mission_version }`       |
 
-| Body field                 | Type                           | Required             | Purpose                                                                                            |
-| -------------------------- | ------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------- |
-| `reason`                   | nonblank string                | Human act            | Reason recorded on the assessment, or the reason of the act.                                       |
-| `expected_mission_version` | positive integer               | All                  | Current mission version.                                                                           |
-| `expected_state`           | state name                     | Human act            | Current state of the node.                                                                         |
-| `expected_attempt`         | integer `>= 0`                 | Human act            | Current attempt number.                                                                            |
-| `target`                   | `Available` or `Waiting`       | `resume`             | Resume target when no external action decides the state.                                           |
-| `result`                   | `success`                      | `override`           | Asserted result; the only value.                                                                   |
-| `landed_commit`            | object                         | `override`, optional | `{ "kind": "repository", "binding_id": "binding_<ulid>", "commit": "<40 or 64 lower-case hex>" }`. |
-| `blocked_attempt`          | integer `>= 0`                 | `unblock`            | Current attempt number of the blocked node.                                                        |
-| `expected_revision`        | positive integer               | `unblock`            | Current revision of the node.                                                                      |
-| `change`                   | object                         | `unblock`, optional  | `{ content, tasks, reason }`; `tasks` holds task writes `{ id?, filename, content }`.              |
-| `start_point`              | `base_branch` or `node_branch` | `unblock`, optional  | Start point of the next attempt. The default is `node_branch`.                                     |
-| `value`                    | signed safe integer            | `priority set`       | New priority.                                                                                      |
+| Body field                 | Type                           | Required                       | Purpose                                                                                                              |
+| -------------------------- | ------------------------------ | ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `reason`                   | nonblank string                | Human act; `unblock`, optional | Reason recorded on the assessment, or the reason of the act. `unblock` checks the text limit and does not record it. |
+| `expected_mission_version` | positive integer               | All                            | Current mission version.                                                                                             |
+| `expected_state`           | state name                     | Human act                      | Current state of the node.                                                                                           |
+| `expected_attempt`         | integer `>= 0`                 | Human act                      | Current attempt number.                                                                                              |
+| `target`                   | `Available` or `Waiting`       | `resume`                       | Resume target when no external action decides the state.                                                             |
+| `result`                   | `success`                      | `override`                     | Asserted result; the only value.                                                                                     |
+| `landed_commit`            | object                         | `override`, optional           | `{ "kind": "repository", "binding_id": "binding_<ulid>", "commit": "<40 or 64 lower-case hex>" }`.                   |
+| `blocked_attempt`          | integer `>= 0`                 | `unblock`                      | Current attempt number of the blocked node.                                                                          |
+| `expected_revision`        | positive integer               | `unblock`                      | Current revision of the node.                                                                                        |
+| `change`                   | object                         | `unblock`, optional            | `{ content, tasks, reason }`; `tasks` holds task writes `{ id?, filename, content }`.                                |
+| `start_point`              | `base_branch` or `node_branch` | `unblock`, optional            | Start point of the next attempt. The default is `node_branch`.                                                       |
+| `value`                    | signed safe integer            | `priority set`                 | New priority.                                                                                                        |
 
-The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. The content object has `name`, `requirement`, `criterion`, `verifications`, `bindings` (binding IDs), `intent` and the optional `tags`, as in [node create](node.md#request-bodies). Bodies accept no unknown field.
+The human act fields are `reason`, `expected_mission_version`, `expected_state` and `expected_attempt`. `pause`, `block`, `ready` and `discard` send the human act. `resume` and `override` add their fields to it. The unblock body is not a human act. It holds `blocked_attempt`, `expected_revision`, `expected_mission_version` and the optional `change`, `reason` and `start_point`. It refuses `expected_state` and `expected_attempt` with `400 gateway.request.validation_failed`, and the CLI refuses them with `cli.file.schema_invalid`. The content object has `name`, `requirement`, `criterion`, `verifications`, `bindings` (binding IDs), `intent` and the optional `tags`, as in [node create](node.md#request-bodies). Bodies accept no unknown field.
 
 | Header            | Required | Purpose                                                        |
 | ----------------- | -------- | -------------------------------------------------------------- |
@@ -315,6 +317,17 @@ An example `resume.json`:
   "expected_state": "Paused",
   "expected_attempt": 1,
   "target": "Available"
+}
+```
+
+An example `unblock.json` that redirects attempt `1` to revision `2`:
+
+```json
+{
+  "blocked_attempt": 1,
+  "expected_revision": 2,
+  "expected_mission_version": 9,
+  "start_point": "node_branch"
 }
 ```
 
