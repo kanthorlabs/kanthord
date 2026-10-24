@@ -8,7 +8,7 @@ The kanthord image holds `bash`, `git`, the OpenSSH client and `kanthord`. It ho
 
 Use the new image as the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker bindings at the `server` placement then run their commands with the toolchain.
 
-At the `container` placement, this image does not apply. A container runs the image of the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of its repository binding. That image takes only `kanthord` and `tini` from `worker.container_image`. Put the toolchain into the environment of the repository binding. See [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
+At the `container` placement, this image does not apply. Follow [step 4](#4-add-a-toolchain-at-the-container-placement) instead.
 
 ## Before you start
 
@@ -65,6 +65,48 @@ The command prints the Node.js version, for example `v24.15.0`.
    ```
 
 2. Run the command of [step 3 of Run kanthord in a container](run-in-a-container.md#3-start-the-server) again. Write `localhost/kanthord-node:<version>` in place of `docker.io/kanthorlabs/kanthord:<version>`.
+
+## 4. Add a toolchain at the `container` placement
+
+At the `container` placement, the image of this guide does not apply. Each container runs the image of the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of its repository binding. You build no image. The server builds the environment image, and takes only `kanthord` and `tini` from `worker.container_image`.
+
+By default, KanthorD selects the toolchain from the repository at the head of the base branch:
+
+- A repository with a manifest, such as `package.json`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml` or `build.gradle`, gets the `detected` environment. It holds the image of each stack, and the install command of the lock file when the repository holds one.
+- A repository with no manifest gets the `universal` environment. It holds Node.js 24, Python 3.12, Go 1.25 and Java 21, and installs no project dependency.
+
+To use another toolchain, write a devcontainer document, for example:
+
+```json
+{
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "updateContentCommand": "npm ci",
+  "customizations": {
+    "kanthord": {
+      "checks": ["node --version", "npm --version"]
+    }
+  }
+}
+```
+
+The image needs `bash`, glibc, git 2.40 or later and OpenSSH 9.0 or later. The images under `mcr.microsoft.com/devcontainers` hold them. Then do one of these steps:
+
+- Commit the document as `.devcontainer/devcontainer.json` to the base branch of the repository.
+- Store the document in the repository binding. Find the binding ID with `kanthord project binding list <project-id> --kind repository`, then run:
+
+  ```sh
+  kanthord project environment set <project-id> <binding-id> --file devcontainer.json
+  ```
+
+A stored document comes before the repository file, and the repository file comes before the `detected` environment.
+
+The server then builds and proves the environment. Read the status of each repository binding:
+
+```sh
+kanthord project environment list <project-id>
+```
+
+Wait until `status` is `ready`. A container starts only on a `ready` environment, and no node of the repository starts before it. The status `failed` holds the cause in `failure`. See [Troubleshooting of Isolate worker instances in containers](isolate-worker-instances-in-containers.md#troubleshooting).
 
 ## After an upgrade
 
