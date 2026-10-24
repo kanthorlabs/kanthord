@@ -51,7 +51,7 @@ A server component writes the span of an operation that has no execution through
 The trace of that call names its project and its creation time. It names a node and an attempt when the operation concerns one node, and the trace row stores them.
 A contribution of either call carries telemetry texts as `texts: [{ text_id, text }]`, and its `text_ids` names them. The admission stores each text with its span in one batch.
 Both calls put the contribution into the [write queue](#the-write-path) and return at once. They never wait for the store.
-A refused record, a failed batch and a full queue count as a drop and raise no error.
+A refused record, an item that fails alone after a failed batch, and a full queue count as a drop and raise no error.
 The Scheduler Service writes the root span and the [settlement span](scheduler-service.impl.md#the-execution-trace) with the producer `scheduler`.
 The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) and the [act trace](mission-service.impl.md#the-act-trace) of each human act on a node with the producer `mission`.
 
@@ -98,7 +98,7 @@ The prebuilt packages of that version cover `darwin-arm64`, `linux-x64` and `lin
 - The queue holds at most 10000 server contributions. The service drops a server contribution beyond that bound and counts the drop.
 - A write call waits for its batch, so the body bound and the timeout of the Gateway bound the waiting write calls.
 - The retention sweep runs on the writer connection between two batches.
-- `TrackingService.drain()` resolves when the queue is empty and the last batch committed. The stop and the tests await it.
+- `TrackingService.drain()` resolves when the queue is empty, the last batch committed, and the per-item pass of a failed batch ended. The stop and the tests await it.
 
 ## Local store
 
