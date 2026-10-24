@@ -563,6 +563,18 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `landed_commit` is admitted only with `result: success`.
 - The server writes the actor, the time, the human assessment and the outcome record.
 
+## The act trace
+
+Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act.
+
+- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override` and `mission.proposal.approve`. The operation of the root span is the operation identity of the act.
+- The root span starts and ends at the time of the act, with the status `Ok`.
+- It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. `mission.proposal.approve` names the created node and holds no `kanthord.node.state.from`.
+- The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
+- An act that revokes a live execution links its root span to the root span of that execution, and it hands the cause `human` to the [revocation](scheduler-service.impl.md#the-execution-trace).
+- `mission.assessment.submit` hands the cause `assessment` and the states of its transition to the revocation of the reviewer execution.
+- A refused act writes no act trace. A lost act trace changes no state, and no service reads it.
+
 ## The rebind
 
 - `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission version and an optional node identity. Without a node identity the act covers every node of the mission.
