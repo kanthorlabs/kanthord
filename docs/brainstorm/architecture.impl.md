@@ -129,7 +129,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A row is a default expansion, an effective path or a path template. A variable of the specification moves a default expansion, the resolution rule of the configuration file selects an effective path, and a runtime identity completes a path template.
 - `kanthord.yaml` of the configuration directory, an effective path that this sibling declares. Its default expansion is `$XDG_CONFIG_HOME/kanthord/kanthord.yaml`, and the default of that variable makes it `~/.config/kanthord/kanthord.yaml`.
 - `kanthord.db` of the data directory with its `-wal` and `-shm` files, a default expansion of `$XDG_DATA_HOME/kanthord/kanthord.db` that this sibling declares.
-- `tracking.duckdb` of the data directory with its `tracking.duckdb.wal` file, a default expansion that [tracking-service.impl.md](tracking-service.impl.md#primary-store) declares.
+- `tracking.duckdb` of the data directory with its `tracking.duckdb.wal` file and its spill directory `tracking.duckdb.tmp/`, a default expansion that [tracking-service.impl.md](tracking-service.impl.md#primary-store) declares.
 - `duckdb/<binding version>/` of the state directory: the native DuckDB binding that a single executable application writes from its assets, a path template that [tracking-service.impl.md](tracking-service.impl.md#the-native-binding-in-the-release) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
@@ -148,7 +148,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The Gateway Service, the Project Service, the Mission Service and the Scheduler Service use that database.
 - The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file and its migration record.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
-- A start that cannot initialize the operational database fails with `system.database.initialization_failed`. The message names the path and the SQLite reason, for example `database is locked`.
+- A start that cannot initialize the operational database or `tracking.duckdb` fails with `system.database.initialization_failed`. `serve server` and `upgrade` answer it. The message names the path and the reason: the SQLite reason for `kanthord.db`, for example `database is locked`, and the DuckDB reason for `tracking.duckdb`, for example `Could not set lock on file`.
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
@@ -192,7 +192,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The compare reads the `CREATE` text as stored. A change of whitespace in a migration text therefore also stops the runner.
 - The reset procedure for a database that stops with `system.database.migration.schema_mismatch`:
   1. Stop the server.
-  2. Delete `kanthord.db` of the data directory with its `-wal` and `-shm` files, and `tracking.duckdb` with its `tracking.duckdb.wal` file. Delete a `tracking.db` of an earlier build with its `-wal` and `-shm` files.
+  2. Delete `kanthord.db` of the data directory with its `-wal` and `-shm` files, and `tracking.duckdb` with its `tracking.duckdb.wal` file and its `tracking.duckdb.tmp/` directory. Delete a `tracking.db` of an earlier build with its `-wal` and `-shm` files.
   3. Start the server. The first start creates `kanthord.db` and `tracking.duckdb`.
 - The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of the `master_key` of that file in the new database, so the same `master_key` stays valid.
 - RULED 2026-10-20 by Ulrich. No migration writes the `placement` of a worker binding. After the schema check, the start reads the latest revision of each worker binding of a worker that kanthord hosts. A revision without `placement` stops the start with `system.database.binding_placement_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
@@ -232,14 +232,14 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
   2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history and check its schema. Do the same for `tracking.duckdb` when it exists, with the DuckDB file lock. A missing `tracking.duckdb` stays missing. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
   3. If no step and no migration is pending, print `up_to_date: <path>` and write nothing.
   4. Write the configuration backup `<path>.bak-<timestamp>` with mode `0600` and one UTC timestamp, while the lock is held. Write it only when a configuration step applies.
-  5. Take `kanthord.db`, then `tracking.duckdb`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory: `kanthord.db` through `VACUUM INTO`, outside a transaction, with a bound path, and `tracking.duckdb` through `CHECKPOINT` and a copy of the file while the lock is held. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command.
+  5. Take `kanthord.db`, then `tracking.duckdb`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory: `kanthord.db` through `VACUUM INTO`, outside a transaction, with a bound path, and `tracking.duckdb` inside its open instance through `ATTACH` of the backup path, `COPY FROM DATABASE` and `DETACH`, so the lock stays held. No step copies or reads `tracking.duckdb` through a file descriptor of its own, because the close of such a descriptor releases the DuckDB lock. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command.
   6. Replace the configuration file atomically.
 - Steps 1 to 3 write nothing. `Store.plan` runs reads only.
 - The command prints the backup path of a database before the migrated rows of that database. It then prints each rename and the configuration versions.
 - A rerun after a success prints `up_to_date: <path>`.
 - A failure in step 5 keeps the committed migrations, and the next start stops with `system.database.migration.pending`. A failure in step 6 keeps the old configuration, and the next start stops with `system.config.version_behind`. A rerun of `kanthord upgrade` completes the remaining part.
 - The command deletes no backup.
-- A restore stops the server, deletes the `-wal` and `-shm` files of `kanthord.db` and the `tracking.duckdb.wal` file, copies each database backup to its database file and the configuration backup to the configuration file, and keeps mode `0600` on each.
+- A restore stops the server, deletes the `-wal` and `-shm` files of `kanthord.db`, the `tracking.duckdb.wal` file and the `tracking.duckdb.tmp/` directory, copies each database backup to its database file and the configuration backup to the configuration file, and keeps mode `0600` on each.
 - The state directory holds no version. A breaking change of its layout states a wipe of the state directory in the release note.
 - `cli.yaml` holds no version. A breaking change of that file states a new `kanthord auth jwt generate` in the release note.
 - An upgrade step never changes `master_key` or `gateway.auth.version`. A change of the JWT format, of a key label or of the authentication version invalidates every JWT and every client secret, and the release note states the reissue.

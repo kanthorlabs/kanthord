@@ -64,16 +64,20 @@ The prebuilt packages of that version cover `darwin-arm64`, `linux-x64` and `lin
 
 - The server process opens `tracking.duckdb` once at every start, in its main thread, and runs `trackingMigrations` on it.
 - One `DuckDBInstance` of the process owns the file. No module opens a second instance on that path, and no worker thread opens the file.
+- DuckDB holds the file lock as a POSIX `fcntl` lock, and the close of any file descriptor of that file in the process releases it. While the store is open, no module of the process opens a file descriptor on `tracking.duckdb` or on `tracking.duckdb.wal`: no copy, no read and no second instance.
+- The store keys each open file by the real path of its directory plus its base name, so two spellings of one file meet one guard. `:memory:` takes no key, and each open of it is a separate database.
 - A worker thread of the `server` placement, a worker application and a container write telemetry through `tracking.telemetry.write` alone.
 - DuckDB locks the file at the open. A second process that opens the file fails, and its start stops with `system.database.initialization_failed`. The message names the path and the DuckDB reason, for example `Could not set lock on file`.
-- The instance runs with the settings `threads` `2` and `memory_limit` `1GB`.
-- The store holds two connections: the writer connection and the reader connection. Each connection runs one statement at a time, in the order of its calls.
-- Every write runs on the writer connection. Every read of an operation runs on the reader connection. A read sees each batch that committed before the read started.
+- The instance runs with the settings `threads` `2`, `memory_limit` `1GB` and `temp_directory` set to `tracking.duckdb.tmp` of the data directory. A query above `memory_limit` spills into that directory.
+- The store holds three connections: the writer connection, the reader connection and the analytics connection. Each connection runs one statement at a time, in the order of its calls.
+- Every write runs on the writer connection. The analytics reads run on the analytics connection, and every other read of an operation runs on the reader connection.
+- A read runs its statements in one `BEGIN TRANSACTION READ ONLY` and `COMMIT`, so it sees one snapshot: each batch that committed before the read started.
+- The health of the Tracking Service answers from the open state of the store and the state of the write queue. It runs no query.
 - The query API of the binding is asynchronous. Every function of the store returns a promise, and a transaction of the writer connection awaits its statements.
 - The file holds its own `migration(service, version, applied_at)` table, and its runner follows the runner contract of [architecture.impl.md](architecture.impl.md#the-migration).
 - The schema check of that runner compares the `sql` text of each table and each index of the service in `duckdb_tables()` and `duckdb_indexes()` with an in-memory DuckDB database that ran the migrations. The error codes are the codes of the operational store.
 - The schema declares no foreign key, no sequence, no view and no partial index. DuckDB supports no `ON DELETE CASCADE` and no partial index.
-- `kanthord upgrade` also plans and migrates `tracking.duckdb`, as [upgrade.md](../reference/upgrade.md) states. The backup of a pending migration runs `CHECKPOINT`, then copies the file while the lock is held.
+- `kanthord upgrade` also plans and migrates `tracking.duckdb`, as [upgrade.md](../reference/upgrade.md) states. The backup of a pending migration runs inside the open instance: `ATTACH '<backup path>' AS backup`, `COPY FROM DATABASE <main> TO backup` and `DETACH backup`. The lock stays held, and the backup is a DuckDB file with every table, index and migration row.
 - At the stop, the service drains the write queue, runs `CHECKPOINT` and closes the instance, so `tracking.duckdb.wal` holds no record at rest.
 - A crash loses each batch that did not commit and each queued record. The next open replays the write-ahead log.
 - The server never reads, migrates or deletes a `tracking.db` file of the SQLite store. The [reset procedure](../reference/upgrade.md#reset-a-pre-release-database) names it.
@@ -85,11 +89,12 @@ The prebuilt packages of that version cover `darwin-arm64`, `linux-x64` and `lin
 - The Tracking Service holds one write queue in the server process.
 - `serverSpan`, `serverTraceSpan`, `executionOpened` and `executionEnded` put a contribution into the queue. `tracking.telemetry.write` puts its records into the queue and awaits the commit of their batch.
 - The writer takes the queue in arrival order. One batch holds at most 2000 records. A batch starts at most 50 ms after its first record enters the queue.
+- A batch holds whole write calls and whole server contributions. A write call never splits across two batches, so it commits in one transaction. A write call holds at most 1000 records, so it always fits.
 - One transaction of the writer connection admits one batch.
 - The admission applies the rules of [ingestion](#ingestion) and of the [trace summary](#trace-summary) to each record of a batch in arrival order. A record sees every earlier record of its batch.
 - A batch reads the stored rows of the spans that it names with one query for each trace, and it writes each changed row once.
 - `Stored` follows the commit of the batch. The write call answers its acknowledgement after that commit.
-- A failed batch rolls back. Each write call of that batch answers 500 `gateway.invocation.unknown`, and each server contribution of that batch counts as a drop. The next batch runs.
+- A failed batch rolls back. The writer then runs each item of that batch alone in its own writer transaction, in arrival order. A write call that fails alone answers 500 `gateway.invocation.unknown`, and a server contribution that fails alone counts as a drop. Every other item commits. The next batch runs after that pass.
 - The queue holds at most 10000 server contributions. The service drops a server contribution beyond that bound and counts the drop.
 - A write call waits for its batch, so the body bound and the timeout of the Gateway bound the waiting write calls.
 - The retention sweep runs on the writer connection between two batches.
@@ -246,14 +251,15 @@ The row of `tracking_trace` holds the summary columns of the trace.
 
 - The query holds exactly one scope: `execution_id`, `node_id` or `project_id`. Another count of scopes answers 400 `gateway.request.validation_failed`.
 - The scope selects every trace whose row names that execution, that node or that project. The traces of a node hold its executions and the [act traces](mission-service.impl.md#the-act-trace) of its human acts.
+- The timeline of a node or a project holds depths 1 and 2 only: the roots, the phases, the evaluation, the settlement and the other direct children of a root. The agent turns, the tool calls, the git steps and the verifications sit deeper, and `tracking.span.list` of one trace answers them.
 - `depth` takes `1` or `2`, and it defaults to `2`. Depth 1 answers the root span of each selected trace. Depth 2 also answers each span whose parent is the root span of its trace.
 - The timeline time of a span is its `start_time`, else its `end_time`. `started_from` and `started_to` bound the timeline time in Unix milliseconds.
 - The order is ascending by timeline time, then by `trace_id`, then by `span_id`. The cursor holds these three values. A cursor of another form answers 400 `system.pagination.cursor_invalid`.
 - `limit` takes 1 to 1000 and defaults to 500.
-- An item holds the fields of a span of `tracking.span.list`, plus `depth`, `duration_ms`, `project_id`, `node_id`, `execution_id` and `attempt` of the span row.
+- An item holds the fields of a span of `tracking.span.list`, plus `depth`, `duration_ms`, `project_id`, `node_id`, `execution_id` and `attempt` of the span row. An item of depth 1 also holds `worker_name` of its trace row, and an item of depth 2 holds `worker_name: null`.
 - A span of depth 2 appears also when the store holds no row of its root span.
 - A reader reads the whole tree of one execution through `tracking.span.list` of its trace.
-- The CLI command is `kanthord tracking timeline list` with exactly one of `--execution <execution-id>`, `--node <node-id>` and `--project <project-id>`, plus `--depth`, `--from`, `--to`, `--limit` and `--cursor`.
+- The CLI command is `kanthord tracking timeline list` with exactly one of `--execution <execution-id>`, `--node <node-id>` and `--project <project-id>`, plus `--depth`, `--from <unix-ms>`, `--to <unix-ms>`, `--limit` and `--cursor`.
 
 ## The analytics reads
 
@@ -268,7 +274,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 
 `tracking.analytics.cost` reads the `agent.turn` spans.
 
-- `group_by` takes `model`, `agent_name`, `provider_name`, `worker_name`, `node_id` or `project_id`, and it defaults to `model`. `model` is `response_model`, else `request_model`.
+- `group_by` takes `none`, `model`, `agent_name`, `provider_name`, `worker_name`, `node_id` or `project_id`, and it defaults to `model`. `model` is `response_model`, else `request_model`. `none` answers one group with the key null, so `group_by=none&bucket=none` answers the totals of the range in one item.
 - An item holds `key`, `bucket_start`, `turn_count`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `total_tokens` and `cost_usd`. The order measure is `cost_usd`.
 
 `tracking.analytics.duration` reads the percentiles of one measure.
@@ -282,7 +288,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `revision_turns`: for each node attempt, the count of its `steps` root spans that start after its first `evaluation` root span. The time of the attempt is the start of its first root span.
 - `group_by` takes `none`, `operation`, `tool_name`, `agent_name`, `model`, `worker_name`, `node_id` or `project_id`, and it defaults to `none`.
 - An item holds `key`, `bucket_start`, `count`, `p50`, `p90`, `p99`, `mean` and `max`. The percentiles are `quantile_cont` of DuckDB. The unit is milliseconds, and a count for `revision_turns`. The order measure is `count`.
-- The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`. Each flag takes the name of its query field with `-` for `_`.
+- The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`. `--project <project-id>`, `--node <node-id>`, `--from <unix-ms>` and `--to <unix-ms>` set `project_id`, `node_id`, `started_from` and `started_to`, as in `trace list` and `timeline list`. `--bucket`, `--group-by`, `--measure` and `--operation` set the field of their name.
 
 ## Retention
 
@@ -323,7 +329,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - RULED 2026-10-22 under the delegation of Ulrich. The entry bound is 61440 bytes, and the cut limits are 4096, 1024 and 256 characters.
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.facet.get` answers at most 200 values for each facet. The dashboard reads an open trace again every 5 seconds.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. The primary store is DuckDB through `@duckdb/node-api` `1.5.6-r.2` in `tracking.duckdb`. The store keeps no data of `tracking.db`, and the reset procedure replaces it.
-- DECIDED 2026-10-24 by Aelita, pending Ulrich. The instance runs with `threads` 2 and `memory_limit` `1GB`, with one writer connection and one reader connection.
+- DECIDED 2026-10-24 by Aelita, pending Ulrich. The instance runs with `threads` 2, `memory_limit` `1GB` and `temp_directory` `tracking.duckdb.tmp`, with one writer connection, one reader connection and one analytics connection.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. A batch holds at most 2000 records and starts at most 50 ms after its first record. The queue holds at most 10000 server contributions.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. `tracking_span` is the summary table of the span, and no view serves a read. A span row only gains values.
 - DECIDED 2026-10-24 by Aelita, pending Ulrich. The timeline read answers depth 1 or 2 across traces, at most 1000 items, 500 by default. The analytics reads answer at most 1000 items, over 7 days by default, in UTC buckets.

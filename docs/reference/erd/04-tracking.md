@@ -153,7 +153,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 ### Admission and durability
 
-- One transaction admits one batch of the write queue. It inserts the `tracking_record` row of each stored record and applies its contribution to its span, its telemetry text or its session entry. The acknowledgement answers `Stored` only after that commit.
+- One transaction admits one batch of the write queue, and a batch holds whole write calls. After a failed batch, each item of it runs alone in its own transaction. A transaction inserts the `tracking_record` row of each stored record and applies its contribution to its span, its telemetry text or its session entry. The acknowledgement answers `Stored` only after that commit.
 - `tracking_record`, `tracking_telemetry_text` and `tracking_session_entry` are insert-only. A span row only gains values.
 - `tracking_record` holds one row for each stored record identity of a trace. A repeat of that identity is `Stored` and changes nothing. A refused record and a dropped record leave no row.
 - `target_id` of a record names a span, a telemetry text or a session entry record of the same trace.
