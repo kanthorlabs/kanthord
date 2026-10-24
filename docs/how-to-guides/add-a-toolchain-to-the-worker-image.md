@@ -70,9 +70,15 @@ The command prints the Node.js version, for example `v24.15.0`.
 
 At the `container` placement, the image of this guide does not apply. Each container runs the image of the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of its repository binding. You build no image. The server builds the environment image, and takes only `kanthord` and `tini` from `worker.container_image`.
 
+The commands of this step use these placeholders:
+
+- `<project-id>`: the **Identity** value under **Details** on the project page, for example `project_01M5…`.
+- `<binding-id>`: the `id` of the repository binding that `kanthord project binding list <project-id> --kind repository --token '<human token>'` prints.
+- `<human token>`: the token of [auth jwt generate](../reference/auth/jwt.md).
+
 By default, KanthorD selects the toolchain from the repository at the head of the base branch:
 
-- A repository with a manifest, such as `package.json`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml` or `build.gradle`, gets the `detected` environment. It holds the image of each stack, and the install command of the lock file when the repository holds one.
+- A repository with a manifest, such as `package.json`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml` or `build.gradle`, gets the `detected` environment. A repository with one stack gets the image of that stack. A repository with several stacks gets a base image with one feature for each stack. The document holds the dependency install command of each stack. Node.js gets it only with a lock file. Python gets it only with `uv.lock`, `poetry.lock` or `requirements.txt`.
 - A repository with no manifest gets the `universal` environment. It holds Node.js 24, Python 3.12, Go 1.25 and Java 21, and installs no project dependency.
 
 To use another toolchain, write a devcontainer document, for example:
@@ -89,13 +95,13 @@ To use another toolchain, write a devcontainer document, for example:
 }
 ```
 
-The image needs `bash`, glibc, git 2.40 or later and OpenSSH 9.0 or later. The images under `mcr.microsoft.com/devcontainers` hold them. Then do one of these steps:
+The image needs `bash`, glibc, git 2.40 or later and OpenSSH 9.0 or later. The Debian bookworm images under `mcr.microsoft.com/devcontainers` hold them. An Alpine or a bullseye image fails with `image_invalid`. Then do one of these steps:
 
 - Commit the document as `.devcontainer/devcontainer.json` to the base branch of the repository.
-- Store the document in the repository binding. Find the binding ID with `kanthord project binding list <project-id> --kind repository`, then run:
+- Store the document in the repository binding. Run:
 
   ```sh
-  kanthord project environment set <project-id> <binding-id> --file devcontainer.json
+  kanthord project environment set <project-id> <binding-id> --file devcontainer.json --token '<human token>'
   ```
 
 A stored document comes before the repository file, and the repository file comes before the `detected` environment.
@@ -103,7 +109,7 @@ A stored document comes before the repository file, and the repository file come
 The server then builds and proves the environment. Read the status of each repository binding:
 
 ```sh
-kanthord project environment list <project-id>
+kanthord project environment list <project-id> --token '<human token>'
 ```
 
 Wait until `status` is `ready`. A container starts only on a `ready` environment, and no node of the repository starts before it. The status `failed` holds the cause in `failure`. See [Troubleshooting of Isolate worker instances in containers](isolate-worker-instances-in-containers.md#troubleshooting).
