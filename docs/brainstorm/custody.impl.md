@@ -161,7 +161,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - Custody releases the key of an `ssh` record through the protected facility with the requested operation `ssh_identity`. The Project Service owns the binding, so it supplies the authorization function.
 - A human identity passes for a binding of a project. It also passes for the draft configuration of a binding write, a binding check or a binding verify.
-- The service identity of the Project Service passes for a live binding: the resource healthcheck and the instruction files read.
+- The service identity of the Project Service passes for a live binding: the resource healthcheck.
 - A machine identity with a proven execution claim passes only for a repository binding of the pinned node revision of that claim. The Gateway proves the claim of `execution_id` in `src/gateway/invocation.ts`, as it does for `worker.handover` and `intake.action.perform`.
 - At the `worker` placement, the material stays on the server. The [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay) takes the same grant, signs on the server and drops the material.
 - `CustodyComponent.sshSign` refuses a placement other than `worker` with 403 `worker.ssh.placement_refused`. It then opens the sealed request and authorizes the grant for its `binding_id`. `sshSignatureOf` of the Repository component checks the payload with the `public_key` metadata of the revision and the pinned host key. After the check, it releases the key through custody, signs, and drops the material. Custody seals the signature. A refused payload decrypts nothing and writes no release log line.

@@ -57,7 +57,7 @@ The repository strategy names the base branch of the repository: the branch from
 A [policy](project-service.vocabulary.md#policy) on a binding configures an external action for the nodes of the project.
 A policy states what its action follows: the passing assessment of the node, or the expected end state of another configured action of the same node.
 The repository strategy is the policy of the repository binding.
-A repository binding holds its connection, which is the address, the platform, the SSH credential reference and the credential reference, and its repository policy, which is the repository strategy and the project prompt.
+A repository binding holds its connection, which is the address, the platform, the SSH credential reference and the credential reference, and its repository policy, which is the repository strategy and the Binding prompts.
 A node requires the action of a policy when the node is an `implement` node and names the binding that holds the policy.
 An external action states its expected end state on its platform.
 The repository [capabilities](project-service.vocabulary.md#capability) distinguish authenticated operations from local work.
@@ -71,11 +71,11 @@ A repository binding holds at most one credential reference. That reference serv
 A binding without a credential reference permits no platform action.
 At the write of a repository binding, the Project Service performs one network git read through the [Repository component](repository.md#repository-connector).
 A failed read refuses the write.
-The Project Service reads the [instruction files](project-service.impl.md#the-instruction-files-read) of a saved repository binding from its base branch on demand. It keeps no clone.
-A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
-The Project Service validates the length of the project prompt against a fixed bound.
-A repository binding holds the switches of the [working layer](agent.md#prompt-composer) of an execution: one switch per agent file and one switch for the project prompt.
-A switch change creates a binding revision.
+A repository binding holds an optional [Binding prompt](agent.md#prompt-composer) for each agent of the catalog, in the field `prompts`.
+The Project Service validates each text against the bound of a prompt file, and it reads no instruction file of the repository.
+A change of a Binding prompt creates a binding revision. A node keeps the text of its pinned binding revision until `mission node rebind`.
+The new binding ID of that revision counts as a changed binding for the Onboarding component, and it clears the mark that the stored environment came from `env@1`.
+The Binding prompts of the agents are separate texts, so a rule that relaxes the Standard goes into the prompts of both `swe@1` and `re@1`.
 
 ## Environment of a repository binding
 

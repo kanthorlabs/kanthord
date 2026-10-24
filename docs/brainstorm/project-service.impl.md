@@ -183,8 +183,16 @@ The refusal compares the stored placements.
 - Every worker binding holds `tags`, the binding of an external harness included.
 - An effective instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
-- A `project_prompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
-- An empty `project_prompt` is an absent source. The switch of the project prompt on the binding turns the source off, and the value `-` holds no meaning.
+- The `config` of a repository binding holds `prompts`, an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS`: `swe@1`, `re@1` and `env@1`. The catalog is the only list, and no new enum exists.
+- A key outside the catalog refuses the write with 400 `gateway.request.validation_failed`.
+- The write validates each text with the text validation of a prompt file: at most 32768 UTF-8 bytes and no control character other than a tab and a newline.
+- A violation refuses the write with 400 `project.bindings.repository.prompt_invalid` and `details: { agent_name, reason }`. `reason` is `too_large` or `control_character`.
+- A blank text counts as absent at the composition.
+- The `prompts` of a binding revision joins the system prompt of the agent as `Instructions of repository <name>:` and the text. [agent.md](agent.md#prompt-composer) rules the order and the precedence.
+- A change of `prompts` stores the next binding revision with a new binding ID. A node keeps its pinned binding revision, and `mission node rebind` moves the node to the current revision.
+- The onboarding group of the binding takes the new binding ID as a changed row, and it clears `environment_from_agent`.
+- The execution setup, `agent.get` with a binding and an `env@1` run read the text of the binding revision that each names.
+- Tests cover each `prompts` key, an unknown key, each violation, a blank text and the revision that a change stores.
 - Every repository binding names exactly one `ssh_credential` of platform `ssh`. An absent SSH credential refuses the write.
 - The host of the address must be a member of the SSH host set of the binding platform. Another host refuses the write with 400 `project.bindings.repository.address_invalid`.
 - The host of the address must hold a [pin](repository.impl.md#host-keys). An unpinned host refuses the write with 409 `repository.host_key.unpinned`.
@@ -295,7 +303,7 @@ The Project resolution checks the disablement and the removal of a binding revis
 
 - An address host outside the SSH host set of the platform answers `unhealthy` with `failure_reason: address_invalid`. The binding check and the verify answer it.
 - An address host in the set with no pin answers `unhealthy` with `failure_reason: host_key_unknown`. The binding check and the verify answer it.
-- The execution setup, the instruction files read and every Intake git operation refuse such a binding before any child process starts. The code is `project.bindings.repository.address_invalid` or `repository.host_key.unpinned`. The resource healthcheck answers `unhealthy`.
+- The execution setup and every Intake git operation refuse such a binding before any child process starts. The code is `project.bindings.repository.address_invalid` or `repository.host_key.unpinned`. The resource healthcheck answers `unhealthy`.
 - The repair is three steps: edit the address to the real host, pin the host, and rotate the `ssh` credential.
 - The release note of the first release with the SSH identity states these three repair steps.
 
@@ -332,24 +340,6 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, and the custody suitability of `ssh_credential` and `credential`.
 - Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, ssh_credential, credential }`.
 - It stores nothing. An absent project answers 404 `project.project.not_found`.
-
-## The instruction files read
-
-- `project.binding.instruction_files.get` reads the instruction files of one repository binding at `GET /api/project/:project_id/binding/:binding_id/instruction_files`. It is a read under `human` access.
-- The instruction files are `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the root of the repository.
-- It reads the configuration of the revision that `binding_id` names. An unsaved configuration has no read.
-- The repository connector resolves the commit of the base branch with `ls-remote`. It fetches that commit at depth 1 with no blobs into a temporary directory.
-- It lists the four paths and fetches the blobs of all regular files in one fetch. Then it reads the files and deletes the directory.
-- The read applies the text validation of the [working layer](agent.md#prompt-composer) to each file.
-- It answers `{ commit, read_at, files }`. Each entry of `files` holds `{ source, path, state, reason, text }`. `state` is `present`, `absent` or `invalid`.
-- The service caches the answer in memory per binding revision and commit. Each request runs `ls-remote`, so a new commit of the base branch replaces the answer.
-- The read deadline is 30 s, because the read opens several SSH sessions. The resource healthcheck keeps its 10 s deadline.
-- The route timeout is 36 s: the read deadline, the 5 s SSH agent cleanup and 1 s. A read that exceeds its deadline therefore answers 422 and not 504.
-- A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable` with `details: { failure_reason }`. A read that exceeds its deadline carries `deadline_exceeded`.
-- A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level with `project_id`, `binding_id`, `failure_reason` and `reason`. `reason` is the git failure text with the user information of a URL redacted.
-- A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`.
-- A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
-- It stores nothing in the database.
 
 ## The environment of a repository binding
 
@@ -651,7 +641,6 @@ The first layer of the build builds the image at the slot start, before the Onbo
 | log  | `project.onboarding.cache_collection_failed`             | The list or the removal of a cache volume fails. A removal names the project and the resource identity.                                     |
 | log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.     |
 | log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                 |
-| log  | `project.binding.instruction_files.read_failed`          | A read of the instruction files fails. It names the project, the binding, the failure reason and the redacted git failure text.             |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                    |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                   |
 
@@ -676,16 +665,14 @@ At the `worker` placement, the server derives the client identity of an instance
 - The form states "A replacement instance starts after a removed instance ends its execution." when the draft removes an instance.
 - The row of a worker binding at the `worker` placement shows `· worker · <instance names>`, for example `· worker · box-coder, box-coder-2`. A registration row shows `· instance <name>`.
 - The "no taker" view of the dashboard applies the match of [The match](scheduler-service.impl.md#the-match): the intent, the tags and the declared node states.
-- The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Repository instructions` holds the instruction files and the project prompt.
-- `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`.
-- While the read runs, the section shows a spinner with `Reading the instruction files from <base branch>.` and a line that names the four files and the binding.
-- Each present file is an expandable row with its Markdown and a copy button. An invalid file is a dashed row with its reason. The absent files sit behind a `Show <n> absent files` footer.
-- A repository with no instruction file shows one line that names the four files and the base branch.
-- The last row of the list is `Project prompt`. It expands to its Markdown like a file row. Its `Edit` dialog writes the draft only, and the Save of the binding stores it.
-- Each row holds the switch of its `working_layer` source. The switch edits the draft, and the Save of the binding stores it. An absent file keeps its switch. A row with its switch off is dimmed and shows `off`.
-- The binding draft carries `working_layer`, `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
-- A refused read shows an inline alert with its code, `Retry` and a link to the SSH credential. It hides the rows.
-- A new binding, or a draft that changes the address, the SSH credential or the base branch, shows `Save the binding to read its instruction files.` and makes no read.
+- The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Binding prompts` holds the Binding prompt of each agent.
+- `Binding prompts` holds one row for each agent of the catalog: `swe@1`, `re@1` and `env@1`. The section makes no network call.
+- A row with a text expands to its Markdown and holds a copy button. A row with no text is inactive.
+- The `Edit` dialog of a row writes the draft only, and the Save of the binding stores it. The dialog shows the byte counter against the 32768-byte limit and refuses a text above the limit or with a control character. An empty text removes the Binding prompt of that agent.
+- The help of the section states that a change stores a new binding revision, and that a node keeps the old text until `mission node rebind`.
+- The help states that the new binding revision makes the Onboarding component clear the mark that the stored environment came from `env@1`.
+- The help states that the Binding prompts of the agents are separate texts, and that a rule that relaxes the Standard goes into the prompts of both `swe@1` and `re@1`.
+- The binding draft carries `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
 - The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows each record as `<name> (v<revision>)` with its fingerprint.
 - The SSH credential field holds `New SSH credential`. It opens the `Create SSH key` sheet and selects the new record.
@@ -743,12 +730,11 @@ The `kanthord` bin of `package.json` releases it.
 - Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.
 - A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
 - A test covers four address hosts: `ssh.github.com`, a host outside the GitHub SSH host set, `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The `ssh.github.com` address and the `github.com` address of one repository derive the same identity.
-- A test covers a binding write with a pinned host, and an unpinned host that refuses with 409. A host outside the host set answers `address_invalid` on the check and on the instruction files read.
+- A test covers a binding write with a pinned host, and an unpinned host that refuses with 409. A host outside the host set answers `address_invalid` on the check.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
 - Tests accept `tags` at 64 bytes and an absent field as `[]`. They refuse a longer tag, an upper-case tag, an empty segment, a repeated tag and a nonlist value with `project.bindings.worker.tags_invalid`.
 - Tests refuse a binding-set write that adds an unmatched pair with `project.bindings.worker.node_unmatched` and the node identities. They accept a write that keeps an earlier unmatched pair and adds none.
-- A test covers the project prompt bound in UTF-8 bytes and its error code.
 - A test covers both GitHub actions, their capabilities and their implied expected end states. It refuses more than one action.
 - A test covers each of the five changes, and it asserts the revision that each one creates.
 - A test covers a disablement that takes effect at the next resolution, and a consumed grant that authorizes no second operation.

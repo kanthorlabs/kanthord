@@ -221,12 +221,12 @@ Each sub-agent has its own agent prompt that defines its responsibilities and co
 
 ## default standard
 
-The default standard is the standard that the system layer states as the default of the human.
+The default standard is the standard that `base.md` states as the default of the human.
 An assessment weighs the evidence against it beside the criterion.
-The system layer that the reviewer runs with states the default standard that an assessment applies.
-The composition record of the execution names each source of that layer by its digest.
+The `base.md` that the reviewer runs with states the default standard that an assessment applies.
+The `kanthord.pinned_context` entry of the execution holds the system prompt that carries it.
 The term names no closed set.
-The shipped `base.md` of the system layer forbids an abstraction for single-use code.
+The shipped `base.md` forbids an abstraction for single-use code.
 The change of task "Add reset token expiry" meets the criterion of "Add password reset".
 It adds a helper class with one call site.
 The assessment of `reviewer@1` records that finding as a blocker and does not pass, and "Add password reset" moves to `Blocked` for the human review.

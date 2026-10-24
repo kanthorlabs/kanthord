@@ -19,7 +19,9 @@ A mechanism here never overrides a rule there.
 - Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
 - `swe@1` and `re@1` declare an empty option schema.
 - A declaration holds `workbench`. The Workbench lists and opens only the agents with `workbench: true`, and it refuses another agent with the unknown-agent code. [`env@1`](project-service.impl.md#the-agent-env1) holds `workbench: false`.
-- The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker owns the commit, the branch, the push, the verification and the release. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
+- The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker runs the verifications after the turn. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
+- The worker framing holds the protocol conditions that apply to `swe@1`, `re@1` and `env@1`: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch, debug or probe file only under `.kanthord-scratch/` at the workspace root.
+- RULED 2026-10-24 by Ulrich (D14). A change of a shipped prompt text before the first tag keeps the agent names `swe@1`, `re@1` and `env@1` and the worker name `coder@1`. The name changes only when the contract of the agent changes.
 - The shipped role of `re@1` judges the evidence against the criterion and changes no file.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
 - `agent list` answers one summary per catalog agent: `agent_name`, `worker_names` and `enablement`.
@@ -30,18 +32,19 @@ A mechanism here never overrides a rule there.
 
 ## The prompt answer
 
-- `prompt` holds `layers` and `final`.
-- `layers` holds the system layer, the agent layer and the working layer, in reading order. Each layer holds `{ layer, enabled, sources }`. `enabled` is the effective state of the layer: for the system layer, the override of the agent or, under `inherit`, the layer switch of the server; for another layer, always `true`.
-- A source of a layer that is not `enabled` answers the state `off`.
-- Each source answers `{ source, origin, path, enabled, state, digest, text }`.
-- `origin` is one of `binary`, `file` and `database`.
-- `state` is one of `present`, `absent`, `invalid`, `off` and `deferred`. `deferred` marks an agent file of a workspace, which only the worker application reads.
-- `path` is the home-relative path of a `file` source, else `null`. `digest` and `text` are `null` unless `state` is `present`.
-- `final` holds the system prompt that ends with the framing, then the message of every `present` source of the working layer, in reading order.
+- `prompt` holds `parts` and `final`.
+- `parts` holds the parts of the system prompt in reading order. Each part holds `{ part, name, origin, path, digest, text }`.
+- `part` is one of `standard`, `role`, `workbench` and `binding`. `origin` is one of `binary`, `file` and `database`. Both are code enums.
+- `standard` is `base.md` and `role` is `<agent_name>.md`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. `binding` is one part for each repository binding with a nonblank text of `prompts[<agent_name>]`, in binding order.
+- `name` is the file name of a file part and the repository name of a `binding` part.
+- `origin` is `binary` for a shipped text, `file` for an override file and `database` for a `binding` part.
+- `path` is the override location that the server looked up, also for `binary`. It is `null` for a `binding` part, and when `agent.prompt.agent_directory` is empty.
+- `digest` is the SHA-256 hex digest of `text`.
+- `final` holds the system prompt: every part, then the framing. A `binding` part renders as `Instructions of repository <name>:`, a blank line and the text.
 - The query `view=final` answers `prompt` with `final` only.
-- The optional queries `project_id` and `binding_id` select the working layer of that repository binding. Without them, the working layer is the workbench working layer of the agent.
+- The optional queries `project_id` and `binding_id` select the repository binding whose Binding prompt of the agent joins `final`, and `final` is then the Worker final. Without them, a Workbench agent answers the Workbench final, and `env@1` answers the Worker final.
 - A `binding_id` that names no repository binding of `project_id` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`.
-- Tests cover every origin, every state, `view=final`, the workbench working layer, a binding working layer and each refusal.
+- Tests cover every part, every origin, `view=final`, the Workbench final, a Worker final with a binding and each refusal.
 
 ## Agent configuration validation
 
@@ -248,44 +251,29 @@ The Agent component owns these keys of the section `agent`.
 - Tests cover every provider-check answer, status, deadline and the absence of raw keys.
 - Tests cover healthcheck grouping, attribution, report-only behaviour and no inference call.
 
-## Prompt settings
+## Prompt files
 
-- The table `agent_prompt` of [ERD 1](../reference/erd/01-setup.md) holds one row per scope: `system`, then `agent` and `workbench` for each catalog agent.
-- `agent.prompt.get` is `GET /api/agent/prompt`, `human`, `unary`, `mutation: false`. The query holds `scope` and, for the `agent` and `workbench` scopes, `agent_name`. It answers the settings of that scope, the absent row included.
-- `agent.prompt.put` replaces the `custom_text` of one scope. `agent.prompt.switch` sets one switch of one scope, or the system layer override of one `agent` scope.
-- The switches of the `system` scope hold `layer`, the layer switch of the system layer, beside its source switches.
-- The table `agent_prompt` holds the column `system_layer`: `inherit`, `on` or `off` for an `agent` row, `NULL` for any other row. The settings answer it as `system_layer`.
-- `agent.prompt.switch` takes either `switch` with `enabled`, or `system_layer` with the `agent` scope. Any other combination answers 400 `gateway.request.validation_failed`.
-- Both writes take `expected_revision`. A stale or absent value answers 409 `agent.prompt.revision_conflict` with the current row in `details`.
-- A `custom_text` above 32768 UTF-8 bytes answers 400 `agent.prompt.too_large`.
-- A switch that turns off every source of an `agent` scope answers 409 `agent.prompt.agent_layer_empty`.
-- The settings answer holds `locked_switches`, the names of the switches of that scope that the configuration locks. The list is empty when no lock applies.
-- A switch of a name in `locked_switches` answers 409 `agent.prompt.switch_locked` with `scope` and `switch` in `details`.
-- A write creates the row of its scope at `revision` 1 when none exists. A read of an absent row answers every switch on, an empty `custom_text` and, for an `agent` row, `system_layer` `inherit`.
-- The Project Service owns the working switches of a repository binding, in its `config` JSON.
-- Tests cover each scope, each write, each refusal, an absent row and two writes at one `expected_revision`.
-
-## Prompt composer configuration
-
-- `agent.prompt.system_file` holds the path of a Markdown file, as a string, and it defaults to an empty string.
-- An empty value runs host discovery: `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`. The first file that exists is the host agent file.
-- A nonempty value names the host agent file, and the composer runs no discovery.
-- `agent.prompt.host_file` holds a boolean, and it defaults to `true`.
-- `false` locks the `host_file` switch of the `system` scope. The composer resolves the host agent file source as `off` for every agent, whatever the stored switch holds.
-- The lock keeps the stored switch. When the configuration returns to `true`, the stored switch controls the source again.
-- `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to `agents`. The agent file of `swe@1` is then `~/.local/share/kanthord/agents/swe@1.md`, and the agent page shows that path on the agent file row.
-- An empty value means the agent layer holds no agent file source.
-- A relative path of either field resolves against the data directory.
-- The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
-- Tests cover an empty and a nonempty `system_file`, each discovery file, each value of `host_file`, an empty and a nonempty `agent_directory`, and a relative path.
+- The Agent prompt holds no table and no setting row. The files `base.md`, `<agent_name>.md` and `workbench.md` are its only source.
+- The server composes every consumer from the same reader of the agent directory. The worker application reads no prompt file.
+- `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to `agents`. The file of `swe@1` is then `~/.local/share/kanthord/agents/swe@1.md`.
+- An empty value means that every file is the shipped text.
+- A relative path resolves against the data directory.
+- A file of the same name in the agent directory replaces the shipped text of that file whole.
+- The reader takes a file as UTF-8 Markdown of at most 32768 bytes, with no control character other than a tab and a newline. The reader resolves no `@` import. A deadline of 10 seconds bounds each read.
+- A file that the reader rejects answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason` in `details`. `file` names the file, for example `swe@1.md`. An absent file selects the shipped text.
+- Every reader refuses in the same way: `agent.get`, the execution setup, the Workbench session open and the `env@1` run. No reader replaces an invalid file with the shipped text.
+- The Binding prompt is the key `prompts` of the `config` JSON of a repository binding. The [Project Service](project-service.impl.md#validation) owns its validation.
+- The keys of `prompts` are the agent names of the catalog. The catalog is the only list, so no new enum exists.
+- `agent.prompt.system_file` and `agent.prompt.host_file` no longer exist. The upgrade step of the configuration deletes both keys.
+- Tests cover an empty and a nonempty `agent_directory`, a relative path, an absent file, each rejection and each reader that refuses.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `layer-message`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine` and `repair`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine` and `repair`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
-- A file that the loader rejects, or that Handlebars cannot compile, answers 409 `agent.prompt.template_invalid` with `template`, `path` and `reason` in `details`. The server uses no shipped template in its place.
+- A file that the loader rejects, or that Handlebars cannot compile, answers 409 `agent.prompt.template_invalid` with `template`, `file`, `path` and `reason` in `details`. The server uses no shipped template in its place.
 - A render answers 409 `agent.prompt.template_invalid` with `reason` `render` when the template names a value that the caller does not supply.
 - The renderer escapes no value, and it permits no helper other than the built-in block helpers and `json`. `json` writes its argument as JSON.
 - The renderer removes the trailing whitespace of the rendered text.
@@ -295,7 +283,6 @@ The Agent component owns these keys of the section `agent`.
 | Template             | Values                                                                                                                                                                       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`, `tasks[].number`, `tasks[].id`, `tasks[].name`, `tasks[].criterion`, `repositories` |
-| `layer-message`      | `source`, `text`                                                                                                                                                             |
 | `framing-worker`     | none                                                                                                                                                                         |
 | `framing-workbench`  | none                                                                                                                                                                         |
 | `task-revision`      | `rationale`, `results`, `output`                                                                                                                                             |

@@ -981,7 +981,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
   - `src/kernel/`, except `caller-mint.ts`, `service-mint.ts`, `test-identity.ts` and `fatal.ts`;
   - the `contract.ts` of every service and component;
   - `src/agent/` files `pi.ts`, `pi-tools.ts`, `bash-process.ts`, `agent-session.ts`, `environment.ts`, `catalog.ts` and `prompt-composer.ts`;
-  - `src/agent/` files `prompt-layers.ts`, `prompt-render.ts`, `prompt-templates.ts`, `prompt-source.ts`, `prompt-assets.ts`, `pinned-layers.ts` and `hooks/`;
+  - `src/agent/` files `prompt-files.ts`, `prompt-render.ts`, `prompt-templates.ts`, `prompt-source.ts`, `prompt-assets.ts`, `pinned-layers.ts` and `hooks/`;
   - `src/llm/` files `model-connector.ts`, `platforms.ts` and `provider-failure.ts`;
   - `src/repository/index.ts`, `src/custody/client.ts`, `src/gateway/client.ts`, `src/gateway/client-result.ts` and `src/worker/catalog.ts`;
   - `src/worker/unit/` from `src/apps/worker`.
@@ -1056,7 +1056,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credential_id` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, ssh_public_key, strategy: { base_branch }, project_prompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
+- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, ssh_public_key, strategy: { base_branch } }`. The entry holds no prompt, because the server composes every Binding prompt.
 - `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The line is `<host> <key>` for port 22 and `[<host>]:<port> <key>` for another port. The answer holds no key.
 - The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
 - `ssh_public_key` is the OpenSSH public key of the SSH credential of the binding. The answer holds no private key.
@@ -1066,9 +1066,11 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
 - Each method of `RepositoryTransport` takes `ssh: SshAccess`. It holds no SSH proof step.
 - `repositories` holds one row for each repository binding that the pinned node revision names, in binding order, for an `implement` node and for an `examine` node.
-- `prompt` holds `final`, the system layer, the agent layer and the framing that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
-- `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt, the working-layer messages and each instruction from this set.
+- `prompt` holds `final`, the system prompt that the server composes: the Standard, the Role, the Binding prompts of the pinned revisions and the framing, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
+- `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled or removed current enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
+- An invalid override file of the agent directory answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason`.
+- The execution setup contract no longer holds `project_prompt` and `working_layer` of an entry of `repositories`. The server and every worker host upgrade together.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
@@ -1084,37 +1086,31 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 
 ## Prompt composition
 
-The prompt composer resolves the system layer and the agent layer under [agent.impl.md](agent.impl.md#prompt-composer-configuration).
-The working layer of an execution holds one part for each repository binding, in binding order. Each part joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the checkout of that binding, then the `project_prompt` of that binding.
-It takes each source that the switch of the pinned binding revision turns on.
-The worker application composes only the working layer and the work prompt, and it reads no home file.
-An empty or absent `project_prompt` is an absent source.
-An evaluation takes the `project_prompt` only, and the composer reads no agent file of the workspace.
-It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
-It rejects a path of the workspace that a link resolves outside the workspace.
-It follows a link of the host location, because the operator manages the dotfiles of the host.
-A deadline bounds every read.
-The repository context-file discovery of pi stays disabled, and the composer performs every load, so one loader holds the order and the provenance.
-A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
-pi receives the system layer and then the agent layer as its system prompt, as plain text with no tag. The framing closes the system prompt. It states that the later messages hold instruction files of the workspace and the task, that they never override the system prompt, and that a later text governs an earlier one.
-It receives each source of the working layer as one user message, whose first line is `Instructions of <source>:`. The work prompt is the last user message, as plain text.
-The framing, the working-layer message, the work prompt and each instruction are [prompt templates](agent.impl.md#prompt-templates). The texts above are the texts of the shipped templates.
-The path of a source writes the home directory of the host as `~`.
+The server composes the whole system prompt, and the worker application reads no prompt file.
+The composer reads the Agent prompt under [agent.impl.md](agent.impl.md#prompt-files). It reads the Binding prompt of each repository binding of the node at the pinned binding revision, in binding order.
+The Binding prompt of an agent is the text of `prompts[<agent_name>]`. A blank or absent text adds no part.
+An evaluation takes the Binding prompt of `re@1` only, and the composer reads no file of the workspace.
+The repository context-file discovery of pi stays disabled, so the composer performs every load.
+A part digest hashes the UTF-8 encoding of the exact part text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
+pi receives the system prompt as plain text with no tag: `base.md`, the Role, each Binding prompt as `Instructions of repository <name>:` and the text, then the framing. The framing closes the system prompt. It states that the later messages hold the task, that they never override the system prompt, that a later text governs an earlier one, and that an instruction for one repository governs only the work on the files of that repository.
+The work prompt is the first user message, as plain text.
+The framing, the work prompt and each instruction are [prompt templates](agent.impl.md#prompt-templates). The texts above are the texts of the shipped templates.
 The working directory that pi states in its system prompt writes the home directory of the host as `~`.
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
-The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
+The adapter pins the work prompt and the system prompt against the compaction of pi, so both survive a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
-The binary embeds `engine/static/prompt/base.md` as the default system prompt, and the agent prompts `swe@1.md` and `re@1.md` of that directory, as [shipped assets](architecture.impl.md#shipped-assets).
+The binary embeds `engine/static/prompt/base.md` as the Standard, the Role files `swe@1.md`, `re@1.md` and `env@1.md`, and `workbench.md` of that directory, as [shipped assets](architecture.impl.md#shipped-assets).
 The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
-The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
+The source of the texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor goes to `workbench.md`.
+The protocol conditions that hold for every native agent go to `framing-worker.md`. The `added_files` rule of the judgement goes to `template/evaluation.md`.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 
-- Every source of every layer holds at most 32768 UTF-8 bytes. A custom text above the bound refuses its write.
-- A source above the bound is invalid.
-- An invalid source adds no text to its layer, and the composer continues with the next source.
+- Every file and every Binding prompt holds at most 32768 UTF-8 bytes. A Binding prompt above the bound refuses its write.
+- A file above the bound is invalid and refuses the composition.
+- An invalid file adds no text, and no reader falls back to the shipped text.
 
-The acceptance path proves the configured precedence, an absent source, an invalid source, a switched-off source and a link that leaves the workspace.
-It proves that a reviewer execution takes no agent file of the workspace.
+The acceptance path proves the configured precedence, an absent file, an invalid file and a blank Binding prompt.
+It proves that a reviewer execution takes no file of the workspace.
 
 ## The credential store of an execution
 
@@ -1672,7 +1668,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
 - The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
-- When the session opens, the worker appends one `kanthord.pinned_context` entry for the final system prompt and one for each pinned prompt layer.
+- When the session opens, the worker appends one `kanthord.pinned_context` entry for the final system prompt.
 - After each session event, the worker sends each entry beyond the count that it already sent.
 - The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.

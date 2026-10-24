@@ -109,70 +109,33 @@ The agent `swe@1` of `coder@1` and the agent `re@1` of `reviewer@1` are native a
 The Worker Service runs `swe@1` under worker binding `coder-main`.
 Each model inference call uses the model [connector](architecture.vocabulary.md#connector) and the agent's effective configuration.
 
-## prompt layer
+## prompt part
 
-A prompt layer is one part of the prompt of a native agent, and it has one owner.
-The set is closed and it holds four values.
+A prompt part is one text of the system prompt of a native agent. The [Agent component](agent.vocabulary.md#prompt-part) defines the closed set.
+The Agent prompt of the agent and the Binding prompt of each repository binding of the node supply the parts. The framing closes the system prompt, and it is no prompt part.
 
-- **system layer**: the operator of the server owns it, and it holds for every agent of the server. The [Agent component](agent.vocabulary.md#system-layer) defines it.
-- **agent prompt**: the worker that declares the agent owns it.
-- **project prompt**: the project that binds the repository owns it.
-- **workbench prompt**: the [Workbench Service](workbench-service.md#prompt) owns it, and it holds for every workbench session.
-
-The custom system prompt of the server states "Every answer is short. A commit message states the change and no reason."
-The shipped `base.md` of the system layer describes a senior software engineer.
-`coder@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
-`reviewer@1` declares the agent prompt of `re@1`.
-The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
-The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
+The shipped `base.md` is the `standard` part, and it describes a senior software engineer.
+`coder@1` declares the Role of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the Role of `re@1`, `assets/prompt/re@1.md`.
+The Role of `re@1` states that the agent judges evidence against the criterion and changes no file of the repository.
+The repository binding of `kanthorlabs/kanthord` holds the Binding prompt of `swe@1` "The work product is TypeScript. A test file sits beside its source file."
 The catalog holds one prompt declaration for `swe@1`, and `coder@1` references that declaration.
 
 ## work prompt
 
 The task message that a consumer sends to an agent session. The node revision that the attempt pins owns it.
-It belongs to no prompt layer, and it holds no switch.
+It belongs to no prompt part.
 The term names no closed set.
 The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
-
-## prompt source
-
-A prompt source is one origin of the text of a prompt layer.
-The system layer, the agent prompt and the project prompt each hold an ordered list, and the set of each list is closed.
-
-- system layer: **the agent file of the host**, then **the shipped `base.md`**, then **the custom system prompt**. The composer joins every source that is on.
-- agent prompt: **the agent file of the agent directory**, then **the shipped agent prompt**, then **the custom agent prompt**. The composer joins every source that is on.
-- project prompt: **the agent files of the workspace**, then **the repository binding**. The composer joins every source that is on.
-
-The work prompt takes the pinned node revision.
-The agent file of the host and the custom system prompt are on, and `base.md` is off, so the system layer holds that file and then the custom system prompt.
-The repository binding of `kanthorlabs/kanthord` holds no project prompt and the workspace holds an agent file, so the project prompt takes that file.
-The workspace holds an agent file that exceeds the bound, so that source is invalid and adds no text.
-The switch of the agent file of the host is off, so the composer reads no agent file of the host.
-
-## agent file
-
-An agent file is a convention file that an agent harness reads by convention.
-The set is closed and it holds four values.
-
-- **AGENTS.md**
-- **AGENTS.local.md**
-- **CLAUDE.md**
-- **CLAUDE.local.md**
-
-Host discovery reads `AGENTS.md` and `CLAUDE.md` only.
-The working directory of `kanthorlabs/kanthord` holds `AGENTS.md` and `CLAUDE.local.md`.
-A fresh clone of that repository holds `AGENTS.md` only, because git ignores `CLAUDE.local.md`.
 
 ## prompt composer
 
 The prompt composer is the Worker Service component that produces the prompt of a native agent.
 The term names no closed set.
-The composer of Execution 1 on "Add password reset" resolves three layers and pins the work prompt.
-It takes the system layer from the agent file of the host and the shipped `base.md`.
-It takes the agent prompt from the shipped `swe@1.md`.
-It takes the project prompt from `AGENTS.md` of the workspace and the repository binding of `kanthorlabs/kanthord`.
+The composer of Execution 1 on "Add password reset" resolves the system prompt of `swe@1` on the server and pins the work prompt.
+It takes the `standard` part from the shipped `base.md` and the `role` part from the shipped `swe@1.md`.
+It takes the `binding` part from the Binding prompt of `swe@1` in the repository binding of `kanthorlabs/kanthord`.
 It pins the work prompt of task "Add reset token expiry".
-The reviewer execution of the same node composes the project prompt from that repository binding, and it reads no agent file of the workspace.
+The reviewer execution of the same node composes the Binding prompt of `re@1` from that repository binding, and it reads no file of the workspace.
 
 ## entry
 

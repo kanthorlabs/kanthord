@@ -44,8 +44,8 @@ The Worker Service publishes the contract of `claude-code@1`.
 It holds the name, host, declared node states, declared intents and resource budget.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
-A worker that kanthord hosts declares the agent prompt of each of its agents.
-[Prompt composition](#prompt-composition) states every layer of the prompt.
+A worker that kanthord hosts declares the Role of each of its agents.
+[Prompt composition](#prompt-composition) states every part of the prompt.
 
 The Worker Service supplies the model [connector](architecture.vocabulary.md#connector) for a model inference call.
 An execution and its agent reach a git platform through the [Repository component](repository.md#boundary) for git transport and through the Intake Service for platform reads, and through nothing else.
@@ -70,70 +70,59 @@ An agent holds no repository credential.
 
 ## Prompt composition
 
-The prompt of a native agent composes prompt layers.
-A prompt layer is one part of the prompt, and it has one owner.
-The composition places the [system layer](agent.md#prompt-composer) first, then the agent prompt, then the project prompt, then the work prompt.
+The system prompt of a native agent composes the Agent prompt, the Binding prompt and the framing. The [Agent component](agent.md#prompt-composer) rules both prompts.
+The composition places `base.md` first, then the Role of the agent, then one Binding prompt for each repository binding that holds a text, then the framing.
+The work prompt is the last message.
 
-The system layer states the conventions of the operator and the default standard of the work product, and it holds for every native agent of the server.
-A worker declares, for each of its agents, the agent prompt of that agent.
-An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
-The shipped agent prompt is the default of the worker name.
-An operator override replaces or extends it on one server, and the [prompt composer](agent.md#prompt-composer) records the override.
-The project prompt states the programming language, the development style and the coding conventions of the work product of one repository.
+`base.md` states the conventions of the operator and the default standard of the work product, and it holds for every native agent of the server.
+A worker declares, for each of its agents, the Role of that agent.
+A Role states the role of the agent, its responsibility and its contribution to the WHAT.
+The shipped Role is the default of the worker name. A file of the same name in the agent directory replaces it on one server.
+The Binding prompt states the programming language, the development style and the coding conventions of the work product of one repository.
 It states no rule about the method, the tools, the repository operations, the assessment or the release.
 The work prompt renders from the node revision that the attempt pins.
 It states the requirement, the criterion and the verifications of the work that the execution takes.
 When the node names two or more repository bindings, the work prompt lists each repository binding with its directory and its base branch.
-The agent prompt is required, and every other layer is optional.
+The Role is required, and every other part is optional.
 The work prompt is required for every unit of work.
 
-A prompt layer takes its text from an ordered list of [prompt sources](agent.md#prompt-composer).
-Each source holds one on or off switch.
-The composer joins every source of the list that is on, present and valid.
-A source that is absent or invalid adds no text, and the composer continues with the next source.
-The composition places the layers that hold text.
+The Binding prompt of an execution holds one part for each repository binding of the pinned binding revisions, in binding order.
+Each part is the text of `prompts[<agent_name>]` of that [repository binding](project-service.md#repository-configuration-and-policy).
+A blank text adds no part.
+The steps method of `swe@1` and the evaluation method of `re@1` take every part.
+An `examine` node takes every part for the bindings that it names.
+The worker reads no file of the workspace for the prompt, because an instruction file of the workspace is the work product of the candidate.
+KanthorD supports no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file in any form.
 
-The project prompt is the working layer of an execution.
-It holds one part for each repository binding of the pinned revision, in binding order.
-Each part joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the checkout of that binding, then the `project_prompt` of that [repository binding](project-service.md#repository-configuration-and-policy), under the switches of that binding.
-A project has no shipped consumer prompt.
-The steps method takes every source of the project prompt.
-On an `examine` node, the steps method reads the agent files of the base-branch checkout of each binding.
-The evaluation method takes the `project_prompt` of each repository binding only.
-An agent file of the workspace is the work product of the candidate.
+The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Binding prompts and the framing, in that order. The work prompt is the first message.
+The precedence from the highest is the framing, the Binding prompt, the Role and the Standard. A later message governs an earlier message.
+The framing and the Role state the obligations of the worker.
+No Binding prompt and no work prompt revokes one.
+An execution performs no conduct that its framing or its Role forbids, whatever another text states.
+The framing also states that an instruction for one repository governs only the work on the files of that repository, never the reply format that a message demands.
+The framing states the protocol conditions that hold for every native agent: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch file only under `.kanthord-scratch/` at the workspace root.
+A Binding prompt and a work prompt define no criterion.
+An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that `base.md` states.
 
-The message boundary states the precedence of every layer to the agent. The system prompt holds the system layer, then the agent prompt. Each source of the project prompt is one later message, and the work prompt is the last message.
-The agent prompt holds the highest precedence, then the system layer, then the work prompt, then the project prompt.
-The system layer and the agent prompt state the obligations of the worker.
-No project prompt and no work prompt revokes one.
-The agent prompt governs the system layer.
-An execution performs no conduct that its system layer or its agent prompt forbids, whatever another layer states.
-A system layer and a project prompt define no criterion.
-An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that the system layer states.
-
-A prompt layer carries instructions, and it authorizes no operation.
+A prompt carries instructions, and it authorizes no operation.
 It names no value of the effective configuration, it adds no tool and it changes no resource budget.
-The tool table of the agent and the effective configuration bound every operation, whatever a prompt layer states.
+The tool table of the agent and the effective configuration bound every operation, whatever a prompt states.
 
 The prompt composer is the Worker Service component that produces the prompt of a native agent.
-It resolves every layer from its sources, it validates every source that it reads, and it composes the layers.
-It is the only component that reads a prompt source for the composition.
-It reads the configured source of the project prompt through the [Project Service](project-service.md#configuration-lifecycle-and-consistency), and it authorizes no operation.
-It reads a regular file for an agent file source, and it follows no reference inside that file.
-An agent file of the workspace resolves inside the workspace, and a path that leaves the workspace is invalid.
-A text that exceeds the bound of its layer is invalid, and a text that the composer cannot decode is invalid.
-The composer decodes the text of a source, and it changes no instruction of that text.
-The composer records every selected source of every layer, the digest of its text, and every source that it read and rejected.
-The composer records no prompt text.
-That record is telemetry of the execution.
+It resolves every part from the agent directory and from the binding configuration, it validates every text that it reads, and it composes the parts.
+It runs on the server. The worker application reads no prompt file.
+It reads the Binding prompt through the [Project Service](project-service.md#configuration-lifecycle-and-consistency), and it authorizes no operation.
+A file that the composer cannot read, cannot decode or finds above the bound is invalid, and the composition answers 409 `agent.prompt.template_invalid`. The composer uses no shipped text in its place.
+The composer decodes the text of a file, and it changes no instruction of that text.
+The composer records no prompt text. The `kanthord.pinned_context` entry of the agent session is the only record of the system prompt.
 
-The execution resolves the system layer, the agent prompt and the project prompt once, when it starts.
+The execution resolves the system prompt once, when its setup is read.
 It holds that text until the execution ends.
 The work prompt renders for each unit of work that the method takes.
-When the composition takes the agent file source, the composer reads that file before the agent runs.
-A configuration revision and a commit change no prompt of a running execution.
-A later execution of the same attempt resolves the sources that stand when that execution starts.
-No model inference call of the execution drops a layer of its prompt.
+A change of an agent file or of a Binding prompt changes no prompt of a running execution.
+A Binding prompt change stores a binding revision, and a node keeps the text of its pinned revision until `mission node rebind`.
+A later execution of the same attempt resolves the files that stand when that execution starts.
+No model inference call of the execution drops a part of its prompt.
 
 ## Instances and hosting
 
