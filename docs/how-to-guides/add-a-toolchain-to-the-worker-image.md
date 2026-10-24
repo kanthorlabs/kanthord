@@ -6,10 +6,9 @@ Build an image that adds a toolchain, for example Node.js, to the kanthord image
 
 The kanthord image holds `bash`, `git`, the OpenSSH client and `kanthord`. It holds no language toolchain. A verification such as `npm test` fails in it.
 
-Use the new image in one of two places:
+Use the new image as the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker bindings at the `server` placement then run their commands with the toolchain.
 
-- As the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker bindings at the `server` placement then run their commands with the toolchain.
-- As `worker.container_image` of a server that runs worker instances at the `container` placement. See [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
+At the `container` placement, this image does not apply. Follow [step 4](#4-add-a-toolchain-at-the-container-placement) instead.
 
 ## Before you start
 
@@ -67,24 +66,53 @@ The command prints the Node.js version, for example `v24.15.0`.
 
 2. Run the command of [step 3 of Run kanthord in a container](run-in-a-container.md#3-start-the-server) again. Write `localhost/kanthord-node:<version>` in place of `docker.io/kanthorlabs/kanthord:<version>`.
 
-## 4. Use the image at the `container` placement
+## 4. Add a toolchain at the `container` placement
 
-1. In the configuration file of the server, set the image name in the `worker` section. The file is `~/.config/kanthord/kanthord.yaml` on a Mac, and `/var/lib/kanthord/.config/kanthord/kanthord.yaml` on the VPS. Write no tag:
+At the `container` placement, the image of this guide does not apply. Each container runs the image of the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of its repository binding. You build no image. The server builds the environment image, and takes only `kanthord` and `tini` from `worker.container_image`.
 
-   ```yaml
-   worker:
-     container_image: localhost/kanthord-node
-   ```
+The commands of this step use these placeholders:
 
-2. Run `kanthord config validate`, then restart the server. On the VPS, run `sudo -u kanthord -H kanthord config validate`, then `sudo systemctl restart kanthord`.
+- `<project-id>`: the **Identity** value under **Details** on the project page, for example `project_01M5…`.
+- `<binding-id>`: the `id` of the repository binding that `kanthord project binding list <project-id> --kind repository --token '<human token>'` prints.
+- `<human token>`: the token of [auth jwt generate](../reference/auth/jwt.md).
 
-The server adds its own version as the tag, so it starts `localhost/kanthord-node:<version>`. A value with a tag or a digest fails with `system.config.invalid_field`.
+By default, KanthorD selects the toolchain from the repository at the head of the base branch:
 
-Build the image as the same user that runs the server. Podman keeps one image store for each user. On the VPS, make the build directory under `/var/lib/kanthord`, so the user `kanthord` can read it. Then build:
+- A repository with a manifest, such as `package.json`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml` or `build.gradle`, gets the `detected` environment. A repository with one stack gets the image of that stack. A repository with several stacks gets a base image with one feature for each stack. The document holds the dependency install command of each stack. Node.js gets it only with a lock file. Python gets it only with `uv.lock`, `poetry.lock` or `requirements.txt`.
+- A repository with no manifest gets the `universal` environment. It holds Node.js 24, Python 3.12, Go 1.25 and Java 21, and installs no project dependency.
+
+To use another toolchain, write a devcontainer document, for example:
+
+```json
+{
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "updateContentCommand": "npm ci",
+  "customizations": {
+    "kanthord": {
+      "checks": ["node --version", "npm --version"]
+    }
+  }
+}
+```
+
+The image needs `bash`, glibc, git 2.40 or later and OpenSSH 9.0 or later. The Debian bookworm images under `mcr.microsoft.com/devcontainers` hold them. An Alpine or a bullseye image fails with `image_invalid`. Then do one of these steps:
+
+- Commit the document as `.devcontainer/devcontainer.json` to the base branch of the repository.
+- Store the document in the repository binding. Run:
+
+  ```sh
+  kanthord project environment set <project-id> <binding-id> --file devcontainer.json --token '<human token>'
+  ```
+
+A stored document comes before the repository file, and the repository file comes before the `detected` environment.
+
+The server then builds and proves the environment. Read the status of each repository binding:
 
 ```sh
-sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman build --build-arg VERSION=<version> -t localhost/kanthord-node:<version> <directory>
+kanthord project environment list <project-id> --token '<human token>'
 ```
+
+Wait until `status` is `ready`. A container starts only on a `ready` environment, and no node of the repository starts before it. The status `failed` holds the cause in `failure`. See [Troubleshooting of Isolate worker instances in containers](isolate-worker-instances-in-containers.md#troubleshooting).
 
 ## After an upgrade
 
@@ -92,8 +120,6 @@ Build the image of the new version before you start the new server. Run step 2 w
 
 ## Troubleshooting
 
-| Symptom                                                                                          | Cause and fix                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A `container` instance never registers, and `workers/<client_id>/stderr.log` shows a failed pull | The image of the server version is absent. Run step 2 with the version of the server, as the user that runs the server.                                                            |
-| `kanthord config validate` fails with `system.config.invalid_field` on `worker.container_image`  | The value holds a tag or a digest. Remove the part after the last `:` of the name, or the part from `@`. A registry port such as `localhost:5000/kanthord-node` is valid.          |
-| A verification still fails with `npm: command not found`                                         | The server runs another image. For the server container, run `podman inspect --format '{{.Config.Image}}' kanthord`. For the `container` placement, read `worker.container_image`. |
+| Symptom                                                  | Cause and fix                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| A verification still fails with `npm: command not found` | The server runs another image. Run `podman inspect --format '{{.Config.Image}}' kanthord`. |
