@@ -608,7 +608,7 @@ The component computes the status of a group in this order. The first rule that 
 - A group holds at most one session at a time. Sessions of different groups run at once and share the queue of [the run](#the-run).
 - Only a failure event starts a session: a run that writes a failed proof file, or [the failure of an execution](#the-failure-of-an-execution). A failure inside a session and the end of a session start none.
 - The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `env@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
-- The last read of the group succeeded, and no binding-set write changed the binding or its target after that read. A failure at an old target thus starts no session.
+- The current binding set still gives the group the target of the failed run or execution. A failure at an old target thus starts no session.
 - A session starts while `repairs` of the failed digest is below 3. The component increments `repairs` before the session starts. A new write of the same digest keeps the count, and `project.binding.environment.rebuild` resets it to 0.
 - The environment state holds `repairing: true` while a session of the group runs. The stop of the server aborts each session before it cancels the runs.
 - The waiting nodes continue when the status is `ready`.
