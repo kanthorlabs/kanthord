@@ -57,7 +57,7 @@ The computed state of the environment of a repository binding. The status is a c
 - **building**: A run builds the image.
 - **proving**: A run proves the environment on the base-branch head.
 - **ready**: The proof passed for the current digest.
-- **failed**: The proof or an execution failed for the current digest.
+- **failed**: The proof or an execution failed for the current digest at the current commit of the base branch.
 
 A human adds `engine` with a stored environment. The status moves `building`, `proving`, `ready` in about two minutes, and the first node of `engine` claims after that.
 
@@ -78,7 +78,7 @@ The binding shows `pnpm test` with exit 1 as a red check, and the nodes of the b
 
 ## proof file
 
-The file `environments/<identity path>/<digest>.json` of the state directory. It caches the last result of a digest for display: the outcome, the failure class, the last 4 KiB of output, the reproduce command and the red baseline.
+The file `environments/<identity path>/<digest>.json` of the state directory. It caches the last result of a digest for display: the outcome, the failure class, the last 4 KiB of output, the reproduce command, the red baseline and the commit of the base branch.
 A lost file costs one more run, because the next run writes it again.
 
 ## Onboarding component
