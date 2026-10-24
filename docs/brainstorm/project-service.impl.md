@@ -434,7 +434,7 @@ The component computes the status of a group in this order. The first rule that 
 - `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed` or `command_absent`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
-- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. A new file after a changed commit of a failed group also holds 0.
+- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits: the next file of the digest after a changed commit holds the count of the removed file.
 - The file is a cache for display and the gate of the `host` target. A lost file costs one run.
 
 ### The run
