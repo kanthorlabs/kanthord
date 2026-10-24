@@ -822,7 +822,7 @@ Tests of the slot driver:
 ### The slot image
 
 - The image of a slot is the image of the environment that its worker binding names in `environment`, under [the Onboarding component](project-service.impl.md#the-onboarding-component).
-- At each slot start, `ContainerDriver` calls `imageFor(runtime, slot)`. It calls `slotImage(projectId, workerResourceIdentity, signal)` of the Onboarding component. The slot starts only when the promise resolves: on `<tag>` of a `ready` environment, or on `<worker.container_image>:<version>` when the worker binding names no repository group.
+- At each slot start, `ContainerDriver` calls `imageFor(runtime, slot)`. It calls `slotImage(projectId, workerResourceIdentity, signal)` of the Onboarding component. The slot starts only when the promise resolves: on `<tag>` of a `ready` environment, or on `<worker.container_image>:<version>` when the worker binding names no repository binding.
 - A slot of an environment that is not ready waits and starts no container. It pulls no work, so the nodes of that repository wait with no backoff loop and no log line for each retry. A stop or a drain of the slot ends the wait.
 - The driver records the image of each slot.
 - After a run makes an environment `ready`, the Onboarding component calls `environmentReady(projectId, resourceIdentity, tag)` of the Worker Service. The Worker Service marks each slot of the worker bindings that name the environment and run another image as draining before the call returns. A draining slot takes no new claim, ends its execution, and the pool host starts it again on the new image.
