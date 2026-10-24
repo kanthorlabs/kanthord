@@ -45,7 +45,7 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 
 ### unblock
 
-- `blocked_attempt` must equal the current attempt, and `expected_revision` must equal the current revision.
+- `blocked_attempt` must equal the current attempt. `expected_revision` must equal the current revision: the `visible_revision` of the node record, not `pinned_revision`.
 - `change` holds new `content`, a `reason` and `tasks`, the complete task list of the node. `tasks` follows the task list rules of [`node update`](node.md#node-update). A task in the list has no bindings. An `examine` node sends `tasks: []`.
 - A change of `intent` while the attempt reads `1` or more fails with `mission.node.intent_locked`. A change that adds an unmatched pair fails with `mission.node.tags_unmatched`.
 - A content change writes a revision with `change.write` `unblock` and increases the mission version.
@@ -238,7 +238,7 @@ All operations use `POST`, access `human` (human bearer JWT), a 30-second timeou
 | `result`                   | `success`                      | `override`                     | Asserted result; the only value.                                                                                     |
 | `landed_commit`            | object                         | `override`, optional           | `{ "kind": "repository", "binding_id": "binding_<ulid>", "commit": "<40 or 64 lower-case hex>" }`.                   |
 | `blocked_attempt`          | integer `>= 0`                 | `unblock`                      | Current attempt number of the blocked node.                                                                          |
-| `expected_revision`        | positive integer               | `unblock`                      | Current revision of the node.                                                                                        |
+| `expected_revision`        | positive integer               | `unblock`                      | The `visible_revision` of the node record, not `pinned_revision`.                                                    |
 | `change`                   | object                         | `unblock`, optional            | `{ content, tasks, reason }`; `tasks` holds task writes `{ id?, filename, content }`.                                |
 | `start_point`              | `base_branch` or `node_branch` | `unblock`, optional            | Start point of the next attempt. The default is `node_branch`.                                                       |
 | `value`                    | signed safe integer            | `priority set`                 | New priority.                                                                                                        |
@@ -320,7 +320,7 @@ An example `resume.json`:
 }
 ```
 
-An example `unblock.json` that redirects attempt `1` to revision `2`:
+An example `unblock.json` after a node update to revision `2`. It opens attempt `2` on revision `2`:
 
 ```json
 {
