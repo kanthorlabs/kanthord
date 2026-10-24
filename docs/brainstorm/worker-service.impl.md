@@ -1253,10 +1253,10 @@ The progress rule:
 - A turn with `changed` true sets the counter to zero. No other event sets it to zero.
 - At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification.
 - The stop `detail` names the rule that fired and its counts, as a JSON object:
-  - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_holds` for a verdict turn that leaves the verdict rule false.
+  - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_unmet` for a verdict turn that leaves the verdict rule false.
   - `count` is the counter at the stop, and `limit` is `NO_PROGRESS_LIMIT`.
-  - `verification` is the last verification of the execution: `passed` and the `exit_codes` of its commands, or `null` before the first verification.
-- The `worker.task` span that the stop ends carries `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, with a verification, `kanthord.stop.verification.passed`.
+  - `verification` is the last verification of any unit of the execution, or `null` before the first verification. It holds `passed`, `ran` (the count of commands that ran) and `exit_code` (the exit code of the last command that ran). A verification stops at the first command that does not pass, so these facts keep a fixed size.
+- The `worker.task` span that the stop ends carries `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
 - A work turn with `changed` false adds nothing. The verification of the unit decides.
 
 ## The further-work release
@@ -1595,11 +1595,12 @@ The tool of the action performer takes the execution identity only.
 - The worker keeps the last 4 KiB of the combined stdout and stderr of each item. The output is not evidence. The task revision carries the output of the last item that ran.
 - An agent turn that ends with a provider error stops the execution with `provider_failed`. pi retries a transient error before the turn ends.
 - The stop code names the provider failure: `rate_limited`, `quota_exhausted`, `unauthorized`, `bad_request` or `unavailable`.
-- The stop `detail` holds the cause text. `redactReason` removes the credential secrets read at the open and at the stop, bearer values, JWTs and tokens of 32 or more characters, keeps a file path, and cuts the text to 300 characters. The sources are:
+- The stop `detail` holds the cause text or the JSON facts of the progress rule. In a cause text, `redactReason` removes the credential secrets read at the open and at the stop, bearer values, JWTs and tokens of 32 or more characters, keeps a file path, and cuts the text to 300 characters. The sources are:
   - the error text of a provider error reply, with `provider_failed`;
   - `<error name>: <message>` of an uncoded error that a prompt to the agent session or any step of the execution throws, with `operation_failed`;
   - the violation text of gate G, with `operation_failed` and the code `worker.turn.*`;
-  - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`.
+  - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`;
+  - the JSON facts of the progress rule, with `no_progress`. The JSON holds no text, and the worker does not cut it.
 - A `CodedError` gives its code and no `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.

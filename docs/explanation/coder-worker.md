@@ -567,7 +567,7 @@ The worker commits the second task and runs `grep -q '/healthz' docs/api.md`. Th
   "stop": {
     "reason": "no_progress",
     "code": null,
-    "detail": "{\"rule\":\"unchanged_revision\",\"count\":2,\"limit\":2,\"verification\":{\"passed\":false,\"exit_codes\":[1]}}"
+    "detail": "{\"rule\":\"unchanged_revision\",\"count\":2,\"limit\":2,\"verification\":{\"passed\":false,\"ran\":1,\"exit_code\":1}}"
   }
 }
 ```
