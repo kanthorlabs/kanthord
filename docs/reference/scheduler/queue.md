@@ -9,7 +9,7 @@ Read the jobs in the work queue of one project. The queue holds one job for each
 - `queue list` returns one page of jobs in queue order.
 - `queue peek` returns the first job in queue order, or `null` for an empty queue.
 
-Queue order is `priority` descending, then `job_id` ascending. A work pull uses the same order when it selects a job. A read removes no job, reserves no node and does not predict which instance claims a job. A job whose node no worker binding of the project matches stays in the queue, and no claim selects it.
+Queue order is `priority` descending, then `job_id` ascending. Each job of a node keeps the `job_id` of the first job of that node, so a rework keeps the queue place of the node. `queued_at` states when the current job entered the queue. A work pull uses the same order when it selects a job. A read removes no job, reserves no node and does not predict which instance claims a job. A job whose node no worker binding of the project matches stays in the queue, and no claim selects it.
 
 Each `queue list` call reads one page. The CLI does not follow `next_cursor`. The list is a live view and holds no history.
 
@@ -28,7 +28,8 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
       "job_id": "job_01JZ8Q4W5N2V7K3M9P0R1S2T3V",
       "project_id": "project_01JZ8PZ0A1B2C3D4E5F6G7H8J9",
       "node_id": "node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
-      "priority": 5
+      "priority": 5,
+      "queued_at": 1751565717573
     }
   ],
   "next_cursor": null
@@ -50,7 +51,8 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
     "job_id": "job_01JZ8Q4W5N2V7K3M9P0R1S2T3V",
     "project_id": "project_01JZ8PZ0A1B2C3D4E5F6G7H8J9",
     "node_id": "node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
-    "priority": 5
+    "priority": 5,
+    "queued_at": 1751565717573
   }
 }
 ```
@@ -61,12 +63,13 @@ The API returns HTTP `200`. The CLI writes the same object as one JSON line to s
 
 ### `Job`
 
-| Property     | Type             | Purpose                                                     |
-| ------------ | ---------------- | ----------------------------------------------------------- |
-| `job_id`     | `job_<ulid>`     | Identity of the job. A priority change keeps this identity. |
-| `project_id` | `project_<ulid>` | Project that owns the queue.                                |
-| `node_id`    | `node_<ulid>`    | Mission node that the job represents.                       |
-| `priority`   | safe integer     | Priority of the node, copied from the Mission Service.      |
+| Property     | Type             | Purpose                                                                                                  |
+| ------------ | ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `job_id`     | `job_<ulid>`     | Identity of the first job of the node. A priority change and a later job of the node keep this identity. |
+| `project_id` | `project_<ulid>` | Project that owns the queue.                                                                             |
+| `node_id`    | `node_<ulid>`    | Mission node that the job represents.                                                                    |
+| `priority`   | safe integer     | Priority of the node, copied from the Mission Service.                                                   |
+| `queued_at`  | integer          | Unix epoch milliseconds of the insert of this job.                                                       |
 
 Identity formats follow the [identity reference](../identities.md).
 

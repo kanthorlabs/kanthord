@@ -39,7 +39,7 @@ flowchart TB
             a1["Agent: agent enablement, prompt settings"]
             w1["Worker: instance"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
-            s1["Scheduler: job"]
+            s1["Scheduler: job, queue place"]
         end
         subgraph v2["ERD 2: Execution"]
             w2["Worker: registration"]

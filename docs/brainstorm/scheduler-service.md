@@ -41,14 +41,17 @@ The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
 `External.Requested` admits an evaluation claim under the readiness condition and the [continuation condition](mission-service.md#continuation-condition).
 No other state admits a claim.
 Membership is not the Mission state `Available`: a claimable `Waiting` node is not `Available`.
-A job carries the node, its priority and a time-ordered identity.
-The identity carries the creation time of the job.
+A job carries the node, its priority, a time-ordered identity and the time of its insert.
+The identity carries the creation time of the first job of the node.
 The [Mission Service](mission-service.md#boundary) inserts the job when the node becomes claimable, and it removes the job when the node leaves that claimable state.
 A release with further work creates a new job when the node is claimable.
+Each new job of a node keeps the identity of the first job of that node.
+Each later job of the node keeps its [queue place](scheduler-service.vocabulary.md#queue-place).
+Examples are a rework, a retry after a stop, an evaluation job, a resume, an unblock and a return from `Pending`.
 A priority change keeps the identity.
 
 The Scheduler orders jobs by priority descending, then identity ascending.
-The highest priority comes first, and the oldest job comes first inside one priority.
+The highest priority comes first, and the oldest job identity comes first inside one priority.
 Inside one priority, newer work never overtakes older work.
 Across priorities, a human who raises the priority of a stream of work accepts that priority 0 waits.
 Priority orders and never admits.
