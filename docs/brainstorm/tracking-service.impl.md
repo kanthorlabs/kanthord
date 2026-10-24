@@ -304,7 +304,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 
 ## The native binding in the release
 
-- The npm package lists `@duckdb/node-api` as a dependency. The package manager installs the platform package of the host.
+- The npm package lists `@duckdb/node-api` and `@duckdb/node-bindings` as dependencies at one exact version. The loader requires `@duckdb/node-bindings` directly. The package manager installs the platform package of the host.
 - The single executable application carries `duckdb.node` and the shared library of its target as SEA assets under `duckdb/`. The shared library is `libduckdb.so` on Linux and `libduckdb.dylib` on macOS.
 - The release build bundles the engine with the alias of `@duckdb/node-bindings` to the binding loader of the engine, `src/tracking/duckdb-binding.cjs`.
 - Outside a single executable application, the loader requires `@duckdb/node-bindings`.
