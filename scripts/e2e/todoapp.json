@@ -63,14 +63,7 @@
         }
       },
       "ssh_credential": "github-com",
-      "credential": "kanthor-verify",
-      "working_layer": {
-        "agents_md": true,
-        "agents_local_md": true,
-        "claude_md": true,
-        "claude_local_md": true,
-        "project_prompt": true
-      }
+      "credential": "kanthor-verify"
     }
   },
   "workers": [

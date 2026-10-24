@@ -4,7 +4,7 @@
 
 ## Function description
 
-An SSH key is a [repository credential](credential.md) of the platform `ssh`. The server generates the key and keeps it. A repository binding names the credential in `ssh_credential`. KanthorD uses the key for every network git operation of that binding: the binding apply, check and verify, the instruction file read, the clone, fetch and push of a worker, and the `git.merge_push` action.
+An SSH key is a [repository credential](credential.md) of the platform `ssh`. The server generates the key and keeps it. A repository binding names the credential in `ssh_credential`. KanthorD uses the key for every network git operation of that binding: the binding apply, check and verify, the clone, fetch and push of a worker, and the `git.merge_push` action.
 
 | Fact          | Value                                                                                                                                                                                           |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -58,7 +58,7 @@ In the dashboard, the row of an `ssh` credential holds `Rotate key`. The dialog 
 
 ### A legacy credential
 
-A legacy credential is an `ssh` credential whose newest live revision holds no generated key, for example a credential of the earlier SSH alias model. A binding apply, the instruction file read, the handover and every git operation refuse a legacy credential with `409 repository.credential.ssh_key_legacy` and `details.credential`. A binding check or verify reports `failure_reason` `identity_unavailable` in the `address` entry. The `verify` of the credential answers `unhealthy` with `failure_reason` `identity_unavailable`. `ssh-key-rotate` accepts a legacy credential and replaces it with a generated key. Then add the new deploy key.
+A legacy credential is an `ssh` credential whose newest live revision holds no generated key, for example a credential of the earlier SSH alias model. A binding apply, the handover and every git operation refuse a legacy credential with `409 repository.credential.ssh_key_legacy` and `details.credential`. A binding check or verify reports `failure_reason` `identity_unavailable` in the `address` entry. The `verify` of the credential answers `unhealthy` with `failure_reason` `identity_unavailable`. `ssh-key-rotate` accepts a legacy credential and replaces it with a generated key. Then add the new deploy key.
 
 ### The agent of one operation
 

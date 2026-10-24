@@ -98,47 +98,42 @@ One run of the agent loop of one agent for one consumer.
 The term names no closed set.
 Execution 1 opens one agent session of `swe@1` under worker binding `coder-main`.
 
-## system layer
+## Agent prompt
 
-The first layer of the prompt of an agent session. It joins the host agent file, the shipped `base.md` and the custom system prompt, in that order.
+The files that a human controls for every repository: `base.md` (the Standard of every agent), `<agent_name>.md` (the Role of one agent) and `workbench.md` (the Workbench behavior).
+A file of the same name in the agent directory replaces the shipped text of that file whole.
 The term names no closed set.
-Ulrich switches `~/.claude/CLAUDE.md` on, `base.md` off and the custom system prompt on, so the system layer holds `~/.claude/CLAUDE.md` and then the custom system prompt.
+Ulrich puts `swe@1.md` into the agent directory, so `swe@1` reads that file in place of the shipped `swe@1.md`, and still reads the shipped `base.md`.
 
-## agent layer
+## Binding prompt
 
-The second layer of the prompt of an agent session. It joins the agent file of the agent directory, the shipped agent prompt and the custom agent prompt, in that order.
-The term names no closed set.
-Ulrich switches `~/workdir/swe@1.md` on, the shipped `swe@1.md` off and the custom agent prompt off, so the agent layer of `swe@1` holds `~/workdir/swe@1.md` only.
+The text of `prompts[<agent_name>]` in the configuration of a repository binding.
+It joins the system prompt of that agent as `Instructions of repository <name>:` and the text.
+The term names no closed set. The keys are the agent names of the catalog.
+The binding `app` holds `prompts` with `swe@1` set to "Write comments in English.", so Execution 1 reads that text under the Agent prompt of `swe@1`.
 
-## working layer
+## prompt part
 
-The third layer of the prompt of an agent session. It joins the agent files of the working directory, the shipped consumer prompt and the custom working prompt, in that order.
-The term names no closed set.
-The workspace of `kanthorlabs/kanthord` holds `AGENTS.md`, and its repository binding holds a `project_prompt`, so the working layer of Execution 1 holds `AGENTS.md` and then that `project_prompt`.
+One text of the system prompt that `agent.get` answers.
+The closed set is:
+
+- `standard`
+- `role`
+- `workbench`
+- `binding`
+
+`base.md` is the `standard` part of Execution 1, `swe@1.md` is its `role` part, and the text of `app` is its `binding` part.
 
 ## prompt origin
 
-The place that holds the text of a prompt source.
+The place that holds the text of a prompt part.
 The closed set is:
 
 - `binary`
 - `file`
 - `database`
 
-The shipped `base.md` has origin `binary`, `~/.claude/CLAUDE.md` has origin `file`, and the custom system prompt has origin `database`.
-
-## prompt source state
-
-The result of the read of one prompt source.
-The closed set is:
-
-- `present`
-- `absent`
-- `invalid`
-- `off`
-- `deferred`
-
-With a binding of `kanthorlabs/kanthord`, the `AGENTS.md` of the workspace answers `deferred`, because only the worker application reads the workspace.
+The shipped `base.md` has origin `binary`, an override `swe@1.md` in the agent directory has origin `file`, and the Binding prompt of `app` has origin `database`.
 
 ## resume
 

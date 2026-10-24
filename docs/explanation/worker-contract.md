@@ -122,7 +122,7 @@ An agent session is the conversation of one agent. Its entries are the agent tra
 - The `agent.session` span names the session. Its span identity is the session identity, and `gen_ai.conversation.id` of each turn and tool span holds it.
 - An `agent.turn` names the entry of its model reply in `kanthord.session.entry_id`. The tool calls of the turn are blocks of that entry.
 - An `agent.tool` finds its result entry through `gen_ai.tool.call.id`: the entry with that `tool_call_id`.
-- When the session opens, the native producer sends one entry of type `custom` with `customType` `kanthord.pinned_context` for the system prompt, and one for each pinned prompt layer. Its `data` holds `part`: `system_prompt` or `layer`, and `text`. These entries are the only record of the pinned texts.
+- When the session opens, the native producer sends one entry of type `custom` with `customType` `kanthord.pinned_context` for the system prompt. Its `data` holds `part`: `system_prompt`, and `text`. This entry is the only record of the system prompt.
 - The producer cuts an entry above 61440 bytes of JSON and sets `truncated: true`. It replaces the exact secret strings of the LLM credential of the agent with `[redacted]` first.
 - A native `agent.turn` stays a child of the worker span that encloses it: `worker.task` for a turn on a unit, `worker.phase` for a conflict turn, and `worker.evaluation` for `re@1`. `gen_ai.conversation.id` links it to its session.
 - The agent trace closes before the release of the execution, while the claim is live. The close sends the last entries and ends the `agent.session` span, with `Error` after a stop and `Ok` otherwise. It ends each open turn and tool span with `Error` and `error.type` `stopped`.
@@ -169,6 +169,8 @@ The execution proof ends with the claim. The worker therefore flushes its queue 
 ## The external harness path
 
 `claude-code@1` is the first external harness. KanthorD configures no agent, prompt or tool of the harness. KanthorD adds hooks that capture what Claude Code exposes.
+
+`claude-code@1` receives no KanthorD text: no Agent prompt, no Binding prompt and no framing. Claude Code loads its own `CLAUDE.md` files from its working directory and its home directory. That load is behavior of the Claude Code harness. It is no KanthorD support. KanthorD reads no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file.
 
 ### Launch
 

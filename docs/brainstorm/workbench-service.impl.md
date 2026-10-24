@@ -24,10 +24,11 @@ A mechanism here never overrides a rule there.
 ## Prompt
 
 - The workbench prompt is [assets/prompt/workbench.md](assets/prompt/workbench.md).
-- pi receives the system layer and the agent layer as its system prompt, and one user message per source of the working layer, as for a worker.
-- The working directory of the working layer is the workbench directory of the agent.
-- The workbench prompt is the shipped consumer prompt of the working layer.
-- The source of the workbench prompt is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
+- pi receives `base.md`, the Role of the agent, `workbench.md` and the Workbench framing as its system prompt, as plain text with no tag. The session pins no message.
+- `workbench.md` is part of the system prompt, not a pinned message.
+- The adapter keeps the system prompt pin across the compaction of pi.
+- The workbench directory of the agent is the working directory only. The session reads no file of it for the prompt.
+- The source of `workbench.md` is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
 
 ## Tools
 

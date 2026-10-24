@@ -421,9 +421,7 @@ This sibling declares the fields below.
 - `gateway.auth.token_lifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.auth.version`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotency_ttl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
-- `agent.prompt.system_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
-- `agent.prompt.host_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
-- `agent.prompt.agent_directory`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
+- `agent.prompt.agent_directory`, which [agent.impl.md](agent.impl.md#prompt-files) declares.
 - `agent.cooldown.rate_limited_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
 - `agent.cooldown.unavailable_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
 - `agent.cooldown.quota_exhausted_ms`, which [agent.impl.md](agent.impl.md#configuration) declares.
@@ -1228,7 +1226,7 @@ The rules of the credential sections follow.
 
 - The dashboard sidebar lists only a route that has a screen.
 - A planned screen joins the sidebar in the change that adds its route.
-- The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
+- The sidebar holds no `Settings` section, because no server-wide setting has a screen.
 - A project-scoped screen waits until the server holds one project or more: Scheduler and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
 - Overview, Scheduler and Traces read every project and offer a project filter.
 - On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
@@ -1332,7 +1330,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The Conversation tab shows the session entries of one agent session in order. A trace with two or more sessions shows a session selector, labeled with the agent name and the start of each session.
 - A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
 - A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
-- A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt` or `Layer <n>`. A system message of pi shows `System prompt update`. They expand to the prompt text and its sections.
+- A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt`. A system message of pi shows `System prompt update`. They expand to the prompt text and its sections.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
 - A model reply offers `Show in timeline`. It selects its turn span on the Timeline tab.

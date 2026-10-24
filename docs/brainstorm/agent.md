@@ -139,45 +139,25 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ## Prompt composer
 
-- The prompt of an agent session has three layers: the system layer, the agent layer and the working layer.
-- The component ships one base prompt, `base.md`, and one agent prompt for each agent of the catalog.
-- A shipped prompt is the default of its agent. The binary embeds it, and no command downloads it.
-- The system layer joins its sources in this order: the host agent file, the shipped `base.md`, the custom system prompt.
-- The host agent file is the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists.
-- A human edits the custom system prompt on the dashboard, and the database stores it.
-- Each source of the system layer holds one on or off switch. The system layer also holds one layer switch.
-- Each agent name holds a system layer override: `inherit`, `on` or `off`. `inherit` takes the layer switch of the server. `on` and `off` decide the system layer of that agent only.
-- When the system layer of an agent is off, the composer joins no source of the system layer for that agent. When it is on, the source switches decide which sources join.
-- The composer joins every source that is on. No source has a merge or override mode.
-- The agent layer joins its sources in this order: the agent file of the agent directory, the shipped agent prompt, the custom agent prompt.
-- The agent file of the agent directory is `<agent_name>.md`, for example `~/workdir/swe@1.md`.
-- A human edits the custom agent prompt on the dashboard, and the database stores it.
-- Each source of the agent layer holds one on or off switch. A switch change that turns off every source of the agent layer is refused.
-- The working layer joins its sources in this order: `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the working directory, the shipped consumer prompt, the custom working prompt.
-- Each source of the working layer holds one on or off switch. An evaluation reads no agent file of the workspace.
-- The layer switch and the source switches of the system layer belong to the server. The system layer override and the agent layer switches belong to the agent name.
-- The working layer switches belong to the repository binding for a Worker execution, and to the agent name for a workbench session.
-- The server composes the system layer and the agent layer for every consumer. The host that holds the working directory reads the agent files of the working layer.
-- The `Settings` section of the dashboard, at `/settings/prompts`, manages the system layer: its layer switch, its source switches and its custom system prompt. The agent page manages the system layer override, the agent layer and the workbench working layer of its agent.
-- The agent page shows the system layer override as a three-way control with the effective state, for example `Follows server: Off`. While the system layer of a scope is off, its source rows are dimmed and stay editable.
-- The custom source row holds an edit button. It opens a sheet with a Write tab and a markdown Preview tab, a byte counter against the 32768-byte limit and one save action. Save stays disabled while the text is unchanged or above the limit. An empty text removes the custom prompt.
-- A close of the editor with unsaved changes asks before it discards the draft. A revision conflict keeps the draft and offers to load the latest revision.
-- The Settings section edits the custom system prompt. The agent page edits the custom agent prompt and the custom working prompt of its agent.
-- Each source row holds its on or off switch. A switch is disabled, with a tooltip that states the reason, for the last source that is on in the agent layer and for a file source whose state is `absent`.
-- The agent page shows each prompt source as one row, collapsed by default. The title of a row is the path of its file, else the name of the source. A chevron points right when the row is collapsed and down when it is expanded. The expanded row renders the text as markdown in a scrollable panel.
-- Each row with text holds a button that copies the raw markdown. A row with no text is inactive: it holds no chevron and no copy button.
-- The agent page hides the inactive prompt sources by default. An inactive source has the state `absent` or `off`. A source with the state `invalid` stays visible, because it needs attention. The custom source stays visible, because its row holds the editor of its text.
-- One switch labelled `Show inactive sources` sits above the layer cards. It is off by default and applies to every layer card. The browser keeps it per viewer in `localStorage`.
-- A layer card that hides sources shows a footer button, for example `2 inactive sources hidden`, that turns the switch on. A layer card with every source hidden shows that button in place of the list.
-- A switch change on a visible row never hides that row before the next page load, so a row does not vanish under the pointer.
-- `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
-- When `kanthord.yaml` names a system file, the host agent file is that file, and the composer runs no discovery.
-- The database holds every switch and every custom text. The dashboard edits a switch or a custom text, and it edits no path.
-- A path change takes effect at the next server start. A switch change or a text change takes effect at the next agent session.
-- The work prompt is the task message of the consumer. It belongs to no layer, it holds no switch, and the composer pins it.
-- An operator override replaces or extends a shipped prompt on one server.
-- An override takes the position and the precedence of the prompt that it replaces or extends.
-- The composition record names the source and the digest of every prompt that an agent session runs with.
+- A human controls the prompt of an agent session through two prompts: the Agent prompt and the Binding prompt. The framing and the prompt templates are KanthorD protocol, not a prompt of a human.
+- The Agent prompt is a set of three files. `base.md` is the Standard that every agent reads. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
+- The component ships the text of each file. The binary embeds it, and no command downloads it.
+- A file of the same name in the agent directory replaces the shipped text of that file whole. The agent directory is a path of the server host.
+- An empty agent directory selects the shipped texts only.
+- The Binding prompt is the text of `prompts[<agent_name>]` in the configuration of a [repository binding](project-service.md#repository-configuration-and-policy). Each agent name of the catalog holds its own text. A blank text is an absent text.
+- The server composes the system prompt for every consumer. The order is `base.md`, `<agent_name>.md`, `workbench.md` for a Workbench session, one Binding prompt for each repository binding that holds a text, then the framing.
+- `swe@1` and `re@1` read the Binding prompt of every repository binding of the node at its pinned revision. `env@1` reads the Binding prompt of the binding of its environment run.
+- The precedence from the highest is the framing, the Binding prompt, `workbench.md`, the Role and the Standard. The messages follow the system prompt, and a later message governs an earlier one.
+- An instruction of one repository governs only the work on the files of that repository. It never governs the reply format that a message demands.
+- The Binding prompt of each agent is a separate text. A rule that relaxes the Standard goes into the Binding prompts of both `swe@1` and `re@1`.
+- KanthorD reads no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file of a repository or of a home directory. A native agent reads no instruction file in any form.
+- `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, and KanthorD does not support that load.
+- A file of the agent directory or of its `prompts` subdirectory that the loader rejects answers 409 `agent.prompt.template_invalid` at every reader. No reader replaces it with the shipped text.
+- The work prompt is the task message of the consumer. It belongs to neither prompt, and the composer pins it.
+- A change of an agent file takes effect at the next composition. A change of a Binding prompt is a change of the binding configuration, so it stores the next binding revision. A node keeps the text of its pinned binding revision until `mission node rebind`.
+- A change of the Binding prompt gives the binding a new binding ID. Environment onboarding treats it as a changed binding and clears the mark that the stored environment came from `env@1`.
+- The agent page shows each part of the system prompt as one read-only row, with its origin, its path and its digest. The binding sheet of a repository edits the Binding prompt of each agent. The dashboard has no screen that edits an Agent prompt file.
+- The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 
 ## Agent session
 

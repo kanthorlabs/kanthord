@@ -44,13 +44,13 @@ It describes no mechanism of another service.
 
 ## Prompt
 
-- The prompt of a workbench session composes the [system layer](agent.md#prompt-composer), the agent prompt of its agent, and its working layer.
-- The composition places the system layer first, then the agent prompt, then the working layer.
-- The working layer joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workbench directory, then the shipped workbench prompt, then the custom workbench prompt.
+- The system prompt of a workbench session composes the [Agent prompt](agent.md#prompt-composer) of its agent: `base.md`, the Role of the agent and `workbench.md`. The framing of the Workbench closes it.
+- A workbench session reads no Binding prompt, no instruction file of the workbench directory and no file of a home directory.
 - A workbench session takes no work prompt. Each human message is a message of the session.
-- The Workbench Service owns the workbench prompt. It states that a human reads every reply.
-- The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the system layer or the agent prompt.
-- The agent prompt holds the highest precedence, then the system layer, then the working layer.
+- The Workbench Service owns `workbench.md`. It states that a human reads every reply.
+- `workbench.md` adds the conduct for a human interlocutor, and it revokes no obligation of `base.md` or of the Role.
+- The precedence from the highest is the framing, `workbench.md`, the Role and the Standard. A later message governs an earlier one.
+- An invalid file of the agent directory refuses the session open with 409 `agent.prompt.template_invalid`. The open uses no shipped text in its place.
 
 ## Tools
 
