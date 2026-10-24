@@ -4,7 +4,7 @@
 
 ## Function description
 
-A binding connects a project to one resource under a project-local name. The binding set of a project is the complete map of its current bindings. The Project Service reads the set, replaces it as a whole, lists binding revisions, probes repository bindings, and reads the instruction files of a repository binding.
+A binding connects a project to one resource under a project-local name. The binding set of a project is the complete map of its current bindings. The Project Service reads the set, replaces it as a whole, lists binding revisions and probes repository bindings.
 
 A binding has one of three kinds. The kind and configuration give the resource identity of the binding:
 
@@ -26,7 +26,7 @@ Read one binding revision by its binding ID. The revision can be old, current or
 
 ### project binding export
 
-Read the current binding set in the input form of `project binding apply`. The output holds the current version and each current binding with its kind and configuration. Optional fields with defaults, such as `working_layer`, appear with their values.
+Read the current binding set in the input form of `project binding apply`. The output holds the current version and each current binding with its kind and configuration. Optional fields with defaults appear with their values.
 
 ### project binding apply
 
@@ -74,36 +74,33 @@ A failed probe reports `unhealthy` and is not an error. A probe that exceeds its
 
 Probe an unsaved repository configuration with the same three probes as `verify`. The service writes nothing. Before the probes, the service applies the action rules, checks the address form, and checks the credential platforms. A host outside the SSH host set, a host with no pin, or a legacy `ssh` credential does not refuse `check`. The `address` entry reports it with a `failure_reason`. Use `check` to test a repository binding before an apply.
 
-### project binding instruction-files
-
-Read the instruction files of a stored repository binding revision from its base branch. The revision must be a repository binding of the project that no later tombstone follows. The service keeps no clone and writes nothing:
-
-1. `git ls-remote` resolves the commit of the base branch.
-2. The service fetches that commit at depth 1 without blobs into a temporary directory.
-3. The service lists `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the repository root. It fetches the blobs of all regular files in one fetch.
-4. The service reads the files, then deletes the directory.
-
-The service applies the text validation of the working layer to each file. It keeps the answer in memory per binding revision and commit, so a new commit of the base branch gives a new answer. The read has a 30-second deadline. The route timeout is 36 seconds: the read deadline, the 5-second SSH agent cleanup and 1 second. A failed read logs `project.binding.instruction_files.read_failed` at the `warn` level.
-
-Before step 1, the service checks the address host, its pin and the SSH key as the apply does. A failure refuses the read with `400 project.bindings.repository.address_invalid`, `409 repository.host_key.unpinned` or `409 repository.credential.ssh_key_legacy`. No git process starts.
-
 ### Binding configuration
 
 The `config` object of each kind accepts only the fields below.
 
 **Repository**
 
-| Field                  | Type                            | Rule                                                                                                                                                                         |
-| ---------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `available`            | boolean                         | Required.                                                                                                                                                                    |
-| `platform`             | `github`, `gitlab`, `bitbucket` | Required.                                                                                                                                                                    |
-| `address`              | string                          | Required. Form `git@<host>:<owner>/<repository>.git` with no port; `<host>` is a member of the [SSH host set](../repository/host-key.md#function-description) of `platform`. |
-| `strategy.base_branch` | string                          | Required, nonblank.                                                                                                                                                          |
-| `strategy.action`      | object                          | Optional. `name` is `pull_request` or `merge_push`; `follows` is `{ "type": "assessment_passed" }`; `landing` is optional.                                                   |
-| `ssh_credential`       | string                          | Required. Name of a live `ssh` credential; see [SSH keys](../repository/ssh-key.md).                                                                                         |
-| `credential`           | string                          | Optional. Name of a live credential of platform `github`. Required for `pull_request`; refused on `gitlab` and `bitbucket`.                                                  |
-| `project_prompt`       | string                          | Optional. At most 32768 UTF-8 bytes.                                                                                                                                         |
-| `working_layer`        | object                          | Optional. Booleans `agents_md`, `agents_local_md`, `claude_md`, `claude_local_md`, `project_prompt`; each defaults to `true`.                                                |
+| Field                  | Type                            | Rule                                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `available`            | boolean                         | Required.                                                                                                                                                                                                             |
+| `platform`             | `github`, `gitlab`, `bitbucket` | Required.                                                                                                                                                                                                             |
+| `address`              | string                          | Required. Form `git@<host>:<owner>/<repository>.git` with no port; `<host>` is a member of the [SSH host set](../repository/host-key.md#function-description) of `platform`.                                          |
+| `strategy.base_branch` | string                          | Required, nonblank.                                                                                                                                                                                                   |
+| `strategy.action`      | object                          | Optional. `name` is `pull_request` or `merge_push`; `follows` is `{ "type": "assessment_passed" }`; `landing` is optional.                                                                                            |
+| `ssh_credential`       | string                          | Required. Name of a live `ssh` credential; see [SSH keys](../repository/ssh-key.md).                                                                                                                                  |
+| `credential`           | string                          | Optional. Name of a live credential of platform `github`. Required for `pull_request`; refused on `gitlab` and `bitbucket`.                                                                                           |
+| `prompts`              | object                          | Optional. One optional text for each agent name `swe@1`, `re@1` and `env@1`. A text holds at most 32768 UTF-8 bytes and no control character other than a tab and a newline. See [Binding prompts](#binding-prompts). |
+
+### Binding prompts
+
+The field `prompts` of a repository binding holds the Binding prompt. The key is the name of an agent of the catalog. A key outside `swe@1`, `re@1` and `env@1` fails with `400 gateway.request.validation_failed`. A text that exceeds 32768 UTF-8 bytes or holds a control character fails with `400 project.bindings.repository.prompt_invalid` and `details.agent_name` and `details.reason`. `reason` is `too_large` or `control_character`.
+
+The server joins the text of `prompts[<agent>]` into the system prompt of that agent as `Instructions of repository <name>:` and the text. A missing key, an empty text and a blank text add nothing. `swe@1` and `re@1` read the prompts of every repository binding of the node at its pinned revision. `env@1` reads the prompt of the binding of its environment run. The text ranks above the Agent prompt and below the framing. See [how the native agent reads its prompt](../../explanation/native-agent.md#the-prompt).
+
+- A change of `prompts` stores the next binding revision. A node keeps the text of the revision that it pins until `mission node rebind` moves the node to the current revision.
+- Environment onboarding treats the new binding ID as a changed binding and clears `environment_from_agent`, the mark that a stored environment came from a session of `env@1`.
+- The prompts of the agents are separate texts. `re@1` does not read the prompt of `swe@1`. Write a rule that relaxes the default standard into the prompts of both `swe@1` and `re@1`.
+- The execution setup contract no longer carries `project_prompt` and `working_layer`. Upgrade the server and every worker host together.
 
 The schema accepts `follows` type `action_end_state` with a `binding` name, but a refinement refuses it.
 
@@ -341,156 +338,104 @@ The `address` entry reports a refusal before the read or a failed read as `unhea
 
 The same values appear in `details.failure_reason` of `project.bindings.repository.ssh_unreachable`, and in the [resource healthcheck](../gateway/healthcheck.md) entry of the binding.
 
-### project binding instruction-files
-
-```json
-{
-  "commit": "3f2a9c1e5b7d4a8f0c6e2b9d1a7f3c5e8b0d4a6f",
-  "read_at": 1791467996322,
-  "files": [
-    {
-      "source": "agents_md",
-      "path": "AGENTS.md",
-      "state": "present",
-      "reason": null,
-      "text": "# AGENTS.md\n..."
-    },
-    {
-      "source": "agents_local_md",
-      "path": "AGENTS.local.md",
-      "state": "absent",
-      "reason": null,
-      "text": null
-    },
-    {
-      "source": "claude_md",
-      "path": "CLAUDE.md",
-      "state": "present",
-      "reason": null,
-      "text": "# CLAUDE.md\n..."
-    },
-    {
-      "source": "claude_local_md",
-      "path": "CLAUDE.local.md",
-      "state": "absent",
-      "reason": null,
-      "text": null
-    }
-  ]
-}
-```
-
-| Property         | Type           | Purpose                                                                                                      |
-| ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------ |
-| `commit`         | string         | Commit of the base branch that the service read.                                                             |
-| `read_at`        | integer        | Time of the read in Unix milliseconds.                                                                       |
-| `files`          | array          | One entry per instruction file, in the order `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md`. |
-| `files[].source` | string         | The `working_layer` switch of the file.                                                                      |
-| `files[].path`   | string         | File name at the repository root.                                                                            |
-| `files[].state`  | string         | `present`, `absent` or `invalid`.                                                                            |
-| `files[].reason` | string or null | Working-layer reason of an `invalid` file, for example `too_large`.                                          |
-| `files[].text`   | string or null | Text of a `present` file.                                                                                    |
-
 ### Failures
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                                         | Commands                                                                | Meaning                                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `401 gateway.authentication.unauthorized`                  | All                                                                     | Absent, invalid, expired or banned token, or a machine token.                                                                                                                                                                                                                                                |
-| `400 gateway.request.validation_failed`                    | All                                                                     | A parameter, query value or body field fails the schema or a schema refinement.                                                                                                                                                                                                                              |
-| `400 system.pagination.cursor_invalid`                     | `list`, `revision list`                                                 | The cursor does not decode to a valid position.                                                                                                                                                                                                                                                              |
-| `404 project.project.not_found`                            | `list`, `export`, `apply`, `verify`, `instruction-files`, `check`       | No project has this ID.                                                                                                                                                                                                                                                                                      |
-| `404 project.binding.not_found`                            | `get`, `revision list`, `verify`, `instruction-files`                   | No revision with this ID belongs to the project. For `get` and `revision list`, also an unknown project. For `verify` and `instruction-files`, also a removed or non-repository binding.                                                                                                                     |
-| `409 project.binding_set.version_conflict`                 | `apply`                                                                 | The submitted version is not current. `details.binding_set_version` holds the current version.                                                                                                                                                                                                               |
-| `400 project.bindings.duplicate_resource`                  | `apply`                                                                 | Two submitted bindings have the same resource identity.                                                                                                                                                                                                                                                      |
-| `409 project.bindings.worker.resource_changed`             | `apply`                                                                 | A submitted worker binding changes its `worker` value.                                                                                                                                                                                                                                                       |
-| `400 project.bindings.worker.placement_required`           | `apply`                                                                 | A worker binding that declares an agent states no `placement`. `details` holds `binding`.                                                                                                                                                                                                                    |
-| `409 project.bindings.worker.placement_changed`            | `apply`                                                                 | A submitted worker binding changes its `placement`.                                                                                                                                                                                                                                                          |
-| `409 project.bindings.worker.placement_unavailable`        | `apply`                                                                 | An added `container` binding meets a server that cannot run containers. `details` holds `binding`, `placement` and `reason`, one of `server_in_container`, `runtime_absent` or `runtime_rootful`.                                                                                                            |
-| `400 project.bindings.worker.instance_count_range`         | `apply`                                                                 | A binding outside the `worker` placement has no `instance_count`, or a value outside `0` to `64`.                                                                                                                                                                                                            |
-| `400 project.bindings.worker.field_forbidden`              | `apply`                                                                 | `entries`, `resource_budget`, `placement` or `worker_instances` is set for a worker that declares no agent. Also `worker_instances` outside the `worker` placement, or `instance_count` at it. `details` holds `binding` and `field`.                                                                        |
-| `400 project.bindings.worker.instances_required`           | `apply`                                                                 | A binding at the `worker` placement has no `worker_instances`. `details` holds `binding`.                                                                                                                                                                                                                    |
-| `400 project.bindings.worker.instances_invalid`            | `apply`                                                                 | `worker_instances` is no list, holds more than 64 items, repeats a name or holds a nontext item. `details` holds `binding` and `instance`; `instance` is `null` for a nonlist value, a list above 64 items or a nontext item.                                                                                |
-| `400 project.bindings.worker.instance_unknown`             | `apply`                                                                 | `worker_instances` names no live worker instance. `details` holds `binding` and `instance`.                                                                                                                                                                                                                  |
-| `400 project.bindings.worker.instance_worker_mismatch`     | `apply`                                                                 | `worker_instances` names an instance of another worker. `details` holds `binding`, `instance` and `worker`, the worker of the instance.                                                                                                                                                                      |
-| `400 project.bindings.worker.agent_unknown`                | `apply`                                                                 | An entry names an agent that the worker does not declare.                                                                                                                                                                                                                                                    |
-| `400 project.bindings.worker.tags_invalid`                 | `apply`                                                                 | A worker `tags` value is no list, repeats a tag or holds a malformed tag. `details` holds `binding` and `tag`; `tag` is `null` for a nonlist value or a nontext item.                                                                                                                                        |
-| `409 project.bindings.worker.node_unmatched`               | `apply`                                                                 | The apply adds a pair of a node and a claimable state that no current worker binding covers. `details.node_ids` names the nodes.                                                                                                                                                                             |
-| `400 agent.configuration.invalid`                          | `apply`                                                                 | The `worker` value names no declared worker.                                                                                                                                                                                                                                                                 |
-| `400 agent.configuration.credential_holder_mismatch`       | `apply`                                                                 | A holder of the worker binding holds no live copy of a chain credential sealed to its current key. The holders are `server`, or the instances of a `worker` placement. `details` holds `{ agent, agent_provider, credential, holder }`. See [`holder_mismatch`](../worker/instance.md#worker-instance-list). |
-| `400 agent.configuration.fallback_duplicate`               | `apply`                                                                 | A `fallback_configurations` list of an entry repeats an agent provider and model, or repeats those of the head of the entry.                                                                                                                                                                                 |
-| `agent.configuration.*`, `agent.enablement.*`              | `apply`                                                                 | The Agent Service refuses the effective configuration of an agent, for example a disabled agent.                                                                                                                                                                                                             |
-| `400 project.bindings.repository.address_invalid`          | `apply`, `check`, `instruction-files`                                   | The address does not match the form. For `apply` and `instruction-files`, also an address host outside the SSH host set of the platform; `check` reports that case as `failure_reason` `address_invalid`.                                                                                                    |
-| `409 repository.host_key.unpinned`                         | `apply`, `instruction-files`                                            | The address host of a new or changed binding (`apply`), or of the binding (`instruction-files`), holds no pin. `details.host` holds the host. No git process starts.                                                                                                                                         |
-| `409 repository.credential.ssh_key_legacy`                 | `apply`, `instruction-files`                                            | The newest live revision of the `ssh_credential` holds no generated key. `details.credential` holds the name. Rotate the key with [`ssh-key-rotate`](../repository/ssh-key.md#ssh-key-rotate).                                                                                                               |
-| `400 project.bindings.repository.action_unsupported`       | `apply`, `check`                                                        | A `gitlab` or `bitbucket` binding sets `credential` or the `pull_request` action.                                                                                                                                                                                                                            |
-| `400 project.bindings.repository.credential_required`      | `apply`, `check`                                                        | The `pull_request` action has no `credential`.                                                                                                                                                                                                                                                               |
-| `400 project.bindings.repository.project_prompt_too_large` | `apply`                                                                 | `project_prompt` exceeds 32768 UTF-8 bytes.                                                                                                                                                                                                                                                                  |
-| `422 project.bindings.repository.ssh_unreachable`          | `apply`, `instruction-files`                                            | `git ls-remote` of a new or changed binding, or the read of the instruction files, fails (`apply`), or fails or exceeds its deadline (`instruction-files`). `details.failure_reason` names the cause, for example `key_refused` or `identity_unavailable`.                                                   |
-| `422 project.bindings.repository.base_branch_absent`       | `instruction-files`                                                     | The repository has no base branch of the binding.                                                                                                                                                                                                                                                            |
-| `404 credential.credential.not_found`                      | `apply`, `verify`, `check`                                              | A named credential has no live revision, or the probe cannot use it.                                                                                                                                                                                                                                         |
-| `400 credential.platform.mismatch`                         | `apply`, `check`                                                        | A named credential has a different platform.                                                                                                                                                                                                                                                                 |
-| `409 credential.credential.archived`                       | `verify`, `check`                                                       | A named credential is archived.                                                                                                                                                                                                                                                                              |
-| `400 credential.check.unsupported`                         | `verify`, `check`                                                       | The credential platform has no check.                                                                                                                                                                                                                                                                        |
-| `400 gateway.idempotency.invalid_key`                      | `apply`                                                                 | Absent or malformed `Idempotency-Key`.                                                                                                                                                                                                                                                                       |
-| `409 gateway.idempotency.conflict`                         | `apply`                                                                 | The key is in use for a different request, or the first request with the key is in progress.                                                                                                                                                                                                                 |
-| `413 gateway.request.body_too_large`                       | `apply`, `check`                                                        | The body exceeds 10 MiB.                                                                                                                                                                                                                                                                                     |
-| `415 gateway.request.unsupported_media_type`               | `apply`, `check`                                                        | The request body is not `application/json`.                                                                                                                                                                                                                                                                  |
-| `400 gateway.request.unexpected_body`                      | `list`, `get`, `export`, `revision list`, `verify`, `instruction-files` | The request has a body.                                                                                                                                                                                                                                                                                      |
-| `504 gateway.invocation.timeout`                           | All                                                                     | The operation exceeded 30 seconds. An apply can still complete.                                                                                                                                                                                                                                              |
+| HTTP status / code                                     | Commands                                           | Meaning                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `401 gateway.authentication.unauthorized`              | All                                                | Absent, invalid, expired or banned token, or a machine token.                                                                                                                                                                                                                                                |
+| `400 gateway.request.validation_failed`                | All                                                | A parameter, query value or body field fails the schema or a schema refinement.                                                                                                                                                                                                                              |
+| `400 system.pagination.cursor_invalid`                 | `list`, `revision list`                            | The cursor does not decode to a valid position.                                                                                                                                                                                                                                                              |
+| `404 project.project.not_found`                        | `list`, `export`, `apply`, `verify`, `check`       | No project has this ID.                                                                                                                                                                                                                                                                                      |
+| `404 project.binding.not_found`                        | `get`, `revision list`, `verify`                   | No revision with this ID belongs to the project. For `get` and `revision list`, also an unknown project. For `verify`, also a removed or non-repository binding.                                                                                                                                             |
+| `409 project.binding_set.version_conflict`             | `apply`                                            | The submitted version is not current. `details.binding_set_version` holds the current version.                                                                                                                                                                                                               |
+| `400 project.bindings.duplicate_resource`              | `apply`                                            | Two submitted bindings have the same resource identity.                                                                                                                                                                                                                                                      |
+| `409 project.bindings.worker.resource_changed`         | `apply`                                            | A submitted worker binding changes its `worker` value.                                                                                                                                                                                                                                                       |
+| `400 project.bindings.worker.placement_required`       | `apply`                                            | A worker binding that declares an agent states no `placement`. `details` holds `binding`.                                                                                                                                                                                                                    |
+| `409 project.bindings.worker.placement_changed`        | `apply`                                            | A submitted worker binding changes its `placement`.                                                                                                                                                                                                                                                          |
+| `409 project.bindings.worker.placement_unavailable`    | `apply`                                            | An added `container` binding meets a server that cannot run containers. `details` holds `binding`, `placement` and `reason`, one of `server_in_container`, `runtime_absent` or `runtime_rootful`.                                                                                                            |
+| `400 project.bindings.worker.instance_count_range`     | `apply`                                            | A binding outside the `worker` placement has no `instance_count`, or a value outside `0` to `64`.                                                                                                                                                                                                            |
+| `400 project.bindings.worker.field_forbidden`          | `apply`                                            | `entries`, `resource_budget`, `placement` or `worker_instances` is set for a worker that declares no agent. Also `worker_instances` outside the `worker` placement, or `instance_count` at it. `details` holds `binding` and `field`.                                                                        |
+| `400 project.bindings.worker.instances_required`       | `apply`                                            | A binding at the `worker` placement has no `worker_instances`. `details` holds `binding`.                                                                                                                                                                                                                    |
+| `400 project.bindings.worker.instances_invalid`        | `apply`                                            | `worker_instances` is no list, holds more than 64 items, repeats a name or holds a nontext item. `details` holds `binding` and `instance`; `instance` is `null` for a nonlist value, a list above 64 items or a nontext item.                                                                                |
+| `400 project.bindings.worker.instance_unknown`         | `apply`                                            | `worker_instances` names no live worker instance. `details` holds `binding` and `instance`.                                                                                                                                                                                                                  |
+| `400 project.bindings.worker.instance_worker_mismatch` | `apply`                                            | `worker_instances` names an instance of another worker. `details` holds `binding`, `instance` and `worker`, the worker of the instance.                                                                                                                                                                      |
+| `400 project.bindings.worker.agent_unknown`            | `apply`                                            | An entry names an agent that the worker does not declare.                                                                                                                                                                                                                                                    |
+| `400 project.bindings.worker.tags_invalid`             | `apply`                                            | A worker `tags` value is no list, repeats a tag or holds a malformed tag. `details` holds `binding` and `tag`; `tag` is `null` for a nonlist value or a nontext item.                                                                                                                                        |
+| `409 project.bindings.worker.node_unmatched`           | `apply`                                            | The apply adds a pair of a node and a claimable state that no current worker binding covers. `details.node_ids` names the nodes.                                                                                                                                                                             |
+| `400 agent.configuration.invalid`                      | `apply`                                            | The `worker` value names no declared worker.                                                                                                                                                                                                                                                                 |
+| `400 agent.configuration.credential_holder_mismatch`   | `apply`                                            | A holder of the worker binding holds no live copy of a chain credential sealed to its current key. The holders are `server`, or the instances of a `worker` placement. `details` holds `{ agent, agent_provider, credential, holder }`. See [`holder_mismatch`](../worker/instance.md#worker-instance-list). |
+| `400 agent.configuration.fallback_duplicate`           | `apply`                                            | A `fallback_configurations` list of an entry repeats an agent provider and model, or repeats those of the head of the entry.                                                                                                                                                                                 |
+| `agent.configuration.*`, `agent.enablement.*`          | `apply`                                            | The Agent Service refuses the effective configuration of an agent, for example a disabled agent.                                                                                                                                                                                                             |
+| `400 project.bindings.repository.address_invalid`      | `apply`, `check`                                   | The address does not match the form. For `apply`, also an address host outside the SSH host set of the platform; `check` reports that case as `failure_reason` `address_invalid`.                                                                                                                            |
+| `409 repository.host_key.unpinned`                     | `apply`                                            | The address host of a new or changed binding holds no pin. `details.host` holds the host. No git process starts.                                                                                                                                                                                             |
+| `409 repository.credential.ssh_key_legacy`             | `apply`                                            | The newest live revision of the `ssh_credential` holds no generated key. `details.credential` holds the name. Rotate the key with [`ssh-key-rotate`](../repository/ssh-key.md#ssh-key-rotate).                                                                                                               |
+| `400 project.bindings.repository.action_unsupported`   | `apply`, `check`                                   | A `gitlab` or `bitbucket` binding sets `credential` or the `pull_request` action.                                                                                                                                                                                                                            |
+| `400 project.bindings.repository.credential_required`  | `apply`, `check`                                   | The `pull_request` action has no `credential`.                                                                                                                                                                                                                                                               |
+| `400 project.bindings.repository.prompt_invalid`       | `apply`                                            | A text of `prompts` exceeds 32768 UTF-8 bytes or holds a control character. `details` holds `agent_name` and `reason`.                                                                                                                                                                                       |
+| `422 project.bindings.repository.ssh_unreachable`      | `apply`                                            | `git ls-remote` of a new or changed binding fails. `details.failure_reason` names the cause, for example `key_refused` or `identity_unavailable`.                                                                                                                                                            |
+| `404 credential.credential.not_found`                  | `apply`, `verify`, `check`                         | A named credential has no live revision, or the probe cannot use it.                                                                                                                                                                                                                                         |
+| `400 credential.platform.mismatch`                     | `apply`, `check`                                   | A named credential has a different platform.                                                                                                                                                                                                                                                                 |
+| `409 credential.credential.archived`                   | `verify`, `check`                                  | A named credential is archived.                                                                                                                                                                                                                                                                              |
+| `400 credential.check.unsupported`                     | `verify`, `check`                                  | The credential platform has no check.                                                                                                                                                                                                                                                                        |
+| `400 gateway.idempotency.invalid_key`                  | `apply`                                            | Absent or malformed `Idempotency-Key`.                                                                                                                                                                                                                                                                       |
+| `409 gateway.idempotency.conflict`                     | `apply`                                            | The key is in use for a different request, or the first request with the key is in progress.                                                                                                                                                                                                                 |
+| `413 gateway.request.body_too_large`                   | `apply`, `check`                                   | The body exceeds 10 MiB.                                                                                                                                                                                                                                                                                     |
+| `415 gateway.request.unsupported_media_type`           | `apply`, `check`                                   | The request body is not `application/json`.                                                                                                                                                                                                                                                                  |
+| `400 gateway.request.unexpected_body`                  | `list`, `get`, `export`, `revision list`, `verify` | The request has a body.                                                                                                                                                                                                                                                                                      |
+| `504 gateway.invocation.timeout`                       | All                                                | The operation exceeded 30 seconds. An apply can still complete.                                                                                                                                                                                                                                              |
 
 Within the replay TTL, a repeated apply key with the same request and caller returns the recorded response, success or failure.
 
 The CLI checks its input before it sends a request. Each local failure exits `1` and writes `<code>: <message>` to stderr.
 
-| Code                                               | Commands                                              | Meaning                                                                                |
-| -------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `cli.project.binding.<command>.invalid_project_id` | All                                                   | The project argument is not a valid project ID.                                        |
-| `cli.project.binding.<command>.invalid_binding_id` | `get`, `verify`, `instruction-files`, `revision list` | The binding argument is not a valid binding ID.                                        |
-| `cli.project.binding.list.invalid_kind`            | `list`                                                | A `--kind` value is not a binding kind.                                                |
-| `cli.project.binding.list.invalid_state`           | `list`                                                | `--state` is not `current`, `removed` or `all`.                                        |
-| `cli.pagination.limit_invalid`                     | `list`, `revision list`                               | `--limit` is not a positive decimal integer.                                           |
-| `cli.pagination.limit_out_of_range`                | `list`, `revision list`                               | `--limit` is more than `1000`.                                                         |
-| `cli.idempotency_key.invalid`                      | `apply`                                               | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                          |
-| `cli.file.invalid_path`                            | `apply`, `check`                                      | `--file` is `-`. The CLI does not read stdin.                                          |
-| `cli.file.not_found`                               | `apply`, `check`                                      | The file does not exist.                                                               |
-| `cli.file.not_regular`                             | `apply`, `check`                                      | The path is not a regular file.                                                        |
-| `cli.file.encoding_invalid`                        | `apply`, `check`                                      | The file is not valid UTF-8.                                                           |
-| `cli.file.not_json`                                | `apply`, `check`                                      | The file is not a JSON document.                                                       |
-| `cli.file.duplicate_key`                           | `apply`, `check`                                      | A JSON object in the file repeats a key.                                               |
-| `cli.file.not_object`                              | `apply`, `check`                                      | The JSON document is not an object.                                                    |
-| `cli.file.schema_invalid`                          | `apply`, `check`                                      | The object fails the request schema. The `details` row lists each issue path and code. |
-| `cli.option.duplicate`                             | All                                                   | A single-value option occurs more than once.                                           |
-| `cli.project.binding.<command>.token_required`     | All                                                   | No nonblank token resolves.                                                            |
+| Code                                               | Commands                         | Meaning                                                                                |
+| -------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
+| `cli.project.binding.<command>.invalid_project_id` | All                              | The project argument is not a valid project ID.                                        |
+| `cli.project.binding.<command>.invalid_binding_id` | `get`, `verify`, `revision list` | The binding argument is not a valid binding ID.                                        |
+| `cli.project.binding.list.invalid_kind`            | `list`                           | A `--kind` value is not a binding kind.                                                |
+| `cli.project.binding.list.invalid_state`           | `list`                           | `--state` is not `current`, `removed` or `all`.                                        |
+| `cli.pagination.limit_invalid`                     | `list`, `revision list`          | `--limit` is not a positive decimal integer.                                           |
+| `cli.pagination.limit_out_of_range`                | `list`, `revision list`          | `--limit` is more than `1000`.                                                         |
+| `cli.idempotency_key.invalid`                      | `apply`                          | `--idempotency-key` is not an `idempotency_key_<ulid>` value.                          |
+| `cli.file.invalid_path`                            | `apply`, `check`                 | `--file` is `-`. The CLI does not read stdin.                                          |
+| `cli.file.not_found`                               | `apply`, `check`                 | The file does not exist.                                                               |
+| `cli.file.not_regular`                             | `apply`, `check`                 | The path is not a regular file.                                                        |
+| `cli.file.encoding_invalid`                        | `apply`, `check`                 | The file is not valid UTF-8.                                                           |
+| `cli.file.not_json`                                | `apply`, `check`                 | The file is not a JSON document.                                                       |
+| `cli.file.duplicate_key`                           | `apply`, `check`                 | A JSON object in the file repeats a key.                                               |
+| `cli.file.not_object`                              | `apply`, `check`                 | The JSON document is not an object.                                                    |
+| `cli.file.schema_invalid`                          | `apply`, `check`                 | The object fails the request schema. The `details` row lists each issue path and code. |
+| `cli.option.duplicate`                             | All                              | A single-value option occurs more than once.                                           |
+| `cli.project.binding.<command>.token_required`     | All                              | No nonblank token resolves.                                                            |
 
-For `revision list`, `<command>` is `revision.list`, for example `cli.project.binding.revision.list.token_required`. For `instruction-files`, `<command>` is `instruction_files`.
+For `revision list`, `<command>` is `revision.list`, for example `cli.project.binding.revision.list.token_required`.
 
 A declared server failure exits `1`. The CLI writes `<code>: request failed` and the row `status`. For `apply`, it also writes the row `idempotency_key`. A transport failure, a timeout or a malformed response exits `1` with `cli.project.binding.<command>.indeterminate`. For `apply`, the message is `the result is unknown; retry with the same idempotency key`, and the row `idempotency_key` holds the key. For a read, the message is `the result is unknown; retry the command`. There is no automatic retry.
 
 ## API shape
 
-| Command             | Method and path                                                      | Operation ID                            | Mutation | Timeout    |
-| ------------------- | -------------------------------------------------------------------- | --------------------------------------- | -------- | ---------- |
-| `list`              | `GET /api/project/:project_id/binding`                               | `project.binding.list`                  | No       | 30 seconds |
-| `get`               | `GET /api/project/:project_id/binding/:binding_id`                   | `project.binding.get`                   | No       | 30 seconds |
-| `export`            | `GET /api/project/:project_id/binding-set`                           | `project.bindingSet.get`                | No       | 30 seconds |
-| `apply`             | `PUT /api/project/:project_id/binding-set`                           | `project.bindingSet.write`              | Yes      | 30 seconds |
-| `revision list`     | `GET /api/project/:project_id/binding/:binding_id/revision`          | `project.bindingRevision.list`          | No       | 30 seconds |
-| `verify`            | `POST /api/project/:project_id/binding/:binding_id/verify`           | `project.binding.verify`                | No       | 30 seconds |
-| `instruction-files` | `GET /api/project/:project_id/binding/:binding_id/instruction_files` | `project.binding.instruction_files.get` | No       | 36 seconds |
-| `check`             | `POST /api/project/:project_id/binding/check`                        | `project.binding.check`                 | No       | 30 seconds |
+| Command         | Method and path                                             | Operation ID                   | Mutation | Timeout    |
+| --------------- | ----------------------------------------------------------- | ------------------------------ | -------- | ---------- |
+| `list`          | `GET /api/project/:project_id/binding`                      | `project.binding.list`         | No       | 30 seconds |
+| `get`           | `GET /api/project/:project_id/binding/:binding_id`          | `project.binding.get`          | No       | 30 seconds |
+| `export`        | `GET /api/project/:project_id/binding-set`                  | `project.bindingSet.get`       | No       | 30 seconds |
+| `apply`         | `PUT /api/project/:project_id/binding-set`                  | `project.bindingSet.write`     | Yes      | 30 seconds |
+| `revision list` | `GET /api/project/:project_id/binding/:binding_id/revision` | `project.bindingRevision.list` | No       | 30 seconds |
+| `verify`        | `POST /api/project/:project_id/binding/:binding_id/verify`  | `project.binding.verify`       | No       | 30 seconds |
+| `check`         | `POST /api/project/:project_id/binding/check`               | `project.binding.check`        | No       | 30 seconds |
 
 Every operation has `human` access: it requires a human bearer JWT.
 
-| Parameter    | In    | Operations                                            | Default   | Rule                                                           |
-| ------------ | ----- | ----------------------------------------------------- | --------- | -------------------------------------------------------------- |
-| `project_id` | path  | All                                                   | None      | Project ID.                                                    |
-| `binding_id` | path  | `get`, `revision list`, `verify`, `instruction-files` | None      | Binding ID of any revision of the project.                     |
-| `kind`       | query | `list`                                                | All kinds | `repository`, `worker` or `storage`. Repeat it for more kinds. |
-| `state`      | query | `list`                                                | `current` | `current`, `removed` or `all`.                                 |
-| `limit`      | query | `list`, `revision list`                               | `100`     | Integer from `1` to `1000`.                                    |
-| `cursor`     | query | `list`, `revision list`                               | None      | Nonempty `next_cursor` value.                                  |
+| Parameter    | In    | Operations                       | Default   | Rule                                                           |
+| ------------ | ----- | -------------------------------- | --------- | -------------------------------------------------------------- |
+| `project_id` | path  | All                              | None      | Project ID.                                                    |
+| `binding_id` | path  | `get`, `revision list`, `verify` | None      | Binding ID of any revision of the project.                     |
+| `kind`       | query | `list`                           | All kinds | `repository`, `worker` or `storage`. Repeat it for more kinds. |
+| `state`      | query | `list`                           | `current` | `current`, `removed` or `all`.                                 |
+| `limit`      | query | `list`, `revision list`          | `100`     | Integer from `1` to `1000`.                                    |
+| `cursor`     | query | `list`, `revision list`          | None      | Nonempty `next_cursor` value.                                  |
 
 | Operation | Request body                                                                                           |
 | --------- | ------------------------------------------------------------------------------------------------------ |
@@ -520,9 +465,6 @@ curl -i -X PUT http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2
   --data-binary @bindings.json
 
 curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/binding_01JD3WA2K5V6X7Y8Z9A0B1C2D5/verify \
-  -H 'Authorization: Bearer <human-jwt>'
-
-curl -i http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/binding_01JD3WA2K5V6X7Y8Z9A0B1C2D5/instruction_files \
   -H 'Authorization: Bearer <human-jwt>'
 
 curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/check \
@@ -608,7 +550,6 @@ kanthord project binding export <project-id> [--token <jwt>] [--endpoint <url>]
 kanthord project binding apply <project-id> --file <path> [--idempotency-key <key>] [--token <jwt>] [--endpoint <url>]
 kanthord project binding revision list <project-id> <binding-id> [--limit <count>] [--cursor <cursor>] [--token <jwt>] [--endpoint <url>]
 kanthord project binding verify <project-id> <binding-id> [--token <jwt>] [--endpoint <url>]
-kanthord project binding instruction-files <project-id> <binding-id> [--token <jwt>] [--endpoint <url>]
 kanthord project binding check <project-id> --file <path> [--token <jwt>] [--endpoint <url>]
 ```
 
@@ -618,7 +559,6 @@ kanthord project binding export project_01JD3W8QF4Q7J8M9N0P1R2S3T4 > bindings.js
 kanthord project binding apply project_01JD3W8QF4Q7J8M9N0P1R2S3T4 --file bindings.json
 kanthord project binding revision list project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D3
 kanthord project binding verify project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D5
-kanthord project binding instruction-files project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D5
 kanthord project binding check project_01JD3W8QF4Q7J8M9N0P1R2S3T4 --file repository.json
 ```
 

@@ -14,12 +14,12 @@ An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs
 
 The schema has four functional views. Their order is the order of delivery.
 
-| View                                             | Scope                                                                                                                      | Tables of the owners                                            |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, worker instances, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Repository, Worker, Project, Agent, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md)              | Registrations, executions, attempts, evidence and its assets, assessments, outcomes and proposals.                         | Worker, Scheduler, Mission                                      |
-| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                                            | Intake                                                          |
-| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records, telemetry texts and session entries.                                                               | Tracking                                                        |
+| View                                             | Scope                                                                                                     | Tables of the owners                                            |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [ERD 1: Environment and planning](01-setup.md)   | Projects, credentials, worker instances, bindings, agent enablement, the mission plan and the work queue. | Custody, Repository, Worker, Project, Agent, Mission, Scheduler |
+| [ERD 2: Execution](02-execution.md)              | Registrations, executions, attempts, evidence and its assets, assessments, outcomes and proposals.        | Worker, Scheduler, Mission                                      |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests.                                                           | Intake                                                          |
+| [ERD 4: Telemetry](04-tracking.md)               | Traces, spans, records, telemetry texts and session entries.                                              | Tracking                                                        |
 
 A view holds the canonical definition of each of its tables.
 Another view shows that table as a stub: its key only, the color of its owner and a dashed border.
@@ -36,7 +36,7 @@ flowchart TB
             c1["Custody: credential"]
             r1["Repository: host key"]
             p1["Project: project, binding, binding revision"]
-            a1["Agent: agent enablement, prompt settings"]
+            a1["Agent: agent enablement"]
             w1["Worker: instance"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job, queue place"]

@@ -11,7 +11,7 @@ Print the effective YAML configuration with sensitive fields masked. The command
 Success writes YAML to stdout and exits `0`. A configuration created with defaults is displayed as:
 
 ```yaml
-version: 2
+version: 3
 master_key: "[Sensitive]"
 log:
   level: info

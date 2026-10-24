@@ -6,11 +6,15 @@
 
 Read the catalog declaration of one agent, its composed prompt, its permitted tools, its global enablement and the fallback chain of that enablement. The API and `kanthord agent get` perform the same read and change no state.
 
-The catalog holds the agents `swe@1` and `re@1`. An agent name outside the catalog fails. The answer contains `enablement: null` when the agent has no live [enablement](enablement.md).
+The catalog holds the agents `swe@1`, `re@1` and `env@1`. An agent name outside the catalog fails. The answer contains `enablement: null` when the agent has no live [enablement](enablement.md).
 
-The server composes the prompt at read time from three layers: the system layer, the agent layer and the working layer. Without a binding, the working layer is the workbench layer of the agent. It reads `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` from the workbench directory of the agent. With a project and a repository binding, the working layer is the layer of that binding. Its workspace files have the state `deferred`, because only the worker application reads a workspace.
+The server composes the prompt at read time from the Agent prompt and the Binding prompt. The Agent prompt holds the files `base.md`, `<agent_name>.md` and, for a Workbench agent, `workbench.md`. The Binding prompt holds the text of `prompts[<agent_name>]` of each repository binding. The framing is KanthorD protocol and no part of either prompt.
 
-The [prompt settings](prompt.md) control the switches and the custom text of each layer. The server configuration `agent.prompt.system_file`, `agent.prompt.agent_directory` and `agent.prompt.host_file` control the file sources. A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped prompt template of that name, for example `prompts/layer-message.md` or `prompts/framing-workbench.md`.
+A file of the same name in the directory `agent.prompt.agent_directory` of the server host replaces the shipped text. The default directory is `<data>/agents`. An empty value selects the shipped texts only. A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped prompt template of that name, for example `prompts/framing-worker.md`.
+
+An override file or a template file that is not a regular UTF-8 file, exceeds 32768 bytes or holds a control character other than a tab and a newline answers `409 agent.prompt.template_invalid` with `details.file`. No reader falls back to the shipped text. The execution setup, the Workbench session open and the `env@1` run refuse in the same way.
+
+Without a binding, a Workbench agent answers the Workbench system prompt, and `env@1` answers the worker system prompt. With a project and a repository binding, `final` is the worker system prompt with the binding prompt of that binding. KanthorD reads no `AGENTS.md`, `CLAUDE.md` or `*.local.md` file of a repository or of a home directory.
 
 ## Expected response
 
@@ -51,21 +55,14 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
     "reasoning_effort"
   ],
   "prompt": {
-    "layers": [
+    "parts": [
       {
-        "layer": "system",
-        "enabled": true,
-        "sources": [
-          {
-            "source": "base",
-            "origin": "binary",
-            "path": null,
-            "enabled": true,
-            "state": "present",
-            "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
-            "text": "This text is the default standard. ..."
-          }
-        ]
+        "part": "standard",
+        "name": "base.md",
+        "origin": "binary",
+        "path": "/home/kanthord/.local/share/kanthord/agents/base.md",
+        "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
+        "text": "This text is the default standard. ..."
       }
     ],
     "final": "This text is the default standard. ..."
@@ -83,8 +80,8 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
 | `agent_name`           | string          | Catalog key of the agent.                                                                                                                                                                |
 | `configuration_schema` | object          | JSON Schema draft 2020-12 of the effective configuration. JSON Schema does not check that the model belongs to the provider or that the model supports the reasoning effort.             |
 | `overridable_fields`   | string array    | Fields that a binding entry can override. For `swe@1` and `re@1` the value is `agent_provider`, `model_identifier`, `reasoning_effort` and `fallback_configurations`.                    |
-| `prompt.layers`        | array           | The system, agent and working layers, in composition order. Absent with `view=final`.                                                                                                    |
-| `prompt.final`         | string          | The composed prompt: the `present` texts of the system and agent layers, a framing paragraph, then each `present` working text as `Instructions of <source label>:`.                     |
+| `prompt.parts`         | array           | The parts of the system prompt in reading order. Absent with `view=final`. See the part table below.                                                                                     |
+| `prompt.final`         | string          | The composed system prompt: every part, then the framing. A `binding` part reads `Instructions of repository <name>:` and its text.                                                      |
 | `tools`                | array           | Permitted tools. Each item holds `name`, `source` (`host`, `builtin` or `kanthord-mcp`) and `input_schema`.                                                                              |
 | `enablement`           | object or null  | The live [enablement record](enablement.md#expected-response), or `null` when no live record exists.                                                                                     |
 | `chain`                | array           | The fallback chain of the enablement: the default configuration, then its `fallback_configurations`. `[]` when the enablement is absent, disabled or invalid. See the chain table below. |
@@ -106,17 +103,18 @@ Each `chain` item holds these fields:
 
 A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats an expired hold as free.
 
-Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `sources`. A disabled layer resolves every source as `off`. Each source holds these fields:
+`prompt.parts` holds `standard` (`base.md`), `role` (`<agent_name>.md`), `workbench` (`workbench.md`, only in the Workbench system prompt) and one `binding` part for each repository binding with a nonblank prompt of the agent. Each part holds these fields:
 
-| Property  | Type           | Purpose                                                                                                                                                                 |
-| --------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`  | string         | Source name, for example `host_file`, `base`, `custom`, `agent_file`, `shipped`, `agents_md` or `project_prompt`.                                                       |
-| `origin`  | string         | `binary`, `file` or `database`.                                                                                                                                         |
-| `path`    | string or null | Path of a `file` source, relative to the home directory with `~/` when the file is below it. `null` for other origins and for an unset file path.                       |
-| `enabled` | boolean        | The switch of the source.                                                                                                                                               |
-| `state`   | string         | `present`, `absent`, `invalid`, `off` or `deferred`. `invalid` marks a text that is too large, is not UTF-8, holds a control character, or that the server cannot read. |
-| `digest`  | string or null | SHA-256 hex digest of the text when `state` is `present`, else `null`.                                                                                                  |
-| `text`    | string or null | Text of the source when `state` is `present`, else `null`.                                                                                                              |
+| Property | Type           | Purpose                                                                                                          |
+| -------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `part`   | string         | `standard`, `role`, `workbench` or `binding`.                                                                    |
+| `name`   | string         | The file name, for example `base.md`, or the repository name for a `binding` part.                               |
+| `origin` | string         | `binary` for a shipped text, `file` for an override file, `database` for a binding prompt.                       |
+| `path`   | string or null | The override path that the server looked up, also for `binary`. `null` for `binding` and for an empty directory. |
+| `digest` | string         | SHA-256 hex digest of `text`.                                                                                    |
+| `text`   | string         | Text of the part.                                                                                                |
+
+The precedence of the system prompt is the framing, then the binding parts, then `workbench.md`, then the role, then the standard. A later message governs an earlier one.
 
 ### Selection
 
@@ -129,13 +127,13 @@ Each layer holds `layer` (`system`, `agent` or `working`), `enabled` and `source
 
 API failures use the shared [error envelope](../errors.md#api-failures).
 
-| HTTP status / code                        | Meaning                                                                         |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| `401 gateway.authentication.unauthorized` | Missing, invalid, expired or banned token, or a machine token.                  |
-| `400 gateway.request.validation_failed`   | `view` is not `final`, or only one of `project_id` and `binding_id` is present. |
-| `404 agent.catalog.not_found`             | The agent name is not in the catalog.                                           |
-| `404 project.binding.not_found`           | `binding_id` names no repository binding of the project `project_id`.           |
-| `409 agent.prompt.template_invalid`       | A prompt template file of the agent directory is invalid.                       |
+| HTTP status / code                        | Meaning                                                                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `401 gateway.authentication.unauthorized` | Missing, invalid, expired or banned token, or a machine token.                                                      |
+| `400 gateway.request.validation_failed`   | `view` is not `final`, or only one of `project_id` and `binding_id` is present.                                     |
+| `404 agent.catalog.not_found`             | The agent name is not in the catalog.                                                                               |
+| `404 project.binding.not_found`           | `binding_id` names no repository binding of the project `project_id`.                                               |
+| `409 agent.prompt.template_invalid`       | An override file or a template file of the agent directory is invalid. `details` holds `file`, `path` and `reason`. |
 
 The CLI checks some input before it sends the request:
 
@@ -159,12 +157,12 @@ A declared failure makes the CLI exit `1` and print `<code>: request failed` and
 | Mutation        | No                                                                     |
 | Request body    | None; a nonempty body fails with `400 gateway.request.unexpected_body` |
 
-| Parameter    | In    | Required                        | Purpose                                                           |
-| ------------ | ----- | ------------------------------- | ----------------------------------------------------------------- |
-| `agent_name` | path  | Yes                             | Catalog key, for example `swe@1`.                                 |
-| `view`       | query | No                              | The only value is `final`. The answer then omits `prompt.layers`. |
-| `project_id` | query | Only together with `binding_id` | Project of the repository binding.                                |
-| `binding_id` | query | Only together with `project_id` | Repository binding that supplies the working layer.               |
+| Parameter    | In    | Required                        | Purpose                                                          |
+| ------------ | ----- | ------------------------------- | ---------------------------------------------------------------- |
+| `agent_name` | path  | Yes                             | Catalog key, for example `swe@1`.                                |
+| `view`       | query | No                              | The only value is `final`. The answer then omits `prompt.parts`. |
+| `project_id` | query | Only together with `binding_id` | Project of the repository binding.                               |
+| `binding_id` | query | Only together with `project_id` | Repository binding whose binding prompt joins `final`.           |
 
 | Header          | Required | Purpose               |
 | --------------- | -------- | --------------------- |
@@ -190,12 +188,12 @@ kanthord agent get swe@1 --project <project-id> --binding-id <binding-id>
 | -------------- | -------- | ---------------------------------- |
 | `<agent-name>` | Yes      | Catalog key; maps to `agent_name`. |
 
-| Option                      | Default / resolution                                                        | Purpose                                        |
-| --------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------- |
-| `--view <view>`             | None; the only value is `final`                                             | Answer `prompt.final` without `prompt.layers`. |
-| `--project <project-id>`    | None; requires `--binding-id`                                               | Sets `project_id`.                             |
-| `--binding-id <binding-id>` | None; requires `--project`                                                  | Sets `binding_id`.                             |
-| `--token <jwt>`             | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.       |
-| `--endpoint <url>`          | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                               |
+| Option                      | Default / resolution                                                        | Purpose                                       |
+| --------------------------- | --------------------------------------------------------------------------- | --------------------------------------------- |
+| `--view <view>`             | None; the only value is `final`                                             | Answer `prompt.final` without `prompt.parts`. |
+| `--project <project-id>`    | None; requires `--binding-id`                                               | Sets `project_id`.                            |
+| `--binding-id <binding-id>` | None; requires `--project`                                                  | Sets `binding_id`.                            |
+| `--token <jwt>`             | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.      |
+| `--endpoint <url>`          | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                              |
 
 The `agent` group declares `--token` and `--endpoint`. Put them before or after the leaf command. Each option except `--endpoint` accepts one occurrence only; a repeat fails with `cli.option.duplicate`. See [client configuration](../README.md#client-configuration). The HTTP client has a 31-second deadline for this 30-second operation.

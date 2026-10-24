@@ -628,7 +628,7 @@ A budget end of an `examine` execution releases with `further_work: true` and `s
 
 ## Under the hood: how coder@1 drives pi and git
 
-`swe@1` runs on the pi SDK, `@earendil-works/pi-coding-agent` 1.1.0. The [native agent](native-agent.md) page explains the configuration, the prompt layers and the tool set. This section shows which pi calls `coder@1` makes, and which git commands the worker runs.
+`swe@1` runs on the pi SDK, `@earendil-works/pi-coding-agent` 1.1.0. The [native agent](native-agent.md) page explains the configuration, the prompt and the tool set. This section shows which pi calls `coder@1` makes, and which git commands the worker runs.
 
 | Need of the worker           | pi API                                                                    | What the worker does with it                                                                                                |
 | ---------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |

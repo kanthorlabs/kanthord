@@ -41,8 +41,9 @@ Success prints one `name: value` row for each change to stdout and exits `0`. Ea
 ```text
 backup:         /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
 renamed:        mission.consecutive_loss_limit -> mission.consecutive_failure_limit
+removed:        agent.prompt.host_file
 upgraded:       /home/user/.config/kanthord/kanthord.yaml
-config_version: 1 -> 2
+config_version: 1 -> 3
 ```
 
 | Output / property                    | Purpose                                                                                                                             |
@@ -50,6 +51,7 @@ config_version: 1 -> 2
 | `backup: <path>`                     | A private `0600` copy of the original configuration or of the database, written before any change. The command deletes none.        |
 | `migrated: <service> <from> -> <to>` | The migrations that the command applied to one service, from one version to another. A pending migration exists from the first tag. |
 | `renamed: <old> -> <new>`            | A configuration key that a configuration step renamed. Values and comments stay.                                                    |
+| `removed: <key>`                     | A configuration key that a configuration step deleted, for example `agent.prompt.system_file`. Other keys and comments stay.        |
 | `upgraded: <path>`                   | The configuration file that the command replaced.                                                                                   |
 | `config_version: <from> -> <to>`     | The configuration versions before and after the upgrade.                                                                            |
 | `up_to_date: <path>`                 | Nothing changed, and the command wrote nothing.                                                                                     |

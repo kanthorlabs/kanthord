@@ -162,7 +162,6 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 - `attributes` maps a name to a value of one kind: a string, a boolean, an integer, a floating-point number or an array of one primitive kind. An event holds attributes of the same kinds.
 - A span carries the identity of every kanthord object that its operation concerns, as an identity attribute with the `kanthord.` prefix. One object has one attribute name in every span. An identity attribute holds an identity and never the content that it names. That rule is a producer obligation, and the registry of the attribute names is open.
 - A span attribute holds no authored prose. That rule is a producer obligation.
-- The record of the prompt composer of the Worker Service is a set of span attributes: the selected source of each prompt layer, the digest of its text, and every source that the composer read and rejected. It follows the trace and the access of its span. The text of a prompt reaches telemetry only through an agent transcript.
 - A span of `links` names a span of another trace. A link names no project.
 - `text_ids` names telemetry texts of the same trace.
 

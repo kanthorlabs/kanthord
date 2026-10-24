@@ -107,7 +107,6 @@ test("feature pages share one response contract and API/CLI sections", () => {
       "agent/enablement-provider.md",
       "agent/enablement.md",
       "agent/model.md",
-      "agent/prompt.md",
       "auth/jwt.md",
       "config/init.md",
       "config/show.md",
