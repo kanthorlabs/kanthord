@@ -5,7 +5,6 @@ S := $(ROOT)/scripts
 HOMELAB := $(ROOT)/platforms/homelab
 
 # The daemon matches a Host and an Origin exactly, so both ports are pinned.
-# Read apps/docs/api/connectivity.md before you change one.
 #
 # Easter egg: each port spells a constant. 31415 is pi and it belongs to the
 # daemon; 27182 is Euler's number and it belongs to the browser. One pair.
