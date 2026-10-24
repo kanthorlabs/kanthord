@@ -14,7 +14,7 @@ The server must run as the kanthord binary on the host. A server inside a contai
 - One container runtime on the same host, for the user that runs the server:
   - On a Mac: a Podman machine or Docker Desktop.
   - On Linux: rootless Podman or rootless Docker. The server refuses a rootful runtime when the server user is not root.
-- The image of the server version. The default is `docker.io/kanthorlabs/kanthord:<version>`. For a toolchain such as Node.js, build an image with [Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md).
+- The image of the server version. The default is `docker.io/kanthorlabs/kanthord:<version>`. For a toolchain such as Node.js, set the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of the repository binding.
 
 Replace each placeholder with your value:
 
@@ -106,7 +106,7 @@ podman pull docker.io/kanthorlabs/kanthord:<version>
 
 On the VPS, run `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman pull docker.io/kanthorlabs/kanthord:<version>`.
 
-The server adds its own version as the tag to the name in `worker.container_image`. With a toolchain image, the server uses that name in place of `docker.io/kanthorlabs/kanthord`. Build the image as the user that runs the server, and set the name as [step 4 of Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md#4-use-the-image-at-the-container-placement) shows. Then pull or build that image instead.
+The server adds its own version as the tag to the name in `worker.container_image`. The server builds an image from the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of each repository binding, and copies `kanthord` and `tini` from this image into it. A container waits until that environment is `ready`, then runs the environment image. Put a toolchain into the environment, not into this image.
 
 ## 3. Check the placement
 

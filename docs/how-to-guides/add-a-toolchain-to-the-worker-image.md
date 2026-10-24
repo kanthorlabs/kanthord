@@ -6,10 +6,9 @@ Build an image that adds a toolchain, for example Node.js, to the kanthord image
 
 The kanthord image holds `bash`, `git`, the OpenSSH client and `kanthord`. It holds no language toolchain. A verification such as `npm test` fails in it.
 
-Use the new image in one of two places:
+Use the new image as the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker bindings at the `server` placement then run their commands with the toolchain.
 
-- As the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker bindings at the `server` placement then run their commands with the toolchain.
-- As `worker.container_image` of a server that runs worker instances at the `container` placement. See [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
+At the `container` placement, this image does not apply. A container runs the image of the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of its repository binding. That image takes only `kanthord` and `tini` from `worker.container_image`. Put the toolchain into the environment of the repository binding. See [Isolate worker instances in containers](isolate-worker-instances-in-containers.md).
 
 ## Before you start
 
@@ -67,33 +66,12 @@ The command prints the Node.js version, for example `v24.15.0`.
 
 2. Run the command of [step 3 of Run kanthord in a container](run-in-a-container.md#3-start-the-server) again. Write `localhost/kanthord-node:<version>` in place of `docker.io/kanthorlabs/kanthord:<version>`.
 
-## 4. Use the image at the `container` placement
-
-1. In the configuration file of the server, set the image name in the `worker` section. The file is `~/.config/kanthord/kanthord.yaml` on a Mac, and `/var/lib/kanthord/.config/kanthord/kanthord.yaml` on the VPS. Write no tag:
-
-   ```yaml
-   worker:
-     container_image: localhost/kanthord-node
-   ```
-
-2. Run `kanthord config validate`, then restart the server. On the VPS, run `sudo -u kanthord -H kanthord config validate`, then `sudo systemctl restart kanthord`.
-
-The server adds its own version as the tag, so it starts `localhost/kanthord-node:<version>`. A value with a tag or a digest fails with `system.config.invalid_field`.
-
-Build the image as the same user that runs the server. Podman keeps one image store for each user. On the VPS, make the build directory under `/var/lib/kanthord`, so the user `kanthord` can read it. Then build:
-
-```sh
-sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman build --build-arg VERSION=<version> -t localhost/kanthord-node:<version> <directory>
-```
-
 ## After an upgrade
 
 Build the image of the new version before you start the new server. Run step 2 with the new version. The configuration stays the same.
 
 ## Troubleshooting
 
-| Symptom                                                                                          | Cause and fix                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A `container` instance never registers, and `workers/<client_id>/stderr.log` shows a failed pull | The image of the server version is absent. Run step 2 with the version of the server, as the user that runs the server.                                                            |
-| `kanthord config validate` fails with `system.config.invalid_field` on `worker.container_image`  | The value holds a tag or a digest. Remove the part after the last `:` of the name, or the part from `@`. A registry port such as `localhost:5000/kanthord-node` is valid.          |
-| A verification still fails with `npm: command not found`                                         | The server runs another image. For the server container, run `podman inspect --format '{{.Config.Image}}' kanthord`. For the `container` placement, read `worker.container_image`. |
+| Symptom                                                  | Cause and fix                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| A verification still fails with `npm: command not found` | The server runs another image. Run `podman inspect --format '{{.Config.Image}}' kanthord`. |
