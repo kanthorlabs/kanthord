@@ -129,7 +129,8 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A row is a default expansion, an effective path or a path template. A variable of the specification moves a default expansion, the resolution rule of the configuration file selects an effective path, and a runtime identity completes a path template.
 - `kanthord.yaml` of the configuration directory, an effective path that this sibling declares. Its default expansion is `$XDG_CONFIG_HOME/kanthord/kanthord.yaml`, and the default of that variable makes it `~/.config/kanthord/kanthord.yaml`.
 - `kanthord.db` of the data directory with its `-wal` and `-shm` files, a default expansion of `$XDG_DATA_HOME/kanthord/kanthord.db` that this sibling declares.
-- `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
+- `tracking.duckdb` of the data directory with its `tracking.duckdb.wal` file and its spill directory `tracking.duckdb.tmp/`, a default expansion that [tracking-service.impl.md](tracking-service.impl.md#primary-store) declares.
+- `duckdb/<binding version>/` of the state directory: the native DuckDB binding that a single executable application writes from its assets, a path template that [tracking-service.impl.md](tracking-service.impl.md#the-native-binding-in-the-release) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
 - `workers/<instance name>.yaml` of the configuration directory, the instance configuration file of a worker instance, a path template that [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares. `kanthord worker join` and `kanthord worker instance create --output` write it, and the server reads it never.
@@ -147,7 +148,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The Gateway Service, the Project Service, the Mission Service and the Scheduler Service use that database.
 - The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file and its migration record.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
-- A start that cannot initialize the operational database fails with `system.database.initialization_failed`. The message names the path and the SQLite reason, for example `database is locked`.
+- A start that cannot initialize the operational database or `tracking.duckdb` fails with `system.database.initialization_failed`. `serve server` and `upgrade` answer it. The message names the path and the reason: the SQLite reason for `kanthord.db`, for example `database is locked`, and the DuckDB reason for `tracking.duckdb`, for example `Could not set lock on file`.
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
@@ -164,6 +165,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The server opens each database file with `locking_mode=EXCLUSIVE`, and it sets that pragma before the first read of the file, because SQLite fixes the mode at that point.
 - It takes the write lock of each file before the migrations run.
 - A start that meets `SQLITE_BUSY` stops with a non-zero status and prints the path of the file, so one server owns the data directory and a second start fails instead of sharing it.
+- The DuckDB file lock of `tracking.duckdb` stops a second start in the same way, under [the primary store](tracking-service.impl.md#primary-store).
 - No external tool reads a database file while the server runs, so an inspection stops the server first.
 - The pragma set holds no `busy_timeout`, and the server retries no statement, because one process holds one connection to each file.
 - `foreign_keys` is `ON`.
@@ -190,13 +192,13 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The compare reads the `CREATE` text as stored. A change of whitespace in a migration text therefore also stops the runner.
 - The reset procedure for a database that stops with `system.database.migration.schema_mismatch`:
   1. Stop the server.
-  2. Delete `kanthord.db` and `tracking.db` of the data directory, with their `-wal` and `-shm` files.
-  3. Start the server. The first start creates both files.
+  2. Delete `kanthord.db` of the data directory with its `-wal` and `-shm` files, and `tracking.duckdb` with its `tracking.duckdb.wal` file and its `tracking.duckdb.tmp/` directory. Delete a `tracking.db` of an earlier build with its `-wal` and `-shm` files.
+  3. Start the server. The first start creates `kanthord.db` and `tracking.duckdb`.
 - The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of the `master_key` of that file in the new database, so the same `master_key` stays valid.
 - RULED 2026-10-20 by Ulrich. No migration writes the `placement` of a worker binding. After the schema check, the start reads the latest revision of each worker binding of a worker that kanthord hosts. A revision without `placement` stops the start with `system.database.binding_placement_missing` and the fields `path`, `project_id` and `binding`. The message names the reset procedure above.
 - Each store owns its runner and its own `migration` history table, keyed by service and version.
 - The operational store holds the history of the services that share it.
-- `tracking.db` holds the history of the Tracking Service alone, as [tracking-service.impl.md](tracking-service.impl.md) describes.
+- `tracking.duckdb` holds the history of the Tracking Service alone, as [tracking-service.impl.md](tracking-service.impl.md#primary-store) describes.
 - The runner owns one transaction per migration and the insert of its `migration` row.
 - A migration changes its own database alone. It performs no filesystem write, no network call and no write through a second connection, because a rollback of SQLite undoes none of those.
 - The runner applies the migrations of one service without regard to the state of a peer.
@@ -227,17 +229,17 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The start of the server validates the migration history. A database that records a migration and has a pending migration stops the start with `system.database.migration.pending`, and its message names `kanthord upgrade`. A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`. A database of another migration text stops the start with `system.database.migration.schema_mismatch`. The start checks the history, then the schema, then the pending migrations, and reports the first failure.
 - `kanthord upgrade [--config <path>]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
   1. Read the configuration file and apply the steps from its version in memory. Validate the result. A newer version stops with `system.config.version_ahead`.
-  2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history and check its schema. Do the same for `tracking.db` when it exists. A missing `tracking.db` stays missing. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
+  2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history and check its schema. Do the same for `tracking.duckdb` when it exists, with the DuckDB file lock. A missing `tracking.duckdb` stays missing. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
   3. If no step and no migration is pending, print `up_to_date: <path>` and write nothing.
   4. Write the configuration backup `<path>.bak-<timestamp>` with mode `0600` and one UTC timestamp, while the lock is held. Write it only when a configuration step applies.
-  5. Take `kanthord.db`, then `tracking.db`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command.
+  5. Take `kanthord.db`, then `tracking.duckdb`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory: `kanthord.db` through `VACUUM INTO`, outside a transaction, with a bound path, and `tracking.duckdb` inside its open instance through `ATTACH` of the backup path, `COPY FROM DATABASE` and `DETACH`, so the lock stays held. No step copies or reads `tracking.duckdb` through a file descriptor of its own, because the close of such a descriptor releases the DuckDB lock. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command.
   6. Replace the configuration file atomically.
 - Steps 1 to 3 write nothing. `Store.plan` runs reads only.
 - The command prints the backup path of a database before the migrated rows of that database. It then prints each rename and the configuration versions.
 - A rerun after a success prints `up_to_date: <path>`.
 - A failure in step 5 keeps the committed migrations, and the next start stops with `system.database.migration.pending`. A failure in step 6 keeps the old configuration, and the next start stops with `system.config.version_behind`. A rerun of `kanthord upgrade` completes the remaining part.
 - The command deletes no backup.
-- A restore stops the server, deletes the `-wal` and `-shm` files of `kanthord.db` and `tracking.db`, copies each database backup to its database file and the configuration backup to the configuration file, and keeps mode `0600` on each.
+- A restore stops the server, deletes the `-wal` and `-shm` files of `kanthord.db`, the `tracking.duckdb.wal` file and the `tracking.duckdb.tmp/` directory, copies each database backup to its database file and the configuration backup to the configuration file, and keeps mode `0600` on each.
 - The state directory holds no version. A breaking change of its layout states a wipe of the state directory in the release note.
 - `cli.yaml` holds no version. A breaking change of that file states a new `kanthord auth jwt generate` in the release note.
 - An upgrade step never changes `master_key` or `gateway.auth.version`. A change of the JWT format, of a key label or of the authentication version invalidates every JWT and every client secret, and the release note states the reissue.
@@ -878,7 +880,7 @@ The invocation chain holds idempotency in memory.
 - Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service and an inbound create of the Intake Service, whose repeat after a restart creates a second record.
 - [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) holds the mechanism.
 - The telemetry sink uses a client of a Tracking operation with a lossy guarantee and a handler idempotent by a natural key.
-- The Tracking Service keeps `tracking.db` separate because telemetry and operational records grow fast.
+- The Tracking Service keeps `tracking.duckdb` separate because telemetry and operational records grow fast.
 - One file couples their locking, retention and maintenance.
 
 Every adapter implements one transport-neutral value and error contract.
@@ -1230,11 +1232,12 @@ The rules of the credential sections follow.
 - A planned screen joins the sidebar in the change that adds its route.
 - The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
 - A project-scoped screen waits until the server holds one project or more: Scheduler and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
-- Overview, Scheduler and Traces read every project and offer a project filter.
+- Overview, Scheduler, Traces and Analytics read every project and offer a project filter. Timeline reads one project or one node.
 - On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
 - The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
 - The sidebar item `Workers` of the group `Workforce` opens `/workers`. The worker page `/workers/:workerName` and the instance page `/workers/:workerName/instances/:instanceName` sit under it. Each name in the path is URL-encoded, as on `/agents/:agentName`. [The worker pages](#the-worker-pages) hold the rules.
 - The sidebar item `Traces` of the group `Work` opens `/traces`, after `Scheduler`. The trace page `/traces/:traceId` sits under it. [The trace pages](#the-trace-pages) hold the rules.
+- The sidebar item `Timeline` of the group `Work` opens `/timeline`, after `Traces`. The sidebar item `Analytics` of the group `Work` opens `/analytics`, after `Timeline`. [The timeline page](#the-timeline-page) and [the analytics page](#the-analytics-page) hold the rules.
 - The sign-in screens call a saved KanthorD address a server, for example `Saved servers` and `Sign in to a KanthorD server`. The word instance names only a worker instance on the screen.
 
 ## The worker pages
@@ -1294,20 +1297,21 @@ The trace pages show what an execution did, so that a human can debug and optimi
 
 - The header shows the node name with a link to the node, the state badge and the stop reason badge.
 - The header facts are the project, the execution, the attempt, the worker, the start, the duration, the input, output and cached tokens, and `Est. cost`.
-- A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the Timeline tab.
-- The page holds two tabs, `Timeline` and `Conversation`. The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
+- A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the `Span tree` tab.
+- The page holds two tabs, `Span tree` and `Conversation`. The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
 - While the page is visible, an `open` trace reads its summary and its spans again every 5 seconds. It reads its entries after the last cursor. The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
 - A read of a deleted or unknown trace shows "This trace is expired or unknown." with a link back to the list.
 
-### The timeline
+### The span tree
 
-- The timeline is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
+- The span tree is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
 - A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`.
 - A span with a start and no end shows `Running` and a bar to the axis end while the trace is `open`. In a trace that is not `open`, it shows `No end recorded` and a bar of zero width at its start.
 - An `agent.turn` row shows its tokens and `Est. cost`. A `worker.task` and an `agent.session` row show the sums of the turns below them.
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
 - The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
+  `scheduler.settlement` shows `Settlement <from state> -> <to state>`. The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
 - The controls are a search field over the labels and the attribute values, and an `Errors only` toggle.
   The toggle group `All`, `Agent`, `Tools`, `Checks` and `Git` follows them. `Expand all` and `Collapse all` follow them.
 - `Errors only` keeps each error span and its ancestors. The search keeps each match and its ancestors.
@@ -1316,7 +1320,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 
 ### The span detail
 
-- From `lg`, the span detail is a panel beside the timeline. Below `lg`, it opens in a `Sheet`.
+- From `lg`, the span detail is a panel beside the span tree. Below `lg`, it opens in a `Sheet`.
 - It shows the label, the status, the start, the end, the duration and the offset from the root start.
 - It shows the model, the input, output and cached tokens, `Est. cost`, the finish reason and the model duration of a turn.
 - It shows every attribute, every event and every link of the span, and the telemetry texts that `text_ids` names.
@@ -1335,7 +1339,34 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt` or `Layer <n>`. A system message of pi shows `System prompt update`. They expand to the prompt text and its sections.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
-- A model reply offers `Show in timeline`. It selects its turn span on the Timeline tab.
+- A model reply offers `Show in span tree`. It selects its turn span on the `Span tree` tab.
+
+### The timeline page
+
+- `/timeline` shows the [timeline](tracking-service.vocabulary.md#timeline) of one project or one node from `tracking.timeline.list` with depth 2. The query string holds `project_id` or `node_id`, and the time range.
+- The toolbar holds the project select and the time range. A node scope shows the node name with a link to the node and a `Show project` action instead of the select. `/timeline` with no scope selects the first project in name order.
+- The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The project scope defaults to `Last 24 hours`, and the node scope defaults to `All time`.
+- The page lists the items in ascending time. Each root span is one group row, and the depth-2 spans of its trace follow it, indented, in time order. The page groups the items by `trace_id`, because the read orders every item by time and items of other traces can come between a root and its children. A depth-2 item whose root is not loaded shows under a group row of its trace marked "root not stored". `Load more` reads the next page through the cursor.
+- An execution row shows the node name in the project scope, `Execution` with the attempt and the kind `steps` or `evaluation` from `kanthord.execution.kind`, the worker from `worker_name` of the item, the start, the duration, the state badge and the stop reason badge. It offers `Open trace`, which opens `/traces/<trace_id>`.
+- A settlement row shows `Settlement <from state> -> <to state>`. A settlement with a rule shows "Paused at the failure limit: <count> of <limit>", "Paused at the further work limit: <count> of <limit>" or "Blocked at the rework limit: <count> of <limit>".
+- An act row shows the act label, `by a human`, and the time. `Show reason` reads its `reason` text through `tracking.text.get`. An act with a link to an execution offers `Open trace` of that execution.
+- A depth-2 row of another span shows the label of [the span tree](#the-span-tree) of the trace page and its duration.
+- While the page is visible and a root span of a loaded page has no end, the page reads its loaded pages again every 5 seconds. Otherwise it reads once.
+- The node sheet offers `Timeline`, which opens `/timeline?node_id=<node id>`. The project page header offers `Timeline`, which opens `/timeline?project_id=<project id>`.
+- The empty text reads "No history in this range." A read failure shows the error and `Retry`.
+
+### The analytics page
+
+- `/analytics` shows the [analytics](tracking-service.vocabulary.md#analytics) of the stored spans from `tracking.analytics.cost` and `tracking.analytics.duration`.
+- The toolbar holds the project filter with `All projects` first, the time range and the bucket. The time range offers `Last 24 hours`, `Last 7 days` and `Last 30 days`, with `Last 7 days` as the default. The bucket offers `Hour`, `Day` and `Week`, with `Day` as the default. The query string holds every value.
+- The `Cost` section holds the group select `Model`, `Agent`, `Provider`, `Worker`, `Node` and `Project`. It shows the totals of the range from a read with `group_by=none&bucket=none`, one row for each group and one row for each bucket. A row shows the turns, the input, output and cached tokens, `Est. cost` and a bar of its cost against the largest row.
+- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait` and `Revision turns`, and the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`. A row shows the count, p50, p90, p99 and max, and one bar from 0 to the largest max with marks at p50, p90 and p99.
+- A group row of a node shows the node name, and a group row of a project shows the project name.
+- A section reads at the page load and at each change of a filter. `Refresh` reads again. The page reads nothing on a timer.
+- A read with `truncated: true` shows "The range holds more groups. Narrow the range or the filter."
+- The cost bar is the shadcn `Progress` primitive. The percentile bar of the `Time` section is a `Progress` from 0 to the largest max with three marks in the theme tokens. The text of each row repeats each value, so a bar holds no information alone.
+- The page uses no chart library, because a chart adds no fact to the rows that each bucket and each group already show.
+- The empty text of a section reads "No spans in this range." A read failure shows the error and `Retry`.
 
 ### The trace links of other pages
 
@@ -1350,7 +1381,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 ### The phone width
 
 - At 390 px, each trace page shows one column with no horizontal page scroll.
-- A timeline row shows the bar below its label. The span detail opens in a full screen `Sheet`.
+- A span tree row shows the bar below its label. The span detail opens in a full screen `Sheet`.
 - Identities use `break-all`, and long texts wrap inside their block.
 
 ## The dashboard onboarding
