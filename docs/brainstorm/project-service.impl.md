@@ -418,7 +418,7 @@ The component computes the status of a group in this order. The first rule that 
 
 - At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
 - At the `image` target, the `universal` source always exists, so the status is never `none`. A slot runs on `worker.container_image` only when its worker binding names no repository binding.
-- After a failed read, the group keeps its last status and digest and sets only `reason`. A transient fetch failure thus never closes the gate of a `ready` environment.
+- After a failed read, the group keeps its last status and digest and sets `reason`. A transient fetch failure thus never closes the gate of a `ready` environment. A failed read after a change of the target also writes the new target and clears the digest, the tag and the proof of the old target.
 - A run that waits in the queue shows the status of its first step, and its `run_started_at` stays null until it starts.
 - A claim gate or a read of a group with no record starts the computation of the group in the background and answers `pending`.
 
@@ -478,11 +478,11 @@ The component computes the status of a group in this order. The first rule that 
 
 ### The triggers
 
-- After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each repository binding whose row the write changed to `pending` synchronously. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A pull between the commit and the computation therefore claims no node of a changed binding.
+- After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each changed repository binding to `pending` synchronously. A repository binding is changed when the write changed its row or its target. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A computation of the project whose read runs during the call writes no record and reads the inputs again. A pull between the commit and the computation therefore claims no node of a changed binding.
 - At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
 - At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
-- A failed read logs `project.onboarding.read_failed` at the `error` level with the project, the binding, the resource identity, the reason and the failure reason. A failed read with the reason of the last logged record of the group logs no record. A successful read, a change of the binding and a removal of the binding clear the last logged record, so the next failed read logs again.
+- A failed read logs `project.onboarding.read_failed` at the `error` level with the project, the binding, the resource identity, the reason and the failure reason. A failed read with the reason of the last logged record of the group logs no record. A successful read, a change of the binding, a change of its target and a removal of the binding clear the last logged record, so the next failed read logs again.
 - The `reason` of a failed SSH read ends with the sentence `The failure reason is <failure_reason>.`, and `<failure_reason>` is the value of [the failure reason](repository.impl.md#the-failure-reason-of-a-git-operation). Any other failure has a null failure reason.
 - `project.binding.environment.rebuild` starts a run.
 
@@ -608,6 +608,7 @@ The component computes the status of a group in this order. The first rule that 
 - A group holds at most one session at a time. Sessions of different groups run at once and share the queue of [the run](#the-run).
 - Only a failure event starts a session: a run that writes a failed proof file, or [the failure of an execution](#the-failure-of-an-execution). A failure inside a session and the end of a session start none.
 - The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `env@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
+- The current binding set still gives the group the target of the failed run or execution. A failure at an old target thus starts no session.
 - A session starts while `repairs` of the failed digest is below 3. The component increments `repairs` before the session starts. A new write of the same digest keeps the count, and `project.binding.environment.rebuild` resets it to 0.
 - The environment state holds `repairing: true` while a session of the group runs. The stop of the server aborts each session before it cancels the runs.
 - The waiting nodes continue when the status is `ready`.
