@@ -978,7 +978,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The policy of both elements allows only these targets:
   - `src/kernel/`, except `caller-mint.ts`, `service-mint.ts`, `test-identity.ts` and `fatal.ts`;
   - the `contract.ts` of every service and component;
-  - `src/agent/` files `pi.ts`, `pi-tools.ts`, `agent-session.ts`, `environment.ts`, `catalog.ts` and `prompt-composer.ts`;
+  - `src/agent/` files `pi.ts`, `pi-tools.ts`, `bash-process.ts`, `agent-session.ts`, `environment.ts`, `catalog.ts` and `prompt-composer.ts`;
   - `src/agent/` files `prompt-layers.ts`, `prompt-render.ts`, `prompt-templates.ts`, `prompt-source.ts`, `prompt-assets.ts`, `pinned-layers.ts` and `hooks/`;
   - `src/llm/` files `model-connector.ts`, `platforms.ts` and `provider-failure.ts`;
   - `src/repository/index.ts`, `src/custody/client.ts`, `src/gateway/client.ts`, `src/gateway/client-result.ts` and `src/worker/catalog.ts`;
@@ -995,8 +995,13 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - `no-restricted-globals` refuses the globals `process`, `globalThis` and `global`.
 - `no-restricted-syntax` refuses a dynamic `import()`.
 - Both rules apply to `src/worker/unit/` and to every file of `src/apps/worker/` except `index.ts`, `thread.ts` and `slot.ts`. Only those three files use the global `process`.
-- `killProcessGroup` of `src/kernel/process-group.ts` is the one signal path of the worker unit.
-- It signals only the group of a detached child that the unit started. It refuses the pid and the parent pid of its own process.
+- `killChildTree` of `src/kernel/process-group.ts` is the one signal path of the worker unit. It refuses the pid and the parent pid of its own process.
+- Before the exit of a detached child that the unit started, `killChildTree` calls `killProcessTree`. That function signals the leader group and each descendant group, and never its own group.
+- `killProcessTree` stops each group with `SIGSTOP`. It reads the process table again until no new descendant group appears, for at most 8 passes. It then kills each stopped group with `SIGKILL`.
+- When the tree still forks after 8 passes, `killProcessTree` reads the table once more and kills each new group. It reports the pass limit as a failure.
+- After a failed table read, `killProcessTree` still kills each stopped group, or the leader group when it stopped no group. It reports every failure.
+- After the exit of the child, `killChildTree` signals only the leader group, because the kernel reparents the children at the exit.
+- A descendant whose parent exited before the kill is no longer a descendant of the leader. It survives the kill.
 - Test files may use `src/agent/test-support.ts`, `src/repository/connector.ts`, `src/repository/node-branch.ts`, `src/worker/test-support.ts` and `src/kernel/test-support.ts`.
 - Test files and `*test-support.ts` files of both elements are exempt from the global, property and dynamic import rules.
 - Tests of `src/apps/server/` may import `src/worker/unit/index.ts`, `src/worker/unit/test-support.ts`, `src/apps/worker/transport.ts` and `src/apps/worker/thread-data.ts`.
