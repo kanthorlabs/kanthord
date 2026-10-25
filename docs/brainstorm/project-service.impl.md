@@ -143,9 +143,28 @@ The binding set has one read route and one write route, and both serve the whole
 - The read answers the current binding set as `BindingSet`. It holds no secret material.
 - The write takes `BindingSet` as its body, and `version` names the version that the client read. A stale `version` answers 409 `project.binding_set.version_conflict` with the current version in `error.details`.
 - The write answers the committed binding set as `BindingSet` at its new version.
+- The answer of the write also holds `stale_pins`, under [Stale pins](#stale-pins).
 - No route writes one field or one binding. An effective instance count of 0 disables a worker binding, and `available: false` disables a repository binding or a storage binding.
 
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
+
+## Stale pins
+
+The answer of a binding-set write holds `stale_pins`. The list shows the nodes that pin an older revision of a revised binding.
+
+- `stale_pins` holds one item `{ node_id, binding_name, pinned_revision, current_revision }` for each pin of an older revision of a binding that the write revised.
+- A revised binding keeps its name and its resource identity and gets the next revision of its group.
+- An older revision is each revision of the same group below the new revision and above the latest tombstone of the group.
+- A removed binding and a name with a new resource identity add no item.
+- `binding_name` and `current_revision` name the new revision. `pinned_revision` is the revision that the node pins.
+- The Project Service reads the pins through the Mission collaboration `currentNodePins(tx, projectId, bindingIds)` in the write transaction. It reads no Mission table.
+- `currentNodePins` answers `{ node_id, binding_id }` for each node that is not terminal and not retired, when its current node revision pins one of the revisions.
+- The node revision of an open attempt does not count. A node that a rebind moved to the new revision is not in the list.
+- The list is in the order of `node_id`, then `binding_name`. A write with no revised binding answers `[]`.
+- The list is read only, and the write moves no pin. [The rebind](mission-service.impl.md#the-rebind) is the only path that moves a pin.
+- `project.binding.environment.set` writes the binding set, so its answer holds the same list.
+- The CLI prints the list as a field of the answer of `project binding apply`.
+- Tests list a pending node that pins an older revision. Tests list no terminal node, no retired node, no unchanged binding, no removed binding and no node on the new revision. Tests list no pin before a removal and no name with a new resource identity.
 
 ## Revision, disablement and rotation
 

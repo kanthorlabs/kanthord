@@ -275,17 +275,28 @@ The response is one binding record with the fields of the list items.
   "changes": [
     { "kind": "revised", "binding_id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4" }
   ],
+  "stale_pins": [
+    {
+      "node_id": "node_01JD3WB7M2N3P4Q5R6S7T8V9W0",
+      "binding_name": "builder",
+      "pinned_revision": 2,
+      "current_revision": 3
+    }
+  ],
   "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property              | Type                            | Surface     | Purpose                                                                 |
-| --------------------- | ------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `project_id`          | string                          | API and CLI | Project ID.                                                             |
-| `binding_set_version` | positive integer                | API and CLI | Binding set version after the apply.                                    |
-| `bindings`            | object                          | API and CLI | Map from name to the binding record of each current binding.            |
-| `changes`             | array                           | API and CLI | One `{ "kind", "binding_id" }` item for each submitted or removed name. |
-| `idempotency_key`     | `idempotency_key_<ulid>` string | CLI only    | Key of this request. Supply it again to retry the same request.         |
+| Property              | Type                            | Surface     | Purpose                                                                  |
+| --------------------- | ------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `project_id`          | string                          | API and CLI | Project ID.                                                              |
+| `binding_set_version` | positive integer                | API and CLI | Binding set version after the apply.                                     |
+| `bindings`            | object                          | API and CLI | Map from name to the binding record of each current binding.             |
+| `changes`             | array                           | API and CLI | One `{ "kind", "binding_id" }` item for each submitted or removed name.  |
+| `stale_pins`          | array                           | API and CLI | One item for each node that pins an older revision of a revised binding. |
+| `idempotency_key`     | `idempotency_key_<ulid>` string | CLI only    | Key of this request. Supply it again to retry the same request.          |
+
+`stale_pins` lists each node that is not terminal and not retired. Its current node revision pins an older revision of a binding that the apply revised. A revised binding keeps its name and its resource identity. Each item holds `node_id`, `binding_name`, `pinned_revision` and `current_revision`. The list is in the order of `node_id`, then `binding_name`. A removed binding adds no item. The apply moves no pin. Run [`mission node rebind`](../mission/node.md#node-rebind) to move a node to the current revision. A retry with the same idempotency key answers the list of the first apply until a restart of the daemon.
 
 ### project binding revision list
 
