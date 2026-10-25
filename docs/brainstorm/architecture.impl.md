@@ -1282,8 +1282,8 @@ The trace pages show what an execution did, so that a human can debug and optimi
 ### The trace list
 
 - `/traces` lists the trace summaries of every project, newest first, 50 rows per page with a pager.
-- The toolbar holds the project filter, the state filter, the time range and the search field. `More filters` reveals the worker, agent, model and error type filters, the minimum duration, the minimum tokens, the minimum cost and the sort.
-- The worker, agent, model and error type filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
+- The toolbar holds the project filter, the state filter, the time range and the search field. `More filters` reveals the worker, agent, model, error type and cause category filters, the minimum duration, the minimum tokens, the minimum cost and the sort.
+- The worker, agent, model, error type and `cause_category` filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
 - The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The default is `Last 7 days`.
 - The search field sends `q` after 300 ms without a keystroke.
 - The query string holds every filter value and the sort, so a link reproduces the first page of the list.

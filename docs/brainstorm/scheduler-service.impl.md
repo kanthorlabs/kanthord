@@ -301,7 +301,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - A revocation with the cause `human` writes the root end only. The [act trace](mission-service.impl.md#the-act-trace) of the Mission Service holds that transition.
 - The start and the end of a transition span are the time of the transition, and its status is `Ok`.
 - The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
-- A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the creation of the node to the transition. An analytics read adds up and divides it, and no service decides from it.
+- A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the first `Available` of the node to the transition. An analytics read adds up and divides it, and no service decides from it.
 - The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
 - The transition span holds `kanthord.transition.rule`, with one of four values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;

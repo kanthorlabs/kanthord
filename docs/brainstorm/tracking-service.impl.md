@@ -180,8 +180,15 @@ The cause names the layer that caused a failure event. The Worker Service owns t
 - The root span end holds `kanthord.cause.category`, `kanthord.cause.subcategory` and `kanthord.cause.assigner`. The [assigner](tracking-service.vocabulary.md#cause) is `rule` or `reviewer`.
 - A cause of the category `unattributed` holds `kanthord.cause.suspects` instead of a subcategory: the candidate categories, the best guess first.
 - The Tracking Service stores these attributes as it receives them. It derives no cause, and it holds no cause column. The schema of `tracking.db` stays unchanged.
-- `tracking.cause.label` has `human` access. Its input holds the trace, the category, the subcategory and a reason. It validates the category and the subcategory against the closed sets of the [vocabulary](tracking-service.vocabulary.md#cause-category).
-- An unknown trace answers 404 `tracking.trace.not_found`.
+- `tracking.cause.label` uses `POST /api/tracking/trace/:trace_id/cause/label` with `human` access. It is a mutation, and it requires an idempotency key.
+- The body is `{ category, subcategory, reason }`. `reason` is a nonblank text. The CLI command is `kanthord tracking cause label <trace-id> --category <category> --subcategory <subcategory> --reason <text>`.
+- The operation validates `category` and `subcategory` against the closed sets of the [vocabulary](tracking-service.vocabulary.md#cause-category). A label never takes the category `unattributed`.
+- The operation answers these errors:
+  - 404 `tracking.trace.not_found` for an unknown or deleted trace;
+  - 409 `tracking.cause_label.trace_open` for a trace whose state is `open`;
+  - 400 `tracking.cause_label.category_invalid` for a category outside the set, or `unattributed`;
+  - 400 `tracking.cause_label.subcategory_invalid` for a subcategory outside the set of its category.
+- The local CLI errors are `cli.tracking.cause.label.invalid_trace_id`, `cli.tracking.cause.label.invalid_input`, `cli.tracking.cause.label.token_required` and `cli.tracking.cause.label.indeterminate`.
 - The operation writes one span `tracking.cause_label` under the root span, with the span identity `<root_span_id>.cause_label` and the producer `tracking`.
 - The label span holds `kanthord.cause.category`, `kanthord.cause.subcategory`, the human identity and the telemetry text `reason`.
 - A new label replaces the span row, its attributes and its `reason` text.
@@ -301,15 +308,16 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
   - `review_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `evaluation`.
   - `revision_turns`: one value for each node attempt with a `scheduler.execution` root span in the range.
+  - `instance_busy_ratio`: the sum of `duration_ms` of the root spans in the range for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
 - Every measure other than `span_duration` ignores `operation`.
+- `instance_busy_ratio` takes the `group_by` value `worker_instance` only, and its `key` is the instance name. Its item holds `key`, `bucket_start`, `count` (the root spans) and `ratio`, and no percentile. With a `bucket`, the length of the bucket replaces the length of the range.
 - The value of `revision_turns` is the count of the `scheduler.transition` spans of the attempt from `Evaluating` to `Available` in the range.
 - The range cuts an attempt: a transition outside the range does not count.
 - The start of the first root span of the attempt in the range sets its bucket. The trace row of that root span sets its group fields.
-- `group_by` takes `none`, `operation`, `tool_name`, `agent_name`, `model`, `worker_name`, `node_id` or `project_id`, and it defaults to `none`.
+- `group_by` takes `none`, `operation`, `tool_name`, `agent_name`, `model`, `worker_name`, `node_id` or `project_id`, and it defaults to `none`. `worker_instance` is a value for `instance_busy_ratio` only.
 - An item holds `key`, `bucket_start`, `count`, `p50`, `p90`, `p99`, `mean` and `max`. The unit is milliseconds, and a count for `revision_turns`. The order measure is `count`.
 - A percentile `p` of `n` sorted values `x[0]` to `x[n - 1]` is `x[k] + (h - k) * (x[k + 1] - x[k])`.
 - In that formula, `h = (n - 1) * p` and `k` is the integer part of `h`. The percentile is `x[n - 1]` when `k` is `n - 1`.
-- `instance_busy_ratio` is the sum of `duration_ms` of the root spans of the selected traces for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
 - The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`.
 - `--project <project-id>` and `--node <node-id>` set `project_id` and `node_id`. `--from <unix-ms>` and `--to <unix-ms>` set `from` and `to`.
 - `--bucket`, `--group-by`, `--measure` and `--operation` set the field of their name.
