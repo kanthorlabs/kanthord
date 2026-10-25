@@ -76,6 +76,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Its route is `POST /api/llm/provider/check`, and its input is only `{ credential }`.
 - It accepts a credential of every platform in `LLM_PROVIDERS`. A credential of another LLM platform answers 400 `llm.provider.check_unsupported`.
 - The component calls `check` with the material that custody releases, caches nothing and drops the material after the call.
+- The check refreshes an OAuth token by [the OAuth refresh of a check](#the-oauth-refresh-of-a-check).
 - Each call of `check` has a 10 s deadline.
 - HTTP 200 holds the answer of `check`, `{ connection, models }`.
 - The route declares an open body, and the handler validates `{ credential }`, so that invalid input answers `llm.provider.invalid_input` and not a Gateway code.
@@ -92,7 +93,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The route declares the body schema, so invalid input answers the Gateway code `gateway.request.validation_failed`.
 - It accepts a credential of every LLM platform, `openai-compatible` included.
 - The component builds the model runtime with the [model connector](#the-model-connector) from the material that custody releases. The check and an execution use one runtime path for every platform.
-- The check stores nothing, pins no credential revision and caches nothing. The enablement write does not call it.
+- The check pins no credential revision and caches nothing. It stores only a refreshed OAuth value, by [the OAuth refresh of a check](#the-oauth-refresh-of-a-check). The enablement write does not call it.
 - HTTP 404 `llm.model.credential_not_found` reports an unknown credential or a credential of another component.
 - The check reads the copy of the holder `server`. A name with no such copy answers 409 `credential.credential.held_by_instance`.
 - HTTP 400 `llm.model.model_unknown` reports a model outside the model list of the credential. HTTP 400 `llm.model.reasoning_unsupported` reports a reasoning effort outside the supported levels of the model.
@@ -103,7 +104,9 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The LLM component owns the classifier of the error text. The Worker Service uses the same classifier for the stop code of `provider_failed`.
 - The classifier maps quota text to `quota_exhausted`, status 429 to `rate_limited`, 401 and 403 to `unauthorized`, every other 4xx to `bad_request`, and every other text to `unavailable`.
 - A first reply without a call of `check_tool` answers `bad_request` with the message `The model did not call the tool.`
-- An expired OAuth access token answers `unauthorized` with the message `The access token is expired.` without a model call. The check never refreshes OAuth.
+- `checkModel` gives the model runtime the custody refresh store in place of the store of one call.
+- Without a refresh store, an OAuth access token that expires within 5 minutes answers `unauthorized` with the message `The access token is expired or expires within 5 minutes, and the check cannot refresh it.` without a model call.
+- A failed refresh answers `unauthorized` with the message `The access token refresh failed.`
 - A check that the 50 s deadline or the cancellation of the caller ends answers `unavailable`.
 - The check is a warning for the dashboard and the CLI before an enablement write.
 
@@ -152,7 +155,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A worker instance checks each of its own copies after its first heartbeat answer and when the `credential_version` of a heartbeat answer changes. The process sends its first heartbeat at its start. A change during a check run starts one more run after it.
 - The instance lists its copies with `llm.credential.list`. It reads each live copy whose `sealed_current` is true through `llm.credential.sealed`.
 - `llm.credential.sealed` is `GET /api/llm/credential/:credential_name/sealed`, policy `worker`, read, secret. The answer is `{ name, platform, revision, metadata, sealed }` of the newest live revision of the copy of the instance of the token. A copy that is absent or sealed to an ended key answers 404 `credential.credential.not_found`. Custody reads the sealed object with `storedSealed` and never opens it.
-- The instance opens the copy with its own key and runs the `check` of [the LLM provider](#the-llm-provider) of the platform with a deadline of 10 s. It maps the result as [the resource healthcheck](#the-resource-healthcheck) does. A platform without a check or an open failure reports `unknown` with `failure_reason: unclassified`. A check that exceeds the deadline reports `unknown` with `failure_reason: deadline_exceeded`.
+- The instance opens the copy with its own key and runs the `check` of [the LLM provider](#the-llm-provider) of the platform with a deadline of 10 s. The check has no refresh store, so it never refreshes the copy. An OAuth access token that expires within 5 minutes reports `unhealthy` with `failure_reason: unauthorized` without a remote call. It maps the result as [the resource healthcheck](#the-resource-healthcheck) does. A platform without a check or an open failure reports `unknown` with `failure_reason: unclassified`. A check that exceeds the deadline reports `unknown` with `failure_reason: deadline_exceeded`.
 - A run that ends on an indeterminate answer or a server failure runs again at the next heartbeat. A refusal waits for the next change of the counter.
 - It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204. The body limit is 1 MiB.
 - `revision` must be the newest live revision of a copy of the instance of the token that is sealed to the current key. An absent or ended-key copy answers 404 `credential.credential.not_found`. Another revision answers 409 `credential.revision.conflict` with `details.revision`. These bodies answer 400 `credential.input.invalid`:
@@ -261,28 +264,29 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
 - The healthcheck reads `holder` first. An instance copy reports `unknown` with `failure_reason: held_by_instance` and releases nothing. [The health of an instance copy](#the-health-of-an-instance-copy) states the report of the instance.
 - The [LLM providers](#the-llm-provider) supply the checks.
-- Only the record verify refreshes an OAuth record, by [the OAuth refresh of a verify](#the-oauth-refresh-of-a-verify). In every other check, an expired access token of an `openai-codex` or `anthropic-subscription` record answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
+- The healthcheck refreshes an OAuth record by [the OAuth refresh of a check](#the-oauth-refresh-of-a-check). An access token that the check cannot refresh and that expires within 5 minutes answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
 - The `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides the result of an expired record.
 - Each failure carries a value of [the failure reason of an HTTP check](gateway-service.impl.md#the-failure-reason-of-an-http-check). A check that exceeds its deadline reports `unknown` with `failure_reason: deadline_exceeded`.
 - Credential and agent provider healthchecks share an implementation where appropriate, not ownership.
 - The `openai-codex` check, the `anthropic-subscription` check and the `opencode-go` check make a model call.
 - The `anthropic-subscription` check builds its call as the `openai-codex` check does, under the pi provider `anthropic`.
-- The `openai-codex` check builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. Outside the record verify, the store lives for the call, and nothing writes back to custody.
+- The `openai-codex` check builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. Without a custody refresh store, the store lives for the call, and nothing writes back to custody.
 - A pi call with an OAuth credential carries no `apiKey` option. pi takes the API key path whenever the options hold the `apiKey` key, even with a `null` value.
 - The `opencode-go` check builds its call through the pi `opencode-go` provider with the stored API key and the smallest token limit.
 - The Copilot check writes no minted token back to the record.
 
-### The OAuth refresh of a verify
+### The OAuth refresh of a check
 
-- The record verify of an `openai-codex` or `anthropic-subscription` record of the holder `server` gives the check a pi credential store of custody. The check passes that store to the pi call in place of the store of one call.
+- The healthcheck, the record verify, the provider check and the model check run on the copy of the holder `server`. They follow one rule for an `openai-codex` or `anthropic-subscription` record.
+- Custody gives the check a pi credential store, the refresh store, in `ResourceCheck` and in `CheckMaterial.refreshStore`. The check passes that store to the pi call in place of the store of one call.
 - pi-ai resolves the authentication of the call. It refreshes an access token that expires within 5 minutes with the stored refresh token, under `CredentialStore.modify`, and the model call uses the new access token.
-- The custody store writes the refreshed value inside `modify`, in place at the same revision. It uses `applyReport`, the digest rule of a [refresh report](custody.impl.md#the-credential-handover). A refresh adds no revision.
-- The workbench credential store and the verify store share this write. The write refuses a revision that a live execution pins.
-- The verify gives no store when a live execution pins the revision, because the execution holds the refresh token. An expired access token then answers `unauthorized` without a remote call.
-- A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change. The verify log names the reason `access token refresh failed`.
-- The verify of an instance copy answers 409 `credential.credential.held_by_instance`, as before. The instance refreshes its own copy.
+- The refresh store writes the refreshed value inside `modify` through `replaceServerCopy`, in place at the same revision. `replaceServerCopy` uses `applyReport`, the digest rule of a [refresh report](custody.impl.md#the-credential-handover). A refresh adds no revision.
+- The workbench credential store and the refresh store share `replaceServerCopy`. It refuses a revision that a live execution pins.
+- Custody gives no refresh store when a live execution pins the revision, because the execution holds the refresh token. An access token that expires within 5 minutes then answers `unauthorized` without a remote call.
+- A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change. The log names the reason `access token refresh failed`.
+- The check of an instance copy runs on the instance with no refresh store, by [the health of an instance copy](#the-health-of-an-instance-copy). The instance refreshes its own copy only in an execution.
 - The `github-copilot` check sends the stored GitHub token and refreshes nothing.
-- The verify adds no error code.
+- The rule adds no error code.
 
 ## Tests
 
@@ -290,10 +294,10 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and a `base_url` change at rotation alone.
 - Tests cover a model removal with dependents and concurrent changes.
 - Tests cover the check of every LLM provider, its `connection` mapping, the healthcheck status mapping, expired OAuth and forbidden calls.
-- Tests cover the OAuth refresh of a verify: a refresh through pi-ai written in place, a failed refresh, and a revision that a live execution pins. The tests fake the network and make no remote call.
+- Tests cover the OAuth refresh of a check for the healthcheck, the verify, the provider check and the model check: a refresh through pi-ai written in place, a failed refresh, and a revision that a live execution pins. Tests cover the instance copy check inside the refresh window. The tests fake the network and make no remote call.
 - Tests assert that a refused model call maps 401 and 403 to `unauthorized` through the status in `errorMessage`.
 - Tests assert that `LLM_PROVIDERS` and `verifiable` agree, and that `llm.provider.check` refuses a platform without a check.
-- Tests cover the model check: the tool round trip, a reply without a tool call, each provider failure code, redaction of the secrets, an unknown model, an unsupported reasoning effort, an expired OAuth access token and the `openai-compatible` runtime path.
+- Tests cover the model check: the tool round trip, a reply without a tool call, each provider failure code, redaction of the secrets, an unknown model, an unsupported reasoning effort, an OAuth access token inside the refresh window and the `openai-compatible` runtime path.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.

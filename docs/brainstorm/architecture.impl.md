@@ -1146,7 +1146,7 @@ The import boundaries follow the public files.
 - It runs the check of the platform on the newest live revision of the record, with a 10 s deadline. A check that exceeds its deadline answers `unknown` with `failure_reason: deadline_exceeded`.
 - It answers the health entry `{ status, capability, failure_reason }`, the same type as an entry of the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
 - It runs the same check code as the health report and stores no result.
-- The verify of an LLM OAuth record can refresh the access token and write the refreshed value in place. [The OAuth refresh of a verify](llm.impl.md#the-oauth-refresh-of-a-verify) states the rule.
+- The verify of an LLM OAuth record can refresh the access token and write the refreshed value in place. [The OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check) states the rule.
 - An archived record answers 409 `credential.credential.archived`. A platform with `verifiable: false` answers 400 `credential.check.unsupported`. A name of another component answers 404 `credential.credential.not_found`.
 - Custody decrypts the newest live revision for the check, as the health report does, and the check drops the material after the call. The verify takes no grant, writes no pin and drains no revision.
 
