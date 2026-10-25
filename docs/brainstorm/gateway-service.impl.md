@@ -84,14 +84,14 @@ The response contains no raw JWT, signing key or token metadata (`iat`, `exp`, `
 
 Every worker instance that registers presents its machine JWT as a bearer token on `POST /api/worker/register`, and the request holds an empty body.
 An instance at the `server` or the `container` placement presents it through the port transport.
-The port side mints it in memory for each call under [the machine identity of a pool slot](worker-service.impl.md#the-machine-identity-of-a-pool-slot).
+The port side mints it in memory for each call under [the machine identity of a server instance](worker-service.impl.md#the-machine-identity-of-a-server-instance).
 An instance at the `worker` placement presents the `client` JWT that the connection answer of the [instance exchange](worker-service.impl.md#the-instance-exchange) holds for that binding.
 The operation ID is `worker.register`, and the Worker Service owns its operation declaration and scoped OpenAPI file.
 This operation creates a live [registration](worker-service.vocabulary.md#registration), not a human account, client identity or worker definition.
 That route declares the client access policy, and the verification of the JWT section authenticates it.
 The request nominates no project, no resource identity, no subject and no kind, and the server takes all four from the verified JWT.
-The Worker Service creates the registration and checks the effective instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
-At `placement: worker`, the effective count is the length of `worker_instances`, under [Validation](project-service.impl.md#validation).
+The Worker Service creates the registration and checks the instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
+The instance count of a binding of a hosted worker is the length of `worker_instances`, and the count of an external harness is its `instance_count`, under [Validation](project-service.impl.md#validation).
 A client identity holds at most one live registration, and a registration of a client identity that holds one answers that registration, so a restarted program keeps its runtime identity.
 The route answers with the runtime identity of the registration, the resource identity of the machine identity and the worker name of the binding, and no token.
 
@@ -121,7 +121,7 @@ The route answers with the runtime identity of the registration, the resource id
 The claim set is closed, and the matrix below holds for the three kinds `human`, `client` and `worker`.
 
 - Every kind requires `sub`, a string of 1 to 64 nonblank characters.
-- For `human`, `sub` is the username. For `client`, it is a client identity: `client_identity_<ulid>` from local issuance, or the derived client identity of a pool slot or of an instance. For `worker`, it is the id `worker_instance_<ulid>` of one instance revision.
+- For `human`, `sub` is the username. For `client`, it is a client identity: `client_identity_<ulid>` from local issuance, or the derived client identity of an instance for one binding. For `worker`, it is the id `worker_instance_<ulid>` of one instance revision.
 - For `human`, issuance and verification use the same username validation and preserve its exact value.
 - Reissuance preserves that subject.
 - The process-local caller identity stores it as `accountId`; this internal field is not a JWT claim or verification-response property.
@@ -136,7 +136,7 @@ The claim set is closed, and the matrix below holds for the three kinds `human`,
 - `iat` is not after the verification time, and `exp` is after it, with no clock-skew tolerance.
 - Every kind requires `jti`, a canonical ULID.
 - `client` requires `project_id`, a `project_<ulid>` identity, and `resource_identity`, the resource identity `worker:kanthord:<binding name>` of a worker binding of that project; `human` and `worker` forbid both.
-- `client` takes the optional claims `instance_id`, the instance revision id, and `connection_id`, a `connection_<ulid>` identity. A binding at `placement: worker` requires both. A binding of another placement answers 401 `gateway.jwt.forbidden_claim` for either. `human` and `worker` forbid both.
+- `client` takes the optional claims `instance_id`, the instance revision id, and `connection_id`, a `connection_<ulid>` identity. A binding of a hosted worker requires `instance_id`. An instance at the `worker` placement also requires `connection_id`. An instance at the `server` or the `container` placement and a binding of an external harness answer 401 `gateway.jwt.forbidden_claim` for `connection_id`. A binding of an external harness answers the same code for `instance_id`. `human` and `worker` forbid both.
 - The two claims name a binding group, not a revision. A token supplies no configuration.
 - Every kind forbids `iss`, `aud` and `nbf`.
 - A claim outside this set, a claim of another type, a missing required claim and a present forbidden claim each reject the token with 401.
@@ -153,11 +153,11 @@ Verification runs in this order.
 - `kind`.
 - The per-kind rules.
 - For `worker`, the Worker Service answers whether `sub` names a live instance revision. An ended or archived revision answers 401 `gateway.jwt.instance_ended`.
-- For `client`, the Project Service answers three checks. The group `(project_id, resource_identity)` exists. Its latest row is no tombstone and holds an effective instance count of 1 or more. `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
-- For a `client` JWT of a binding at `placement: worker`, the Worker Service then checks in this order:
-  1. `instance_id` and `connection_id` are present, else 401 `gateway.jwt.instance_required`.
+- For `client`, the Project Service answers three checks. The group `(project_id, resource_identity)` exists. Its latest row is no tombstone and holds an instance count of 1 or more. `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
+- For a `client` JWT of a binding of a hosted worker, the Worker Service then checks in this order:
+  1. `instance_id` is present, else 401 `gateway.jwt.instance_required`.
   2. `instance_id` names a live instance revision, else 401 `gateway.jwt.instance_ended`.
-  3. `connection_id` is the current connection of that instance, else 401 `gateway.jwt.connection_superseded`. When the instance holds no current connection, the id becomes current, under [the connection](worker-service.impl.md#the-instance-exchange).
+  3. For an instance at the `worker` placement, `connection_id` is present, else 401 `gateway.jwt.instance_required`. It is the current connection of that instance, else 401 `gateway.jwt.connection_superseded`. When the instance holds no current connection, the id becomes current, under [the connection](worker-service.impl.md#the-instance-exchange).
   4. The binding lists the instance name, or the client identity holds a live registration of that binding, else 401 `gateway.jwt.instance_not_listed`.
 - A `resource_identity` of another binding kind answers 401 `gateway.jwt.invalid_type`.
 - The tombstone rule refuses every token that a removal preceded, so a binding that a human removes and binds again under the same name accepts no earlier token.
@@ -187,7 +187,7 @@ A worker instance at the `worker` placement takes a new worker token and connect
 It uses the signing-key derivation and token contract above, with the configured lifetime.
 Without `--project` and `--binding` it generates a human JWT with the selected username as `sub`.
 With `--project` and `--binding` it generates a `client` JWT for an external harness, and it rejects a `username` argument. The JWT holds a fresh client identity as `sub`, the project as `project_id` and `worker:kanthord:<binding name>` as `resource_identity`.
-The token holds no `instance_id`, so the Gateway Service refuses it on a binding at `placement: worker`.
+The token holds no `instance_id`, so the Gateway Service refuses it on a binding of a hosted worker.
 The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` fails with `cli.auth.jwt.binding_without_project`. `--project` without `--binding` fails with `cli.auth.jwt.project_without_binding`. A `--project` value that is not a canonical `project_<ulid>` identity fails with `gateway.authentication.invalid_project`.
 Mint one machine token for each concurrent external harness program. A program reuses its token across restarts while the token is valid.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
@@ -223,7 +223,7 @@ The client secret is `HKDF-SHA256(master_key, info = "worker/client-secret/v<aut
 `sub` is the client identity of the machine JWT, so each machine JWT has its own client secret.
 The server stores no client secret. It derives the secret again from the verified `sub` of each request that needs it.
 At the `worker` placement, the connection answer of the [instance exchange](worker-service.impl.md#the-instance-exchange) carries the client secret of each listing binding, sealed to the instance public key. `master_key` never leaves the server.
-The pool host derives the client secret of a pool slot, under [the machine identity of a pool slot](worker-service.impl.md#the-machine-identity-of-a-pool-slot). An external harness receives no client secret.
+The pool host derives the client secret of a server instance for each listing binding, under [the machine identity of a server instance](worker-service.impl.md#the-machine-identity-of-a-server-instance). An external harness receives no client secret.
 From a client secret, no party derives `master_key`, the signing key, the Custody key or another client secret.
 
 - The Gateway Service owns no human account table and no client identity table.
@@ -585,9 +585,9 @@ It verifies the default and explicitly supplied subjects and derived-key signatu
 It covers the removed password-login route and its absence from OpenAPI.
 It covers a registration with a machine JWT whose worker binding is absent or unavailable, and it asserts 401 and no registration.
 It covers two concurrent registrations against a binding of one instance, and it asserts one registration and one refusal.
-It covers a second registration of a client identity that holds a live registration, and it asserts the runtime identity of that registration and no second slot.
+It covers a second registration of a client identity that holds a live registration, and it asserts the runtime identity of that registration and no second registration.
 
-- A test repeats the registration key within the TTL while the registration is live and asserts the recorded runtime identity without another slot.
+- A test repeats the registration key within the TTL while the registration is live and asserts the recorded runtime identity without another registration.
 - A test repeats the registration key after a restart and asserts that the handler runs again with its natural key.
 - A test repeats a key after its TTL expires and asserts that the handler runs again.
 
@@ -595,7 +595,7 @@ It covers a repeat of a completed key under another caller, and it asserts that 
 It covers an expired token and a token signed under an earlier `gateway.auth.version`, and it asserts 401 for each one.
 It covers an increment of `gateway.auth.version`, and it asserts that a credential store record stays readable.
 It covers a work pull of a machine identity whose registration ended, and it asserts the refusal.
-It covers each code `gateway.jwt.instance_required`, `instance_ended`, `connection_superseded` and `instance_not_listed`, and a `client` JWT with `instance_id` on a binding of another placement.
+It covers each code `gateway.jwt.instance_required`, `instance_ended`, `connection_superseded` and `instance_not_listed`, a `client` JWT with `connection_id` of a server instance and a `client` JWT with `instance_id` on a binding of an external harness.
 It covers the Host check. A `client`, `worker` or `public` route under an unlisted `Host` passes, and an unmatched route fails. A `human_or_worker` route passes with a worker token and fails with a human token.
 It emits the directory from the registry and compares it with the committed directory, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
