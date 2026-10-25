@@ -2,9 +2,9 @@
 
 [How-to guides](README.md)
 
-Run the instances of a worker binding at the `container` placement. The server then starts one container for each instance on its own host, with Podman or Docker.
+Run worker instances at the `container` placement. The server starts one container for each such instance on its own host, with Podman or Docker. It runs the container from the create of the instance until its archive.
 
-At the `server` placement, an agent command runs as the server user. It can read every credential of the server, `master_key` and the database. At the `container` placement, an agent command runs in the container of its instance. It reads no file of the server and cannot signal the server process. Each instance runs in the container `kanthord_slot_<client_id>` and keeps its state in its own volume `kanthord_slot_<client_id>`.
+At the `server` placement, an agent command runs as the server user. It can read every credential of the server, `master_key` and the database. At the `container` placement, an agent command runs in the container of its instance. It reads no file of the server and cannot signal the server process. Each instance runs in the container `kanthord_slot_<name>` and keeps its state in its own volume `kanthord_slot_<name>`. `<name>` is the instance name.
 
 The server must run as the kanthord binary on the host. A server inside a container cannot start containers, so `container` is off there. To install the binary, use [Run kanthord on a Mac with Tailscale](run-on-a-mac-with-tailscale.md) or [Run kanthord on a VPS](run-on-a-vps.md).
 
@@ -18,14 +18,14 @@ The server must run as the kanthord binary on the host. A server inside a contai
 
 Replace each placeholder with your value:
 
-| Placeholder      | Value                                                                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `<version>`      | The version of the server, for example `28.0.1`.                                                                                       |
-| `<project-id>`   | The **Identity** value under **Details** on the project page, for example `project_01M5…`.                                             |
-| `<binding-id>`   | The `id` of the repository binding that `kanthord project binding list <project-id> --kind repository --token '<human token>'` prints. |
-| `<human token>`  | The token of [auth jwt generate](../reference/auth/jwt.md).                                                                            |
-| `<client_id>`    | The part after `kanthord_slot_` in the container names that `podman ps --filter label=io.kanthord.owner --format '{{.Names}}'` prints. |
-| `<execution_id>` | The identity of an execution, for example `execution_01M5…`.                                                                           |
+| Placeholder      | Value                                                                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<version>`      | The version of the server, for example `28.0.1`.                                                                                                                    |
+| `<project-id>`   | The **Identity** value under **Details** on the project page, for example `project_01M5…`.                                                                          |
+| `<binding-id>`   | The `id` of the repository binding that `kanthord project binding list <project-id> --kind repository --token '<human token>'` prints.                              |
+| `<human token>`  | The token of [auth jwt generate](../reference/auth/jwt.md).                                                                                                         |
+| `<name>`         | The name of a `container` instance, for example `coder-box-1`. `podman ps --filter label=io.kanthord.owner --format '{{.Names}}'` prints it after `kanthord_slot_`. |
+| `<execution_id>` | The identity of an execution, for example `execution_01M5…`.                                                                                                        |
 
 The commands use Podman. With Docker, write `docker` in place of `podman`.
 
@@ -112,19 +112,21 @@ The server adds its own version as the tag to the name in `worker.container_imag
 
 ## 3. Check the placement
 
-In the project, open the **Bindings** tab, and select **Add** in the **Workers** section. **Placement** shows the `Container` card on, with the runtime that the server uses, for example "with Podman". When the card is off, it shows the reason. Under `runtime_failed`, the card stays on and shows the detail, because a save passes and the instances start after the runtime recovers. See [Troubleshooting](#troubleshooting).
+Open **Workers**, then the worker, for example `coder@1`, and select **Add instance**. **Placement** shows the `Container` option on, with the runtime that the server uses, for example "with Podman". When the option is off, it shows the reason. Under `runtime_failed`, the option stays on and shows the detail, because a create passes and the instance starts after the runtime recovers. See [Troubleshooting](#troubleshooting).
 
-## 4. Add the worker binding
+## 4. Add the instances and the worker binding
 
-1. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section.
-2. Enter a **Name**, for example `coder-box`. Use a name that the project does not hold.
-3. Choose the **Worker**, for example `coder@1`.
-4. Select the **Placement** card `Container`, and set the **Instance count**.
-5. Select **Save binding**.
+1. In the **Add instance** sheet, enter a **Name**, for example `coder-box-1`.
+2. Select the **Placement** `Container`.
+3. Select **Create instance**. Repeat steps 1 to 3 for each execution that runs at once, for example `coder-box-2`.
+4. In the project, open the **Bindings** tab. Select **Add** in the **Workers** section, or open the existing binding of the worker.
+5. Choose the **Worker**, for example `coder@1`.
+6. In **Instances**, select the `container` instances. With two repository bindings or more, choose the **Environment**.
+7. Select **Save binding**.
 
-A later write cannot change the placement of a binding. To move an existing binding, follow [Move a server binding to the worker placement](run-in-a-container.md#move-a-server-binding-to-the-worker-placement). In its step 3, add a binding with another name at the placement `container`, as the list above shows. Skip the steps of the `worker` placement.
+The placement belongs to the instance and never changes. To move a binding to containers, list the new `container` instances and remove the old instances from the binding. Each removed instance finishes its execution first. A `container` instance serves one live binding at most. A second binding that lists it fails with `project.bindings.worker.instance_shared`, because one container runs the image of one environment.
 
-The first container of the binding starts only after the environment of its repository binding is `ready`. The first build pulls a devcontainer image, and it can take several minutes. Read the status of each repository binding:
+The first container of the binding starts its work only after the environment of its repository binding is `ready`. The first build pulls a devcontainer image, and it can take several minutes. Read the status of each repository binding:
 
 ```sh
 kanthord project environment list <project-id> --token '<human token>'
@@ -140,28 +142,28 @@ On the VPS, run `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman ps
 
 ## Read the files of an instance
 
-The server writes the output of each instance to `workers/<client_id>/stderr.log` of its state directory, for example `~/.local/state/kanthord/workers/<client_id>/stderr.log`. On the VPS, the state directory is `/var/lib/kanthord/.local/state/kanthord`.
+The server writes the output of each instance to `workers/<name>/stderr.log` of its state directory, for example `~/.local/state/kanthord/workers/coder-box-1/stderr.log`. On the VPS, the state directory is `/var/lib/kanthord/.local/state/kanthord`.
 
 The Conversation tab of the trace page of the dashboard shows the session entries of each execution. The pi session files also stay in the volume of the instance. To list the files of one execution:
 
 ```sh
-podman run --rm -v kanthord_slot_<client_id>:/v:ro --entrypoint ls docker.io/kanthorlabs/kanthord:<version> /v/state/kanthord/pi/sessions/execution/<execution_id>
+podman run --rm -v kanthord_slot_<name>:/v:ro --entrypoint ls docker.io/kanthorlabs/kanthord:<version> /v/state/kanthord/pi/sessions/execution/<execution_id>
 ```
 
 On the VPS, write `sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman` in place of `podman`.
 
 ## Limits
 
-- An instance reaches the network through the default network of the runtime. It cannot reach `127.0.0.1` of the host. A provider, an OAuth endpoint or an S3 endpoint on the host loopback address, for example a local Ollama or MinIO, fails at the `container` placement. Use the `server` placement for such a binding.
+- An instance reaches the network through the default network of the runtime. It cannot reach `127.0.0.1` of the host. A provider, an OAuth endpoint or an S3 endpoint on the host loopback address, for example a local Ollama or MinIO, fails at the `container` placement. Use instances at the `server` placement for such a binding.
 - An agent command still reaches the memory of its own instance and every network that the container reaches.
-- An agent command at the `server` placement on the same server reaches every container of the server through the runtime. Do not mix `server` bindings of untrusted repositories with `container` bindings on one server.
-- The server removes the volume `kanthord_slot_<client_id>` after you remove the binding and its last slot ends. A lowered count keeps the volume.
+- An agent command at the `server` placement on the same server reaches every container of the server through the runtime. Do not mix `server` instances for untrusted repositories with `container` instances on one server.
+- The server removes the container and the volume `kanthord_slot_<name>` at the archive of the instance. A removal of the instance from a binding keeps both, and the container keeps running with no binding.
 
 ## Troubleshooting
 
 | Symptom                                                                                     | Cause and fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Save binding** fails with `project.bindings.worker.placement_unavailable`                 | The server cannot run containers. `error.details.reason` names the cause: `server_in_container`, `runtime_absent` or `runtime_rootful`. The reason `runtime_failed` never refuses a save, because a stopped runtime recovers. See the rows below.                                                                                                                                                                                                                                                                                                                                            |
+| **Create instance** fails with `worker.instance.placement_unavailable`                      | The server cannot run containers. `error.details.reason` names the cause: `server_in_container`, `runtime_absent` or `runtime_rootful`. The reason `runtime_failed` never refuses a create, because a stopped runtime recovers. See the rows below.                                                                                                                                                                                                                                                                                                                                          |
 | The sheet shows "Off. This server runs in a container…", or `reason: server_in_container`   | The server runs in a container. Install the binary on the host, or keep the `server` placement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | The sheet shows "Install Podman or Docker on the server host…", or `reason: runtime_absent` | No `podman` and no `docker` is on the `PATH` of the server. Do step 1, then restart the server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | The sheet shows "Cannot connect to Podman…", or `reason: runtime_failed` with that text     | The Podman machine is stopped. Run `podman machine start`. The instances start by themselves.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

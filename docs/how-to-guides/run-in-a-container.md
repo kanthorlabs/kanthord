@@ -222,10 +222,10 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 
 ## 8. Run a worker on another host
 
-At the `worker` placement, a worker runs in a `kanthord serve worker` process outside the server container. One process is one worker instance. You add the instance once in the dashboard. Then a worker binding of a project lists the instance.
+At the `worker` placement, a worker runs in a `kanthord serve worker` process outside the server container. One process is one worker instance. You add the instance once in the dashboard, with the placement `Worker`. Then a worker binding of a project lists the instance.
 
 - An instance belongs to one worker, for example `coder@1`. Only a binding of that worker can list it.
-- An instance runs one execution at a time.
+- An instance runs one execution at a time. To run more work at once, add another instance.
 - An instance holds its own copy of each LLM credential, sealed to its key. The server hands no server-held credential to an instance.
 - The **Workers** screen and step 8.6 need a project. Without a project, **Workers** shows "No projects". To create one, open **Projects**, then **New project**, as [step 5](#5-connect-a-repository) shows.
 - The first-task tutorial needs `coder@1` and `reviewer@1`. To run both at the `worker` placement, add one instance of each worker. Do step 8 once for each instance. For a second instance on the same worker host, skip steps 8.1 and 8.2.
@@ -243,7 +243,7 @@ The steps use these placeholders in addition to the table at the start of this g
 
 | Placeholder     | Value                                                                                                    |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
-| `<name>`        | The name of the worker instance, for example `coder-1`. You choose it in step 8.3.                       |
+| `<name>`        | The name of the worker instance, for example `builder-1`. You choose it in step 8.3.                     |
 | `<LAN address>` | The address of the container host on your local network, for example `192.168.1.10`.                     |
 | `<address>`     | The server address that the instance calls, for example `http://192.168.1.10:<port>`. Step 8.1 makes it. |
 | `<arch>`        | `x64` for an `x86_64` worker host, `arm64` for an `arm64` worker host.                                   |
@@ -396,9 +396,9 @@ On a Mac:
 The dashboard shows the instance configuration only once. It holds the private key of the instance. Open a terminal on the worker host before you start.
 
 1. In the dashboard, open **Workers**. Select the card of the worker, for example `coder@1`.
-2. If the worker has no instance, select **Advanced: worker instances**. The **Instances** section opens.
-3. In the **Instances** section, select **Add instance**.
-4. Enter a **Name**, for example `coder-1`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens. This name is `<name>`.
+2. In the **Instances** section, select **Add instance**.
+3. Enter a **Name**, for example `builder-1`. Start with a lowercase letter. Use only lowercase letters, digits and hyphens. This name is `<name>`.
+4. In **Placement**, choose `Worker`. The fields of the worker host appear.
 5. In **Where does it run?**, choose `Linux (systemd)` or `macOS (foreground)`.
 6. In **Address**, enter `<address>`. The field is empty when the dashboard runs on `localhost`.
 7. Select **Create instance**. The sheet shows the **Instance configuration** and the copy block of the host kind.
@@ -536,7 +536,7 @@ When the row shows `Not connected`, read the log of the instance. See [Troublesh
 
 ### 8.5 Give the instance the LLM credential
 
-The agents of the worker call a model with an LLM credential, for example `claude` of the [first-task tutorial](../tutorials/first-task.md#3-add-the-llm-credential). At the `worker` placement, each listed instance needs its own copy of that credential, with the same name. Without the copy, **Save binding** of step 8.6 fails with `agent.configuration.credential_holder_mismatch`.
+The agents of the worker call a model with an LLM credential, for example `claude` of the [first-task tutorial](../tutorials/first-task.md#3-add-the-llm-credential). Each listed instance at the `worker` placement needs its own copy of that credential, with the same name. Without the copy, **Save binding** of step 8.6 fails with `agent.configuration.credential_holder_mismatch`.
 
 For an API key platform, for example `anthropic`:
 
@@ -568,9 +568,8 @@ The CLI can also make a copy with the option `--holder`. See [LLM credentials](.
 2. Enter a **Name**, for example `coder-remote`. Use a name that the project does not hold.
 3. Choose the **Worker** of the instance, for example `coder@1`.
 4. The **Agents** section shows the agent of the worker, for example `swe@1`. When the agent shows the badge `Not enabled`, select **Enable swe@1**. Enter an **Agent provider name**, for example `claude`. Choose the **LLM credential** and the **Model identifier**. Then select **Enable agent**. The badge then shows `Enabled`.
-5. Open **Advanced settings**, and turn on **Worker placement**. The `Server` and `Container` cards turn off, and **Instances** replaces **Instance count**.
-6. In **Instances**, select `<name>`.
-7. Select **Save binding**.
+5. In **Instances**, select `<name> · worker`.
+6. Select **Save binding**.
 
 Within about 15 s, the instance registers for the binding. Its log shows a line that holds `"msg":"Worker application ready"` and `"resource_identity":"worker:kanthord:<binding name>"`. `<binding name>` is the name of step 2. The **Live registrations** item of the **Readiness** panel shows `Done`.
 
@@ -740,15 +739,17 @@ The image holds `bash`, `git`, the OpenSSH client and the `kanthord` binary of t
 
 `podman restart kanthord` keeps the network connection. After `podman rm` of the server, do the worker steps of [Use a newer image](#use-a-newer-image).
 
-### Move a server binding to the worker placement
+### Move a binding to a worker instance
 
-A later write cannot change the placement of a worker binding. The tutorial bindings `coder` and `reviewer` keep the placement `server`. To move `coder` to a worker instance:
+The placement belongs to the instance, and it never changes. A binding holds no placement, so it keeps its name. The tutorial binding `coder` lists the `server` instance `coder-1`. To move `coder` to a worker instance:
 
-1. In the project, open the **Bindings** tab. Select **Remove** on the `coder` row.
-2. In the dialog, select **Make unavailable instead**. The binding keeps its name, and its instance count becomes `0`. The live registration of the binding ends, and the binding claims no node.
-3. Add an instance of `coder@1`, and bind it with another name at the placement `worker`. Do steps 8.1 to 8.6, for example with the instance `coder-1` and the binding `coder-remote`.
+1. Add an instance of `coder@1` at the `worker` placement, and give it the LLM credential. Do steps 8.1 to 8.5, for example with the instance `builder-1`.
+2. In the project, open the **Bindings** tab, and open the `coder` binding.
+3. In **Instances**, select `builder-1 · worker`, and clear `coder-1 · server`.
+4. Select **Save binding**. The registration of `coder-1` shows **Draining** until its live execution ends. Then `coder-1` takes no work of the binding.
+5. To stop `coder-1`, open its instance page, and select **Archive**. The server still runs an instance that no binding lists, until its archive.
 
-Do the same for `reviewer`, for example with the instance `reviewer-1` and the binding `reviewer-remote`. Do not select **Remove binding** in step 2. While a node is not `Completed`, the server refuses the removal of the only `coder@1` binding with `project.bindings.worker.node_unmatched`. A binding with instance count `0` still covers the states of the node. To use the binding again, set its instance count above `0`.
+Do the same for `reviewer`, for example with the instance `builder-reviewer-1`.
 
 ### Clean up a worker host of an earlier version
 
