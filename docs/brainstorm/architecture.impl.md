@@ -1304,7 +1304,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 
 ### The trace page
 
-- The header holds a back link `Traces` to `/traces`, the node name and the state badge.
+- The header holds a back link `Traces` to `/traces`, the node name with a link to the node, and the state badge.
 - The header holds one line of facts: the duration, the total tokens, `Est. cost` and the attempt.
 - A `Reveal` labeled `Details` holds the other facts: the project, the execution, the worker, the start, and the input, output and cached tokens.
 - The header and the tab row stay sticky at the top of the page.
@@ -1445,7 +1445,7 @@ The prompt block:
 - A span with a start and no end shows `Running` and a bar to the axis end while the trace is `open`. In a trace that is not `open`, it shows `No end recorded` and a bar of zero width at its start.
 - A span with no start shows `No start recorded`.
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
-- The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
+- The labels are `Execution`, `Phase <phase>`, `Task <task name>`, `Verification <index>`, `Judgement`, `Evaluation`, `Git <step>`, `Gate <gate mode>`, `Prompt <agent name>` and `Cause label`. A task with no name in the node revision shows `Task <task id>`. The group `Git` holds `worker.git` and `worker.gate`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
   `scheduler.transition` shows `Transition <from state> -> <to state>`.
   The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
@@ -1491,7 +1491,7 @@ The prompt block:
 - The user entry before the first `agent.turn` of each `worker.task` shows collapsed as `Work prompt <task id>`.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
-- A model reply offers `Show in span tree`. It selects its turn span on the `Steps` tab.
+- A model reply offers `Show in steps`. It selects its turn span on the `Steps` tab.
 - Each entry block and each text container holds `min-w-0`. Long tokens wrap, so the page never scrolls sideways.
 
 ### The timeline page
