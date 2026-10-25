@@ -271,6 +271,40 @@ A parked work pull waits at most until the earliest `available_at` of its projec
 The attempt stays open.
 The operations that [Liveness](scheduler-service.md#liveness) names apply this same settlement before their own precondition checks in the same transaction.
 
+## The execution trace
+
+The Scheduler Service writes the root span `scheduler.execution` and the transition span `scheduler.transition` of each execution.
+It writes both with the producer `scheduler`, through [the server spans](tracking-service.impl.md#server-spans).
+Each write follows the commit of the transaction that changes the execution row.
+
+- The root start holds `kanthord.execution.kind`: `steps` for a claim that moves the node to `Executing`, and `evaluation` for a claim that moves it to `Evaluating`.
+- The root start holds `kanthord.worker.name`, the worker name of the claiming worker binding. The trace row takes its `worker_name` from it.
+- The root start holds `kanthord.queue.wait_ms`: the claim time minus `queued_at` of the claimed job. The wait includes a backoff of `available_at`.
+- A job keeps the identity of the first job of its node. The time of that identity is not the time of the enqueue.
+- A new claim writes the root start. A work pull that answers an existing claim writes no root start.
+- The Scheduler ends the root span of every execution that it ends. `kanthord.execution.end` holds one of three values:
+  - `finished` for a release;
+  - `lost` for a loss declaration of the sweep or of an inline settlement;
+  - `revoked` for a revocation at a Mission transition.
+- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, and `human` for a human act.
+- The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
+- The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
+- A revoked trace keeps `stop_reason` null, because no stop reason exists. `kanthord.execution.end` holds `revoked`.
+- The timeline and the span detail show "Revoked by a human" for a revocation with the cause `human`.
+- A release, a loss and a revocation with the cause `assessment` each write one `scheduler.transition` span. It is a child of the root span, with the record identity `<root_span_id>:transition`.
+- A revocation with the cause `human` writes the root end only. The [act trace](mission-service.impl.md#the-act-trace) of the Mission Service holds that transition.
+- The start and the end of a transition span are the time of the transition, and its status is `Ok`.
+- The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
+- The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
+- The transition span holds `kanthord.transition.rule`, with one of four values:
+  - `failure_limit` when the count of consecutive failures moves the node to `Paused`;
+  - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
+  - `rework_limit` when a `criterion-not-met` assessment at `mission.rework_limit` moves the node to `Blocked`;
+  - `none` otherwise.
+- With a rule other than `none`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`.
+- A transition span of a node that keeps its state holds the same state in both attributes.
+- No service reads these spans to decide, and a lost span changes no node state.
+
 ## Retention
 
 - The Scheduler Service exposes no delete of an execution record, so under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) it keeps every execution record, and no sweep deletes one.

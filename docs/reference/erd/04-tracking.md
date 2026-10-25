@@ -142,6 +142,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 
 - A trace belongs to exactly one project or to no project. A server operation that concerns several projects opens one root span, and so one trace, for each project, and the root spans link to each other.
 - A unique index covers `tracking_trace.execution_id` where it is not null.
+- `node_id` and `attempt` of a trace with no execution name the node and the attempt of its server operation, or hold null. An act trace of the Mission Service names its node.
 - The first stored record of a trace creates its `tracking_trace` row. The server record of the Scheduler Service or the first write of a native worker creates it. For an execution, the Scheduler Service opens the root span after the claim records the execution, and `trace_id`, `root_span_id`, `project_id` and `execution_id` equal the values of the execution record. An imported record never creates a trace row.
 - A trace has exactly one root span, and `root_span_id` names it. A lost write of the root span leaves no root row. The trace then stays readable through its other spans, and a reader meets an unresolved parent. The representation of a missing root is open.
 - An ingestion carries no project. It names an existing trace, and it assigns no trace and reassigns no trace. The Tracking Service resolves the project from `tracking_trace`.
@@ -152,6 +153,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 ### Spans
 
 - `start_time` or `end_time` is not null. A start with no end is an unfinished span. An end with no start creates the span with no start time.
+- A span row holds no copy of a column of its trace row and no column that an attribute derives. A read joins the trace row and reads `attributes`.
 - The Tracking Service persists a start when it arrives and an end when it arrives, so a reader reads a span that holds a start and no end. The root span of an execution is persisted when the server opens it.
 - The first record that creates a span binds it to its producer. A record that names that span from another producer is refused.
 - No record replaces a value that an earlier record set. A second end of one span is refused.

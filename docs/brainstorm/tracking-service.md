@@ -231,6 +231,11 @@ It defines no authorization model of its own.
 The [Project Service](project-service.md#authorization-and-credential-custody) owns that authorization.
 A reader lists the traces with their summaries, and it filters and sorts that list.
 A reader reads the spans, the telemetry texts and the session entries of one trace.
+A reader reads the [timeline](tracking-service.vocabulary.md#timeline) of one execution, one node or one project.
+The timeline orders the traces of its scope by their start, and it lists the spans of each trace below its root.
+A reader reads the [analytics](tracking-service.vocabulary.md#analytics) of the stored spans.
+The analytics hold the cost of the turns and the percentiles of a duration, by group and by time bucket.
+The analytics add up the measurements that the spans hold, as the trace summary does.
 A reader of an open trace reads it again to follow it.
 No operation streams a trace, a span or a session entry.
 

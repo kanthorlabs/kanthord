@@ -137,6 +137,35 @@ The set is closed and it holds three values.
 
 The trace of a running execution of `Add password reset` is `open`.
 
+## timeline
+
+A timeline is one ordered history of the stored traces of an execution, a node or a project.
+It orders the traces of its scope by their start.
+It holds the root span of each trace and the spans directly below that root.
+The timeline of the node `Add password reset` holds each execution, each transition and each human act on that node.
+
+## analytics
+
+Analytics are the totals and the percentiles of the measurements that the stored spans hold, by group and by time bucket.
+The analytics of project `Billing` hold the cost of each model by day and the p90 of the tool latency.
+
+## analytics measure
+
+An analytics measure names the value of one duration read.
+The set is closed and it holds six values.
+
+- **span_duration**
+- **tool_latency**
+- **verification_time**
+- **queue_wait**
+- **review_wait**
+- **revision_turns**
+
+## act trace
+
+An act trace is the trace of one human act on a node. Its root span names the operation of the act.
+The pause of `Add password reset` by a human opens one act trace.
+
 ## record disposition
 
 A record disposition states the result of one record in an acknowledgement.
