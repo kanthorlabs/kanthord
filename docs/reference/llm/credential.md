@@ -113,7 +113,7 @@ The health report, `verify`, [`llm provider check`](provider.md) and [`llm model
 - The server runs one refresh of a revision at a time. A second check waits and uses the new access token.
 - When a live execution pins the revision before the refresh starts, the check does not refresh. This also applies to a pin that commits after the check reads the credential. An access token that expires within 5 minutes then answers `unauthorized`, without a remote call.
 - A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change.
-- When a live execution pins the revision during the refresh, the server refuses the write. `verify` then answers `unknown` with `unreachable`, and the stored value does not change.
+- The server tests the pin again at the write. A handover waits for a refresh in flight, so this test is a guard. When the guard refuses the write, `verify` answers `unknown` with `unreachable`, and the stored value does not change.
 - In server and container placements, a handover to an execution waits until a refresh of its revision ends, and then hands over the new value. When the refresh does not end in the wait, the handover answers 503 [`worker.handover.refresh_in_flight`](../worker/handover.md), and the worker retries it.
 - The check of an instance copy never refreshes. An access token that expires within 5 minutes answers `unauthorized`, without a remote call.
 
