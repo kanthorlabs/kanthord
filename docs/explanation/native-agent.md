@@ -174,7 +174,8 @@ A human controls the prompt of a native agent through two prompts. The framing a
 
 **Agent prompt.** Each file has a shipped text that is embedded in the binary. An upgrade replaces it together with the code that depends on it.
 
-- `base.md` is the Standard. Every agent reads it.
+- `base.md` is the Standard. Every agent reads it. It holds only the rules that every agent shares, so it holds no code rule.
+- The code, test and finding rules stand in both `swe@1.md` and `re@1.md`, in the same words, because `re@1` judges the work of `swe@1`.
 - `<agent_name>.md` is the Role, for example `swe@1.md`.
 - `workbench.md` is the Workbench behavior. Only a Workbench session reads it, and it is part of the system prompt.
 

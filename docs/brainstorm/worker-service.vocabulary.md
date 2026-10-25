@@ -114,7 +114,7 @@ Each model inference call uses the model [connector](architecture.vocabulary.md#
 A prompt part is one text of the system prompt of a native agent. The [Agent component](agent.vocabulary.md#prompt-part) defines the closed set.
 The Agent prompt of the agent and the Binding prompt of each repository binding of the node supply the parts. The framing closes the system prompt, and it is no prompt part.
 
-The shipped `base.md` is the `standard` part, and it describes a senior software engineer.
+The shipped `base.md` is the `standard` part, and it states the rules that every agent shares.
 `coder@1` declares the Role of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the Role of `re@1`, `assets/prompt/re@1.md`.
 The Role of `re@1` states that the agent judges evidence against the criterion and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the Binding prompt of `swe@1` "The work product is TypeScript. A test file sits beside its source file."

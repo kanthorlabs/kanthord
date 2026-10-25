@@ -140,7 +140,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 ## Prompt composer
 
 - A human controls the prompt of an agent session through two prompts: the Agent prompt and the Binding prompt. The framing and the prompt templates are KanthorD protocol, not a prompt of a human.
-- The Agent prompt is a set of three files. `base.md` is the Standard that every agent reads. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
+- The Agent prompt is a set of three files. `base.md` is the Standard that every agent reads. It holds only the rules that every agent shares, a non-coding agent included. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
 - The component ships the text of each file. The binary embeds it, and no command downloads it.
 - A file of the same name in the agent directory replaces the shipped text of that file whole. The agent directory is a path of the server host.
 - An empty agent directory selects the shipped texts only.
