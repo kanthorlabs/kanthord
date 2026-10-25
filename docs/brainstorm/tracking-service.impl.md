@@ -119,6 +119,8 @@ A root span of an execution stays open for hours.
 The implementation persists the root span when the server opens it, before a child span exists.
 It persists the start of a span when the start arrives, and the end of a span when the end arrives.
 A reader reads a span that holds a start and no end.
+A span with no end under a root span with an end is a span with no end recorded.
+A reader shows no duration for it.
 No reader waits for the root span.
 
 ## Session entries

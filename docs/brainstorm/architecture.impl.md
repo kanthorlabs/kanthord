@@ -1310,6 +1310,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The span tree is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
 - A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`.
 - A span with a start and no end shows `Running` and a bar to the axis end while the trace is `open`. In a trace that is not `open`, it shows `No end recorded` and a bar of zero width at its start.
+- A span with no start shows `No start recorded`.
 - An `agent.turn` row shows its tokens and `Est. cost`. A `worker.task` and an `agent.session` row show the sums of the turns below them.
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
 - The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
@@ -1370,6 +1371,9 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - An act row shows the act label, `by a human`, and the time. `Show reason` reads its `reason` text through `tracking.text.get`.
 - An act with a link to an execution offers `Open trace` of that execution.
 - A depth-2 row of another span shows the label of [the span tree](#the-span-tree) of the trace page and its duration.
+- A depth-2 span with a start and no end shows `running` while its root span holds no end, or while the loaded pages hold no root span of its trace.
+- A depth-2 span with a start and no end under a root span with an end shows `No end recorded` and no duration.
+- A depth-2 span with no start shows `No start recorded` and no duration.
 - A root span of a loaded page can hold no end. While the page is visible in that case, it reads its loaded pages again every 5 seconds.
 - Otherwise the page reads once.
 - The node sheet offers `Timeline`, which opens `/timeline?node_id=<node id>`.
