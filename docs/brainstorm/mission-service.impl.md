@@ -201,6 +201,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - A new `filename` of a terminal node answers 409 `mission.import.terminal_change`. A task that enters, leaves or changes its `filename` in a terminal node answers the same code. An omitted terminal node also answers it.
 - A nonterminal node can name a terminal node in `depends_on`. An import that retires a node keeps the dependency of a terminal dependent on that node.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
+- The preview digest covers the mission identity, the mission version, the normalized entries and the sorted `creates`, `updates` and `retirements` sets. A classification change between the preview and the apply, for example after a discard, answers 409 `mission.import.retirement_mismatch`.
 - The import result maps each node file name to its node identity and each task file name to its task identity.
 - A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
@@ -819,7 +820,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
 - Tests include terminal nodes in unchanged export-import cycles and assert a no-op.
-- Tests re-import the export of a mission with a `Completed` node after a new revision, a rename or a removal of its binding, with one new plan file. They assert a no-op for that node, keep its pinned binding revision and create the new node. They assert a change for a nonterminal node with a pin from before a removal of its binding.
+- Tests re-import the export of a mission with a `Completed` node and one new plan file. The binding of that node has a new revision, a new name or a removal. They assert a no-op for that node, keep its pinned binding revision and create the new node. They assert a change for a nonterminal node with a pin from before a removal of its binding.
 - Tests import an edited plan file and an edited task file of a `Completed` node. They assert a no-op and no new revision.
 - Tests refuse a new `filename`, a task change and a retirement of a `Completed` node with `mission.import.terminal_change`.
 - Tests assert human-only access and both exact export answer shapes.
@@ -836,6 +837,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that a terminal dependent keeps its dependency.
 - Tests assert that preview changes no state and answers the same refusals.
 - Tests assert that a stale mission version and a changed digest refuse the apply with no effect.
+- Tests preview an edit of a `Pending` node, discard the node, and refuse the apply with `mission.import.retirement_mismatch`.
 - Tests assert that one retirement increments the mission version once.
 - Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
 - Tests refuse an `implement` node verification that no task of the node holds with the exact text with `mission.import.verification_uncovered`, and the apply writes nothing. Tests accept an `implement` node with no task on every write path.
