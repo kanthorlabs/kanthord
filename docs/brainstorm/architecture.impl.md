@@ -1282,70 +1282,217 @@ The trace pages show what an execution did, so that a human can debug and optimi
 ### The trace list
 
 - `/traces` lists the trace summaries of every project, newest first, 50 rows per page with a pager.
+- The pills `All`, `Failed` and `Open` sit in one row above the list. `Failed` sets `state=error`. `Open` sets `state=open`.
 - The toolbar holds the project filter, the state filter, the time range and the search field. `More filters` reveals the worker, agent, model, error type and cause category filters, the minimum duration, the minimum tokens, the minimum cost and the sort.
+- On compact width, a `Filters` button opens a bottom `Sheet`. It holds the project, time range, worker, agent, model, error type and cause category filters, the minimums and the sort.
+- The sheet holds a draft and applies it on `Apply`, so one change triggers one read. The pills and the search field stay outside the sheet.
 - The worker, agent, model, error type and `cause_category` filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
+- The cause category filter labels each value with its category label. `cause_category` accepts only a cause category of the closed set.
+- The list has no stop reason filter. The search field sends `q`, and `q` matches the stop reason.
 - The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The default is `Last 7 days`.
 - The search field sends `q` after 300 ms without a keystroke.
-- The query string holds every filter value and the sort, so a link reproduces the first page of the list.
-- A row shows the node name as its title, or the execution identity for a trace with no node. It shows the state badge and the stop reason badge.
-- A row shows the fields worker, agent, model, started, duration, tokens, `Est. cost`, turns, tools and errors.
-- A row opens `/traces/:traceId`. A row of a trace with an error opens it at `first_error_span_id`.
+- The query string holds every filter value, `node_id` and the sort, so a link reproduces the first page of the list.
+- A row shows the node name as its title, or the execution identity for a trace with no node. It shows the state badge.
+- A row shows a cause line from `cause` of the list item: `<category label> - <subcategory>`, with a space in place of each `_` of the subcategory.
+- The cause line of an `unattributed` cause reads `Unattributed - suspects <a>, <b>`, in the order of the suspects. With no suspect, it reads `Unattributed`.
+- An `open` row shows `Open - <duration>` as its cause line. A row with no cause and no error shows no cause line.
+- A row shows the fields worker, attempt, duration, `Est. cost`, started, turns and `Errors (incl. recovered)`.
+- The error count includes the recovered `tool_error` spans, so its label says so.
+- On compact width, a row holds three lines: the title and the state badge, the cause line, then the fields. From `lg`, the row holds one line.
+- A row opens `/traces/:traceId` with no `tab` and no `span`.
 - The empty text reads "No traces match these filters." With no filter, it reads "No traces yet. A trace opens when a worker claims a node."
 
 ### The trace page
 
-- The header shows the node name with a link to the node, the state badge and the stop reason badge.
-- The header facts are the project, the execution, the attempt, the worker, the start, the duration, the input, output and cached tokens, and `Est. cost`.
-- A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the `Span tree` tab.
-- The dashboard computes no cause. It only picks the span that it highlights as the cause.
-- An `unattributed` cause shows "Unattributed. Suspects: ..." with the action `Label cause`.
-- `Label cause` calls `tracking.cause.label` with a category, a subcategory and a `reason`.
-- The trace page charts the input tokens of each `agent.turn`.
-- The page holds two tabs, `Span tree` and `Conversation`. The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
-- While the page is visible, an `open` trace reads its summary and its spans again every 5 seconds. It reads its entries after the last cursor. The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
+- The header holds a back link `Traces` to `/traces`, the node name and the state badge.
+- The header holds one line of facts: the duration, the total tokens, `Est. cost` and the attempt.
+- A `Reveal` labeled `Details` holds the other facts: the project, the execution, the worker, the start, and the input, output and cached tokens.
+- The header and the tab row stay sticky at the top of the page.
+- The page holds three tabs in one horizontal row under the header: `Summary`, `Steps` and `Conversation`.
+- The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
+- `tab` takes `summary`, `steps` or `conversation`. An absent or unknown `tab` selects `summary`. The page reads the old value `span_tree` as `steps`.
+- A write that opens a span while no span is open pushes a history entry, from every tab. Every other write replaces the entry.
+- A link with `span` mounts the steps tree and opens the span level above it.
+- While the page is visible, an `open` trace reads its summary every 5 seconds. It reads its entries after the last cursor.
+- An `open` trace reads its spans again only when `span_count`, `error_count`, `total_tokens` or `ended_at` of the summary changes.
+- The poll holds while the document is hidden. It resumes on `visibilitychange`.
+- The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
 - A read of a deleted or unknown trace shows "This trace is expired or unknown." with a link back to the list.
+
+### The summary tab
+
+- The dashboard computes no cause. It only picks the span that it highlights as the cause.
+- On compact width, the tab shows these blocks in order: the diagnosis block or the `Now` block, the attempts block, the time block, the plan block and the prompt block.
+- From `lg`, the tab shows the diagnosis block or the `Now` block, then the steps tree with a sticky span pane, then the attempts block.
+- From `lg`, the time block, the plan block and the prompt block follow in one row.
+- The tab reads the traces of the node once. It passes them to the attempts block and to the diagnosis block.
+
+The diagnosis block:
+
+- The block `What went wrong` shows the cause line, one sentence, at most 4 evidence lines, `Open causal span`, the error stepper and `Label cause`.
+- The block reads the cause from the label span `tracking.cause_label` first. Otherwise it reads `kanthord.cause.*` of the root span end.
+- The block takes a category or a subcategory outside the closed sets as no cause.
+- The sentence names the causal span and the stop, for example "Turn 5 of Task t2 failed: rate_limited. The execution stopped: provider_failed / rate_limited."
+- An `unattributed` cause shows "Unattributed. Suspects: ..." with the action `Label cause`.
+- A labeled cause shows "Labeled by <username>" and its `reason` text. The text comes from `tracking.text.get` with the text id `<root_span_id>.cause_label:reason`.
+- A `steps` trace with no cause can precede an evaluation that sets a rework cause. The block then looks for the next execution of the same attempt with the kind `evaluation`.
+- When that execution holds a cause, the block shows "Reworked by review", the cause line of that cause and a link to that trace.
+- A trace with no cause and no rework cause shows "No failure" and the count of recovered errors.
+- `Open causal span` selects the causal span. An evidence link selects its span.
+- The error stepper reads `<index>/<count> errors`. Its previous and next controls step through the causal span and the consequence spans.
+- After a label, the block reads the spans again.
+- `Label cause` opens a `Sheet`. The side is `bottom` on compact width and `right` from `lg`. It shows on every trace with a cause.
+- The sheet holds the category select, the subcategory select of that category, a `reason` text, `Cancel` and `Save label`.
+- The category select lists the 8 categories except `unattributed`. The subcategory select labels each value with a space in place of each `_`.
+- The category starts at the first suspect of an `unattributed` cause. Otherwise it starts at the category of the cause.
+- The subcategory starts at the subcategory of the cause when it belongs to the category. Otherwise it starts at the first subcategory of the category.
+- A change of the category resets the subcategory to the first subcategory of the new category.
+- `Save label` stays disabled while the draft is invalid or the call is pending. A draft is valid when the trimmed `reason` holds 1 to 4096 characters.
+- `Save label` calls `tracking.cause.label` once with a category, a subcategory and a `reason`.
+- The sheet shows the message of the error. A 409 `tracking.cause.trace_open` shows "The trace is still open. Label it after it ends."
+
+The causal span:
+
+- The page picks one causal span with the first rule that matches. It reads `kanthord.stop.reason` and `kanthord.stop.code` of the root span.
+  - A `provider_failed` stop gives the last `agent.turn` whose `error.type` equals the stop code.
+  - An `environment_failed` stop with the code `command_absent` gives the last `worker.verification` with `process.exit.code` 127.
+  - A `no_progress` stop gives the `worker.task` that holds `kanthord.stop.reason`.
+  - A trace with a `worker.evaluation` span whose result is `criterion-not-met` gives that span.
+  - Otherwise the `Error` span with the latest `end_time` gives the span. That span has no `error.type` `stopped` and no `Error` child. The deeper span wins a tie.
+  - Otherwise the root span gives the span.
+- Each `Error` span has a role. An `Error` span that ends at the stop time, an `Error` ancestor of the causal span, and a span with `error.type` `stopped` are `consequence`.
+- Every other `Error` span is `recovered`. The error steps are the causal span and the consequences, in `end_time` order.
+- The page picks and computes the roles once for each span list.
+
+The evidence lines follow the category of the cause:
+
+- `prompt`: the `kanthord.prompt.parts` of the agent, the work prompt of the task and the reply of the causal turn.
+- `plan`: the requirement, the criterion and the verifications at the attempt revision, the `rationale` text of a rework, and the turns of each task.
+- `worker_action`: the `error` text of `worker.gate` or `worker.git`, and `kanthord.stop.detail`.
+- `llm_provider`: `error.type` of the causal turn, `kanthord.stop.detail` of the root span, `gen_ai.provider.name` and the model.
+- `model`: the reply of the causal turn, `gen_ai.response.finish_reasons`, the `rationale` text of a rework and the count of `task-revision` turns.
+- `environment`: the `command` and `output` texts of the causal verification, and the `environment.*` span that ends `Error`.
+- `infrastructure`: `kanthord.stop.detail` and the last span `end_time` of a lost execution.
+- `human`: the reason of the linked act trace.
+- `unattributed`: the lines of each suspect category, in the order of the suspects, up to 4 lines.
+
+The `Now` block:
+
+- An `open` trace shows the block `Now` in place of the diagnosis block.
+- The block shows the deepest span with no `end_time` and its age.
+- The block shows the time since the latest span `created_at`. A gap above 6 poll intervals shows "No new record for <n> min".
+
+The attempts block:
+
+- The block `Attempts of this node` reads up to 100 traces of the node with `tracking.trace.list` and the attempts of the node. A trace with no node reads nothing.
+- Each attempt shows `Attempt <n> (v<revision>)`, with the executions of the attempt in `created_at` order. One attempt holds several executions, because each rework stays in the attempt.
+- An attempt whose node revision differs from the previous attempt shows `Plan changed in (v<revision>)`.
+- An execution row shows its kind from `kanthord.execution.kind` (`steps` or `evaluation`), its state, its cause line and its duration.
+- An execution whose cause equals the cause of the previous failed execution of the attempt shows `Repeat`. The current trace shows `This trace`.
+- A repeated `plan` or `prompt` cause shows "A retry does not fix this. Change the plan or the prompt."
+- The current execution shows `Prompt changed` when a `<part>:<name>` digest of `kanthord.prompt.parts` or `kanthord.prompt.templates_digest` differs from the previous execution.
+- The comparison reads the spans of the previous execution once. No other execution carries the mark.
+- An execution row opens its trace on the `Summary` tab. A failed read shows its error and `Retry`.
+
+The time block:
+
+- The block `Where time went` shows the duration of the trace and one row for each line, with its time and a `Progress` bar of its share.
+- Each line is the union of the intervals of its spans, so parallel spans count once.
+- `tool_latency` is the union of the `agent.tool` intervals. `verification_time` is the union of the `worker.verification` intervals.
+- `Git` is the union of the `worker.git` and `worker.gate` intervals.
+- `Model calls` is the union of the `agent.turn` intervals minus `tool_latency`.
+- `Worker other` is `duration_ms` minus the union of all other lines, and at least 0.
+- The line `queue_wait` comes from `kanthord.queue.wait_ms` of the root span. It shows below the total and outside it.
+- One line shows the turn count, the tool count and the cache share of the input tokens.
+- An `open` trace computes the lines at the current time.
+
+The plan block:
+
+- The block `The plan <name> (v<revision>)` shows the node at the revision of the trace attempt. A trace with no node or no attempt shows no plan.
+- The block shows the requirement and the criterion cut to two lines. Each has `More`.
+- The block shows the task states on one line. A task is `done` when its `worker.task` holds `kanthord.task.result` `complete`.
+- A task is `failed` when its `worker.task` has the status `Error`. Otherwise it is `open`.
+- `Open node` opens the node sheet.
+
+The prompt block:
+
+- The block `What the agent received` shows `System prompt <length> chars` with `Show`.
+- The block lists the layers of `kanthord.prompt.parts` as `<part> <name>` items, in reading order.
+- The block shows one row `Work prompt <task id> <length> chars` for each task. The row shows the template of the first turn of the task and `Show`.
+- The page reads the session entries only when the block opens a prompt.
+- `Open in conversation` opens the Conversation tab at the entry.
+- A trace with no `agent.prompt` span shows "No prompt record for this trace."
 
 ### The span tree
 
-- The span tree is one tree of the spans, with a waterfall bar on each row. The axis runs from the root start to the latest start or end of the trace.
-- A row shows the span label, the duration and the status badge. A row with the status `Error` shows the badge `Error`.
+- The `Steps` tab shows the span tree. The tree is one tree of the spans.
+- The toolbar holds one row of pills: `Errors <count>`, `Slow`, `Agent`, `Checks` and `Git`. The row scrolls inside itself, never the page.
+- The search field follows the pills. A `Reveal` labeled `More` holds `Expand all`, `Collapse all` and `All errors`.
+- A pill keeps the spans that it names and their ancestors. The search keeps each match and its ancestors.
+  - `Errors` keeps the causal span and the consequences. `All errors` adds the recovered spans.
+  - `Slow` keeps each span with a self time of at least 10 % of `duration_ms`. The self time is the duration minus the union of the child intervals.
+  - `Agent` keeps `agent.session`, `agent.turn` and `agent.tool`.
+  - `Checks` keeps `worker.verification`, `worker.evaluation`, `worker.release_gate` and `worker.setup`.
+  - `Git` keeps `worker.git` and `worker.gate`.
+- A row holds one line: the chevron, the label, the duration and the status badge. Tokens and `Est. cost` show in the span level.
+- A row with the status `Error` shows the badge `Error`. The causal span row shows the mark `Cause`. A recovered row shows a muted `recovered`. A consequence row keeps `Error`.
+- A run of 2 or more consecutive `agent.turn` siblings folds into one group row `Turns <first>-<last>`. The row shows the turn count, the duration and the count of tool errors.
+- A group starts collapsed. A turn with the status `Error` stays outside the group, and so does a turn that the active pill keeps.
+- A `worker.task` row shows the task name from the node revision of the trace attempt. Without a name, it shows the task id.
+- The indent is 12 px for each level, up to 4 levels. A deeper row keeps the indent of level 4 and shows its depth as a number.
+- From `lg`, each row adds a waterfall bar column. On compact width, no row shows a bar.
+- The axis runs from the root start to the latest start or end of the trace.
 - A span with a start and no end shows `Running` and a bar to the axis end while the trace is `open`. In a trace that is not `open`, it shows `No end recorded` and a bar of zero width at its start.
 - A span with no start shows `No start recorded`.
-- An `agent.turn` row shows its tokens and `Est. cost`. A `worker.task` and an `agent.session` row show the sums of the turns below them.
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
 - The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
   `scheduler.transition` shows `Transition <from state> -> <to state>`.
   The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
 - The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`.
-- The controls are a search field over the labels and the attribute values, and an `Errors only` toggle.
-  The toggle group `All`, `Agent`, `Tools`, `Checks` and `Git` follows them. `Expand all` and `Collapse all` follow them.
-- `Errors only` keeps each error span and its ancestors. The search keeps each match and its ancestors.
 - The tree takes the keyboard: up and down move the selection, right expands, left collapses, and Enter opens the span detail.
 - The waterfall bar uses the theme tokens only. Its text repeats the duration, so the bar holds no information alone.
 
 ### The span detail
 
-- From `lg`, the span detail is a panel beside the span tree. Below `lg`, it opens in a `Sheet`.
-- It shows the label, the status, the start, the end, the duration and the offset from the root start.
+- From `lg`, the span detail is a panel beside the span tree. Below `lg`, it is a stacked span level that renders over the tree.
+- The tree stays mounted under the span level, so it keeps its scroll position.
+- The span level header holds the back control `Back to steps`, the span label, and one line with the status, the error type, the duration and `Est. cost`.
+- The header holds a bar of the span against the trace extent. `Back to steps` removes `span`.
+- A sticky footer holds `Previous error`, `Conversation` and `Next error`. From `lg`, the same controls sit at the end of the panel.
+- The error controls step through the error steps. `Conversation` shows for a span with a session entry and opens the Conversation tab at that entry.
+- The block `Why this span` reads "Causal span of this trace.", "Consequence of the stop." or "Recovered error." by the role of the span. It also shows the status of the parent.
+- The first block depends on the operation.
+  - An `agent.turn` shows the provider error, else the model reply. Then it shows the tool calls with a link to each tool span, and the thinking in a `Reveal`.
+  - The causal turn of a `provider_failed` stop shows `kanthord.stop.detail` of the root span as its error.
+  - An `agent.tool` shows its result text with the outcome, then the arguments of its call from the model reply entry of its turn.
+  - A `worker.verification` shows the `output` text, `process.exit.code` and `kanthord.verification.timed_out`, then the `command` text.
+  - A `worker.git` and a `worker.gate` show the `error` text and `kanthord.gate.violation`, then `kanthord.git.step`, `kanthord.gate.mode` and `kanthord.gate.changed`.
+  - A `worker.task` shows the stop facts `kanthord.stop.*`, then `kanthord.task.revision_count`.
+  - A `worker.evaluation` shows `kanthord.evaluation.result`, `kanthord.evaluation.stage`, `kanthord.evaluation.unmet_grounds` and the `rationale` text.
+  - A `scheduler.execution` shows the cause, `kanthord.stop.reason`, `kanthord.stop.code`, `kanthord.stop.detail` and `kanthord.execution.end`, then `kanthord.queue.wait_ms`.
+- It shows the start, the end, the duration and the offset from the root start.
 - It shows the model, the input, output and cached tokens, `Est. cost`, the finish reason and the model duration of a turn.
-- It shows every attribute, every event and every link of the span, and the telemetry texts that `text_ids` names.
+- `All attributes`, `Events` and `Texts` stay in collapsed `Reveal` blocks for every span. `Texts` holds the telemetry texts that `text_ids` names. The span detail shows every link of the span.
 - A turn and a tool take their session from `gen_ai.conversation.id`.
-- A turn shows its model reply entry: the text, the collapsed thinking and each tool call with a link to its tool span.
-- A tool shows the arguments of its call from the model reply entry of its turn, and its result entry.
-- A verification shows its `command` and `output` texts. A judgement and an evaluation show their `rationale` text.
-- A turn or a tool offers `Open in conversation`. It opens the Conversation tab at its entry.
+- The span level of an `agent.turn` and of an `agent.session` charts the input tokens of each `agent.turn` of the session.
+- The chart shows one horizontal bar for each turn in `kanthord.turn.index` order, with the turn index and the value as text. It marks the selected turn.
+- An error text is never cut. An identity wraps at any character and has a copy control.
 - A span that references an entry that the store does not hold shows "The entry is not stored."
 
 ### The conversation
 
-- The Conversation tab shows the session entries of one agent session in order. A trace with two or more sessions shows a session selector, labeled with the agent name and the start of each session.
+- A sticky head holds the session select and `Jump to the causal entry`. A trace with two or more sessions shows the select, labeled with the agent name and the start of each session.
+- `Jump to the causal entry` selects the entry of the causal span: the model reply entry of a causal turn, or the tool result entry of a causal tool. It hides when the causal span has no entry.
+- The Conversation tab shows the session entries of one agent session in order.
 - A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
 - A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
 - A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt`. A system message of pi shows `System prompt update`. They expand to the prompt text and its sections.
+- The user entry before the first `agent.turn` of each `worker.task` shows collapsed as `Work prompt <task id>`.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."
-- A model reply offers `Show in span tree`. It selects its turn span on the `Span tree` tab.
+- A model reply offers `Show in span tree`. It selects its turn span on the `Steps` tab.
+- Each entry block and each text container holds `min-w-0`. Long tokens wrap, so the page never scrolls sideways.
 
 ### The timeline page
 
@@ -1406,17 +1553,24 @@ The trace pages show what an execution did, so that a human can debug and optimi
 ### The trace links of other pages
 
 - A row of the Scheduler page offers `Trace`. It opens `/traces/<trace_id>` of the execution.
-- An execution row of the Attempts tab of the node sheet offers `Trace`. The row shows turns, tokens, `Est. cost` and errors from `tracking.trace.get`.
+- The Attempts tab of the node sheet reads the traces of the node with one `tracking.trace.list` call with `node_id` and 100 items.
+- An execution row of the Attempts tab offers `Trace`. The row shows turns, tokens, `Est. cost` and errors from that list. A trace that the list does not hold shows `Trace expired`.
+- An execution row of the Attempts tab shows a `Badge` with the category label and the subcategory of the cause. An `unattributed` cause shows `Unattributed` and the first suspect.
 - A registration row of the instance page with a live execution offers `Trace`.
 - The paused detail of an Overview item with an execution offers `Last trace` for the newest execution.
+- The paused detail reads that trace with `tracking.trace.list` and `execution_id`, and shows its cause line beside `Last trace`. A failed read shows no cause line and keeps the link.
 - The project page header offers `Traces`. It opens `/traces?project_id=<project id>`.
 - The worker page offers `Traces`. It opens `/traces?worker_name=<worker name>`. The agent page offers `Traces`. It opens `/traces?agent_name=<agent name>`.
+- A cost row or a time row of the analytics page offers `Traces` for the group `node_id` or `model`. It opens `/traces?node_id=<key>` or `/traces?model=<key>`, with the key encoded. A row of another group or a null key has no link.
 - The Workbench pages hold no trace link, because a workbench session is no execution.
 
 ### The phone width
 
 - At 390 px, each trace page shows one column with no horizontal page scroll.
-- A span tree row shows the bar below its label. The span detail opens in a full screen `Sheet`.
+- Every control is at least 44 px high on compact width. The shared wrapper `TouchTarget` gives each control that height.
+- Every tree row is at least 44 px high. The chevron is its own 44 x 44 px target.
+- The pill row scrolls inside itself. Hover holds no information alone.
+- The span level is a stacked screen with the back control `Back to steps`. The `Label cause` sheet and the filter sheet open as a bottom `Sheet`.
 - Identities use `break-all`, and long texts wrap inside their block.
 
 ## The dashboard onboarding
