@@ -55,7 +55,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - It performs the model inference calls of that runtime.
 - It holds every fact about an LLM platform, so the Worker Service holds none.
 - The model check runs one tool round trip through that runtime for a credential, a model identifier and a reasoning effort. It answers `ok` or a provider failure code.
-- The model check is a warning for the human. It stores nothing, and no write calls it.
+- The model check is a warning for the human. It stores only a refreshed OAuth value, by [the OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check), and no write calls it.
 
 ## Placement
 

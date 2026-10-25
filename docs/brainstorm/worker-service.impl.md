@@ -1149,6 +1149,10 @@ It proves that a reviewer execution takes no file of the workspace.
 - At the `server` and the `container` placements, the pool host derives the `client_secret` of the slot. The slot driver delivers it to the instance once at the start. The `thread` driver puts it in `workerData`. The `container` driver sends it in the `init` frame. The worker unit holds no `master_key`.
 - A `client_secret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
 - A handover envelope that the handover key does not open ends the execution with `worker.handover.decryption_failed`.
+- In server and container placements, custody refuses a handover of a revision with an OAuth refresh in flight, and the handover pins nothing. [The OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check) rules the refusal.
+- The handler then waits until the refresh ends and runs the handover again. The wait ends 5 s before the 30 s route timeout of `worker.handover`, so the handler answers before the route timer.
+- When the refresh does not end in the wait, the handler answers 503 `worker.handover.refresh_in_flight`. The refusal is retryable, and nothing commits after the answer.
+- The worker application retries a `worker.handover.refresh_in_flight` answer with a new key, with the backoff of an indeterminate result, until the claim expires. It does not retry another 503 or a 504.
 
 ## The SSH signature relay
 
