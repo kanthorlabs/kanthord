@@ -167,14 +167,15 @@ The agent `env@1` repairs a failed environment of a repository binding on the se
 
 A human controls the prompt of a native agent through two prompts. The framing and the templates of the framing belong to the KanthorD protocol, not to a prompt of a human.
 
-| Prompt         | Purpose                                                                | Owner                                 | Source                                                                                               |
-| -------------- | ---------------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Agent prompt   | The default standard, the role of the agent and the Workbench behavior | The server host                       | The files `base.md`, `<agent_name>.md` and `workbench.md`                                            |
-| Binding prompt | The language and the conventions of one repository for one agent       | The repository binding of the project | The field `prompts` of the repository binding, with one text for each of `swe@1`, `re@1` and `env@1` |
+| Prompt         | Purpose                                                          | Owner                                 | Source                                                                                               |
+| -------------- | ---------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Agent prompt   | The Standard, the role of the agent and the Workbench behavior   | The server host                       | The files `base.md`, `<agent_name>.md` and `workbench.md`                                            |
+| Binding prompt | The language and the conventions of one repository for one agent | The repository binding of the project | The field `prompts` of the repository binding, with one text for each of `swe@1`, `re@1` and `env@1` |
 
 **Agent prompt.** Each file has a shipped text that is embedded in the binary. An upgrade replaces it together with the code that depends on it.
 
-- `base.md` is the Standard. Every agent reads it.
+- `base.md` is the Standard. Every agent reads it. It holds only the rules that every agent shares, so it holds no code rule.
+- The code, test and finding rules stand in both `swe@1.md` and `re@1.md`, in the same words, because `re@1` judges the work of `swe@1`.
 - `<agent_name>.md` is the Role, for example `swe@1.md`.
 - `workbench.md` is the Workbench behavior. Only a Workbench session reads it, and it is part of the system prompt.
 
@@ -185,7 +186,7 @@ A file of the same name in the directory `agent.prompt.agent_directory` replaces
 - `swe@1` and `re@1` read the binding prompts of every repository binding of the node, at the binding revision that the node pins.
 - `env@1` reads the binding prompt of the binding of its environment run.
 
-The binding prompt of one agent is an independent text. `re@1` does not read the prompt of `swe@1`. A rule that relaxes the default standard must go into the prompts of both `swe@1` and `re@1`, or the reviewer judges the work against the Standard that the rule relaxes.
+The binding prompt of one agent is an independent text. `re@1` does not read the prompt of `swe@1`. A rule that relaxes the default standard must go into the prompts of both `swe@1` and `re@1`, or the reviewer judges the work against the default standard that the rule relaxes.
 
 KanthorD reads no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file, neither in a repository nor in a home directory. A native agent takes its conventions from the two prompts only. `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, not as KanthorD support.
 

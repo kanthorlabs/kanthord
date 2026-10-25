@@ -74,7 +74,9 @@ The system prompt of a native agent composes the Agent prompt, the Binding promp
 The composition places `base.md` first, then the Role of the agent, then one Binding prompt for each repository binding that holds a text, then the framing.
 The work prompt is the first user message.
 
-`base.md` states the conventions of the operator and the default standard of the work product, and it holds for every native agent of the server.
+`base.md` states the rules that every native agent of the server shares. It holds no rule that only code, a test or a review needs, so a non-coding agent can read it.
+`base.md` and the Role state the default standard of the work product.
+The Roles of `swe@1` and `re@1` hold the same code, test and finding rules in the same words, because `re@1` judges the work of `swe@1`.
 A worker declares, for each of its agents, the Role of that agent.
 A Role states the role of the agent, its responsibility and its contribution to the WHAT.
 The shipped Role is the default of the worker name. A file of the same name in the agent directory replaces it on one server.
@@ -102,7 +104,7 @@ An execution performs no conduct that its framing forbids, whatever another text
 The framing also states that an instruction for one repository governs only the work on the files of that repository, never the reply format that a message demands.
 The framing states the protocol conditions that hold for every native agent: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch file only under `.kanthord-scratch/` at the workspace root.
 A Binding prompt and a work prompt define no criterion.
-An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that `base.md` states.
+An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that `base.md` and the Role state.
 
 A prompt carries instructions, and it authorizes no operation.
 It names no value of the effective configuration, it adds no tool and it changes no resource budget.

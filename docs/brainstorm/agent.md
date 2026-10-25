@@ -140,7 +140,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 ## Prompt composer
 
 - A human controls the prompt of an agent session through two prompts: the Agent prompt and the Binding prompt. The framing and the prompt templates are KanthorD protocol, not a prompt of a human.
-- The Agent prompt is a set of three files. `base.md` is the Standard that every agent reads. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
+- The Agent prompt is a set of three files. `base.md` is the Standard that every agent reads. It holds only the rules that every agent shares, a non-coding agent included. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
 - The component ships the text of each file. The binary embeds it, and no command downloads it.
 - A file of the same name in the agent directory replaces the shipped text of that file whole. The agent directory is a path of the server host.
 - An empty agent directory selects the shipped texts only.
@@ -149,7 +149,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - `swe@1` and `re@1` read the Binding prompt of every repository binding of the node at its pinned revision. `env@1` reads the Binding prompt of the binding of its environment run.
 - The precedence from the highest is the framing, the Binding prompt, `workbench.md`, the Role and the Standard. The messages follow the system prompt, and a later message governs an earlier one.
 - An instruction of one repository governs only the work on the files of that repository. It never governs the reply format that a message demands.
-- The Binding prompt of each agent is a separate text. A rule that relaxes the Standard goes into the Binding prompts of both `swe@1` and `re@1`.
+- The Binding prompt of each agent is a separate text. A rule that relaxes the default standard goes into the Binding prompts of both `swe@1` and `re@1`.
 - KanthorD reads no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file of a repository or of a home directory. A native agent reads no instruction file in any form.
 - `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, and KanthorD does not support that load.
 - A file of the agent directory or of its `prompts` subdirectory that the loader rejects answers 409 `agent.prompt.template_invalid` at every reader. No reader replaces it with the shipped text.

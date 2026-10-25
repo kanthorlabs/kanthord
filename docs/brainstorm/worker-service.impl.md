@@ -1101,7 +1101,10 @@ The adapter pins the work prompt and the system prompt against the compaction of
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
 The binary embeds `engine/static/prompt/base.md` as the Standard, the Role files `swe@1.md`, `re@1.md` and `env@1.md`, and `workbench.md` of that directory, as [shipped assets](architecture.impl.md#shipped-assets).
 The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
-The source of the texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor goes to `workbench.md`.
+The source of the texts is the ideals file of Ulrich, split by single obligation: a rule that every agent shares goes to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor goes to `workbench.md`.
+`base.md` holds no rule that only code, a commit, a test, a repository or a review needs, because a non-coding agent also reads it.
+A rule for code, tests or findings goes to both `swe@1.md` and `re@1.md` in the same words, because `re@1` enforces it. Both files end with that block.
+A process rule that leaves no evidence in the work product goes to `swe@1.md` only. The rule that the prose style of a produced report is no ground for a blocker goes to `re@1.md`.
 The protocol conditions that hold for every native agent go to `framing-worker.md`. The `added_files` rule of the judgement goes to `template/evaluation.md`.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 

@@ -75,7 +75,7 @@ A repository binding holds an optional [Binding prompt](agent.md#prompt-composer
 The Project Service validates each text against the bound of a prompt file, and it reads no instruction file of the repository.
 A change of a Binding prompt creates a binding revision. A node keeps the text of its pinned binding revision until `mission node rebind`.
 The new binding ID of that revision counts as a changed binding for the Onboarding component, and it clears the mark that the stored environment came from `env@1`.
-The Binding prompts of the agents are separate texts, so a rule that relaxes the Standard goes into the prompts of both `swe@1` and `re@1`.
+The Binding prompts of the agents are separate texts, so a rule that relaxes the default standard goes into the prompts of both `swe@1` and `re@1`.
 
 ## Environment of a repository binding
 
