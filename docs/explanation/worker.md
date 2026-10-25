@@ -39,8 +39,8 @@ The terms below appear on every worker page. Each term has exactly one meaning.
 | Node revision        | One version of the content of a node. An execution reads the revision that its attempt pins, so a later edit does not change a running execution.                                                                         |
 | Attempt              | One try at a node. It holds one or more executions. The first claim opens attempt 1. A human unblock opens the next attempt.                                                                                              |
 | Worker               | A template that defines how work happens: its method, its agents, the node states that it claims, the intents that it takes and its default budget. `coder@1` and `reviewer@1` are workers.                               |
-| Worker binding       | The project configuration that turns a worker on for one project. It sets the instance count, the tags, the model of each agent and an optional budget.                                                                   |
-| Worker instance      | One running copy of a worker. It pulls work and holds at most one execution at a time.                                                                                                                                    |
+| Worker binding       | The project configuration that turns a worker on for one project. It lists the worker instances, the tags, the model of each agent and an optional budget. The count of listed instances is the instance count.           |
+| Worker instance      | One named copy of a worker with one placement. It pulls work and holds at most one execution at a time. To run more work at once, add an instance.                                                                        |
 | Claim                | The grant of one node to one instance. It has a fixed deadline, `expired_at`.                                                                                                                                             |
 | Execution            | The work under one claim, from the claim to the release. It has an identity, for example `execution_01JZ8R2B…`.                                                                                                           |
 | Agent                | An LLM participant that the worker drives, for example `swe@1`. `swe@1` edits files, and `re@1` judges. An agent decides nothing about the node.                                                                          |
@@ -225,7 +225,7 @@ These rules explain most behavior that looks surprising at first.
 - **A fresh agent for each execution.** Each execution opens a new agent session with an empty conversation. The execution can lose its claim or its process at any time, so nothing durable lives in the agent. The next execution rebuilds its context from the node branch and from the records of the Mission Service.
 - **Git is the memory of the work.** The node branch carries the work from one execution to the next. A `Kanthord-Done` trailer on a worker commit marks each unit that passed with a change, so the next execution skips it. A budget end writes a checkpoint commit and pushes it, so no work is lost.
 - **No history rewrite.** No execution deletes, renames or force-pushes a node branch. No execution rewrites a commit that it pushed, because a record can name that commit.
-- **One instance, one execution.** An instance holds at most one execution at a time. One `kanthord serve worker` process hosts one instance. At the `worker` placement, a binding that lists 3 instances needs 3 processes, each with its own instance configuration. One instance runs one execution at a time over all the bindings that list it.
+- **One instance, one execution.** An instance holds at most one execution at a time, at every placement, over all the bindings that list it. Capacity comes only from the count of instances. No rank and no weight exist between instances. At the `worker` placement, one `kanthord serve worker` process hosts one instance, so a binding that lists 3 such instances needs 3 processes.
 - **A lost claim is a failure.** A claim that reaches `expired_at` with no release is lost. The Scheduler ends the execution and returns the node to `Available` (or `Waiting` for a reviewer claim). The loss counts toward `mission.consecutive_failure_limit`. The worker process that still runs learns of the loss at its next call and stops.
 
 ## Where the state lives
@@ -249,13 +249,15 @@ The start of `coder@1` reads the done records of the node branch, so it needs on
 
 ## Where a worker runs
 
-The field `placement` of a worker binding chooses where its native instances run. The value is `server`, `container` or `worker`. A binding of a native worker states it, and a write without it fails. A binding never changes its placement.
+Each worker instance holds one placement: `server`, `container` or `worker`. The placement is set at the create of the instance and never changes. A worker binding holds no placement. It lists its instances in `worker_instances`, and one binding can list instances of different placements.
 
-- At the `server` placement, the server runs each instance as a worker thread. The server starts one thread for each unit of `instance_count`, up to `worker.server_slot_limit` (default 16). A human generates no token and starts no process.
-- At the `container` placement, the server runs each instance in its own container on the server host, with Podman or Docker. The server starts one container for each unit of `instance_count`, up to `worker.server_slot_limit`. A human generates no token and starts no process. The container waits until the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of its repository binding is `ready`, then runs the image of that environment. That image takes `kanthord` and `tini` from `<worker.container_image>:<server version>`. In a project with no repository binding, the container runs `<worker.container_image>:<server version>`.
-- At the `worker` placement, each instance is a separate `kanthord serve worker` process. A human adds the instance once on the worker page, and the binding lists it in `worker_instances`. The process can run on the server host or on another host.
+- At the `server` placement, the server runs the instance as a worker thread. A human generates no token and starts no process.
+- At the `container` placement, the server runs the instance in its own container on the server host, with Podman or Docker. A human generates no token and starts no process. The container waits until the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of the repository binding of its listing binding is `ready`, then runs the image of that environment. That image takes `kanthord` and `tini` from `<worker.container_image>:<server version>`. With no listing binding, or in a project with no repository binding, the container runs `<worker.container_image>:<server version>`. One live worker binding at most lists a `container` instance, because one container runs one image.
+- At the `worker` placement, each instance is a separate `kanthord serve worker` process. The process can run on the server host or on another host.
 
-Every placement runs the same worker unit. The thread of a server slot and the container of a `container` slot reach the server through the same API operations, under a machine identity of the same project and binding scope. The container reaches the server through a channel that the server holds, and it holds no token.
+The server runs each `server` and `container` instance from its create until its archive, also while no binding lists it. The live `server` and `container` instances are at most `worker.server_instance_limit` (default 16). A removal of an instance from a binding drains it for that binding: its live execution finishes, and the binding gets no new claim from that instance.
+
+Every placement runs the same worker unit. A `server` thread and a `container` instance reach the server through the same API operations, under a machine identity of the same project and binding scope. The container reaches the server through a channel that the server holds, and it holds no token.
 
 The server checks the placement `container` with a runtime check. The check answers a reason when the server cannot host containers:
 
@@ -271,30 +273,33 @@ The server checks the placement `container` with a runtime check. The check answ
 To run 3 instances of `coder@1` for one project at the `server` placement:
 
 1. Enable the agent `swe@1` with a provider and a model. See [agent enablement](../reference/agent/enablement.md).
-2. Add a worker binding with `"worker": "coder@1"`, `"instance_count": 3` and `"placement": "server"` to the project. See [project bindings](../reference/project/binding.md).
+2. Add the instances `coder-1`, `coder-2` and `coder-3` of `coder@1` at the `server` placement on the worker page, or with `kanthord worker instance create coder-1 --worker coder@1 --placement server`. See [worker instances](../reference/worker/instance.md).
+3. Add a worker binding with `"worker": "coder@1"` and `"worker_instances": ["coder-1", "coder-2", "coder-3"]` to the project. See [project bindings](../reference/project/binding.md).
 
-The server starts the 3 threads. A raise of `instance_count` starts more threads. A lowered count drains the excess threads: an idle thread ends at once, and a busy thread ends after its execution. A server restart starts each thread again under the same client identity, and a live registration resumes its running execution.
+The server starts the 3 threads at their create. To run more work at once, add an instance and list it. To run less, remove an instance from the list: an idle instance stops taking work of the binding at once, and a busy instance finishes its execution first. The instance still runs until its archive. A server restart starts each thread again under the same client identity, and a live registration resumes its running execution.
 
-To run 3 instances of `coder@1` at the `container` placement, enable the agent and add the worker binding as above, with `"placement": "container"`. The server starts the 3 containers, and a server restart starts each container again under the same client identity.
+An archive refuses while a binding lists the instance. Remove the instance from each binding first. An archive with `--force` also stops the live execution of the instance. The node returns to `Available` or `Waiting`, and the stop counts as no loss and no failure.
+
+To run 3 instances of `coder@1` at the `container` placement, create the instances with `--placement container`, and list them as above. The server starts the 3 containers, and a server restart starts each container again under the same client identity.
 
 To run 3 instances of `coder@1` at the `worker` placement:
 
 1. Enable the agent `swe@1`.
-2. Add 3 instances of `coder@1` on the worker page, and start one `kanthord serve worker` process for each. The host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
+2. Add 3 instances of `coder@1` at the `worker` placement on the worker page, and start one `kanthord serve worker` process for each. The host needs `bash`, `git` 2.40 or later, and OpenSSH 9.0 or later with `ssh`, `ssh-agent` and `ssh-add`. The binary supplies `rg` and `fd`, which the agent tools `grep` and `find` call.
 3. Give each instance its own copy of the LLM credential of the agent.
-4. Add the worker binding with `"placement": "worker"` and the 3 instance names in `worker_instances`.
+4. Add the worker binding with the 3 instance names in `worker_instances`.
 
 [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host) shows the steps, and [worker instances](../reference/worker/instance.md) lists the operations.
 
 A worker host needs no SSH key, no SSH configuration and no `known_hosts` entry. The server keeps each [SSH key](../reference/repository/ssh-key.md) in custody. For each execution:
 
-1. At the `server` and `container` placements, the [credential handover](../reference/worker/handover.md) carries the SSH key of each repository binding of the node, in the sealed envelope. At the `worker` placement, the key stays on the server. The instance sends each SSH signature request to the server through the SSH signature relay.
+1. For an instance at the `server` or the `container` placement, the [credential handover](../reference/worker/handover.md) carries the SSH key of each repository binding of the node, in the sealed envelope. At the `worker` placement, the key stays on the server. The instance sends each SSH signature request to the server through the SSH signature relay.
 2. The execution setup carries the [pinned host key](../reference/repository/host-key.md) of each repository address. An address host with no pin refuses the setup with `409 repository.host_key.unpinned`, and a host outside the SSH host set with `400 project.bindings.repository.address_invalid`. The execution then does not start.
 3. The worker keeps both in memory. Each clone, fetch and push starts a private SSH agent, and ends the agent after the git command. At the `server` and `container` placements, the agent loads the key. At the `worker` placement, the agent relays the signature request. The worker writes no private key file.
 
 The worker host must reach the SSH port of each repository address host. The SSH port is 443 for `ssh.github.com`, `altssh.gitlab.com` and `altssh.bitbucket.org`, and 22 for every other host. See [SSH host keys](../reference/repository/host-key.md#function-description). No binding check proves that path from the worker host. The worker reads no file under `~/.ssh`, so a key or an alias in the SSH configuration of the host has no effect. A temporary directory path above 75 bytes makes every SSH operation fail; see [the temporary directory limit](../reference/repository/ssh-key.md#the-temporary-directory-limit).
 
-An instance keeps its files in a data directory. A process at the `worker` placement uses `$XDG_DATA_HOME/kanthord/workers/<name>/` of its host, by default `~/.local/share/kanthord/workers/<name>/`. `<name>` is the instance name. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<client_id>/` of the state directory of the server. A container at the `container` placement uses `state/kanthord/` of its volume `kanthord_slot_<client_id>`. Two instances share no file.
+An instance keeps its files in a data directory. A process at the `worker` placement uses `$XDG_DATA_HOME/kanthord/workers/<name>/` of its host, by default `~/.local/share/kanthord/workers/<name>/`. `<name>` is the instance name. A thread at the `server` placement uses `state/kanthord/` under its slot root, `workers/<name>/` of the state directory of the server. A container at the `container` placement uses `state/kanthord/` of its volume, which carries the instance name. The archive of the instance removes both. Two instances share no file.
 
 | Path                         | Content                                                                                                                                                                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -306,7 +311,7 @@ The agent root is the directory that the agent works from. A node with no reposi
 
 The head commit of an `implement` node with two or more repository bindings is the set of the heads of its node branches. Each required external action resolves on its own.
 
-The workspace and the pi session files are local conveniences, not records. The worker sends every session entry to the Tracking Service when the agent appends it. Another host or another slot can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
+The workspace and the pi session files are local conveniences, not records. The worker sends every session entry to the Tracking Service when the agent appends it. Another instance can take the next execution of the same node. It then clones the repository and checks out the pushed node branch.
 
 The agent tools and the verification commands run with the rights of the worker process. At the `server` placement, those rights are the rights of the server user. A command can read the files of that user and can signal the server process. At the `container` placement, a command runs in the container of its instance. It reads no file of the server and cannot signal the server process. It still reaches every network that the container reaches. KanthorD has no other sandbox. Run a worker on a host that you trust with the repository and its credentials.
 

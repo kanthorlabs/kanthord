@@ -95,7 +95,7 @@ flowchart TB
         Templates["Worker templates"]
         Registration["Registration"]
         RegistrationHealth["Registration healthcheck"]
-        Pools["Instance pools"]
+        Pools["Worker instances"]
         Execution["Execution"]
         Agents["Native agents"]
         Prompts["Prompt composer"]
