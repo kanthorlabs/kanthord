@@ -695,11 +695,12 @@ A fatal error runs as below.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
 - `kanthord worker join` and `kanthord worker instance create --output` are the only commands that write an instance configuration file. Each creates an absent file, and `--force` is the only overwrite. `kanthord worker join` reads the instance configuration from standard input, so no secret reaches the command line.
 - The `worker instance` group holds five commands, each with the remote flags of the engine CLI:
-  - `kanthord worker instance create <name> --worker <worker> [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.create`.
+  - `kanthord worker instance create <name> --worker <worker> [--slot-count <count>] [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.create`.
   - `kanthord worker instance list [--worker <worker>] [--include-archived] [--limit <count>] [--cursor <opaque>]` calls `worker.instance.list`.
   - `kanthord worker instance get <name>` calls `worker.instance.get`.
   - `kanthord worker instance rotate <name> --expected-revision <revision> [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.rotate`.
   - `kanthord worker instance archive <name> --expected-revision <revision>` calls `worker.instance.archive`.
+  - `kanthord worker instance slot-count <name> <count> --expected-revision <revision>` calls `worker.instance.slot_count.set`.
 - `create` and `rotate` generate the key pair on the host of the CLI and send only `public_key`. Without `--output`, they print the instance configuration once to terminal standard output.
 - `--worker-endpoint` sets `endpoint` of the instance configuration, the server address that the instance calls. It defaults to the resolved `--endpoint` of the CLI.
 - The `auth` group holds every authentication command, and a bare `kanthord auth` prints the help of the group. Its `jwt` group holds `generate` and `inspect`, and a bare `kanthord auth jwt` prints the help of the group.
@@ -1242,17 +1243,17 @@ The rules of the credential sections follow.
 ## The worker pages
 
 - `/workers` lists the worker catalog. Each card links to its worker page and shows the count of live registrations of the worker.
-- The dashboard reads the expected instance count of a worker binding as `worker_instances.length` at the `worker` placement, and as `instance_count` at every other placement. Today `binding-instances.ts` of `apps` reads `config.instance_count` only.
+- The dashboard reads the expected instance count of a worker binding as the sum of the `slot_count` of the instances of `worker_instances` at the `worker` placement, and as `instance_count` at every other placement. Today `binding-instances.ts` of `apps` reads `config.instance_count` only.
 - The worker page shows these sections, top to bottom:
   1. The header: the worker name, the host badge, the declared node states, the declared intents and the resource budget.
-  2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, the short fingerprint, `Connected · <connection_name>` or `Not connected`, `Executing <project> · <node>` or `Idle`, and the binding count. A row shows a holder-mismatch badge when a listing binding lacks a copy for that instance. The section holds `Add instance`. The empty state reads "No instances. Add one to run this worker at the worker placement." When the instance read answers no instance, the section starts collapsed behind the trigger `Advanced: worker instances`, because the worker placement is an advanced setup. The section stays open while the first read runs, after a failed read and while an instance exists.
+  2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, `<n> slots` when the slot count is 2 or more, the short fingerprint, `Connected · <connection_name>` or `Not connected`, `Executing <project> · <node>` or `Idle`, and the binding count. A row shows a holder-mismatch badge when a listing binding lacks a copy for that instance. The section holds `Add instance`. The empty state reads "No instances. Add one to run this worker at the worker placement." When the instance read answers no instance, the section starts collapsed behind the trigger `Advanced: worker instances`, because the worker placement is an advanced setup. The section stays open while the first read runs, after a failed read and while an instance exists.
   3. Bindings: the worker bindings of this worker in the current project, with the placement and, at `worker`, the listed instance names.
   4. Live registrations of this worker in the current project.
 - A worker of an external harness shows sections 1, 3 and 4.
 - The instance page shows these sections, top to bottom:
-  1. The header: the name, `(v<revision>)`, the worker, the fingerprint and the connection line.
+  1. The header: the name, `(v<revision>)`, the worker, the fingerprint, the connection line and `Slots <n>` with the action `Change slots`.
   2. The bindings that list the instance, in every project, from `worker.instance.get`. A row shows the project, the binding, the state `serving` or `draining` and a link to the binding.
-  3. The registrations of the instance: the activity and a link to the execution.
+  3. The registrations of the instance: `Slot <n>`, the activity, the outline badge `draining` for a draining slot and a link to the execution.
   4. Credentials: a row shows `<name> · <platform> (v<revision>)` and its health line from `credentials[].health` of `worker.instance.get`. The health line shows the status badge and, with a report, "<failure reason hint> Reported by <instance> at <time>." Without a report it reads "No report from <instance> for this revision since the server start." A copy sealed to an ended fingerprint shows `Re-enter: sealed to an ended key` in place of the health line.
   5. The danger zone: `Reset key` and `Archive`.
 - The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects. The notice reads "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.vocabulary.md](worker-service.vocabulary.md#trust-boundary) states the trust boundary.
@@ -1261,9 +1262,11 @@ The rules of the credential sections follow.
 - `Sign in again` on an OAuth copy that is not live opens the sign-in panel for that copy and holder, in copy-code or device-code mode only. The completion adds the next revision of the copy, under [llm.impl.md](llm.impl.md#the-login-of-an-instance). On a live copy sealed to the current key, the page disables `Sign in again` and shows the reason "The copy is live. The server refuses a new sign-in while the copy is sealed to the current key of the instance."
 - The `openai-compatible` copy of an instance gets no model prefill at its creation. The human types its model ids.
 - A live `openai-compatible` copy sealed to the current key offers `Edit models`. It opens the metadata sheet for that holder and offers each model id of the last report that the draft does not hold as `Add <id>`.
-- `Add instance` opens a sheet with the name, the host kind and the address. The host kind field reads "Where does it run?" and offers `Linux (systemd)`, `macOS (foreground)`, `Container` and `Container on this host`. A container host kind adds the field "Container runtime" with `Podman` and `Docker`. `Podman` is the default.
+- `Change slots` opens a sheet with the number field `Slots`, from 1 to 64. The save calls `worker.instance.slot_count.set` with `expected_revision`. A lower states "Slots at and above <n> finish their execution, then stop." A 409 `worker.instance.revision_conflict` reads the instance again and shows the new revision.
+- `Add instance` opens a sheet with the name, the host kind, the address and `Slots`. The host kind field reads "Where does it run?" and offers `Linux (systemd)`, `macOS (foreground)`, `Container` and `Container on this host`. A container host kind adds the field "Container runtime" with `Podman` and `Docker`. `Podman` is the default.
 - The address default follows the host kind. `Container on this host` fills `http://kanthord:31415` when `worker.placement.list` reports `server_in_container`. Every other host kind fills the address of the dashboard. A loopback dashboard address leaves the field empty with a hint. The human can edit the address.
-- The sheet sends the name and the address as `endpoint` to `worker.instance.create`. The server generates the key pair, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).
+- `Slots` is a number field from 1 to 64 with the default 1. Its description reads "Executions that this instance runs at once. The slots share the host and the credential copies of the instance."
+- The sheet sends the name, the address as `endpoint` and `slot_count` to `worker.instance.create`. The server generates the key pair, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).
 - The sheet then shows `instance_configuration` once, in monospace with `break-all` and `Copy`, with a warning that it shows only once. The sheet keeps no copy after it closes.
 - `apps` holds no key generation and no fallback for a page outside a secure context.
 - Below the instance configuration, the sheet shows the one copy block of the selected host kind. [The copy blocks](worker-service.impl.md#the-copy-blocks) hold the content of each block. The server stores no host kind.

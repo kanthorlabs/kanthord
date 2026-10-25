@@ -216,6 +216,7 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 
 The Add instance sheet and the Reset key result show the one copy block of the host kind that the human selects, under [The worker pages](architecture.impl.md#the-worker-pages).
 No block puts the instance configuration on a command line. `<name>` is the instance name, and `<version>` is the server version.
+The container blocks below show `--memory=4g` for one slot. A block of an instance with more slots sets 4 GiB for each slot, for example `--memory=8g` for 2 slots, and its text names that value.
 
 `Linux (systemd)` runs the instance as a systemd user unit:
 
