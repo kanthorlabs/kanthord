@@ -296,7 +296,7 @@ The response is one binding record with the fields of the list items.
 | `stale_pins`          | array                           | API and CLI | One item for each node that pins an older revision of a revised binding. |
 | `idempotency_key`     | `idempotency_key_<ulid>` string | CLI only    | Key of this request. Supply it again to retry the same request.          |
 
-`stale_pins` lists each node that is not terminal and not retired whose current node revision pins an older revision of a binding that the apply revised. A revised binding keeps its name and its resource identity. Each item holds `node_id`, `binding_name`, `pinned_revision` and `current_revision`. The list is in the order of `node_id`, then `binding_name`. A removed binding adds no item. The apply moves no pin. Run [`mission node rebind`](../mission/node.md#node-rebind) to move a node to the current revision. A retry with the same idempotency key answers the list of the first apply.
+`stale_pins` lists each node that is not terminal and not retired. Its current node revision pins an older revision of a binding that the apply revised. A revised binding keeps its name and its resource identity. Each item holds `node_id`, `binding_name`, `pinned_revision` and `current_revision`. The list is in the order of `node_id`, then `binding_name`. A removed binding adds no item. The apply moves no pin. Run [`mission node rebind`](../mission/node.md#node-rebind) to move a node to the current revision. A retry with the same idempotency key answers the list of the first apply until a restart of the daemon.
 
 ### project binding revision list
 

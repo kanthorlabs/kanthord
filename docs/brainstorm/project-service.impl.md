@@ -150,22 +150,21 @@ The invocation chain records the answer of the edit in memory after the commit, 
 
 ## Stale pins
 
-The answer of a binding-set write holds `stale_pins`. The list shows the nodes that still run on an older revision of a changed binding.
+The answer of a binding-set write holds `stale_pins`. The list shows the nodes that pin an older revision of a revised binding.
 
 - `stale_pins` holds one item `{ node_id, binding_name, pinned_revision, current_revision }` for each pin of an older revision of a binding that the write revised.
 - A revised binding keeps its name and its resource identity and gets the next revision of its group.
-- An older revision is each revision of the same group below the new revision that is no tombstone. A revision before a removal counts.
-- A removed binding and a name with a new resource identity add no item. The group has no current revision, and a rebind refuses a tombstone.
+- An older revision is each revision of the same group below the new revision and above the latest tombstone of the group.
+- A removed binding and a name with a new resource identity add no item.
 - `binding_name` and `current_revision` name the new revision. `pinned_revision` is the revision that the node pins.
-- The Project Service reads the pins through the Mission collaboration `liveNodePins(tx, projectId, bindingIds)` in the write transaction. It reads no Mission table.
-- `liveNodePins` answers `{ node_id, binding_id }` for each node that is not terminal and not retired, when its current node revision pins one of the revisions.
+- The Project Service reads the pins through the Mission collaboration `currentNodePins(tx, projectId, bindingIds)` in the write transaction. It reads no Mission table.
+- `currentNodePins` answers `{ node_id, binding_id }` for each node that is not terminal and not retired, when its current node revision pins one of the revisions.
 - The node revision of an open attempt does not count. A node that a rebind moved to the new revision is not in the list.
 - The list is in the order of `node_id`, then `binding_name`. A write with no revised binding answers `[]`.
 - The list is read only, and the write moves no pin. [The rebind](mission-service.impl.md#the-rebind) is the only path that moves a pin.
-- A repeat of the write with the same idempotency key answers the recorded answer.
 - `project.binding.environment.set` writes the binding set, so its answer holds the same list.
 - The CLI prints the list as a field of the answer of `project binding apply`.
-- Tests list a pending node that pins an older revision. Tests list no terminal node, no retired node, no unchanged binding, no removed binding and no node on the new revision.
+- Tests list a pending node that pins an older revision. Tests list no terminal node, no retired node, no unchanged binding, no removed binding and no node on the new revision. Tests list no pin before a removal and no name with a new resource identity.
 
 ## Revision, disablement and rotation
 
