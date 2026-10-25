@@ -150,13 +150,13 @@ The instance healthcheck stays out of every human inspection command under [work
 - When one agent has no chain entry whose credential is free, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
 - `claimOnce` of `src/scheduler/claim.ts` holds the instance guard next to `countRunningOfGroup`, inside the claim transaction.
   The Scheduler Service declares the collaboration `registrationsOfInstance(tx, runtimeIdentity)` in its `contract.ts` as a dependency. The Worker Service implements it.
-  It answers the runtime identities of the other live registrations of the instance of `runtimeIdentity`. It answers an empty list for a registration with a null `instance_id`.
+  It answers the runtime identities of the other live registrations of the instance slot of `runtimeIdentity`: the same `instance_id` and the same `slot`. It answers an empty list for a registration with a null `instance_id`.
   The guard counts the executions of those runtime identities whose `ended_at` is null and whose `expired_at` is later than now, the predicate of `countRunningOfGroup`.
   A count above zero answers `{ kind: "no-work" }`, and the claim inserts no execution and changes no node.
   The claim transactions of the server serialize, so a second claim of one instance never commits, also when a pull abort arrives late.
   An expired, unsettled execution blocks no other registration of its instance.
-  Tests cover two pulls of one instance on two bindings that commit one claim. They also cover an expired execution that blocks nothing and a registration with no instance.
-- The queue order of an instance gives a free slot to the registration that waited longest.
+  Tests cover two pulls of one slot on two bindings that commit one claim, and two pulls of two slots of one instance that commit two claims. They also cover an expired execution that blocks nothing and a registration with no instance.
+- The queue order of an instance gives a free slot to the registration that waited longest. At the `worker` placement, the instance of a registration in this section is its instance slot.
   `InstanceQueue` of `src/scheduler/instance-queue.ts` holds the order in memory. It records the runtime identities that wait, in the order in which each started to wait. A server restart clears the order.
   - A registration starts to wait when the guard refuses its pull, or when another registration of its instance commits a claim. A registration that already waits keeps its place.
   - After the guard finds no live execution, `claimOnce` asks `turn`. A registration has its turn when no other live registration of its instance waits before it. A registration that does not wait has its turn only when no other registration of its instance waits.
