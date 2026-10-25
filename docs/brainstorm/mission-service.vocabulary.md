@@ -12,7 +12,7 @@ This file is not a design document, and `mission-service.md` stays the single so
 
 The bindings of a node are the project binding identities in its content.
 A plan file names each binding by its name.
-The write resolves each identity or name to the latest revision of its binding and checks these counts.
+A node write, and an import that creates a node, resolve each identity or name to the latest revision of its binding and check these counts.
 A node names every binding that it uses, and no node takes a binding from the project.
 The storage bindings of a node form an ordered list, and an upload uses the first working binding of that list.
 A task names no binding.
