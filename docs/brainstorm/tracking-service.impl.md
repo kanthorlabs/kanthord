@@ -176,9 +176,13 @@ The row of `tracking_trace` holds the summary columns of the trace.
 ## Reads
 
 - `tracking.trace.get` answers the trace summary.
-- `tracking.trace.list` answers one page of trace summaries, newest first by default. It filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type` and `q`.
+- `tracking.trace.list` answers one page of trace summaries, newest first by default.
+- Each item of `tracking.trace.list` also holds `root_operation` and `root_attributes`: the `operation` and the `attributes` of the root span.
+  Both are null while the store holds no root span. The list reads the root span through the primary key of `tracking_span`.
+- `tracking.trace.list` filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type` and `q`.
 - `tracking.trace.list` also filters by the time range `from` and `to`, by [the overlap rule](#the-timeline-read) of the timeline read.
 - Every time range filter of the Tracking Service is named `from` and `to`, and it selects the traces by that overlap rule.
+- A `from` after `to` answers 400 `tracking.filter.range_invalid` on every read that takes `from` and `to`.
 - `tracking.trace.list` also filters by a minimum and a maximum of `duration_ms`, `total_tokens` and `cost_usd`.
   A trace with no `duration_ms` fails `min_duration_ms` and `max_duration_ms`.
 - `q` matches a case-insensitive substring of the trace, execution and node identities.
@@ -243,7 +247,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 
 - `tracking.analytics.cost` uses `GET /api/tracking/analytics/cost`, and `tracking.analytics.duration` uses `GET /api/tracking/analytics/duration`. Both have `human` access.
 - `to` defaults to the time of the read. `from` defaults to 7 days before `to`.
-- A range of more than 31 days answers 400 `tracking.analytics.range_invalid`. A `from` after `to` answers the same code.
+- A range of more than 31 days answers 400 `tracking.filter.range_invalid`. A `from` after `to` answers the same code.
 - The range check applies the default of a missing `from` or `to` first.
 - The read selects the traces whose window overlaps the range, by the rule of [the timeline read](#the-timeline-read). `project_id` and `node_id` filter the selected traces.
 - The read counts each span of a selected trace whose `start_time` lies from `from` to `to`, both inclusive.
