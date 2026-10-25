@@ -194,6 +194,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - An import covers the whole mission and carries no scope.
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
+- The import compares the bindings of a node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
 - The import result maps each node file name to its node identity and each task file name to its task identity.
 - A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
@@ -813,6 +814,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
 - Tests include terminal nodes in unchanged export-import cycles and assert a no-op.
+- Tests re-import the export of a mission with a `Completed` node after a new revision of its binding. They assert a no-op for that node and keep its pinned binding revision.
 - Tests assert human-only access and both exact export answer shapes.
 - Tests accept an export at 10 MiB and assert 413 `mission.export.too_large` above that bound.
 - Tests import raw Markdown through the Mission Service parser and JSON through the same node validation rules.
