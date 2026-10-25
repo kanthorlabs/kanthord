@@ -57,7 +57,6 @@ erDiagram
         text client_id "client_identity_ + ULID"
         text client_name "display name, 1-64 chars"
         text instance_id "worker instance revision, null at server and container"
-        integer slot "instance slot 0 to 63, null at server and container"
         integer registered_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -216,10 +215,10 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 ### Worker Service
 
 - `worker_registration` holds one row for each registration of a worker instance under one worker binding. `worker.register` inserts the row, and `id` is the runtime identity.
-- A worker instance at the `server` or the `container` placement, and an external harness program, hold one registration. A worker instance at the `worker` placement holds one registration for each slot and each worker binding that lists it, `instance_id` holds its live revision, and `slot` holds the slot number. `instance_id` and `slot` are null at every other placement.
+- A worker instance at the `server` or the `container` placement, and an external harness program, hold one registration. A worker instance at the `worker` placement holds one registration for each worker binding that lists it, and `instance_id` holds its live revision. `instance_id` is null at every other placement.
 - `worker_registration` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
 - The live registrations of a worker binding are the rows of that group where `ended_at` is null.
-- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. At the `worker` placement, the instance count is the sum of the `slot_count` of the instances of `worker_instances`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
+- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. At the `worker` placement, the instance count is the length of `worker_instances`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
 - `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
@@ -236,7 +235,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so a registration holds at most one execution without a terminal write.
 - The live executions of a worker binding are the `running` rows of that group, whatever revision each row pins.
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
-- A worker instance runs one execution at a time over all its registrations. At the `worker` placement, this rule binds each instance slot: the slot of a registration is `worker_registration.slot`, and the instance runs at most `slot_count` executions. The claim transaction reads the registrations of the instance, or of the instance slot, of the runtime identity of the work pull through the Worker Service. It admits no claim while one of them is the claimant of an execution with a null `ended_at` and a clock before `expired_at`.
+- A worker instance runs one execution at a time over all its registrations. The claim transaction reads the registrations of the instance of the runtime identity of the work pull through the Worker Service. It admits no claim while one of them is the claimant of an execution with a null `ended_at` and a clock before `expired_at`.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names a registration of that worker binding. For a registered program, it equals `worker_registration.id`.
 - The claim admits a node only in a state that the worker of the binding declares, through the [match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match). The match has two conditions. The worker declares the intent of the node. The tags of the worker binding include every tag of the node. The intent and the tags of the node come from the revision that the claim pins. A worker name with no worker declaration gives no claimant. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.

@@ -225,7 +225,7 @@ The line starts with `-rw-------`. See [config validate](../reference/config/val
 At the `worker` placement, a worker runs in a `kanthord serve worker` process outside the server container. One process is one worker instance. You add the instance once in the dashboard. Then a worker binding of a project lists the instance.
 
 - An instance belongs to one worker, for example `coder@1`. Only a binding of that worker can list it.
-- An instance runs one execution at a time in each slot. An instance holds 1 slot by default. To run more executions on one host, raise the slot count with `kanthord worker instance slot-count`.
+- An instance runs one execution at a time.
 - An instance holds its own copy of each LLM credential, sealed to its key. The server hands no server-held credential to an instance.
 - The **Workers** screen and step 8.6 need a project. Without a project, **Workers** shows "No projects". To create one, open **Projects**, then **New project**, as [step 5](#5-connect-a-repository) shows.
 - The first-task tutorial needs `coder@1` and `reviewer@1`. To run both at the `worker` placement, add one instance of each worker. Do step 8 once for each instance. For a second instance on the same worker host, skip steps 8.1 and 8.2.

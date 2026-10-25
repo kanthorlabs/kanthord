@@ -101,11 +101,11 @@ Their design, and the packaging of the `/work` orchestration skill that they car
   An unknown name answers 404 `worker.catalog.not_found`.
 - `worker.registration.list` is `GET /api/worker/registration` with optional `project_id`, `resource_identity`, `limit` and `cursor`. `project_id` is a `project_<ulid>` and `resource_identity` is `worker:kanthord:<binding name>`. `resource_identity` requires `project_id`, and a binding that the project does not hold answers 400 `worker.registration.binding_unknown`. The answer pages live registration records by runtime identity descending. It is a live inventory and no history.
 - `worker.registration.get` is `GET /api/worker/registration/:runtime_identity`. An unknown or ended registration answers 404 `worker.registration.not_found`.
-- A registration record holds `runtime_identity`, `project_id`, `resource_identity`, `worker_name`, `host`, `placement`, `client_id`, `name`, `instance`, `slot`, `activity`, `draining`, `execution_id` and `registered`. It holds no JWT.
+- A registration record holds `runtime_identity`, `project_id`, `resource_identity`, `worker_name`, `host`, `placement`, `client_id`, `name`, `instance`, `activity`, `draining`, `execution_id` and `registered`. It holds no JWT.
   - `placement` is `server`, `container` or `worker` for a kanthord host, from the placement of the binding.
-  - `client_id` and `name` name a registered instance. `instance` is the instance name and `slot` the slot number at the `worker` placement, else both are null.
+  - `client_id` and `name` name a registered instance. `instance` is the instance name at the `worker` placement, else null.
   - `activity` is `idle`, `pulling` or `executing`. `execution_id` holds a value while the registration executes.
-  - `draining` comes from the [pool](#the-pool). It is true for a slot that drains. At the `worker` placement, it is true for a slot at or above the slot count of its instance.
+  - `draining` comes from the [pool](#the-pool). It is true for a slot that drains.
 - The dashboard shows the placement of a pool slot registration as the text `· server` or `· container` in the row description. It shows `draining` as an outline badge. A registration at the `worker` placement shows `· instance <name>`. A registration of an external harness shows neither.
 - The dashboard calls these rows live registrations.
 - The reads change no registration, no pool, no configuration and no scheduling state, and they infer no dead process from silence.
@@ -151,11 +151,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The command declares `--instance <name>` and `--endpoint`. It refuses `--token` and `--config`.
 - The wrapper resolves the [instance configuration](#the-instance-configuration). It reads no `cli.yaml`.
 - The bindings, the worker, the agent configuration and the effective instance count come from the server through the [connection answer](#the-instance-exchange). The worker application reads the setup of one execution through `worker.execution.setup.get`.
-- One process hosts one instance. Each slot of the instance serves each binding that lists the instance through one registration of that binding.
-- The wrapper runs one worker unit for each slot of the connection answer, and it starts the units one after another. A unit gets the binding entries of its slot only.
-- The data directory of an instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/` and `pi/`, and every unit of the process shares them.
-- The units share one workspace root, so the hold of a node workspace covers every unit of the process.
-- The units share one opened copy of each credential revision. The wrapper refreshes an OAuth copy under one lock for each revision and sends one refresh report. A later execution of any unit reads the refreshed value.
+- One process hosts one instance. The instance serves each binding that lists it through one registration of that binding.
+- The data directory of an instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/` and `pi/` of the worker unit.
 - The log directory of an instance is `$XDG_STATE_HOME/kanthord/workers/<name>/`.
 - The wrapper gives the worker unit these directories. The worker unit names no placement and no instance.
 - The startup order is:
@@ -170,7 +167,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The application logs one info record for each task start, task commit, task verification, done record, planning of the units and of the verdict, verdict rule check, release verification, routed release failure, turn violation, node judgement and base merge. A record holds identities and results, and no agent content.
 - When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`. When the stop has a cause text, the record also adds `detail`.
 - The worker unit keeps the agent sessions of each execution in `pi/sessions/execution/<execution identity>/` of its data directory, under [Traces](#traces). It keeps the newest 50 execution directories.
-- After each registration, the worker unit logs one record `Worker application ready` with `runtime_identity`, `resource_identity`, `worker_name` and `slot`. Every other record of a unit also holds `slot`.
+- After each registration, the worker unit logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
 - The application writes operational log records to stderr as JSON lines. It prints no token, no private key and no instance configuration, and it requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
 - A registration whose answer is indeterminate stops the start with `worker.start.registration_indeterminate`.
@@ -178,11 +175,11 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - A `SIGINT` or a `SIGTERM` during the startup is a stop, not a startup failure. The application exits 0 with no diagnostic.
 - A stop aborts each outstanding work pull. A claim that commits during that abort has no worker until its lease expires, and settlement then declares it lost.
 - The application deregisters only a registration whose runtime identity it knows.
-- The application deregisters the registrations of a slot at a stop only when that slot holds no live execution and no work pull answer failed its schema. A busy slot keeps its registrations. An upgrade stops the old process before it starts the new one.
+- The application deregisters at a stop only when no execution is live and no work pull answer failed its schema. An upgrade stops the old process before it starts the new one.
 - A work pull answer that fails its schema ends the pull loop with `gateway.client.answer_invalid`. The application deregisters nothing and exits 1. A restart of the same instance inside the heartbeat window resumes the same registration and the same claim.
 - It exits 0 after a successful deregistration of each registration, or after the 404 that ends a registration. Any other deregistration or cleanup failure exits 1 without a retry.
 - An execution that ends with a release or a closure leaves the registration live, and the application pulls again. A release with a `stop` is a release. An execution that ends with no release and no closure exits 1.
-- A stop during a live execution of any slot exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
+- A stop during a live execution exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
 - A superseded connection exits with status 3 under [The instance exchange](#the-instance-exchange). Every other stop diagnostic exits 1.
 - A 10-second watchdog applies only when no execution is live and no registration waits for its answer.
 - `SIGHUP` reopens nothing.
@@ -216,7 +213,6 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 
 The Add instance sheet and the Reset key result show the one copy block of the host kind that the human selects, under [The worker pages](architecture.impl.md#the-worker-pages).
 No block puts the instance configuration on a command line. `<name>` is the instance name, and `<version>` is the server version.
-The container blocks below show `--memory=4g` for one slot. A block of an instance with more slots sets 4 GiB for each slot, for example `--memory=8g` for 2 slots, and its text names that value.
 
 `Linux (systemd)` runs the instance as a systemd user unit:
 
@@ -485,16 +481,11 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `revision`    | The revision value of [architecture.impl.md](architecture.impl.md#the-revision-value). Unique with `name`.                               |
 | `public_key`  | The base64url form of the 32-byte X25519 public key.                                                                                     |
 | `fingerprint` | `SHA256:<unpadded base64 of the SHA-256 of the 32 key bytes>`. Unique over every row.                                                    |
-| `slot_count`  | `INTEGER NOT NULL DEFAULT 1`. An integer from 1 to 64. A Reset key copies it to the next revision.                                       |
 | `created_at`  | Unix ms.                                                                                                                                 |
 | `ended_at`    | Unix ms, null while the revision is live.                                                                                                |
 
 - The table holds three unique indexes: the primary key `id`, `(name, revision)` and `fingerprint`. It holds no other index and no `CHECK`.
-- The Worker Service validates the name form, the worker against the catalogue, the key form and `slot_count` before each write. A `slot_count` that is no integer from 1 to 64 answers 400 `worker.instance.slot_count_invalid`.
-- `worker.instance.slot_count.set` writes `slot_count` of the live revision in place and adds no revision. It names `expected_revision`.
-  - A raise adds the slots. A lower drains each slot at and above the new count, as [the instance exchange](#the-instance-exchange) states.
-  - The write increments the `binding_version` of the instance, so the process connects again at its next heartbeat.
-  - The effective instance count of each binding that lists the instance changes with the write, and no binding revision changes.
+- The Worker Service validates the name form, the worker against the catalogue and the key form before each write.
 - An archived name stays taken. A create of a taken name answers 409 `worker.instance.name_conflict`.
 - The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`. `server` is the holder value of a server-held credential. The other three are static route segments.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived.
@@ -512,26 +503,23 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - The Reset key confirmation states: "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials."
 - A list row shows `<name> (v<revision>)`.
 - The `worker_registration` row holds `instance_id`, the instance revision id of a registration at the `worker` placement, and null at every other placement.
-- The `worker_registration` row holds `slot`, the slot number of a registration at the `worker` placement, and null at every other placement. `worker.register` finds the slot whose derived client identity equals the client identity of the caller.
-- The Worker Service implements the Scheduler collaboration `registrationsOfInstance(tx, runtimeIdentity)` from `instance_id` and `slot`, under [scheduler-service.impl.md](scheduler-service.impl.md#the-claim-selection).
+- The Worker Service implements the Scheduler collaboration `registrationsOfInstance(tx, runtimeIdentity)` from `instance_id`, under [scheduler-service.impl.md](scheduler-service.impl.md#the-claim-selection).
 
 ### The operations of an instance
 
-| Operation                        | Route                                                | Policy                                    | Input                                                   | Answer                                                                                                                                                       |
-| -------------------------------- | ---------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `worker.instance.create`         | `POST /api/worker/instance`                          | `human`, mutation                         | `{ name, worker, public_key?, endpoint?, slot_count? }` | 200 instance record                                                                                                                                          |
-| `worker.instance.list`           | `GET /api/worker/instance`                           | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived`        | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                                     |
-| `worker.instance.get`            | `GET /api/worker/instance/:instance_name`            | `human`, read                             | none                                                    | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current, health }]` |
-| `worker.instance.rotate`         | `POST /api/worker/instance/:instance_name/revision`  | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`         | 200 instance record                                                                                                                                          |
-| `worker.instance.archive`        | `POST /api/worker/instance/:instance_name/archive`   | `human`, mutation                         | `{ expected_revision }`                                 | 200 instance record                                                                                                                                          |
-| `worker.instance.slot_count.set` | `PUT /api/worker/instance/:instance_name/slot-count` | `human`, mutation                         | `{ slot_count, expected_revision }`                     | 200 instance record                                                                                                                                          |
-| `worker.instance.token`          | `POST /api/worker/instance/token`                    | `public`, read                            | `{ instance_id }`                                       | 200 `{ server_version, sealed }`                                                                                                                             |
-| `worker.instance.connect`        | `POST /api/worker/instance/connect`                  | `worker`, mutation                        | `{ connection_id?, connection_name }`                   | 200 `{ connection_id, binding_version, sealed }`                                                                                                             |
-| `worker.instance.heartbeat`      | `POST /api/worker/instance/heartbeat`                | `worker`, mutation                        | `{ connection_id, connection_name }`                    | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                                |
-| `worker.ssh.sign`                | `POST /api/worker/ssh/sign`                          | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                   | 200 `{ nonce, ciphertext }`                                                                                                                                  |
+| Operation                   | Route                                               | Policy                                    | Input                                            | Answer                                                                                                                                                       |
+| --------------------------- | --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `worker.instance.create`    | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, public_key?, endpoint? }`       | 200 instance record                                                                                                                                          |
+| `worker.instance.list`      | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived` | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                                     |
+| `worker.instance.get`       | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                             | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current, health }]` |
+| `worker.instance.rotate`    | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`  | 200 instance record                                                                                                                                          |
+| `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision }`                          | 200 instance record                                                                                                                                          |
+| `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                | 200 `{ server_version, sealed }`                                                                                                                             |
+| `worker.instance.connect`   | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`            | 200 `{ connection_id, binding_version, sealed }`                                                                                                             |
+| `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`             | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                                |
+| `worker.ssh.sign`           | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`            | 200 `{ nonce, ciphertext }`                                                                                                                                  |
 
-- An instance record is `{ id, name, worker, revision, public_key, fingerprint, slot_count, created_at, ended_at }`.
-- `worker.instance.create` writes `slot_count: 1` when the input holds none.
+- An instance record is `{ id, name, worker, revision, public_key, fingerprint, created_at, ended_at }`.
 - `worker.instance.create` and `worker.instance.rotate` take `public_key` or `endpoint`, never both and never neither. Another input answers 400 `worker.instance.key_invalid`.
 - With `public_key`, the server stores that key. The CLI commands `kanthord worker instance create` and `rotate` generate the key pair on their host and send only `public_key`.
 - With `endpoint`, the server generates the X25519 key pair and stores only the public key. The dashboard path sends `endpoint`.
@@ -555,7 +543,6 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.key_conflict`          | A row of any instance holds the fingerprint.                                                                                                            |
 | 404  | `worker.instance.not_found`             | The name is unknown, or the `instance_id` is unknown or ended.                                                                                          |
 | 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                                                                                           |
-| 400  | `worker.instance.slot_count_invalid`    | `slot_count` is no integer from 1 to 64.                                                                                                                |
 | 409  | `worker.instance.archived`              | A write names an archived instance.                                                                                                                     |
 | 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists, or whose registration holds a live execution. `details.bindings` or `details.executions` lists them. |
 | 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                                                      |
@@ -586,15 +573,14 @@ The connection:
 1. The process calls `worker.instance.connect` with `{ connection_id?, connection_name }`. `connection_name` is the host name of the process, for display only.
 2. Without `connection_id`, the server creates `connection_<ulid>` and makes it current. The previous connection of the instance ends at once.
 3. The answer is `{ connection_id, binding_version, sealed }`. `sealed` uses the info `kanthord/instance-connection/v1` and the aad `instance_id` followed by `connection_id`.
-4. `sealed` opens to `{ bindings: [{ project_id, resource_identity, slot, client_id, token, expired_at, client_secret, state }] }`, one entry for each binding that lists the instance and each slot. `state` is `serving` or `draining`.
+4. `sealed` opens to `{ bindings: [{ project_id, resource_identity, client_id, token, expired_at, client_secret, state }] }`, one entry for each binding that lists the instance. `state` is `serving` or `draining`.
 
-- The client identity of a slot for one binding is `client_identity_<26 characters>`. It comes from `deriveKey(master_key, "worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>/<slot>")`, in the form of [The machine identity of a pool slot](#the-machine-identity-of-a-pool-slot).
+- The client identity of an instance for one binding is `client_identity_<26 characters>`. It comes from `deriveKey(master_key, "worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>")`, in the form of [The machine identity of a pool slot](#the-machine-identity-of-a-pool-slot).
 - No database holds it. A new binding generation or a Reset key changes it.
 - `client_secret` is `deriveClientSecret(master_key, auth_version, client_id)`, as for a pool slot. `master_key` never leaves the server.
 - Each `token` is a `client` JWT with the claims `instance_id` and `connection_id`. Its lifetime is `WORKER_TOKEN_LIFETIME`.
-- A binding that drops the instance from `worker_instances` stays in the answer with `state: draining` while a slot holds a live registration of it. The worker unit of that slot ends the execution of that binding, deregisters, and the entry leaves the next answer.
-- A slot at or above `slot_count` stays in the answer with `state: draining` for each binding of which it holds a live registration. Its worker unit ends its execution, deregisters each registration and ends. The entries leave the next answer.
-- At the `worker` placement, `worker.register` checks that the client identity of the caller is the derived identity of a slot below `slot_count` of a listed instance for that binding. When the client identity holds a live registration, the check searches the slots 0 to 63, so a restarted process resumes a slot at or above `slot_count`. `isSlot` makes the same check for a pool slot. Another identity answers 409 `worker.registration.placement_mismatch`.
+- A binding that drops the instance from `worker_instances` stays in the answer with `state: draining` while the instance holds a live registration of it. The worker unit ends the execution of that binding, deregisters, and the entry leaves the next answer.
+- At the `worker` placement, `worker.register` checks that the client identity of the caller is the derived identity of a listed instance for that binding. `isSlot` makes the same check for a pool slot. Another identity answers 409 `worker.registration.placement_mismatch`.
 - `register` returns the live registration of a client identity before the count check, so a restart resumes the same runtime identity.
 
 The current connection:
@@ -627,9 +613,7 @@ Tests:
 - A second process supersedes the first. The first ends the child tree of its running bash tool before it exits 3.
 - After a server restart, the first valid connection becomes current, and a request of the same connection passes.
 - An auth-version increment exits with `worker.instance.secret_changed`, and the restart resumes a `running` execution of a fake unit.
-- Two pulls of one slot on two bindings commit one claim.
-- Two pulls of two slots of one instance commit two claims.
-- A lower of `slot_count` drains the higher slot: its healthcheck fails, a busy slot ends its execution, and its entries leave the next answer.
+- Two pulls of one instance on two bindings commit one claim.
 - An execution passes one renewal of its client token.
 - A heartbeat with another `server_version` stops the unit.
 
@@ -639,7 +623,7 @@ Tests:
 - For each binding at the `server` or the `container` placement, it holds the slots.
 - The reconciliation takes a binding only when its placement is a value of `PoolPlacement`: `server` or `container`. `requirePoolSlot` applies the same test.
 - A binding of an external harness reads `placement: null`, so it never holds a pool slot.
-- A binding at the `worker` placement holds no pool slot. The Project Service answers its effective instance count, the sum of the `slot_count` of the instances of `worker_instances`, through `workerBindingOf`. Registration, the claim count and the Gateway verification read that count.
+- A binding at the `worker` placement holds no pool slot. The Project Service answers its effective instance count, the length of `worker_instances`, through `workerBindingOf`. Registration, the claim count and the Gateway verification read that count.
 - For each slot, it holds the client identity, the runtime identity and the drain flag.
 - `src/worker/pool.ts` computes the plan of a reconciliation.
 - The pool host executes the plan through the `PoolHost` interface of `src/worker/contract.ts`.
@@ -1141,7 +1125,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - The view exposes only the credential that the effective agent provider names, at the revision that the execution pins, under the pi adapter id.
 - `read(providerId)` answers `undefined` for every other id.
 - The adapter passes the model identifier and the reasoning effort of the effective configuration to the [model connector](llm.impl.md#the-model-connector), which maps them onto the pi model and fails closed with `worker.runtime.setup_refused`.
-- The store holds the credential of one execution, so no store crosses executions. At the `worker` placement, the units of one process read one shared opened copy of each credential revision, as [The worker application](#the-worker-application) rules.
+- The store holds the credential of one execution, so no credential crosses executions.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
 - A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.

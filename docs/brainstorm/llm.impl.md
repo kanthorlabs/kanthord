@@ -230,7 +230,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The component applies a `pending` or `failed` report to the session after the commit of the operation.
 - The instance sends a lost `pending` report again with the next heartbeat answer. It sends a lost `completed` report again every 2 s with one idempotency key, until the session ends or expires. A stopped instance starts no session.
 - `InstanceLogin` of `src/llm/instance-login.ts` holds the session of an instance holder on the server. `InstanceLogins` of `src/apps/worker/instance-login.ts` runs the sessions on the instance.
-- The instance refreshes its OAuth copy and reports the refreshed copy sealed, under [the credential handover](custody.impl.md#the-credential-handover). The slots of one instance share one opened copy, and the worker application refreshes it under one lock for each revision, so one copy has one refresh holder.
+- The instance refreshes its OAuth copy and reports the refreshed copy sealed, under [the credential handover](custody.impl.md#the-credential-handover). One instance runs one execution at a time, so one copy has one refresh holder.
 
 ## The model connector
 
