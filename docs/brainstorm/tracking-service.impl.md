@@ -216,10 +216,11 @@ The row of `tracking_trace` holds the summary columns of the trace.
   2. It keeps at most `limit + 1` traces in the order above.
   3. It reads the root span of each kept trace through the primary key of `tracking_span`.
   4. At depth 2, it reads the spans of each kept trace through the primary key of `tracking_span` with its `trace_id`. It keeps each span whose parent is the root span.
-  5. It orders the items of the kept traces and keeps at most `limit + 1` items.
+  5. It adds one end row for each kept trace, after the items of that trace.
+  6. It orders the items and the end rows, and it answers at most `2 * limit + 2` rows.
 - The page and its cursor follow the counts of the statement:
   - With more than `limit` items, the page holds the first `limit` items. `next_cursor` names the last item of the page.
-  - With at most `limit` items and more than `limit` traces, the page holds every item. `next_cursor` names the end of the last kept trace.
+  - With at most `limit` items and more than `limit` end rows, the page holds every item. `next_cursor` names the last end row.
   - Otherwise the page holds every item, and `next_cursor` is null.
 - `next_cursor` holds 4 values as base64url JSON: the start of a trace, its `trace_id`, a timeline time and a `span_id`.
 - The cursor of an item holds the values of that item. The cursor of a trace end holds the timeline time `9007199254740991` and the `span_id` `""`.
