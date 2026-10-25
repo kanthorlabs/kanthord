@@ -62,7 +62,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ## The poll acquisition
 
-- The poll loops run inside the Intake Service of the `server` application, at the `server` and at the `worker` placement. No worker process and no slot thread runs a poll.
+- The poll loops run inside the Intake Service of the `server` application, at the `server` and at the `worker` placement. No worker process and no thread of a server instance runs a poll.
 - The poll runs on an interval of 60 seconds per inbound with a release per request. Each request carries a deadline.
 - One poll cycle per inbound runs at a time, and its requests run one after the other. The next interval starts after the previous cycle ends, so no older answer commits its checkpoint field after a newer one.
 - A cycle of a GitHub poll makes the events read, then the [closed pull request read](repository.impl.md#the-closed-pull-request-read). Each request takes its own release for `poll`.
