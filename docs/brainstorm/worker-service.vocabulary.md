@@ -215,15 +215,16 @@ A registration is the admission of a worker instance under one worker binding.
 It holds the runtime identity and the client identity of that admission.
 The term names no closed set.
 An instance at the `server` or the `container` placement and an instance of an external harness hold one registration.
-An instance at the `worker` placement holds one registration for each binding that lists it.
-The instance `box-coder` is listed by `coder` of project A and `coder` of project B, so it holds two registrations.
+An instance at the `worker` placement holds one registration for each slot and each binding that lists it.
+The instance `box-coder` with one slot is listed by `coder` of project A and `coder` of project B, so it holds two registrations.
+With two slots, it holds four registrations.
 
 ## instance record
 
 The instance record is the durable server record of one worker instance at the `worker` placement.
-It holds a name, one worker, a revision and one X25519 public key.
+It holds a name, one worker, a revision, one X25519 public key and the slot count.
 The term names no closed set.
-A human adds `box-coder` of `coder@1` once on the details page of `coder@1`.
+A human adds `box-coder` of `coder@1` once on the details page of `coder@1`, with 2 slots.
 A Reset key gives `box-coder` revision 2 with a new public key, and every token of revision 1 fails.
 
 ## instance configuration
@@ -260,7 +261,7 @@ The instance heartbeat of a [connection](#connection) is another signal. It keep
 
 The pool is the instances of one worker binding.
 The pool of worker binding `coder-main` holds two instances.
-The pool of a binding at the `worker` placement is its listed instances.
+The pool of a binding at the `worker` placement is the slots of its listed instances.
 Both are idle, both pull, and the Scheduler serves "Add password reset" to the first pull.
 The second instance keeps its pull outstanding and starts no other pull.
 
@@ -271,6 +272,15 @@ A slot holds a slot number from 0 to 63 and one client identity.
 The client identity stays the same across server restarts, and a new binding generation gets new ones.
 Worker binding `coder-main` with instance count 2 holds slots 0 and 1.
 A raise of the count to 3 adds slot 2.
+
+## instance slot
+
+An instance slot is one unit of the slot count of a worker instance at the `worker` placement.
+A slot holds a slot number from 0 to 63, one client identity for each binding that lists its instance, and at most one execution over all its registrations.
+The process of the instance runs one worker unit for each slot. The slots share the host, the data directory and the credential copies of the instance.
+The client identity of a slot stays the same across restarts of the process. A Reset key and a new binding generation give new ones.
+The instance `box-coder` holds slot count 2, so it runs slots 0 and 1 and hosts up to two executions at once.
+A lower of the slot count to 1 drains slot 1.
 
 ## slot driver
 
