@@ -1141,7 +1141,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - The view exposes only the credential that the effective agent provider names, at the revision that the execution pins, under the pi adapter id.
 - `read(providerId)` answers `undefined` for every other id.
 - The adapter passes the model identifier and the reasoning effort of the effective configuration to the [model connector](llm.impl.md#the-model-connector), which maps them onto the pi model and fails closed with `worker.runtime.setup_refused`.
-- The store holds the credential of one execution, so no credential crosses executions.
+- The store holds the credential of one execution, so no store crosses executions. At the `worker` placement, the units of one process read one shared opened copy of each credential revision, as [The worker application](#the-worker-application) rules.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
 - A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
