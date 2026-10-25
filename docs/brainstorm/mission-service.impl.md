@@ -48,7 +48,8 @@ An execution assessment is the exception: it stores the execution identity, and 
 - `verifications` is a nonempty ordered list of nonblank bash command strings.
 - `bindings` is a list of binding identities of the project. A read answers the pinned identities, and a node write and an unblock content change take identities. A plan file names each binding by its name.
 
-The write resolves each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding, pins that revision and checks the rule table.
+A node write, and an import that creates a node, resolve each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding. The write pins that revision and checks the rule table.
+An import of an existing node keeps a pinned revision with the same name and the same `resource_identity`, unless a removal of that binding follows the pin.
 The write accepts the identity of a revision of the current binding of that resource. An identity from before a removal of that binding answers `mission.node.bindings_invalid`, also when a binding of the same resource exists again.
 The intent of the node determines the column.
 A node names every binding that it uses, and the write takes no binding from the project.
@@ -194,7 +195,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - An import covers the whole mission and carries no scope.
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
-- The import compares the bindings of a node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change.
+- The import compares the bindings of a node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
 - The import result maps each node file name to its node identity and each task file name to its task identity.
 - A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
@@ -814,7 +815,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
 - Tests include terminal nodes in unchanged export-import cycles and assert a no-op.
-- Tests re-import the export of a mission with a `Completed` node after a new revision of its binding. They assert a no-op for that node and keep its pinned binding revision.
+- Tests re-import the export of a mission with a `Completed` node after a new revision of its binding. They assert a no-op for that node and keep its pinned binding revision. They assert a change for a pin from before a removal of its binding.
 - Tests assert human-only access and both exact export answer shapes.
 - Tests accept an export at 10 MiB and assert 413 `mission.export.too_large` above that bound.
 - Tests import raw Markdown through the Mission Service parser and JSON through the same node validation rules.
@@ -869,7 +870,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests reject absent and empty verifications with `mission.node.verifications_missing`.
 - Tests reject nonlist verifications and blank or nontext items with `mission.node.content_invalid`.
 - A test accepts `true` for a node with no verification need.
-- Tests resolve project binding identities, and the binding names of a plan file, to the identities of their latest revisions at the write.
+- Tests resolve project binding identities, and the binding names of a plan file, to the identities of their latest revisions at a node write and at an import that creates a node.
 - Tests reject absent or nonlist bindings and unknown or foreign-project identities and names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject a repeated binding name in the `bindings` of one node.
