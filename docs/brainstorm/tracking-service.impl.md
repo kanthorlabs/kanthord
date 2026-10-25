@@ -213,7 +213,7 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - An item of depth 1 holds `worker_name` of its trace row, and an item of depth 2 holds `worker_name: null`.
 - The read runs one statement in one read transaction:
   1. It scans `tracking_trace` for the scope, the window and the cursor, as the trace list does. An `execution_id` scope reads the unique index `tracking_trace_execution`.
-  2. It keeps at most `limit + 1` traces in the order above.
+  2. It keeps at most `limit + 1` traces whose end comes after the cursor, in the order above.
   3. It reads the root span of each kept trace through the primary key of `tracking_span`.
   4. At depth 2, it reads the spans of each kept trace through the primary key of `tracking_span` with its `trace_id`. It keeps each span whose parent is the root span.
   5. It adds one end row for each kept trace, after the items of that trace.

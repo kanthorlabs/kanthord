@@ -286,7 +286,7 @@ Each write follows the commit of the transaction that changes the execution row.
   - `finished` for a release;
   - `lost` for a loss declaration of the sweep or of an inline settlement;
   - `revoked` for a revocation at a Mission transition.
-- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution settles the node, and `human` for a human act.
+- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, and `human` for a human act.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
 - A release, a loss and a revocation with the cause `assessment` each write one `scheduler.transition` span. It is a child of the root span, with the record identity `<root_span_id>:transition`.
