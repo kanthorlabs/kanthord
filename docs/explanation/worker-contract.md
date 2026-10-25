@@ -117,7 +117,7 @@ Every span of a worker also holds `kanthord.execution.id`, `kanthord.node.id`, `
 
 `reviewer@1` writes `agent.session`, `agent.turn` and `agent.tool` spans below `worker.evaluation`. The model reply of its last turn holds the whole review, also the parts that the assessment rationale leaves out.
 
-A turn and a tool call have one shape for both producers. The Span tree tab of the trace page of the dashboard therefore shows a native run and a harness run with the same view. The Conversation tab renders the entries of the `pi` session format only.
+A turn and a tool call have one shape for both producers. The Steps tab of the trace page of the dashboard therefore shows a native run and a harness run with the same view. The Conversation tab renders the entries of the `pi` session format only.
 
 The attributes follow the [OpenTelemetry GenAI semantic conventions](https://github.com/open-telemetry/semantic-conventions-genai). `gen_ai.usage.input_tokens` counts every input token, also the cached ones. `kanthord.usage.cost_usd` is the cost that pi estimates from its price table.
 
