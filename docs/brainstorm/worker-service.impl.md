@@ -837,8 +837,8 @@ Tests of the slot driver:
 - `prepare()` runs `<runtime> ps --all --filter label=io.kanthord.owner=<owner> --format '{{.Names}}'`, then `<runtime> rm --force <name>` for each name.
 - `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes. The start sweep of [Isolation of a thread slot](#isolation-of-a-thread-slot) removes the volume of a removed binding.
 - Each launch first runs `<runtime> rm --force kanthord_slot_<client_id>`.
-- A `rm --force` of `prepare()` or of a launch counts as success when it succeeds or answers "no such container", in any case.
-- When `rm --force` fails otherwise, the driver runs `<runtime> container inspect --format '{{.Id}}' <name>`. A failed inspect that answers "no such container" counts as success.
+- A `rm --force` of `prepare()`, of a launch or of an environment proof counts as success when it succeeds or answers "no such container" in any letter case.
+- When `rm --force` fails otherwise, the removal runs `<runtime> container inspect --format '{{.Id}}' <name>`. A failed inspect that answers "no such container" counts as success.
 - Every other inspect answer fails the removal with the error output of `rm --force`.
 - The removal of the slot volume of a removed binding is a [HANDOFF](HANDOFF.md#worker-service) item.
 
@@ -1241,9 +1241,9 @@ The steps method of `coder@1` on an `implement` node runs only coding turns of t
 
 - A **unit** is one item of work with a work prompt and a list of verifications. Each task is one unit. A node with no task is one unit, the **node unit**, with the node identity as its id. `workUnitsOf` builds the list.
 - The node unit holds the node content and the task list as its work prompt, and the node verifications as its commands. `nodeUnitOf` of `release-gate.ts` builds it.
-- The work prompt of a task starts with `# Node <name>` and the `Requirement` and the `Criterion` of the node. The line "Do only the task below. The node part above is context." follows.
+- The shipped `work` template starts the work prompt of a task with `# Node <name>` and the `Requirement` and the `Criterion` of the node. The line "Do only the task below. The node part above is context." follows.
 - The task part then starts with `# Task <name>` and holds the task content. The work prompt of the node unit holds no node part.
-- The node part is in the pinned work prompt, the first user message. The system prompt holds no node part.
+- The node part is in the pinned work prompt, a user message. The system prompt holds no node part.
 - A **turn** is one call of `prompt` or `instruct` on the agent: a work turn, a revision turn or a conflict turn. The execution runs no answer turn: no start-check judgement, no task judgement, no task choice and no repair turn.
 - One `swe@1` session serves every turn of the execution.
 

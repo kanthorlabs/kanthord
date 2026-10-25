@@ -295,7 +295,7 @@ The Agent component owns these keys of the section `agent`.
 - `repositories` lists `{ name, directory, base_branch }` for each repository binding of the pinned revision, in binding order. `work` receives an empty list for a node with one repository binding.
 - `verification` holds the results of the node verifications that the execution code runs. `dependencies`, `outcomes` and `evidence` are empty for an `examine` node with no direct dependency.
 - `tasks` lists the tasks of the node for the work prompt of the node unit, and is empty for the work prompt of a task.
-- `node` holds the node content for the work prompt of a task, and is null for the work prompt of a node unit.
+- `node` holds the name, the requirement and the criterion of the node for the work prompt of a task. It is null for every other work prompt.
 - `marker` is the marker that the worker parses. A replacement of `evaluation` or `repair` keeps the marker line, or the worker treats the reply as invalid.
 - The loader reads only the files of the template names above. A file `task-judgement.md` or `task-choice.md` in `prompts` is unused, and the loader gives no warning.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.
