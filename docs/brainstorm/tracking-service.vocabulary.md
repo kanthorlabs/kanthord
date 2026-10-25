@@ -165,7 +165,7 @@ The set is closed and it holds seven values.
 ## cause
 
 A cause names the layer that caused one failure event, as a category and a subcategory.
-The root span end of a failed execution holds its cause, and its assigner is `rule`, `reviewer` or `human`.
+The root span end of a failed execution holds its cause, with the assigner `rule` or `reviewer`. A cause label gives the effective cause the assigner `human`.
 The cause of the execution that `Add password reset` stopped for a quota error is `llm_provider` with `quota_exhausted`.
 
 ## cause category
