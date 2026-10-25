@@ -44,7 +44,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - An enablement holds one or more named agent providers and the default configuration that a human selects.
 - Each agent provider pairs a provider with a credential name.
 - A credential name holds one copy for each [holder](custody.vocabulary.md#holder). A consumer resolves the copy of its own holder.
-- The holder of a consumer is each [worker instance](worker-service.md#worker-instances) that a `worker` placement binding lists in `worker_instances`. It is `server` for a `server` or a `container` binding and for a workbench session.
+- The holders of a worker binding are its listed [worker instances](worker-service.md#worker-instances) at the `worker` placement, and `server` when it lists an instance at the `server` or the `container` placement. The holder is `server` for a workbench session.
 - For each holder of a consumer, every agent provider of the chain names a credential with a live copy of that holder. The chain covers the head and every fallback. That copy is sealed to the current key of the holder.
 - This holder rule runs at enablement write, worker binding write and resolution. It refuses, and it never filters a chain entry.
 - Each copy of a credential passes the approved-model membership of its own metadata.
