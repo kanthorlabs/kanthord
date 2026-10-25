@@ -694,7 +694,7 @@ A fatal error runs as below.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
 - `kanthord worker join` and `kanthord worker instance create --output` are the only commands that write an instance configuration file. Each creates an absent file, and `--force` is the only overwrite. `kanthord worker join` reads the instance configuration from standard input, so no secret reaches the command line.
-- The `worker instance` group holds five commands, each with the remote flags of the engine CLI:
+- The `worker instance` group holds six commands, each with the remote flags of the engine CLI:
   - `kanthord worker instance create <name> --worker <worker> [--slot-count <count>] [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.create`.
   - `kanthord worker instance list [--worker <worker>] [--include-archived] [--limit <count>] [--cursor <opaque>]` calls `worker.instance.list`.
   - `kanthord worker instance get <name>` calls `worker.instance.get`.
