@@ -565,12 +565,12 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 ## The act trace
 
-Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act.
+Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act. A node with no attempt gives the trace a null attempt.
 
 - The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.approve` and `mission.evidence.delete`. The operation of the root span is the operation identity of the act.
 - The act trace of `mission.evidence.delete` names the node of the evidence and holds `kanthord.evidence.id`. Its two node states are equal when the delete changes no state. It is the Tracking span of the delete that [evidence retention](#evidence-retention) names.
 - The root span starts and ends at the time of the act, with the status `Ok`.
-- It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. `mission.proposal.approve` names the created node and holds no `kanthord.node.state.from`.
+- It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. A null attempt omits `kanthord.attempt`. `mission.proposal.approve` names the created node and holds no `kanthord.node.state.from`.
 - The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
 - An act that revokes a live execution links its root span to the root span of that execution.
 - That act hands the cause `human` to the [revocation](scheduler-service.impl.md#the-execution-trace).

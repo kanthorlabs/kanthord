@@ -178,10 +178,15 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - `tracking.trace.list` answers one page of trace summaries, newest first by default. It filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type` and `q`.
 - `tracking.trace.list` also filters by the time range `from` and `to`, by [the overlap rule](#the-timeline-read) of the timeline read.
 - Every time range filter of the Tracking Service is named `from` and `to`, and it selects the traces by that overlap rule.
-  It also filters by a range of `started_at`, and by a minimum and a maximum of `duration_ms`, `total_tokens` and `cost_usd`.
+  It also filters by a minimum and a maximum of `duration_ms`, `total_tokens` and `cost_usd`.
+  A trace with no `duration_ms` fails `min_duration_ms` and `max_duration_ms`.
 - `q` matches a case-insensitive substring of the trace, execution and node identities.
   It also matches the worker name, an agent name, a model, an error type and the stop reason.
 - `sort` takes `started_at`, `duration_ms`, `total_tokens` or `cost_usd`, always in descending order. The cursor holds the sort value and the row position.
+- Equal sort values follow the creation order of the trace in descending order. A trace with no start sorts by its creation time.
+- An open trace sorts last under `duration_ms`.
+- A cursor of another sort answers 400 `system.pagination.cursor_invalid`.
+- `limit` takes 1 to 1000. It defaults to 100 for `tracking.trace.list` and `tracking.session.entry.list`, and to 500 for `tracking.span.list`.
 - The list scans `tracking_trace`. The retention bounds that table, and no index other than a unique index exists.
 - `tracking.facet.get` answers the distinct worker names, agent names, models and error types, at most 200 values each.
   `project_id` limits it to the traces of one project.
@@ -238,6 +243,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `tracking.analytics.cost` uses `GET /api/tracking/analytics/cost`, and `tracking.analytics.duration` uses `GET /api/tracking/analytics/duration`. Both have `human` access.
 - `to` defaults to the time of the read. `from` defaults to 7 days before `to`.
 - A range of more than 31 days answers 400 `tracking.analytics.range_invalid`. A `from` after `to` answers the same code.
+- The range check applies the default of a missing `from` or `to` first.
 - The read selects the traces whose window overlaps the range, by the rule of [the timeline read](#the-timeline-read). `project_id` and `node_id` filter the selected traces.
 - The read counts each span of a selected trace whose `start_time` lies from `from` to `to`, both inclusive.
 - The read takes the identities of the selected traces in one read transaction.
@@ -246,7 +252,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - The service yields to the event loop between two steps. A write that commits between two steps can show in a later step.
 - A cancelled request stops the read between two steps.
 - The service builds the groups and the percentiles in memory from the span rows and their trace rows.
-- `bucket` takes `none`, `hour`, `day` or `week`, and it defaults to `day`.
+- `bucket` takes `none`, `hour`, `day` or `week`. It defaults to `day` for the cost read and to `none` for the duration read.
 - A bucket starts on a UTC boundary of its size, and a week starts on Monday at 00:00 UTC. A span counts in the bucket of its `start_time`.
 - `bucket_start` holds the start of the bucket in Unix milliseconds, or null for `none`.
 - `worker_name`, `node_id` and `project_id` come from the trace row, and `operation` comes from the span row.
@@ -265,7 +271,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 `tracking.analytics.duration` reads the percentiles of one measure.
 
 - `measure` is required. It takes one value of this closed set:
-  - `span_duration`: `end_time - start_time` of each span with a start and an end. `operation` filters it.
+  - `span_duration`: `end_time - start_time` of each span with a start and an end. `operation` filters it. Every other measure ignores `operation`.
   - `tool_latency`: `end_time - start_time` of each `agent.tool` span.
   - `verification_time`: `end_time - start_time` of each `worker.verification` span.
   - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
@@ -294,6 +300,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `tracking.text.get` checks the trace first. A text of a deleted or unknown trace answers 404 `tracking.trace.not_found`. A text that a held trace does not hold answers 404 `tracking.text.not_found`.
 - A late record reuses the predicate of the sweep and needs no tombstone. The time of an execution identity is the time of its ULID. When that time is older than the retention, `tracking.telemetry.write` refuses every record with `trace_expired` and opens no trace row.
 - `serverSpan` drops a span of such an execution and counts the drop.
+- `serverTraceSpan` drops a span when `created_at` of its trace is older than the retention, and counts the drop.
 
 ## Configuration
 
