@@ -281,9 +281,14 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Custody gives the check a pi credential store, the refresh store, in `ResourceCheck` and in `CheckMaterial.refreshStore`. The check passes that store to the pi call in place of the store of one call.
 - pi-ai resolves the authentication of the call. It refreshes an access token that expires within 5 minutes with the stored refresh token, under `CredentialStore.modify`, and the model call uses the new access token.
 - The refresh store writes the refreshed value inside `modify` through `replaceServerCopy`, in place at the same revision. `replaceServerCopy` uses `applyReport`, the digest rule of a [refresh report](custody.impl.md#the-credential-handover). A refresh adds no revision.
-- The workbench credential store and the refresh store share `replaceServerCopy`. It refuses a revision that a live execution pins.
+- The workbench credential store and the refresh store share `replaceServerCopy`. It refuses a revision that a live execution pins at the write. It logs `credential refresh stale` when the stored value changed, and then it writes nothing.
+- Custody holds one in-process lock for each credential revision. Both stores run `CredentialStore.modify` under it, so pi-ai refreshes a revision once. A second check reads the new value under the lock and refreshes nothing.
+- The lock is also the registry of refreshes in flight. A server placement handover of a revision with a refresh in flight refuses inside its transaction with `CredentialRefreshInFlight`. The Worker Service handler waits until the refresh ends and runs the handover again. A wait past the 30 s handover timeout answers 504 `gateway.invocation.timeout`.
+- A write that custody refuses after a refresh fails the pi call. The healthcheck and the verify answer `unknown` with `unreachable`, the provider check answers `unreachable`, and the model check answers `unavailable`.
 - Custody gives no refresh store when a live execution pins the revision, because the execution holds the refresh token. An access token that expires within 5 minutes then answers `unauthorized` without a remote call.
-- A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change. The log names the reason `access token refresh failed`.
+- A check without a refresh store gives pi-ai a frozen store. Its `modify` answers the stored value and never calls the refresh, so the check never refreshes, also when the token enters the window between two model calls.
+- The redaction list of a check holds every credential that the refresh returns, also when the write fails.
+- A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change. The log of the healthcheck, the verify and the provider check names the reason `access token refresh failed`. The log of the model check names the reason `The access token refresh failed.`
 - The check of an instance copy runs on the instance with no refresh store, by [the health of an instance copy](#the-health-of-an-instance-copy). The instance refreshes its own copy only in an execution.
 - The `github-copilot` check sends the stored GitHub token and refreshes nothing.
 - The rule adds no error code.

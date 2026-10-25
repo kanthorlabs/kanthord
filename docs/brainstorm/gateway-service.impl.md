@@ -486,22 +486,22 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), the [LL
 
 ### The failure reason of an HTTP check
 
-`failureReasonOfStatus` and `thrownFailureReason` of `src/kernel/probe.ts` map an HTTP status and a thrown failure to a value. `thrownFailureReason` gives `unclassified` for a cancel by the caller. `src/llm/probes.ts` sets the rows of the expired token, the model list and the model call. The table applies to every LLM provider check, the `github` check and the `s3` `HeadBucket` check. The first row that matches decides.
+`failureReasonOfStatus` and `thrownFailureReason` of `src/kernel/probe.ts` map an HTTP status and a thrown failure to a value. `thrownFailureReason` gives `unclassified` for a cancel by the caller. `src/llm/probes.ts` sets the rows of the token inside the refresh window, the model list and the model call. The table applies to every LLM provider check, the `github` check and the `s3` `HeadBucket` check. The first row that matches decides.
 
-| Condition                                                                              | Value               |
-| -------------------------------------------------------------------------------------- | ------------------- |
-| The check exceeds its deadline                                                         | `deadline_exceeded` |
-| The access token of an `openai-codex` or `anthropic-subscription` record is expired    | `unauthorized`      |
-| The remote answers HTTP 401                                                            | `unauthorized`      |
-| The remote answers HTTP 403                                                            | `forbidden`         |
-| The remote answers HTTP 429                                                            | `rate_limited`      |
-| The remote answers a status other than success, a redirect or an S3 `404` included     | `invalid_response`  |
-| The body of a model list does not parse                                                | `invalid_response`  |
-| The request fails before an HTTP answer, or a failed model call carries no HTTP status | `unreachable`       |
-| Any other failure, for example a check model that pi does not list                     | `unclassified`      |
+| Condition                                                                                                                          | Value               |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| The check exceeds its deadline                                                                                                     | `deadline_exceeded` |
+| The access token of an `openai-codex` or `anthropic-subscription` record expires within 5 minutes, and the check cannot refresh it | `unauthorized`      |
+| The remote answers HTTP 401                                                                                                        | `unauthorized`      |
+| The remote answers HTTP 403                                                                                                        | `forbidden`         |
+| The remote answers HTTP 429                                                                                                        | `rate_limited`      |
+| The remote answers a status other than success, a redirect or an S3 `404` included                                                 | `invalid_response`  |
+| The body of a model list does not parse                                                                                            | `invalid_response`  |
+| The request fails before an HTTP answer, or a failed model call carries no HTTP status                                             | `unreachable`       |
+| Any other failure, for example a check model that pi does not list                                                                 | `unclassified`      |
 
-- `unauthorized` means that the remote refused the secret, or that the stored access token is expired.
-- An expired access token answers `unauthorized` without a remote call. No check refreshes an OAuth record.
+- `unauthorized` means that the remote refused the secret, that the OAuth refresh failed, or that the check cannot refresh an access token that expires within 5 minutes.
+- An LLM check refreshes an OAuth record by [the OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check). A token that the check cannot refresh answers `unauthorized` without a remote call.
 - A `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides.
 - `forbidden` means that the remote answered HTTP 403. An LLM provider answers 403 for a secret that it accepts. GitHub and S3 can also answer 403 for a rate limit or a wrong key, so their checks report `unknown`.
 - `rate_limited` means that the remote refused the request for its rate limit.

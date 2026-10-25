@@ -17,7 +17,7 @@ The check is a warning for the human. Run it before an agent enablement write. T
 | 3    | The tool result `ready` goes back to the model.                     |
 | 4    | The model must answer without a provider failure.                   |
 
-The reasoning effort `off` sends no reasoning option. Every other effort goes to the model call. The check has a 50-second deadline. It does not refresh OAuth: an expired access token answers `unauthorized` without a model call.
+The reasoning effort `off` sends no reasoning option. Every other effort goes to the model call. The check has a 50-second deadline. It refreshes an OAuth access token by the [OAuth refresh](credential.md#oauth-refresh). The check stores only a refreshed OAuth value.
 
 ## Expected response
 
@@ -35,14 +35,14 @@ The API returns HTTP `200` with JSON. The CLI writes the same object as one JSON
 | `result`  | string           | Check result; see the table below.                                                 |
 | `message` | string or `null` | Failure text without secrets, cut to 300 characters; `null` when `result` is `ok`. |
 
-| `result`          | Meaning                                                                                      |
-| ----------------- | -------------------------------------------------------------------------------------------- |
-| `ok`              | The model called the tool and answered after the tool result.                                |
-| `rate_limited`    | The provider answered `429`.                                                                 |
-| `quota_exhausted` | The error text names a quota, a usage limit, a billing state or a credit balance.            |
-| `unauthorized`    | The provider answered `401` or `403`, or the OAuth access token is expired.                  |
-| `bad_request`     | The provider answered another `4xx`, or the model answered without a call of the tool.       |
-| `unavailable`     | Every other failure: a `5xx` answer, a network failure, the deadline or a cancelled request. |
+| `result`          | Meaning                                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`              | The model called the tool and answered after the tool result.                                                                                                                   |
+| `rate_limited`    | The provider answered `429`.                                                                                                                                                    |
+| `quota_exhausted` | The error text names a quota, a usage limit, a billing state or a credit balance.                                                                                               |
+| `unauthorized`    | The provider answered `401` or `403`, the [OAuth refresh](credential.md#oauth-refresh) failed, or an OAuth access token that the check cannot refresh expires within 5 minutes. |
+| `bad_request`     | The provider answered another `4xx`, or the model answered without a call of the tool.                                                                                          |
+| `unavailable`     | Every other failure: a `5xx` answer, a network failure, the deadline or a cancelled request.                                                                                    |
 
 The `message` of a model that does not call the tool is `The model did not call the tool.` The answer contains no key or token.
 

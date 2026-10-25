@@ -100,9 +100,22 @@ A provider failure with the code `rate_limited`, `unavailable` or `quota_exhaust
 - `revoke` ends one older live revision of one copy at once. A live execution that pins that revision fails at its next use of the credential.
 - `archive` ends every live revision of one copy. An archive is final. An agent provider, a worker binding or an inbound that names the credential blocks the archive of the `server` copy. A worker binding that lists the instance blocks the archive of an instance copy when an agent of its worker has an agent provider that names the credential.
 - `check` tests a typed secret against its platform before a `create`. It stores nothing. It accepts only `verifiable` platforms with the secret shape `api_key`.
-- `verify` tests the current revision of a stored credential. It stores no result. It accepts every `verifiable` platform.
+- `verify` tests the current revision of a stored credential. It stores no result, only a refreshed OAuth value. It accepts every `verifiable` platform.
 
-`check` and `verify` run the provider check of the platform with a 10-second deadline. The connection result maps to a status: `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` or `invalid_response` to `unknown`. A check that exceeds its deadline answers `unknown` with the failure reason `deadline_exceeded`. No check refreshes OAuth. An expired access token of `openai-codex` or `anthropic-subscription` answers `unhealthy` with the failure reason `unauthorized`, without a remote call. The `github-copilot` check sends the stored GitHub token and ignores the stored expiry, so the remote decides.
+`check` and `verify` run the provider check of the platform with a 10-second deadline. The connection result maps to a status: `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` or `invalid_response` to `unknown`. A check that exceeds its deadline answers `unknown` with the failure reason `deadline_exceeded`. `verify` refreshes an OAuth access token by the [OAuth refresh](#oauth-refresh). The `github-copilot` check sends the stored GitHub token and ignores the stored expiry, so the remote decides.
+
+### OAuth refresh
+
+The health report, `verify`, [`llm provider check`](provider.md) and [`llm model check`](model.md) run on the `server` copy of a credential. For `openai-codex` and `anthropic-subscription`, they follow one rule:
+
+- pi-ai refreshes the access token with the stored refresh token when the token expires within 5 minutes. The model call then uses the new access token.
+- The server writes the refreshed value in place at the same revision. The refresh adds no revision.
+- The server runs one refresh of a revision at a time. A second check waits and uses the new access token.
+- When a live execution pins the revision, the check does not refresh. An access token that expires within 5 minutes then answers `unauthorized`, without a remote call.
+- A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change.
+- When a live execution pins the revision during the refresh, the server refuses the write. `verify` then answers `unknown` with `unreachable`, and the stored value does not change.
+- A handover to an execution waits until a refresh of its revision ends, and then hands over the new value.
+- The check of an instance copy never refreshes. An access token that expires within 5 minutes answers `unauthorized`, without a remote call.
 
 ## Expected response
 
@@ -233,15 +246,15 @@ The CLI fetches no further page.
 | `capability`     | string           | Capability of the platform check, as in the health report.                                 |
 | `failure_reason` | string or `null` | `null` for a `healthy` answer only. Every other answer carries a value of the table below. |
 
-| `failure_reason`    | Cause                                                                                                   | Status      |
-| ------------------- | ------------------------------------------------------------------------------------------------------- | ----------- |
-| `unauthorized`      | The provider answered `401`, or the `openai-codex` or `anthropic-subscription` access token is expired. | `unhealthy` |
-| `forbidden`         | The provider answered `403`.                                                                            | `unhealthy` |
-| `rate_limited`      | The provider answered `429`.                                                                            | `unknown`   |
-| `invalid_response`  | The provider answered another status or a redirect, or a model list that the check cannot read.         | `unknown`   |
-| `unreachable`       | The request failed before an HTTP answer, or a failed model call carries no HTTP status.                | `unknown`   |
-| `deadline_exceeded` | The check exceeded its 10-second deadline.                                                              | `unknown`   |
-| `unclassified`      | Any other failure.                                                                                      | `unknown`   |
+| `failure_reason`    | Cause                                                                                                                                                                                          | Status      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `unauthorized`      | The provider answered `401`, the [OAuth refresh](#oauth-refresh) failed, or an `openai-codex` or `anthropic-subscription` access token that the check cannot refresh expires within 5 minutes. | `unhealthy` |
+| `forbidden`         | The provider answered `403`.                                                                                                                                                                   | `unhealthy` |
+| `rate_limited`      | The provider answered `429`.                                                                                                                                                                   | `unknown`   |
+| `invalid_response`  | The provider answered another status or a redirect, or a model list that the check cannot read.                                                                                                | `unknown`   |
+| `unreachable`       | The request failed before an HTTP answer, or a failed model call carries no HTTP status.                                                                                                       | `unknown`   |
+| `deadline_exceeded` | The check exceeded its 10-second deadline.                                                                                                                                                     | `unknown`   |
+| `unclassified`      | Any other failure.                                                                                                                                                                             | `unknown`   |
 
 The answer holds no remote text. The server log record `credential verify failed` or `credential check failed` keeps the redacted remote text under `reason`.
 
