@@ -5,7 +5,7 @@ These checks are operator-run KanthorD tests, not work assigned to the TODO app 
 ## Preconditions
 
 - Read [README.md](README.md) and configure the `todoapp-repo` binding, execution worker and reviewer explicitly. Use the implemented command/API contracts, not guessed CLI syntax.
-- Before import/graph experiments, keep workers unable to claim, for example with project worker instance counts at zero. Enable them only for the execution checks.
+- Before import/graph experiments, keep workers unable to claim, for example with empty `worker_instances` lists in the project worker bindings. Enable them only for the execution checks.
 - Capture the initial mission version and binding revisions. Read the daemon's stores only for controlled diagnostic assertions; never write directly to them.
 - Use a fresh separate project for each destructive or graph-mutating scenario. Source mutations below refer to temporary copies or an identity-bearing export, never edits to the checked-in baseline.
 
