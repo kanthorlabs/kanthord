@@ -594,7 +594,7 @@ The connection:
 - Each `token` is a `client` JWT with the claims `instance_id` and `connection_id`. Its lifetime is `WORKER_TOKEN_LIFETIME`.
 - A binding that drops the instance from `worker_instances` stays in the answer with `state: draining` while a slot holds a live registration of it. The worker unit of that slot ends the execution of that binding, deregisters, and the entry leaves the next answer.
 - A slot at or above `slot_count` stays in the answer with `state: draining` for each binding of which it holds a live registration. Its worker unit ends its execution, deregisters each registration and ends. The entries leave the next answer.
-- At the `worker` placement, `worker.register` checks that the client identity of the caller is the derived identity of a slot below `slot_count` of a listed instance for that binding. The live registration of a draining slot answers before this check, so a restarted process resumes it. `isSlot` makes the same check for a pool slot. Another identity answers 409 `worker.registration.placement_mismatch`.
+- At the `worker` placement, `worker.register` checks that the client identity of the caller is the derived identity of a slot below `slot_count` of a listed instance for that binding. When the client identity holds a live registration, the check searches the slots 0 to 63, so a restarted process resumes a slot at or above `slot_count`. `isSlot` makes the same check for a pool slot. Another identity answers 409 `worker.registration.placement_mismatch`.
 - `register` returns the live registration of a client identity before the count check, so a restart resumes the same runtime identity.
 
 The current connection:
