@@ -102,13 +102,13 @@ A worker binding names one worker.
 The worker that a worker binding names never changes. A project removes the binding and adds another one instead.
 
 - A worker binding holds its instance count.
-- At the `worker` placement, a worker binding names its registered [worker instances](overview.vocabulary.md#worker-instance) in `worker_instances` in place of an instance count. The length of that list is its instance count.
+- At the `worker` placement, a worker binding names its registered [worker instances](overview.vocabulary.md#worker-instance) in `worker_instances` in place of an instance count. The sum of the [slot counts](worker-service.vocabulary.md#instance-slot) of the listed instances is its instance count.
 - Each listed instance belongs to the worker of the binding. One instance can serve worker bindings of several projects.
 - An instance count of 0 makes the binding unavailable.
 - A worker binding of a worker that kanthord hosts holds its [placement](worker-service.vocabulary.md#placement): `server`, `container` or `worker`. Every write of the binding states it.
 - A worker binding of an external harness holds no placement.
 - The placement of a worker binding never changes. A project removes the binding and adds it again instead.
-- For every placement, the instance count limits the live registrations of the binding. At the `server` and the `container` placements, the server also runs one instance for each unit of the count. At the `worker` placement, each listed instance holds one registration of the binding.
+- For every placement, the instance count limits the live registrations of the binding. At the `server` and the `container` placements, the server also runs one instance for each unit of the count. At the `worker` placement, each slot of a listed instance holds one registration of the binding.
 - A write refuses to add a binding at the `container` placement when the server cannot run containers.
 - A worker binding of a native worker can hold an optional [resource budget](worker-service.vocabulary.md#resource-budget).
 - A worker binding can hold an [entry](worker-service.vocabulary.md#entry) for each agent of its worker.

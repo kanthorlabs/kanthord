@@ -244,7 +244,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 ## Worker binding configuration
 
 - A worker binding holds `instance_count`, or `worker_instances` at the `worker` placement. It holds `placement` for a worker that kanthord hosts, optional `tags`, optional `resource_budget` and optional per-agent entries.
-- The effective instance count is `instance_count`, or the length of `worker_instances` at the `worker` placement. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count and the Gateway verification read one value. [The worker pages](architecture.impl.md#the-worker-pages) state the rule of the dashboard.
+- The effective instance count is `instance_count`, or the sum of the `slot_count` of the instances of `worker_instances` at the `worker` placement. The Project Service reads each slot count from the instance record through the Worker collaboration that checks the listed instances. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count and the Gateway verification read one value. [The worker pages](architecture.impl.md#the-worker-pages) state the rule of the dashboard.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
@@ -670,7 +670,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - A list row of a paused project shows the badge `Paused`.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a worker binding holds a `Tags` field with one tag per line. The row of a worker binding shows one badge for each tag.
-- At the `worker` placement, the form of a worker binding holds an `Instances` multi-select in place of the count. It lists the live instances of the selected worker. It preselects the only instance when exactly one exists. It holds the link `Add instance` to the worker page.
+- At the `worker` placement, the form of a worker binding holds an `Instances` multi-select in place of the count. It lists the live instances of the selected worker. An option reads `<name> · <n> slots` when the slot count is 2 or more. The field states "Runs up to <sum> executions at once." with the sum of the slot counts of the selection. It preselects the only instance when exactly one exists. It holds the link `Add instance` to the worker page.
 - The form shows the cross-project notice of [the worker pages](architecture.impl.md#the-worker-pages) when a selected instance serves bindings of another project.
 - The form states "A replacement instance starts after a removed instance ends its execution." when the draft removes an instance.
 - The row of a worker binding at the `worker` placement shows `· worker · <instance names>`, for example `· worker · box-coder, box-coder-2`. A registration row shows `· instance <name>`.
