@@ -58,7 +58,8 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `trace_id` and `root_span_id` hold the protocol-defined values of the Tracking Service: 32 and 16 lower-case hexadecimal characters under the [trace model](tracking-service.impl.md#trace-model). Before the tracer of the Tracking Service exists, the Scheduler mints both values at the claim through the `TraceIdentity` dependency that its `contract.ts` declares, and the composition root injects that stand-in.
 - `WorkPull` is the input of `scheduler.work.pull`: `resource_identity` and `runtime_identity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity. A mismatch of either field answers 403 `scheduler.work.claimant_mismatch`.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
-- `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean, and `stop` as `null` or `{ reason, code, detail? }`. `detail` is a string of 1 to 2048 characters. The worker cuts a redacted cause text to 300 characters.
+- `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean, and `stop` as `null` or `{ reason, code, detail?, cause }`. `detail` is a string of 1 to 2048 characters. The worker cuts a redacted cause text to 300 characters.
+  `cause` is the [cause of the stop](worker-service.impl.md#the-cause-of-a-stop) that the worker computes. The execution row stores `reason`, `code` and `detail` only. The cause lives on the root span end alone.
   `false` states that the execution of the attempt requires no further work.
   `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed`.
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
@@ -290,11 +291,17 @@ Each write follows the commit of the transaction that changes the execution row.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
 - A revoked trace keeps `stop_reason` null, because no stop reason exists. `kanthord.execution.end` holds `revoked`.
+- The root end holds the `kanthord.cause.*` attributes of the cause. `RootSpanEnd.stop` passes the `cause` of the stop through, and the Scheduler derives no cause from it.
+- The Scheduler assigns the cause of the two endings that no worker stop describes:
+  - `lost` gets `infrastructure.execution_lost`;
+  - `revoked` with the cause `human` gets `human.intervention`.
+- A revocation with the cause `assessment` carries the rework cause that the reviewer execution hands with its assessment submit. The Mission Service hands it to the revocation. The root end of that execution holds it as for a stop. Another assessment result writes no cause.
 - The timeline and the span detail show "Revoked by a human" for a revocation with the cause `human`.
 - A release, a loss and a revocation with the cause `assessment` each write one `scheduler.transition` span. It is a child of the root span, with the record identity `<root_span_id>:transition`.
 - A revocation with the cause `human` writes the root end only. The [act trace](mission-service.impl.md#the-act-trace) of the Mission Service holds that transition.
 - The start and the end of a transition span are the time of the transition, and its status is `Ok`.
 - The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
+- A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the creation of the node to the transition. An analytics read adds up and divides it, and no service decides from it.
 - The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
 - The transition span holds `kanthord.transition.rule`, with one of four values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;

@@ -574,7 +574,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
 - An act that revokes a live execution links its root span to the root span of that execution.
 - That act hands the cause `human` to the [revocation](scheduler-service.impl.md#the-execution-trace).
-- `mission.assessment.submit` hands the cause `assessment` and the states of its transition to the revocation of the reviewer execution.
+- `mission.assessment.submit` hands the cause `assessment` and the states of its transition to the revocation of the reviewer execution. A `criterion-not-met` submit also hands the rework cause that the reviewer execution computed.
 - At the rework limit, it also hands the rework count and `mission.rework_limit`.
 - A refused act writes no act trace. A lost act trace changes no state, and no service reads it.
 
