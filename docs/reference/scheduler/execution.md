@@ -28,13 +28,15 @@ A `stop` can also carry `detail`, the cause text or the JSON facts of the stop. 
 - `<error name>: <message>` of an error with no code that a prompt to the agent session or another step of the execution throws, with the reason `operation_failed`;
 - the text of a git state violation after an agent turn, with the reason `operation_failed` and a code `worker.turn.*`;
 - the JSON result of a verification that failed twice because of the infrastructure, with the reason `operation_failed` and the code `worker.verification.infrastructure_failed`;
+- the redacted git stderr of a failed gate G commit, with the reason `operation_failed` and the code `worker.git.commit_failed`;
 - the JSON facts of the progress rule, with the reason `no_progress`. The JSON holds no text, and the worker does not cut it.
 
-Any other error with a code, for example `repository.node_branch.missing`, gives the code and no `detail`. A `budget_end` stop and the code `worker.merge.markers_left` carry no `detail`. In a cause text, the worker removes the secrets of the credential, bearer values, JWTs and tokens of 32 or more characters, and cuts the text to 300 characters. A file path stays visible when it holds at least three `/`, no segment of 32 or more characters, and no `+` or `=`. `detail` is optional, a nonempty string of at most 2048 characters, and changes no count. The server stores the whole `stop`, `detail` included, as JSON in the `stop` column of the execution row, so `detail` needs no new column.
+Any other error with a code, for example `repository.node_branch.missing`, gives the code and no `detail`. A `budget_end` stop and the code `worker.merge.markers_left` carry no `detail`. In a cause text, the worker removes the secrets of the credential, bearer values, JWTs and tokens of 32 or more characters, and cuts the text to 300 characters. A file path stays visible when it holds at least three `/`, no segment of 32 or more characters, and no `+` or `=`. `detail` is optional, a nonempty string of at most 2048 characters, and changes no count. The server stores `reason`, `code` and `detail` of the `stop` as JSON in the `stop` column of the execution row, so `detail` needs no new column.
 
-The JSON facts of a `no_progress` stop hold `rule`, `count`, `limit` and `verification`. `rule` is `unchanged_revision` or `verdict_rule_unmet`. `count` is the count of unchanged turns at the stop, and `limit` is the count that stops the execution. `verification` is `null`, or the last verification of any unit of the execution. It holds `passed`, `ran` (the count of commands that ran) and `exit_code` (the exit code of the last command that ran) and `timed_out`. `exit_code` is `null` when the command has no exit code or no command ran. `timed_out` is `true` when the last command that ran reached its command limit, and `false` otherwise.
+The JSON facts of a `no_progress` stop hold `rule`, `count`, `limit` and `verification`. `rule` is `unchanged_revision` or `verdict_rule_unmet`. `count` is the count of unchanged turns at the stop, and `limit` is the count that stops the execution. `verification` is `null`, or the last verification of any unit of the execution. It holds `passed`, `ran` (the count of commands that ran), `exit_code` (the exit code of the last command that ran) and `timed_out`. `exit_code` is `null` when the command has no exit code or no command ran. `timed_out` is `true` when the last command that ran reached its command limit, and `false` otherwise.
 
-A `stop` also carries `cause`, the cause of the failure that the worker computes. `cause` is `{ category, assigner, subcategory?, suspects? }`.
+A `stop` can also carry `cause`, the cause of the failure that the worker computes at record time. `cause` is `{ category, assigner, subcategory?, suspects? }`.
+A `stop` with no `cause`, for example from an external harness, gives the cause `unattributed` with no suspects.
 `category` is `prompt`, `plan`, `worker_action`, `llm_provider`, `model`, `environment`, `infrastructure`, `human` or `unattributed`. `assigner` is `rule` or `reviewer`.
 `subcategory` is a value of the set of its category:
 
@@ -69,6 +71,7 @@ A native steps execution sends `operation_failed` with these codes of its own:
 | `worker.turn.git_in_progress`               | An agent turn left a merge, `am`, cherry-pick or revert in progress on the node branch. An open rebase detaches `HEAD` and gives `worker.turn.branch_changed`. |
 | `worker.turn.merge_missing`                 | A conflict turn ended with no open merge of the base.                                                                                                          |
 | `worker.merge.markers_left`                 | A conflicted file still holds a conflict marker after the conflict turn.                                                                                       |
+| `worker.git.commit_failed`                  | A gate G commit failed. `detail` holds the redacted git stderr cut to 300 characters.                                                                          |
 | `worker.verification.infrastructure_failed` | A verification failed because of the infrastructure on its run and on its rerun.                                                                               |
 
 A native evaluation execution also sends `worker.verification.infrastructure_failed`. [How the coder@1 worker works](../../explanation/coder-worker.md#how-the-execution-ends) explains each end of a steps execution.
@@ -201,7 +204,7 @@ API failures use the shared [error envelope](../errors.md#api-failures).
 | HTTP status / code                              | Commands      | Meaning                                                                                                                                                        |
 | ----------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `401 gateway.authentication.unauthorized`       | All           | Missing, invalid or expired token. `get` and `list` reject a machine token; `release` rejects a human token or a machine token whose binding does not resolve. |
-| `400 gateway.request.validation_failed`         | All           | Invalid path parameter, query field or body, a `stop` with no valid `cause` included; also `attempt` without `node_id`, or `limit` outside 1 to 1000.          |
+| `400 gateway.request.validation_failed`         | All           | Invalid path parameter, query field or body, a `stop` with an invalid `cause` included; also `attempt` without `node_id`, or `limit` outside 1 to 1000.        |
 | `400 system.pagination.cursor_invalid`          | `list`        | The `cursor` value is not a cursor that this operation issued.                                                                                                 |
 | `400 gateway.request.unexpected_body`           | `get`, `list` | The request carries a body.                                                                                                                                    |
 | `404 scheduler.execution.not_found`             | `get`         | No execution has this identity.                                                                                                                                |
@@ -280,15 +283,15 @@ curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5
 
 ### `execution release`
 
-| Item                  | Value                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                                                                               |
-| Operation ID          | `scheduler.execution.release`                                                                                                                                       |
-| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration                                                             |
-| Timeout               | 30 seconds                                                                                                                                                          |
-| Mutation              | Yes                                                                                                                                                                 |
-| Path/query parameters | `execution_id` (path, required); no query fields                                                                                                                    |
-| Request body          | Closed JSON object `{ "further_work": <boolean>, "stop": { "reason", "code", "detail"?, "cause" } \| null }`; `further_work` is required, `stop` defaults to `null` |
+| Item                  | Value                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method and path       | `POST /api/scheduler/execution/:execution_id/release`                                                                                                                |
+| Operation ID          | `scheduler.execution.release`                                                                                                                                        |
+| Access                | `client` (machine bearer JWT) with a live worker registration and a live execution of that registration                                                              |
+| Timeout               | 30 seconds                                                                                                                                                           |
+| Mutation              | Yes                                                                                                                                                                  |
+| Path/query parameters | `execution_id` (path, required); no query fields                                                                                                                     |
+| Request body          | Closed JSON object `{ "further_work": <boolean>, "stop": { "reason", "code", "detail"?, "cause"? } \| null }`; `further_work` is required, `stop` defaults to `null` |
 
 | Header            | Required | Purpose                                                      |
 | ----------------- | -------- | ------------------------------------------------------------ |

@@ -280,6 +280,7 @@ Each write follows the commit of the transaction that changes the execution row.
 
 - The root start holds `kanthord.execution.kind`: `steps` for a claim that moves the node to `Executing`, and `evaluation` for a claim that moves it to `Evaluating`.
 - The root start holds `kanthord.worker.name`, the worker name of the claiming worker binding. The trace row takes its `worker_name` from it.
+- The root start holds `kanthord.worker.instance`, the instance name of the claiming registration. A claimant with no instance name omits it.
 - The root start holds `kanthord.queue.wait_ms`: the claim time minus `queued_at` of the claimed job, and at least 0. The wait includes a backoff of `available_at`.
 - A job keeps the identity of the first job of its node. The time of that identity is not the time of the enqueue.
 - A new claim writes the root start. A work pull that answers an existing claim writes no root start.
@@ -291,17 +292,17 @@ Each write follows the commit of the transaction that changes the execution row.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
 - A revoked trace keeps `stop_reason` null, because no stop reason exists. `kanthord.execution.end` holds `revoked`.
-- The root end holds the `kanthord.cause.*` attributes of the cause. `RootSpanEnd.stop` passes the `cause` of the stop through, and the Scheduler derives no cause from it.
-- The Scheduler assigns the cause of the two endings that no worker stop describes:
+- The root end holds the `kanthord.cause.*` attributes of the cause. `RootSpanEnd.cause` holds the cause of the end: `stop.cause` for a stop, the Scheduler cause for `lost` and for the revoke cause `human`, and the rework cause for the revoke cause `assessment`.
+- The Scheduler assigns the cause of the two endings that no worker stop describes, with the assigner `rule`:
   - `lost` gets `infrastructure.execution_lost`;
-  - `revoked` with the cause `human` gets `human.intervention`.
-- A revocation with the cause `assessment` carries the rework cause that the reviewer execution hands with its assessment submit. The Mission Service hands it to the revocation. The root end of that execution holds it as for a stop. Another assessment result writes no cause.
+  - the revoke cause `human` gets `human.intervention`.
+- The reviewer execution hands the rework cause with its assessment submit, and the Mission Service hands it to the revocation. Another assessment result writes no cause. A stop with no `cause` writes `unattributed` with no suspects.
 - The timeline and the span detail show "Revoked by a human" for a revocation with the cause `human`.
 - A release, a loss and a revocation with the cause `assessment` each write one `scheduler.transition` span. It is a child of the root span, with the record identity `<root_span_id>:transition`.
 - A revocation with the cause `human` writes the root end only. The [act trace](mission-service.impl.md#the-act-trace) of the Mission Service holds that transition.
 - The start and the end of a transition span are the time of the transition, and its status is `Ok`.
 - The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
-- A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the first `Available` of the node to the transition. An analytics read adds up and divides it, and no service decides from it.
+- A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the first `Available` of the node to the transition. The Mission Service hands the time of the first `Available` with the states of a transition to `Completed`. An analytics read adds up and divides it, and no service decides from it.
 - The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
 - The transition span holds `kanthord.transition.rule`, with one of four values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;

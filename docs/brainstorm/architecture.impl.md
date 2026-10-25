@@ -1297,6 +1297,9 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The header shows the node name with a link to the node, the state badge and the stop reason badge.
 - The header facts are the project, the execution, the attempt, the worker, the start, the duration, the input, output and cached tokens, and `Est. cost`.
 - A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the `Span tree` tab.
+- The dashboard computes no cause. It only picks the causal span that it highlights.
+- An `unattributed` cause shows "Unattributed. Suspects: ..." with the action `Label cause`.
+- The trace page charts the input tokens of each `agent.turn`.
 - The page holds two tabs, `Span tree` and `Conversation`. The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
 - While the page is visible, an `open` trace reads its summary and its spans again every 5 seconds. It reads its entries after the last cursor. The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
 - A read of a deleted or unknown trace shows "This trace is expired or unknown." with a link back to the list.

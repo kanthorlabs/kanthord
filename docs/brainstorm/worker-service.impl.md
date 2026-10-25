@@ -1280,7 +1280,7 @@ The progress rule:
 
 - A budget end always releases with `further_work: true`. Only the release gate releases with `further_work: false`.
 - At a budget end, the execution aborts the agent, removes the release clones, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases.
-- The budget-end release sends the stop `{ reason: "budget_end", code }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
+- The budget-end release sends the stop `{ reason: "budget_end", code, cause }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
 - A unit completed when the execution wrote a new done record for it and step 5 found no record for it. A pass of the verdict unit, or of the node unit with the cleared text, always counts as completed.
 - A violation that the checkpoint gate of a budget end finds stops the execution with that violation, not with the budget end.
 
@@ -1617,8 +1617,9 @@ The tool of the action performer takes the execution identity only.
   - `<error name>: <message>` of an uncoded error that a prompt to the agent session or any step of the execution throws, with `operation_failed`;
   - the violation text of gate G, with `operation_failed` and the code `worker.turn.*`;
   - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`;
+  - the redacted git stderr of a failed gate G commit, with `operation_failed` and the code `worker.git.commit_failed`;
   - the JSON facts of the progress rule, with `no_progress`. The JSON holds no text, and the worker does not cut it.
-- A `CodedError` gives its code and no `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
@@ -1659,8 +1660,8 @@ Tests stop a steps execution with each reason and assert the checkpoint commit, 
 
 The cause names the layer that caused a failure event. `src/worker/unit/execution-run.ts` computes it.
 
-- The worker computes the cause at the record time from the stop code, the git step, the verification class and the stop detail. It hands the cause in `ExecutionStop.cause`.
-- A cause holds `category`, `assigner`, and either `subcategory` or `suspects`. The [closed sets](tracking-service.vocabulary.md#cause-category) live in the Tracking vocabulary.
+- The worker computes the cause at record time from the stop code, the git step, the verification class and the stop detail. It hands the cause in `ExecutionStop.cause`. A stop with no cause gives `unattributed` with no suspects.
+- A cause holds `category`, `assigner`, and either `subcategory` or `suspects`. The rows of a recorded ground take the assigner `reviewer`. Every other row takes `rule`. The [closed sets](tracking-service.vocabulary.md#cause-category) live in the Tracking vocabulary.
 - A rule assigns a category only when a recorded code names the cause. Otherwise the cause is `unattributed`, with the `assigner` `rule` and the `suspects`, the best guess first.
 - The first matching row of the table decides.
 
@@ -1670,14 +1671,14 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `provider_failed`                         | `unauthorized`                                                   | `human.configuration`                                              |
 | `provider_failed`                         | `bad_request`                                                    | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
 | `environment_failed`                      | `setup_failed`, `command_absent`                                 | `environment.<code>`                                               |
+| failed `worker.git` step                  | `fetch_base`, `push`                                             | `unattributed`, suspects `infrastructure`, `worker_action`         |
+| failed `worker.git` step                  | `merge_base`                                                     | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | `worker.verification.infrastructure_failed`                      | `infrastructure.verification_killed`                               |
 | `operation_failed`                        | prefix `project.binding.`                                        | `human.configuration`                                              |
 | `operation_failed`                        | `worker.git.commit_failed`                                       | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`              | `unattributed`, suspects `model`, `prompt`                         |
 | `operation_failed`                        | other `worker.*` code                                            | `unattributed`, suspects `worker_action`, `infrastructure`         |
 | `operation_failed`                        | prefix `gateway.`, or no code                                    | `unattributed`, suspects `infrastructure`, `worker_action`         |
-| failed `worker.git` step                  | `fetch_base`, `push`                                             | `unattributed`, suspects `infrastructure`, `worker_action`         |
-| failed `worker.git` step                  | `merge_base`                                                     | `unattributed`, suspects `worker_action`, `environment`            |
 | `no_progress`                             | the last verification of the stop detail holds `timed_out: true` | `unattributed`, suspects `environment`, `plan`                     |
 | `no_progress`                             | other                                                            | `unattributed`, suspects `model`, `prompt`, `plan`                 |
 | `budget_end`, `assessment_absent`         | the last verification of the stop detail holds `timed_out: true` | `unattributed`, suspects `environment`, `plan`, `model`            |
@@ -1685,11 +1686,10 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `judgement_invalid`, `report_absent`      | any                                                              | `unattributed`, suspects `model`, `prompt`                         |
 | `action_unsettled`                        | any                                                              | `unattributed`, suspects `worker_action`, `infrastructure`         |
 | `criterion-not-met`, stage `setup`        | none                                                             | `unattributed`, suspects `environment`, `model`                    |
-| `criterion-not-met`, stage `verification` | class `code_failure`                                             | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                       | `unattributed`, suspects `model`, `plan`                           |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                      | `model.work_defect`                                                |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                    | `model.standard_violation`                                         |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                    | `plan.criterion_unstated`                                          |
-| `criterion-not-met`, stage `judgement`    | a proposal with a `dependency_id`                                | `plan.dependency`                                                  |
 | none of the above                         | none                                                             | `unattributed`                                                     |
 
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.

@@ -165,7 +165,7 @@ The set is closed and it holds seven values.
 ## cause
 
 A cause names the layer that caused one failure event, as a category and a subcategory.
-The root span end of a failed execution holds its cause, and its assigner is `rule` or `reviewer`.
+The root span end of a failed execution holds its cause, and its assigner is `rule`, `reviewer` or `human`.
 The cause of the execution that `Add password reset` stopped for a quota error is `llm_provider` with `quota_exhausted`.
 
 ## cause category
@@ -184,7 +184,7 @@ The set is closed and it holds nine values.
 - **unattributed**
 
 A rule assigns a category only when a recorded code names the cause. Otherwise the cause is `unattributed`.
-A cause of the execution `Billing` with a setup that fails on the base head has the category `environment`.
+A cause of an execution of project `Billing` with a setup that fails on the base head has the category `environment`.
 
 ## cause subcategory
 
@@ -205,13 +205,13 @@ The subcategory of a reviewer that judged a stated item of `Add password reset` 
 ## suspects
 
 Suspects are the candidate categories of an `unattributed` cause, the best guess first.
-A budget end of the execution `Billing` has the suspects `plan` and `model`.
+A budget end of an execution of project `Billing` has the suspects `plan` and `model`.
 
 ## cause label
 
 A cause label is a human annotation of a trace. It assigns a category and a subcategory, and it holds a reason.
 A new label replaces the old one, and every reader takes the label over the rule cause.
-A human labels the `unattributed` cause of the execution `Billing` as `plan` with `oversized`.
+A human labels the `unattributed` cause of an execution of project `Billing` as `plan` with `oversized`.
 
 ## act trace
 
