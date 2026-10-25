@@ -53,7 +53,7 @@ erDiagram
         integer turn_count "stored agent.turn spans"
         integer tool_count "stored agent.tool spans"
         integer error_count "spans with status Error"
-        text first_error_span_id "first span with status Error, root excluded"
+        text first_error_span_id "first span with status Error, root, tool_error and stopped excluded"
         integer created_at "Unix ms, start of the retention"
     }
 
