@@ -62,7 +62,8 @@ The import condition is state `Pending` or `Available` with attempt `0`. The imp
 
 These additional rules apply:
 
-- No terminal node (`Completed` or `Discarded`) changes. An entry that keeps a terminal node unchanged is a no-op and is allowed.
+- An import compares no content of a terminal node (`Completed` or `Discarded`). A terminal node with an unchanged `filename` is a no-op. The import resolves no binding name and no `depends_on` name of that node.
+- A new `filename` of a terminal node, a task that enters, leaves or changes its `filename` in it, and its retirement fail with `mission.import.terminal_change`.
 - A change of only `depends_on` requires a nonterminal node, not the import condition. The dependency rules of [dependency](dependency.md#function-description) apply.
 - A new dependency of a kept node requires no live claim on that node. Only apply checks this rule.
 - An import that adds an unmatched pair of a node and a claimable state fails with `mission.node.tags_unmatched`. The preview lists one violation for each node file with an added pair.

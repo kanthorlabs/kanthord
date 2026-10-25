@@ -175,7 +175,7 @@ A retirement removes a node that never started work, with no outcome.
 
 A substantive update of a terminal node returns an error.
 A node in a terminal state holds no new revision, because a terminal node is not editable.
-A no-op import of a terminal node returns no error.
+An import compares no content of a terminal node. A terminal node with an unchanged `filename` is a no-op.
 
 An import creates, updates and retires a node, and each operation requires the import condition.
 The condition holds when the node holds `Pending` or `Available` and its attempt reads 0.
