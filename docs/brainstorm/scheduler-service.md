@@ -130,7 +130,7 @@ An instance retries with backoff, never with tight polling.
 A no-work answer that the Scheduler held for the backoff delay or longer counts as that delay, so the instance pulls again at once.
 A Mission write, an accepted inbound event or an ended execution of the binding triggers a recheck for a waiting pull.
 An ended execution of the same worker instance also triggers a recheck.
-A free slot of a worker instance goes to the binding of the instance that waited longest, and a newer pull waits in that order.
+An idle worker instance goes to the binding of the instance that waited longest, and a newer pull waits in that order.
 The Scheduler rechecks every admission condition before it satisfies that pull.
 A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
 A [project pause](project-service.md#project-pause) takes effect while a request waits, and a resume triggers a recheck for a waiting pull.
@@ -200,10 +200,10 @@ Only the orchestrator of the external harness communicates with kanthord, and it
 The declared states give the capability to take a state and no continuity: the Scheduler serves a node to the first compatible pull, and no rule prefers the binding whose instance executed the steps of the node.
 
 The [Project Service](project-service.md#execution-configuration-and-instance-count) owns the instance count of a worker binding.
-At the `worker` placement, the count is the length of `worker_instances` of the binding.
+For a worker that kanthord hosts, the count is the length of `worker_instances` of the binding. For an external harness, it is `instance_count`.
 The Scheduler admits a claim only while the live executions of the claimant are fewer than its count.
 It admits no claim for an instance that holds a live execution under any of its registrations.
-An instance at the `worker` placement holds one registration for each binding that lists it, so this rule spans bindings and projects.
+An instance holds one registration for each binding that lists it, at every placement, so this rule spans bindings and projects.
 The Worker Service answers the registrations of an instance, and the Scheduler counts their executions inside the claim.
 The Scheduler counts executions per claimant; the Worker Service owns how an instance hosts an execution.
 An ordinary claim debits no other budget.
@@ -231,13 +231,14 @@ The [Mission Service](mission-service.md#state-transitions) owns the human pause
 Those transitions also determine whether the attempt closes or stays open.
 Its success override from `Executing` ends a live steps claim.
 Its human pause from `Evaluating` ends a live evaluation claim.
+Its [forced archive](worker-service.md#worker-instances) transitions `Executing -> Available` and `Evaluating -> Waiting` end the live claim of the archived instance.
 Before expiry, the Scheduler revokes the claim in the transaction of the Mission transition and sets `ended_at`.
-That revocation counts as no loss.
+That revocation counts as no loss and no failure, and it sets no hold. A forced archive revokes with the cause `human`.
 It accepts the revocation before any later operation admission reads the claim state.
 The [Project Service](project-service.md#configuration-lifecycle-and-consistency) owns completion against the remote of an operation that already holds admission.
 The revoked execution leaves its claimant's count at revocation.
 
-An instance-count change stops new admissions where the new count requires it.
+An instance-count change stops new admissions where the new count requires it. A removal of an instance from `worker_instances` drains its registration of that binding, and the live execution finishes.
 The Scheduler counts live executions during the drain and treats no configuration edit as a discard of a node.
 
 ## Match

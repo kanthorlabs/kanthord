@@ -150,13 +150,13 @@ The instance healthcheck stays out of every human inspection command under [work
 - When one agent has no chain entry whose credential is free, the pull answers `{ kind: "no-work" }`. The claim inserts no execution and changes no node.
 - `claimOnce` of `src/scheduler/claim.ts` holds the instance guard next to `countRunningOfGroup`, inside the claim transaction.
   The Scheduler Service declares the collaboration `registrationsOfInstance(tx, runtimeIdentity)` in its `contract.ts` as a dependency. The Worker Service implements it.
-  It answers the runtime identities of the other live registrations of the instance of `runtimeIdentity`. It answers an empty list for a registration with a null `instance_id`.
+  It answers the runtime identities of the other live registrations of the instance of `runtimeIdentity`. Every registration of a native worker binding holds `instance_id`, so the guard holds at every placement. It answers an empty list for a registration with a null `instance_id`, the registration of an external harness.
   The guard counts the executions of those runtime identities whose `ended_at` is null and whose `expired_at` is later than now, the predicate of `countRunningOfGroup`.
   A count above zero answers `{ kind: "no-work" }`, and the claim inserts no execution and changes no node.
   The claim transactions of the server serialize, so a second claim of one instance never commits, also when a pull abort arrives late.
   An expired, unsettled execution blocks no other registration of its instance.
-  Tests cover two pulls of one instance on two bindings that commit one claim. They also cover an expired execution that blocks nothing and a registration with no instance.
-- The queue order of an instance gives a free slot to the registration that waited longest.
+  Tests cover two pulls of one instance on two bindings that commit one claim, at the `server` and the `worker` placements. They also cover an expired execution that blocks nothing and a registration with no instance.
+- The queue order of an instance gives the idle instance to the registration that waited longest.
   `InstanceQueue` of `src/scheduler/instance-queue.ts` holds the order in memory. It records the runtime identities that wait, in the order in which each started to wait. A server restart clears the order.
   - A registration starts to wait when the guard refuses its pull, or when another registration of its instance commits a claim. A registration that already waits keeps its place.
   - After the guard finds no live execution, `claimOnce` asks `turn`. A registration has its turn when no other live registration of its instance waits before it. A registration that does not wait has its turn only when no other registration of its instance waits.
@@ -171,11 +171,11 @@ The instance healthcheck stays out of every human inspection command under [work
   - The order therefore records every other registration of the instance at the claim.
   - At the end of the execution, the releasing registration pulls first and gets `queued`. The other registration then claims, or passes its turn.
   - The order assumes that each live registration of an instance pulls again after an execution ends. The worker unit does this.
-  - A registration that waits and never pulls holds the slot until its registration ends or its healthcheck fails.
+  - A registration that waits and never pulls holds the instance until its registration ends or its healthcheck fails.
   - Tests cover these cases:
     - two bindings on one instance that alternate their claims;
     - a parked pull that a release wakes;
-    - a turn without work that passes the slot;
+    - a turn without work that passes the instance;
     - one binding that keeps its speed, alone and next to a sibling with no work;
     - one live execution for each instance;
     - a pruned registration that holds no place.
@@ -212,10 +212,10 @@ function covered(
 
 - A `Claimant` holds `declared_node_states` and `declared_intents` from the worker declaration, and `tags` from the worker binding row that the claim pins.
 - `ClaimFacts` holds `intent`, `tags` and `repositories` at the node revision that the claim pins. `repositories` holds the resource identity of each repository binding of the node.
-- A `Claimant` also holds `environment`: the resource identity of the repository binding that the `environment` key of a worker binding at the `container` placement names, or null. A worker binding with an environment claims only the nodes that name that repository binding. Tags do not route environments.
+- A `Claimant` also holds `environment`: the resource identity of the repository binding that the `environment` key of a worker binding that lists a `container` instance names, or null. A worker binding with an environment claims only the nodes that name that repository binding. Tags do not route environments.
 - The claim walk calls `claimFacts` for each job, applies `admits`, then calls `transitions.claim` of the Mission Service. The on-demand path applies the same `admits`.
 - `declarationOf` answers `null` for a worker name with no declaration. The claim then has no claimant and answers `{ kind: "no-work" }`. It asserts nothing.
-- `unmatchedClaims` computes `covered` for each pair of a node and a claimable state. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores `instance_count`.
+- `unmatchedClaims` computes `covered` for each pair of a node and a claimable state. It reads `claimFactsOf` and `workerBindingsOf`, and it ignores the instance count.
 - `claim` of a pair is its claimable state: `Available`, `Waiting` or `External.Requested`. `claims` of `claimFactsOf` lists the claimable states of the node.
 
 The collaborations of the match are below.
@@ -234,8 +234,8 @@ The collaborations of the match are below.
 - DECIDED 2026-10-23 by Aelita, pending Ulrich: the first layer, before the Onboarding component exists, gives consecutive `environment_failed` releases of a node the growing stop backoff, and the node moves to `Paused` at `mission.consecutive_failure_limit`. The code of the first layer holds this rule.
 - The Onboarding component replaces that rule with the gate below. From then on, an `environment_failed` stop neither counts nor ends the count of [the loss settlement](#loss-settlement), and it sets no `available_at`. The node returns to `Available` or `Waiting`.
 - After the commit of an `environment_failed` release, the release calls `environmentFailed(input)` of the [Onboarding component](project-service.impl.md#the-failure-of-an-execution) with the resource identities of the repository bindings of the node. The environment of each binding is then `failed`.
-- DECIDED 2026-10-23 by Aelita, pending Ulrich: the claim selection skips a job whose node names a repository binding with an environment that is not claimable. The proposal kept the Scheduler without a gate, but a thread slot of the `server` placement serves every repository of the project, so only the claim can hold back one repository. `environmentsClaimable(projectId, resourceIdentities)` of the Project Service answers it from process memory inside the claim transaction. The node and the job stay unchanged.
-- An environment is claimable when its status is `none` or `ready`. The gate holds at every placement, because a thread slot of the `server` placement serves every repository of the project.
+- DECIDED 2026-10-23 by Aelita, pending Ulrich: the claim selection skips a job whose node names a repository binding with an environment that is not claimable. The proposal kept the Scheduler without a gate, but a `server` instance serves every repository of the project, so only the claim can hold back one repository. `environmentsClaimable(projectId, resourceIdentities)` of the Project Service answers it from process memory inside the claim transaction. The node and the job stay unchanged.
+- An environment is claimable when its status is `none` or `ready`. The gate holds at every placement, because a `server` instance serves every repository of the project.
 - The Onboarding component calls `wake(projectId)` when an environment of the project becomes `none` or `ready`, so the parked work pulls claim at once.
 - `unmatchedClaims` reads no environment status, because a status is temporary and a write never refuses for it.
 
@@ -288,7 +288,7 @@ Each write follows the commit of the transaction that changes the execution row.
   - `finished` for a release;
   - `lost` for a loss declaration of the sweep or of an inline settlement;
   - `revoked` for a revocation at a Mission transition.
-- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, and `human` for a human act.
+- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, and `human` for a human act. A forced archive of an instance is a human act.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
 - A revoked trace keeps `stop_reason` null, because no stop reason exists. `kanthord.execution.end` holds `revoked`.
@@ -354,6 +354,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - A test computes the deadline from a binding override of `wall_time_ms` and the configured reserve, including the default `600` seconds.
   A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.
 - A test revokes a claim before expiry and asserts `finished`, no loss increment and the transaction reading as `ended_at`.
+- A test archives an instance with `force: true` during a steps claim and during an evaluation claim. It asserts `revoked` with the cause `human`, no loss increment, no failure count, no hold and a claimable job.
 - Tests cover all three derived claim states before, at and after the deadline, with and without `ended_at`.
 - Tests assert an abort on the first refused call for an execution at each placement.
 - A test calls `claim get` from another worker binding or runtime identity and asserts 403 `scheduler.execution.not_owner`.
@@ -373,7 +374,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - Tests admit a claimant only when its worker declares the intent of the node and its binding tags include every tag of the node, at the node revision and the binding row that the claim pins.
 - Tests skip a job that the claimant does not admit and claim the next admitted job, and they apply the same match to an on-demand request.
 - A test pulls with a worker name that has no declaration and asserts `{ kind: "no-work" }` and no assertion failure.
-- Tests answer the unmatched pairs of `Available`, `Waiting` and, for a node that requires an external action, `External.Requested`. They ignore `instance_count`.
+- Tests answer the unmatched pairs of `Available`, `Waiting` and, for a node that requires an external action, `External.Requested`. They ignore the instance count.
 
 ## Execution CLI validation
 
