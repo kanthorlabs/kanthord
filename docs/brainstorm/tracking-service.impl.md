@@ -47,9 +47,13 @@ A kanthord operation name stays the span operation, and `gen_ai.operation.name` 
 A server component writes its span of an execution through `TrackingService.serverSpan(trace, producer, contribution)`.
 The call admits the root span, or a span whose parent is the root span. A span elsewhere in the trace fails an assertion.
 The call merges the identity attributes of the trace under the attributes of the contribution: `kanthord.execution.id`, `kanthord.node.id`, `kanthord.project.id` and `kanthord.attempt`.
+A server component writes the span of an operation that has no execution through `TrackingService.serverTraceSpan(trace, producer, contribution)`.
+The trace of that call names its project and its creation time. It names a node and an attempt when the operation concerns one node, and the trace row stores them.
+A contribution of either call carries telemetry texts as `texts: [{ text_id, text }]`, and its `text_ids` names them.
+Each call admits its span and its texts in one transaction of the store before it returns. A text identity that the trace holds already refuses the whole contribution with `text_exists`.
 A refused or failed write counts as a drop and raises no error.
-The Scheduler Service writes the root span with the producer `scheduler`.
-The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) with the producer `mission`.
+The Scheduler Service writes the root span and the [settlement span](scheduler-service.impl.md#the-execution-trace) with the producer `scheduler`.
+The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) and the [act trace](mission-service.impl.md#the-act-trace) of each human act on a node with the producer `mission`.
 
 ## Primary store
 
@@ -60,6 +64,7 @@ The server opens that file at every start and runs `trackingMigrations` on it.
 Its migration record follows the runner contract of [architecture.impl.md](architecture.impl.md).
 `kanthord upgrade` also plans and migrates `tracking.db`, as [upgrade.md](../reference/upgrade.md) states.
 The schema holds the trace with its summary, the span, the record, the telemetry text and the session entry.
+The span row holds no copy of a column of its trace row and no column that an attribute derives. A read joins the trace row and reads the attributes of the span.
 A bulk import runs in bounded transactions, so a concurrent write of the server never waits for a whole import.
 The retention sweep deletes in bounded batches for the same reason.
 A separate database file separates the locking and the retention sweep of telemetry, and it separates no processor, no memory and no disk bandwidth.
@@ -152,7 +157,7 @@ A session entry is a record of the kind `session_entry` in `tracking.telemetry.w
 
 The row of `tracking_trace` holds the summary columns of the trace.
 
-- `node_id` and `attempt` come from the execution of the trace when the row opens.
+- `node_id` and `attempt` come from the execution of the trace when the row opens. A server trace takes them from the trace of `serverTraceSpan`, or holds null.
 - `started_at`, `ended_at`, `state` and `stop_reason` follow the root span. `state` is `open` while the root span holds no end. It is `ok` when the root span ends with `Ok`, and `error` when it ends with `Error`. `stop_reason` holds `kanthord.stop.reason` of the root span.
 - `worker_name` holds the first `kanthord.worker.name` that a span of the trace carries.
 - `agent_names`, `models` and `error_types` are JSON arrays of the distinct values of `kanthord.agent.name`, of `gen_ai.request.model` and `gen_ai.response.model`, and of `error.type`. Each array holds at most 128 values.
@@ -179,6 +184,60 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - `tracking.session.entry.get` answers one entry. An entry that the trace does not hold answers 404 `tracking.entry.not_found`.
 - A reader of an open trace reads the span list again and reads the entry list after its last cursor. The dashboard reads every 5 seconds while the trace is `open`.
 - A reader renders a span with a parent that the store does not hold at the top level, marked "parent not stored".
+
+## The timeline read
+
+`tracking.timeline.list` answers one ordered history of an execution, a node or a project. It uses `GET /api/tracking/timeline` with `human` access.
+
+- The query holds exactly one scope: `execution_id`, `node_id` or `project_id`. Another count of scopes answers 400 `gateway.request.validation_failed`.
+- The scope selects every trace whose row names that execution, that node or that project. The traces of a node hold its executions and the [act traces](mission-service.impl.md#the-act-trace) of its human acts.
+- The start of a trace is `started_at` of its row, else `created_at`. `started_from` and `started_to` bound the window of a trace in Unix milliseconds. The read selects a trace that starts at or before `started_to` and that ends at or after `started_from` or holds no `ended_at`. A missing bound leaves that side open.
+- `depth` takes `1` or `2`, and it defaults to `2`. Depth 1 answers the root span of each selected trace. Depth 2 also answers each span whose parent is the root span of its trace, also when the store holds no row of that root span.
+- The timeline of a node or a project holds depths 1 and 2 only: the roots, the phases, the evaluation, the settlement and the other direct children of a root. The agent turns, the tool calls, the git steps and the verifications sit deeper, and `tracking.span.list` of one trace answers them.
+- The order is ascending by the start of the trace, then by `trace_id`. Inside one trace, the order is ascending by the timeline time of the span, then by `span_id`. The timeline time of a span is its `start_time`, else its `end_time`.
+- `next_cursor` holds the start of the trace, `trace_id`, the timeline time and `span_id` of the last item as base64url JSON, or null on the last page. A cursor of another form answers 400 `system.pagination.cursor_invalid`.
+- `limit` takes 1 to 1000 and defaults to 500.
+- An item holds the fields of a span of `tracking.span.list`, plus `depth`, `duration_ms`, and `project_id`, `node_id`, `execution_id` and `attempt` of its trace row. `duration_ms` is `end_time - start_time`, or null when the span holds no start or no end. An item of depth 1 also holds `worker_name` of its trace row, and an item of depth 2 holds `worker_name: null`.
+- The read runs one statement in one read transaction:
+  1. It scans `tracking_trace` for the scope, the window and the cursor, as the trace list does. An `execution_id` scope reads the unique index `tracking_trace_execution`. It keeps at most `limit` traces in the order above.
+  2. It reads the root span of each kept trace through the primary key of `tracking_span`.
+  3. At depth 2, it reads the spans of each kept trace through the primary key of `tracking_span` with its `trace_id`, and it keeps each span whose parent is the root span.
+  4. It orders the items of the kept traces and answers at most `limit` items.
+- The CLI command is `kanthord tracking timeline list` with exactly one of `--execution <execution-id>`, `--node <node-id>` and `--project <project-id>`, plus `--depth`, `--from <unix-ms>`, `--to <unix-ms>`, `--limit` and `--cursor`.
+
+## The analytics reads
+
+The analytics reads add up the measurements of the stored spans. They derive no measurement of an operation. A duration is the difference of the two times that the producer of a span set.
+
+- `tracking.analytics.cost` uses `GET /api/tracking/analytics/cost`, and `tracking.analytics.duration` uses `GET /api/tracking/analytics/duration`. Both have `human` access.
+- `started_from` defaults to 7 days before the read, and `started_to` defaults to the time of the read. A range of more than 31 days, or a `started_from` after `started_to`, answers 400 `tracking.analytics.range_invalid`.
+- The read selects the traces whose window overlaps the range, by the rule of [the timeline read](#the-timeline-read). `project_id` and `node_id` filter the selected traces.
+- The read counts each span of a selected trace whose `start_time` lies from `started_from` to `started_to`, both inclusive.
+- The read takes the identities of the selected traces in one read transaction. It then reads their spans in steps of at most 100 traces, through the primary key of `tracking_span`, each step in its own read transaction. The service yields to the event loop between two steps, so no step holds the server for long. A write that commits between two steps can show in a later step.
+- The service builds the groups and the percentiles in memory from the span rows and their trace rows.
+- `bucket` takes `none`, `hour`, `day` or `week`, and it defaults to `day`. A bucket starts on a UTC boundary of its size, and a week starts on Monday at 00:00 UTC. A span counts in the bucket of its `start_time`. `bucket_start` holds the start in Unix milliseconds, or null for `none`.
+- The group fields read the trace row or the span. `worker_name`, `node_id` and `project_id` come from the trace row, and `operation` from the span row. `agent_name` is `kanthord.agent.name`, `provider_name` is `gen_ai.provider.name` and `tool_name` is `gen_ai.tool.name`. `model` is `gen_ai.response.model`, else `gen_ai.request.model`.
+- An item holds `key`, the value of the `group_by` field, or null when the span holds no value. An attribute that holds no string counts as no value.
+- A read answers at most 1000 items, ordered by `bucket_start`, then by the order measure in descending order, then by `key` with null last. `truncated` is `true` when more items exist.
+
+`tracking.analytics.cost` reads the `agent.turn` spans.
+
+- `group_by` takes `none`, `model`, `agent_name`, `provider_name`, `worker_name`, `node_id` or `project_id`, and it defaults to `model`. `none` answers one group with the key null, so `group_by=none&bucket=none` answers the totals of the range in one item.
+- An item holds `key`, `bucket_start`, `turn_count`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `total_tokens` and `cost_usd`. A token or cost attribute that holds no finite number adds 0. The order measure is `cost_usd`.
+
+`tracking.analytics.duration` reads the percentiles of one measure.
+
+- `measure` is required. It takes one value of this closed set:
+  - `span_duration`: `end_time - start_time` of each span with a start and an end. `operation` filters it.
+  - `tool_latency`: `end_time - start_time` of each `agent.tool` span.
+  - `verification_time`: `end_time - start_time` of each `worker.verification` span.
+  - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
+  - `review_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `evaluation`.
+  - `revision_turns`: for each node attempt with a `scheduler.execution` root span in the selection, the count of its `steps` root spans that start after its first `evaluation` root span. The start of its first root span sets its bucket, and the trace row of that root span sets its group fields.
+- `group_by` takes `none`, `operation`, `tool_name`, `agent_name`, `model`, `worker_name`, `node_id` or `project_id`, and it defaults to `none`.
+- An item holds `key`, `bucket_start`, `count`, `p50`, `p90`, `p99`, `mean` and `max`. The unit is milliseconds, and a count for `revision_turns`. The order measure is `count`.
+- A percentile `p` of `n` sorted values `x[0]` to `x[n - 1]` is `x[k] + (h - k) * (x[k + 1] - x[k])`, with `h = (n - 1) * p` and `k` the integer part of `h`. It is `x[n - 1]` when `k` is `n - 1`.
+- The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`. `--project <project-id>`, `--node <node-id>`, `--from <unix-ms>` and `--to <unix-ms>` set `project_id`, `node_id`, `started_from` and `started_to`, as in `trace list` and `timeline list`. `--bucket`, `--group-by`, `--measure` and `--operation` set the field of their name.
 
 ## Retention
 
@@ -207,6 +266,9 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.retention_days` defaults to 30. A sweep runs at the start and every hour, with at most 20 rows in each transaction and 50 transactions in one sweep.
 - RULED 2026-10-22 under the delegation of Ulrich. The entry bound is 61440 bytes, and the cut limits are 4096, 1024 and 256 characters.
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.facet.get` answers at most 200 values for each facet. The dashboard reads an open trace again every 5 seconds.
+- DECIDED 2026-10-25 by Aelita, pending Ulrich. The timeline read answers depth 1 or 2 across traces in the order of the trace start, at most 1000 items, 500 by default.
+- DECIDED 2026-10-25 by Aelita, pending Ulrich. The analytics reads select the traces whose window overlaps the range, read their spans in steps of at most 100 traces, answer at most 1000 items, and take a range of 7 days by default and 31 days at most.
+- DECIDED 2026-10-25 by Aelita, pending Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
 
 ## Capture and packaging
 
