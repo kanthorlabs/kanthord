@@ -66,9 +66,9 @@ Before the first tag, a schema change edits the one migration of a service. The 
 2. Delete `kanthord.db` and `tracking.db` of the data directory, with their `-wal` and `-shm` files.
 3. Start the server. The first start creates both files.
 
-The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays.
+The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of its `master_key` in the new database, so the same `master_key` stays valid.
 
-The worker instance model needs this reset. A worker binding of an older build holds `instance_count` and `placement`, and the new build stores each `server` and `container` instance as a named [worker instance](worker/instance.md). After the reset, create one instance for each unit of each old count, and list the instances in the binding. For example, a `coder` binding with `instance_count: 2` at the `server` placement becomes the instances `coder-1` and `coder-2` at the `server` placement and `"worker_instances": ["coder-1", "coder-2"]`. Run `kanthord upgrade` before the start: a configuration step renames `worker.server_slot_limit` to `worker.server_instance_limit`. The first start records the verifier of its `master_key` in the new database, so the same `master_key` stays valid.
+The worker instance model needs this reset. A worker binding of an older build holds `instance_count` and `placement`, and the new build stores each `server` and `container` instance as a named [worker instance](worker/instance.md). After the reset, create one instance for each unit of each old count, and list the instances in the binding. For example, a `coder` binding with `instance_count: 2` at the `server` placement becomes the instances `coder-1` and `coder-2` at the `server` placement and `"worker_instances": ["coder-1", "coder-2"]`. Run `kanthord upgrade` before the start: a configuration step renames `worker.server_slot_limit` to `worker.server_instance_limit`.
 
 ### Restore the backups
 
