@@ -665,7 +665,8 @@ At every placement, the server derives the client identity of an instance for a 
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a worker binding holds a `Tags` field with one tag per line. The row of a worker binding shows one badge for each tag.
 - The form of a worker binding of a worker that kanthord hosts holds the multi-select `Instances`. It holds no placement select and no count field. It lists the live instances of the selected worker, each as `<name> · <placement>`. It preselects the only instance when exactly one exists.
-- `Add instance` beside `Instances` opens a sheet with the name and the select `Placement`. The sheet creates the instance through `worker.instance.create` before the binding write and adds it to the selection. The `worker` placement continues on the worker page, because it needs the key and the copy blocks.
+- `Add instance` beside `Instances` opens a sheet with the name and the select `Placement`. The sheet creates the instance through `worker.instance.create` before the binding write and adds it to the selection. The `worker` placement shows the link `Add a worker instance on the worker page`, because it needs the key and the copy blocks.
+- A refusal 409 `project.bindings.worker.instance_shared` shows "<instance> already serves <binding> of <project>. A container instance serves one binding." under `Instances`.
 - The form of an external-harness binding holds the number field `Instance count`.
 - The form shows the cross-project notice of [the worker pages](architecture.impl.md#the-worker-pages) when a selected instance serves bindings of another project.
 - The form states "A removed instance finishes its execution, then takes no new work of this binding." when the draft removes an instance.
