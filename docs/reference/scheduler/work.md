@@ -12,8 +12,8 @@ The Scheduler processes a pull in this order:
 
 1. When the runtime identity holds a live execution, the pull returns that execution as `claimed`. It creates no second execution.
 2. When the project is [paused](../project/project.md#project-pause), the pull admits no claim. The claim creates no execution and moves no job.
-3. When the registration healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, or an invalid agent configuration of a server-hosted worker.
-4. When the binding group already runs as many executions as its instance count, the pull admits no claim.
+3. When the registration healthcheck fails, the pull answers `no-work` at once. The healthcheck fails for an ended registration, an absent or deleted binding, a binding with an instance count of `0`, a binding that no longer lists the instance of the registration, or an invalid agent configuration of a server-hosted worker.
+4. When the binding group already runs as many executions as its instance count, the pull admits no claim. The instance count is the length of `worker_instances`, or `instance_count` for an external harness. A worker instance holds at most one execution at a time over all its registrations.
 5. Otherwise, the Scheduler reads the project queue in queue order. It skips each job whose node the claimant does not admit through the match. It claims the first job whose node the Mission Service admits for the node states that the worker declares.
 
 The claimant admits a node when two facts hold. The worker declares the `intent` of the node, and the tags of the worker binding include every tag of the node. The match compares exact strings. The intent and the tags come from the node revision that the claim pins: the revision of the open attempt, else the current revision. A worker name with no worker declaration gives no claimant, and its pull answers `no-work`.

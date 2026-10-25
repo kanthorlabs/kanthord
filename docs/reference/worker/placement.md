@@ -4,17 +4,17 @@
 
 ## Function description
 
-List the three worker placements and tell whether this server can host an instance at each one. The read starts no container and writes no state.
+List the three worker placements and tell whether this server can host a [worker instance](instance.md) at each one. Each instance holds one placement, set at its create. The read starts no container and writes no state.
 
-| Placement   | Where the instances of a binding run                                                    |
-| ----------- | --------------------------------------------------------------------------------------- |
-| `server`    | The server runs each instance as a thread.                                              |
-| `container` | The server runs each instance in its own container on the server host.                  |
-| `worker`    | Each listed [worker instance](instance.md) runs as one `kanthord serve worker` process. |
+| Placement   | Where an instance runs                                                |
+| ----------- | --------------------------------------------------------------------- |
+| `server`    | The server runs the instance as a thread.                             |
+| `container` | The server runs the instance in its own container on the server host. |
+| `worker`    | The instance runs as one `kanthord serve worker` process.             |
 
 The `server` and `worker` placements are always available. The `container` placement depends on a runtime check of the server. The check reads the container runtime of the server user, Podman first, then Docker. The server reuses the newest answer for 10 seconds.
 
-The dashboard reads this list when the worker binding sheet opens for a new binding. The sheet preselects `server`, and it offers `worker` only under **Advanced settings**. [`project binding apply`](../project/binding.md#placement) reads the same check and refuses a new `container` binding for three reasons. The sheet turns `container` off for the same three reasons.
+The dashboard reads this list when the **Add instance** sheet opens. The sheet preselects `server`. [`worker instance create`](instance.md#worker-instance-create-and-worker-instance-rotate) reads the same check and refuses a new `container` instance with `409 worker.instance.placement_unavailable` for three reasons. The sheet turns `container` off for the same three reasons.
 
 ## Expected response
 
@@ -67,7 +67,7 @@ The items `server` and `worker` always answer `available: true` and `null` in th
 | `runtime_failed`      | The runtime does not answer, or it fails a check. `detail` states why. A stopped Podman machine gives it. |
 | `runtime_rootful`     | The host is Linux, the runtime is rootful and the server user is not root. Docker Desktop is exempt.      |
 
-The reason `runtime_failed` is transient. The slots of a `container` binding start again with a backoff when the runtime recovers. The other reasons stay until a human changes the host.
+The reason `runtime_failed` is transient. The `container` instances start again with a backoff when the runtime recovers. The other reasons stay until a human changes the host.
 
 The check runs with the full environment of the server. A server with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME` loses the Podman machine connection and answers `runtime_failed`.
 

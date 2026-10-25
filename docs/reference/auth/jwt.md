@@ -8,7 +8,7 @@
 
 Human mode preserves the supplied username as `sub`; reissuing for the same username generates a fresh `jti` without creating an account or password record. Machine mode generates a fresh client identity and `jti` on every issuance. Local issuance cannot check whether a worker binding exists or is available; Gateway checks it when the token is used.
 
-A machine presents its JWT to [worker registration](../worker/register.md), which returns a runtime identity. It issues and changes no JWT. Registration state is not a `reg` claim in the token. A machine token serves a worker of an external harness. `kanthord serve worker` uses no machine token: a [worker instance](../worker/instance.md) takes its tokens with its instance key. The Gateway refuses a machine token of a binding at the `worker` placement with `401 gateway.jwt.instance_required`.
+A machine presents its JWT to [worker registration](../worker/register.md), which returns a runtime identity. It issues and changes no JWT. Registration state is not a `reg` claim in the token. A machine token serves a worker of an external harness. `kanthord serve worker` uses no machine token: a [worker instance](../worker/instance.md) takes its tokens with its instance key. The Gateway refuses a machine token of a binding of a worker that kanthord hosts with `401 gateway.jwt.instance_required`, because such a binding registers only the worker instances that it lists.
 
 ## Expected response
 
