@@ -149,7 +149,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - `swe@1` and `re@1` read the Binding prompt of every repository binding of the node at its pinned revision. `env@1` reads the Binding prompt of the binding of its environment run.
 - The precedence from the highest is the framing, the Binding prompt, `workbench.md`, the Role and the Standard. The messages follow the system prompt, and a later message governs an earlier one.
 - An instruction of one repository governs only the work on the files of that repository. It never governs the reply format that a message demands.
-- The Binding prompt of each agent is a separate text. A rule that relaxes the Standard goes into the Binding prompts of both `swe@1` and `re@1`.
+- The Binding prompt of each agent is a separate text. A rule that relaxes the default standard goes into the Binding prompts of both `swe@1` and `re@1`.
 - KanthorD reads no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file of a repository or of a home directory. A native agent reads no instruction file in any form.
 - `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, and KanthorD does not support that load.
 - A file of the agent directory or of its `prompts` subdirectory that the loader rejects answers 409 `agent.prompt.template_invalid` at every reader. No reader replaces it with the shipped text.

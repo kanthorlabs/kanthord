@@ -672,7 +672,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - The `Edit` dialog of a row writes the draft only, and the Save of the binding stores it. The dialog shows the byte counter against the 32768-byte limit and refuses a text above the limit or with a control character. An empty text removes the Binding prompt of that agent.
 - The help of the section states that a change stores a new binding revision, and that a node keeps the old text until `mission node rebind`.
 - The help states that the new binding revision makes the Onboarding component clear the mark that the stored environment came from `env@1`.
-- The help states that the Binding prompts of the agents are separate texts, and that a rule that relaxes the Standard goes into the prompts of both `swe@1` and `re@1`.
+- The help states that the Binding prompts of the agents are separate texts, and that a rule that relaxes the default standard goes into the prompts of both `swe@1` and `re@1`.
 - The binding draft carries `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
 - The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows each record as `<name> (v<revision>)` with its fingerprint.

@@ -62,10 +62,10 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
         "origin": "binary",
         "path": "/home/kanthord/.local/share/kanthord/agents/base.md",
         "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
-        "text": "This text is the default standard. ..."
+        "text": "This text is the shared standard of every agent. ..."
       }
     ],
-    "final": "This text is the default standard. ..."
+    "final": "This text is the shared standard of every agent. ..."
   },
   "tools": [{ "name": "read", "source": "builtin", "input_schema": {} }],
   "enablement": null,
