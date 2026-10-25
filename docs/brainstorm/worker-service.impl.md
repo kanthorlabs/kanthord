@@ -511,7 +511,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - The Reset key confirmation states: "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials."
 - The dashboard offers Reset key only at the `worker` placement.
 - The Archive confirmation lists each binding that lists the instance, with a link, and states "Remove the instance from these bindings first." Its action stays disabled while a binding lists the instance.
-- With no listing binding and a live execution, the Archive confirmation holds the checkbox `Stop the live execution`. A checked box sends `force: true`, and an unchecked box refuses with `details.executions`.
+- With no listing binding and a live execution, the Archive confirmation holds the checkbox `Stop the live execution`. Its action stays disabled until the human checks the box, and the action then sends `force: true`.
 - A server instance that no binding lists shows "Runs with no binding. Archive it to stop it." on the worker page and on the instance page.
 - A list row shows `<name> (v<revision>)` and the placement.
 - The `worker_registration` row holds `instance_id`, the instance revision id of a registration at every placement of kanthord, and null for an external harness.
