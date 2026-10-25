@@ -313,7 +313,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
   - `review_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `evaluation`.
   - `revision_turns`: one value for each node attempt with a `scheduler.execution` root span in the range.
-  - `instance_busy_ratio`: the sum of `duration_ms` of the root spans in the range for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
+  - `instance_busy_ratio`: the sum of `duration_ms` of the root spans in the range for one `kanthord.worker.instance`, divided by the length of the range in milliseconds. The ratio of an instance with slots can reach its slot count.
 - Every measure other than `span_duration` ignores `operation`.
 - `instance_busy_ratio` takes the `group_by` value `worker_instance` only. Another `group_by` with `instance_busy_ratio` answers 400 `gateway.request.validation_failed`.
 - The `key` of an `instance_busy_ratio` item is the instance name. Its item holds `key`, `bucket_start`, `count` (the root spans) and `ratio`, and no percentile.
