@@ -111,10 +111,10 @@ The health report, `verify`, [`llm provider check`](provider.md) and [`llm model
 - pi-ai refreshes the access token with the stored refresh token when the token expires within 5 minutes. The model call then uses the new access token.
 - The server writes the refreshed value in place at the same revision. The refresh adds no revision.
 - The server runs one refresh of a revision at a time. A second check waits and uses the new access token.
-- When a live execution pins the revision, the check does not refresh. An access token that expires within 5 minutes then answers `unauthorized`, without a remote call.
+- When a live execution pins the revision before the refresh starts, the check does not refresh. This also applies to a pin that commits after the check reads the credential. An access token that expires within 5 minutes then answers `unauthorized`, without a remote call.
 - A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change.
 - When a live execution pins the revision during the refresh, the server refuses the write. `verify` then answers `unknown` with `unreachable`, and the stored value does not change.
-- A handover to an execution waits until a refresh of its revision ends, and then hands over the new value.
+- In server and container placements, a handover to an execution waits until a refresh of its revision ends, and then hands over the new value. When the refresh does not end in the wait, the handover answers 503 [`worker.handover.refresh_in_flight`](../worker/handover.md), and the worker retries it.
 - The check of an instance copy never refreshes. An access token that expires within 5 minutes answers `unauthorized`, without a remote call.
 
 ## Expected response
