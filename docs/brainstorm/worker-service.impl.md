@@ -1241,6 +1241,9 @@ The steps method of `coder@1` on an `implement` node runs only coding turns of t
 
 - A **unit** is one item of work with a work prompt and a list of verifications. Each task is one unit. A node with no task is one unit, the **node unit**, with the node identity as its id. `workUnitsOf` builds the list.
 - The node unit holds the node content and the task list as its work prompt, and the node verifications as its commands. `nodeUnitOf` of `release-gate.ts` builds it.
+- The work prompt of a task starts with `# Node <name>` and the `Requirement` and the `Criterion` of the node. The line "Do only the task below. The node part above is context." follows.
+- The task part then starts with `# Task <name>` and holds the task content. The work prompt of the node unit holds no node part.
+- The node part is in the pinned work prompt, the first user message. The system prompt holds no node part.
 - A **turn** is one call of `prompt` or `instruct` on the agent: a work turn, a revision turn or a conflict turn. The execution runs no answer turn: no start-check judgement, no task judgement, no task choice and no repair turn.
 - One `swe@1` session serves every turn of the execution.
 

@@ -280,21 +280,22 @@ The Agent component owns these keys of the section `agent`.
 - The execution setup carries the resolved template set, so the worker application reads no template file.
 - The values of each template:
 
-| Template             | Values                                                                                                                                                                       |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `work`               | `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`, `tasks[].number`, `tasks[].id`, `tasks[].name`, `tasks[].criterion`, `repositories` |
-| `framing-worker`     | none                                                                                                                                                                         |
-| `framing-workbench`  | none                                                                                                                                                                         |
-| `task-revision`      | `rationale`, `results`, `output`                                                                                                                                             |
-| `criterion-revision` | `rationale`                                                                                                                                                                  |
-| `conflict`           | `binding`, `directory`, `base_branch`, `files`                                                                                                                               |
-| `evaluation`         | `tasks`, `tested_input`, `evidence`, `dependencies`, `marker`                                                                                                                |
-| `examine`            | `repositories`, `verification`, `dependencies`, `outcomes`, `evidence`                                                                                                       |
-| `repair`             | `marker`                                                                                                                                                                     |
+| Template             | Values                                                                                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work`               | `node.name`, `node.requirement`, `node.criterion`, `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`, `tasks[].number`, `tasks[].id`, `tasks[].name`, `tasks[].criterion`, `repositories` |
+| `framing-worker`     | none                                                                                                                                                                                                                            |
+| `framing-workbench`  | none                                                                                                                                                                                                                            |
+| `task-revision`      | `rationale`, `results`, `output`                                                                                                                                                                                                |
+| `criterion-revision` | `rationale`                                                                                                                                                                                                                     |
+| `conflict`           | `binding`, `directory`, `base_branch`, `files`                                                                                                                                                                                  |
+| `evaluation`         | `tasks`, `tested_input`, `evidence`, `dependencies`, `marker`                                                                                                                                                                   |
+| `examine`            | `repositories`, `verification`, `dependencies`, `outcomes`, `evidence`                                                                                                                                                          |
+| `repair`             | `marker`                                                                                                                                                                                                                        |
 
 - `repositories` lists `{ name, directory, base_branch }` for each repository binding of the pinned revision, in binding order. `work` receives an empty list for a node with one repository binding.
 - `verification` holds the results of the node verifications that the execution code runs. `dependencies`, `outcomes` and `evidence` are empty for an `examine` node with no direct dependency.
 - `tasks` lists the tasks of the node for the work prompt of the node unit, and is empty for the work prompt of a task.
+- `node` holds the node content for the work prompt of a task, and is null for the work prompt of a node unit.
 - `marker` is the marker that the worker parses. A replacement of `evaluation` or `repair` keeps the marker line, or the worker treats the reply as invalid.
 - The loader reads only the files of the template names above. A file `task-judgement.md` or `task-choice.md` in `prompts` is unused, and the loader gives no warning.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.

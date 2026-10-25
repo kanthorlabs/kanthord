@@ -84,6 +84,7 @@ The Binding prompt states the programming language, the development style and th
 It states no rule about the method, the tools, the repository operations, the assessment or the release.
 The work prompt renders from the node revision that the attempt pins.
 It states the requirement, the criterion and the verifications of the work that the execution takes.
+The work prompt of a task also states the name, the requirement and the criterion of its node first, as context for the task.
 When the node names two or more repository bindings, the work prompt lists each repository binding with its directory and its base branch.
 The Role is required, and every other part is optional.
 The work prompt is required for every unit of work.
