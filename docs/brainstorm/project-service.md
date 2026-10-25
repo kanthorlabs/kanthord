@@ -89,7 +89,7 @@ KanthorD adds no table and no column for an environment. The status, the source 
 The [Onboarding component](project-service.vocabulary.md#onboarding-component) of the Project Service onboards each repository binding in the background, with no approval.
 The human act that adds the repository binding is the consent to build and to prove its environment.
 Onboarding is one-time work, so it depends on no worker. It is a server operation of the Project Service. It is no mission node, no claim and no Scheduler job.
-Onboarding resolves the environment, builds its image when a slot runs in a container, and runs the [proof](project-service.vocabulary.md#proof) on the base-branch head before any node of the binding spends budget.
+Onboarding resolves the environment, builds its image when a `container` instance runs its nodes, and runs the [proof](project-service.vocabulary.md#proof) on the base-branch head before any node of the binding spends budget.
 A node whose repository binding holds an environment that is not ready waits. It changes no state while it waits, and it continues when the environment is ready.
 An environment failure of an execution stops that execution with its own reason, `environment_failed`. It never becomes a revision turn of the coder agent, and it never counts toward the failure limit of the node.
 The human acts only when the proof or an execution fails. The human then stores a fixed environment or runs the onboarding again.
@@ -101,15 +101,14 @@ The [Worker Service](worker-service.md#workers-and-templates) owns worker declar
 A worker binding names one worker.
 The worker that a worker binding names never changes. A project removes the binding and adds another one instead.
 
-- A worker binding holds its instance count.
-- At the `worker` placement, a worker binding names its registered [worker instances](overview.vocabulary.md#worker-instance) in `worker_instances` in place of an instance count. The length of that list is its instance count.
+- A worker binding of a worker that kanthord hosts names its [worker instances](overview.vocabulary.md#worker-instance) in `worker_instances`. The length of that list is its instance count.
 - Each listed instance belongs to the worker of the binding. One instance can serve worker bindings of several projects.
+- A `container` instance serves at most one live worker binding, because one container runs the image of one environment.
+- The [placement](worker-service.vocabulary.md#placement) belongs to the instance, not to the binding. One binding can list instances of different placements.
+- A worker binding of an external harness holds its instance count in `instance_count`. It holds no placement and no `worker_instances`.
 - An instance count of 0 makes the binding unavailable.
-- A worker binding of a worker that kanthord hosts holds its [placement](worker-service.vocabulary.md#placement): `server`, `container` or `worker`. Every write of the binding states it.
-- A worker binding of an external harness holds no placement.
-- The placement of a worker binding never changes. A project removes the binding and adds it again instead.
-- For every placement, the instance count limits the live registrations of the binding. At the `server` and the `container` placements, the server also runs one instance for each unit of the count. At the `worker` placement, each listed instance holds one registration of the binding.
-- A write refuses to add a binding at the `container` placement when the server cannot run containers.
+- The instance count limits the live registrations of the binding. Each listed instance holds one registration of the binding.
+- The server runs each instance at the `server` and the `container` placements until its archive, whether a binding lists it or not. A binding write starts and stops no instance.
 - A worker binding of a native worker can hold an optional [resource budget](worker-service.vocabulary.md#resource-budget).
 - A worker binding can hold an [entry](worker-service.vocabulary.md#entry) for each agent of its worker.
 - The Project Service holds that entry in the binding and resolves no [effective configuration](agent.vocabulary.md#effective-configuration).
@@ -134,7 +133,7 @@ Each worker binding of one worker holds its own configuration, and two bindings 
 A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
 
-A worker binding of a worker whose instances register groups those instances for its instance count.
+A worker binding groups the instances that register under it for its instance count.
 Each such instance presents the credential of its own [client identity](project-service.vocabulary.md#client-identity) for that binding. That credential names the worker binding by its project and its resource identity.
 The [Gateway Service](gateway-service.md#machine-identities) authenticates that credential, and the Project Service holds no secret of a client identity and no list of the client identities of a binding.
 A client identity authenticates nothing while its worker binding is removed or unavailable.

@@ -55,7 +55,7 @@ The constraints are below.
 - A binding name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - A new binding takes revision 1.
 - A tombstone is the next revision of a group with `removed_at` set and the last configuration copied.
-- A disablement is the next revision with `available: false`, or with an effective instance count of 0 for a worker binding. That count is `instance_count: 0`, or `worker_instances: []` at the `worker` placement.
+- A disablement is the next revision with `available: false`, or with an effective instance count of 0 for a worker binding. That count is `worker_instances: []` for a native worker binding, or `instance_count: 0` for an external-harness binding.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](architecture.impl.md).
 
@@ -130,11 +130,11 @@ The outcomes of the comparison by binding name are below.
 - A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set inserts no row and keeps the version.
 - After the edit, the latest row of a worker group can be a tombstone or hold an effective instance count of 0. The edit then ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
-- At the `worker` placement, a name that the edit removes from `worker_instances` is a lowered count. The write ends no registration of that instance. The connection answer of the instance marks the binding `draining`, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
+- A name that the edit removes from `worker_instances` is a lowered count at every placement. The write ends no registration of that instance. The binding entry of the instance turns `draining`, under [the instance exchange](worker-service.impl.md#the-instance-exchange) and [the server instances](worker-service.impl.md#the-server-instances). The live execution finishes, and the binding gets no new claim from that instance.
 - The transaction reads `unmatchedClaims(tx, projectId)` of the [Scheduler Service](scheduler-service.impl.md#the-match) before and after its inserts. A pair that the after-read holds and the before-read lacks refuses the write with 409 `project.bindings.worker.node_unmatched` and `details: { node_ids }`. The refusal writes no row.
 - After the commit of a binding-set write, the Project Service calls the Worker contract method `bindingsChanged(projectId)`.
-- The Worker Service then reconciles the [pool](worker-service.impl.md#the-pool) of each binding at the `server` or the `container` placement.
-- For a changed binding at the `worker` placement, `bindingsChanged(projectId)` also increments the `binding_version` of each instance. It covers the old list and the new list of `worker_instances`. A removed instance thus learns its `draining` state at its next heartbeat.
+- The Worker Service then sends the new binding entries to each running [server instance](worker-service.impl.md#the-server-instances) that the old list or the new list of a changed binding names. A binding write starts and stops no server instance.
+- For a changed binding, `bindingsChanged(projectId)` also increments the `binding_version` of each instance at the `worker` placement that the old list or the new list names. A removed instance thus learns its `draining` state at its next heartbeat.
 
 The binding set has one read route and one write route, and both serve the whole set.
 
@@ -165,19 +165,20 @@ A schema validates the shape, and a `superRefine` validates the relations of the
 The validation of the whole set runs at the write, and the validation of one binding with its dependencies runs again at each resolution.
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
 The write refuses a submission that changes the worker of an existing worker binding under the same binding name with 409 `project.bindings.worker.resource_changed`.
-The write refuses a submission that changes the `placement` of an existing worker binding under the same binding name with 409 `project.bindings.worker.placement_changed`.
-The refusal compares the stored placements.
 
 - Worker binding validation calls [Agent configuration validation](agent.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
-- The `instance_count` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
-- A worker binding at the `worker` placement holds `worker_instances` in place of `instance_count`. A binding at the `server` or the `container` placement and a binding of an external harness hold `instance_count`. The other field refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`.
-- `worker_instances` is required at the `worker` placement. A write without it refuses with 400 `project.bindings.worker.instances_required` and `details: { binding }`.
+- A worker binding holds no `placement`. The field refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`. The [placement](worker-service.vocabulary.md#placement) is a field of each instance, and it never changes.
+- A worker binding of a worker that kanthord hosts holds `worker_instances`. An external-harness binding holds `instance_count`. The other field refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`.
+- The `instance_count` field of an external-harness binding is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
+- `worker_instances` is required on a worker binding of a worker that kanthord hosts. A write without it refuses with 400 `project.bindings.worker.instances_required` and `details: { binding }`.
 - `worker_instances` is a list of 0 to 64 unique instance names. Another shape, a list above 64 names or a repeated name refuses the write with 400 `project.bindings.worker.instances_invalid` and `details: { binding, instance }`.
 - Each name names a live [worker instance](overview.vocabulary.md#worker-instance) record. An unknown or archived name refuses the write with 400 `project.bindings.worker.instance_unknown` and `details: { binding, instance }`.
 - Each instance belongs to the worker of the binding. An instance of another worker refuses the write with 400 `project.bindings.worker.instance_worker_mismatch` and `details: { binding, instance, worker }`.
-- The Project Service reads the instance records through the Worker contract inside the write transaction.
-- Any revision can change the list. `placement` never changes.
+- One binding can list instances of different placements.
+- A `container` instance is listed by at most one live worker binding over every project. A second listing refuses the write with 409 `project.bindings.worker.instance_shared` and `details: { binding, instance, listed_by: { project_id, binding } }`. One container runs the image of one environment.
+- The Project Service reads the instance records, with their placements, through the Worker contract inside the write transaction.
+- Any revision can change the list.
 - The [holder rule](agent.impl.md#agent-configuration-validation) of the credential copies runs under Agent configuration validation for each listed instance.
 - The `tags` field is a list of unique strings, and an absent field reads as `[]`. Each item matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` and holds at most 64 bytes. A nonlist value, a repeated item or an item that violates the form refuses the write with 400 `project.bindings.worker.tags_invalid` and `details: { binding, tag }`.
 - Every worker binding holds `tags`, the binding of an external harness included.
@@ -202,15 +203,8 @@ The refusal compares the stored placements.
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
 - An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
 - For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `agent.configuration.invalid`.
-- A worker binding of a known worker with no declared agent, an external harness, that carries `entries`, `resource_budget` or `placement` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
-- The `placement` field of a worker binding of a worker that kanthord hosts is required, and it is `server`, `container` or `worker`. A write without it refuses with 400 `project.bindings.worker.placement_required` with `details: { binding }`.
-- The write stores `placement` as written. No reader falls back to a default.
-- A worker binding of an external harness reads `placement: null`.
-- No migration writes a placement. The latest revision of a hosted worker binding without `placement` stops the server start with `system.database.binding_placement_missing`, under [architecture.impl.md](architecture.impl.md#the-migration).
-- Before the transaction, a write that adds a worker binding at the `container` placement reads `placementStatus("container")` through the Worker contract. An added binding is a binding name with no live binding, so a name that a project reuses after a removal is added.
-- The write refuses the added binding with 409 `project.bindings.worker.placement_unavailable` and `details: { binding, placement, reason }` when `reason` is `server_in_container`, `runtime_absent` or `runtime_rootful`.
-- The write accepts the added binding on `runtime_failed`, because the backoff of [the pool](worker-service.impl.md#the-pool) covers a stopped runtime.
-- An edit of a live `container` binding reads no placement status, so a human can lower its count to 0 while the runtime is down.
+- A worker binding of a known worker with no declared agent, an external harness, that carries `entries`, `resource_budget` or `worker_instances` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
+- The binding write reads no placement status. The create of a `container` instance reads it, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).
 - A strategy with more than one action refuses the write.
 - A `landing` on an action other than `pull_request` refuses the write at the `landing` path.
 
@@ -243,8 +237,8 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 ## Worker binding configuration
 
-- A worker binding holds `instance_count`, or `worker_instances` at the `worker` placement. It holds `placement` for a worker that kanthord hosts, optional `tags`, optional `resource_budget` and optional per-agent entries.
-- The effective instance count is `instance_count`, or the length of `worker_instances` at the `worker` placement. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count and the Gateway verification read one value. [The worker pages](architecture.impl.md#the-worker-pages) state the rule of the dashboard.
+- A worker binding of a worker that kanthord hosts holds `worker_instances`, optional `tags`, optional `resource_budget`, optional per-agent entries and the optional `environment`. An external-harness binding holds `instance_count` and optional `tags`.
+- The effective instance count is the length of `worker_instances`, or `instance_count` for an external-harness binding. `workerBindingOf` answers the effective count as `instance_count`, so the registration count, the claim count and the Gateway verification read one value. [The worker pages](architecture.impl.md#the-worker-pages) state the rule of the dashboard.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
@@ -253,12 +247,12 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 - The [co-location contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) holds both calls inside the write transaction.
 - The Project Service offers `workerBindingsOf(tx, projectId)` to the Scheduler Service through its `contract.ts`. It answers `{ binding_id, worker_name, tags }` for each current worker binding that is no tombstone. `workerBindingOf` answers `tags` with the pinned row.
 - A change of `tags` creates the next revision of the binding. A live execution keeps the tags of the row that its claim pins.
-- A worker binding at the `container` placement holds the optional key `environment`: the binding name of one repository binding of the project. The slots of the binding run the image of that environment, and the binding claims only the nodes that name that repository binding.
-- An absent `environment` names the only repository binding of the project. With two repository bindings or more, an absent key refuses the write with 400 `project.bindings.worker.environment_required` and `details: { binding }`.
+- A worker binding of a worker that kanthord hosts holds the optional key `environment`: the binding name of one repository binding of the project. Its `container` instances run the image of that environment, and the binding claims only the nodes that name that repository binding.
+- An absent `environment` names the only repository binding of the project. A binding that lists a `container` instance with an absent key refuses the write with 400 `project.bindings.worker.environment_required` and `details: { binding }` when the project holds two repository bindings or more.
 - A name that is no repository binding of the submitted set refuses the write with 400 `project.bindings.worker.environment_unknown` and `details: { binding, environment }`.
-- `environment` on a binding at another placement refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`.
-- The write stores the key as written. The default resolves at each read, so a write that adds a second repository binding refuses each `container` binding with no key.
-- `workerBindingsOf` and `workerBindingOf` answer `environment`: the resource identity of the named repository binding, or null at another placement.
+- `environment` on an external-harness binding refuses the write with 400 `project.bindings.worker.field_forbidden` and `details: { binding, field }`.
+- The write stores the key as written. The default resolves at each read, so a write that adds a second repository binding refuses each binding that lists a `container` instance and holds no key.
+- `workerBindingsOf` and `workerBindingOf` answer `environment`: the resource identity of the named or the default repository binding when the binding lists a `container` instance, else null.
 
 ## The credential dependents of a binding
 
@@ -355,14 +349,14 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - A name of `containerEnv` or `remoteEnv` matches `^[A-Za-z_][A-Za-z0-9_]*$`, and a value holds no control character. Another name or value refuses the document.
 - `customizations.kanthord` holds one key, `checks`: a list of 0 to 32 nonblank commands. The proof runs them. An absent key reads as `[]`.
 - At `environment set` and at a binding-set write, a refused key, value or path answers 400 `project.environment.key_refused` with the message "The environment key <key> is refused: <reason>." and `details: { key, reason }`. A document that is no JSON object or that holds a wrong type answers 400 `project.environment.invalid`.
-- Before the Onboarding component, a refused repository file fails the slot start and logs `project.environment.key_refused` with the key and the reason. From the Onboarding component on, a refused repository file or a refused build ends the run with the class `build_failed` and the key in the output tail.
+- Before the Onboarding component, a refused repository file fails the start of a `container` instance and logs `project.environment.key_refused` with the key and the reason. From the Onboarding component on, a refused repository file or a refused build ends the run with the class `build_failed` and the key in the output tail.
 - `project.binding.environment.get` at `GET /api/project/:project_id/binding/:binding_id/environment` is a `human` read. It answers `{ source, commit, environment, reason }` of the target of the binding. `source` is a value of [the environment source](project-service.vocabulary.md#environment-source). `reason` holds the parse failure of a repository file, or null.
 - `project.binding.environment.set` at `PUT /api/project/:project_id/binding/:binding_id/environment` is a `human` mutation with the body `{ environment }`. It writes the whole current binding set with the new key, so the change is a binding revision. A change of the key alone skips the `ls-remote` check of [the network git operations](#the-network-git-operations).
 - `project.binding.environment.set` with `{ environment: null }` removes the key, so the source returns to the repository file or the next source.
 - A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`.
 - `kanthord project environment show <project-id> <binding-id>`, `kanthord project environment set <project-id> <binding-id> --file <path>` and `kanthord project environment unset <project-id> <binding-id>` call the two routes. `set` reads JSONC.
 - `kanthord project environment export <project-id> <binding-id>` prints the `environment` of `show` as indented JSON. A user who wants one file for KanthorD and the CI commits that output. KanthorD never commits it.
-- The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a slot reads the same revision. A node that pins an earlier revision therefore runs the current environment.
+- The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a `container` instance reads the same revision. A node that pins an earlier revision therefore runs the current environment.
 - At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there. The docs of `environment show` name them as ignored, and the answer holds no field for them. The repository devcontainer applies only at the `container` placement.
 
 ## The Onboarding component
@@ -377,10 +371,10 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 
 ### The target
 
-- The target of a group is `image` when a current worker binding at the `container` placement names the repository binding in its `environment` key, also through the default of that key.
-- The target is `remote` when the project holds one worker binding or more, and each of them is at the `worker` placement or is the binding of an external harness.
+- The target of a group is `image` when a current worker binding lists a `container` instance and names the repository binding in its `environment` key, also through the default of that key.
+- The target is `remote` when the project holds one worker binding or more, and each listed instance of each binding is at the `worker` placement or the binding is the binding of an external harness.
 - In every other case the target is `host`. A project with no worker binding has the target `host`.
-- One group has one target. A worker binding at the `server` placement next to a `container` binding that names the group runs on the host with the status of the image.
+- One group has one target. A `server` instance next to a `container` instance that runs the image of the group runs on the host with the status of the image.
 
 ### The source of each target
 
@@ -412,7 +406,7 @@ The component computes the status of a group in this order. The first rule that 
 6. Otherwise the component starts a run, and the status is the step of that run.
 
 - At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
-- At the `image` target, the `universal` source always exists, so the status is never `none`. A slot runs on `worker.container_image` only when its worker binding names no repository binding.
+- At the `image` target, the `universal` source always exists, so the status is never `none`. A `container` instance runs on `worker.container_image` only when no live binding lists it or its worker binding names no repository binding.
 - After a failed read, the group keeps its last status and digest and sets `reason`. A transient fetch failure thus never closes the gate of a `ready` environment. A failed read after a change of the target also writes the new target and clears the digest, the tag and the proof of the old target.
 - A run that waits in the queue shows the status of its first step, and its `run_started_at` stays null until it starts.
 - A claim gate or a read of a group with no record starts the computation of the group in the background and answers `pending`.
@@ -436,7 +430,7 @@ The component computes the status of a group in this order. The first rule that 
 - It then builds `<tag>` when the tag is absent, under [the image build](#the-image-build), with the status `building`. It then proves the image, with the status `proving`.
 - At the `host` target, the run computes the digest and proves on the server host, with the status `proving`. A source `none` runs no proof.
 - The run writes the proof file. After a passed proof at the `image` target, it tags `<tag>-proved`.
-- After the run, the component collects the garbage of the group. It then calls `environmentReady` of the Worker Service, which drains the slots that run another image of the group. Only after that call returns, it wakes the work pulls of the project through `wake(projectId)` of the Scheduler.
+- After the run, the component collects the garbage of the group. It then calls `environmentReady` of the Worker Service, which drains the `container` instances that run another image of the group. Only after that call returns, it wakes the work pulls of the project through `wake(projectId)` of the Scheduler.
 - A run has a deadline of 30 minutes. A run that reaches it during the build ends with the class `build_failed`. During the proof, the stopped command goes through the classification of [the proof](#the-proof).
 - The stop of the server cancels the run, and the cancellation kills the process group of each child. A cancelled run writes no proof file.
 - The component logs `project.onboarding.run_started` and `project.onboarding.run_ended` with the binding, the digest, the target, the status and the class.
@@ -460,20 +454,20 @@ The component computes the status of a group in this order. The first rule that 
 - A setup command that ends with an exit code other than 0, or that exceeds its limit, fails the proof with the class `setup_failed`.
 - A check that ends with exit 127 fails the proof with the class `command_absent`.
 - A check that ends with another exit code other than 0 joins the red baseline, and the proof passes.
-- At the `image` target, the proof starts one container of `<tag>` with the flags of a slot: uid 10001, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, a `tmpfs` at `/tmp`, the owner label, and a new volume at `/var/lib/kanthord`. The container idles under `tini`.
+- At the `image` target, the proof starts one container of `<tag>` with the flags of a `container` instance: uid 10001, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, a `tmpfs` at `/tmp`, the owner label, and a new volume at `/var/lib/kanthord`. The container idles under `tini`.
 - The host feeds the base-branch head into the container as a git bundle on standard input, and the container clones it into its home. Each command runs through `<runtime> exec`. The run removes the container and the volume at its end.
 - The container removal follows the rules of [names, labels and stale containers](worker-service.impl.md#names-labels-and-stale-containers).
 - At the `image` target, a failed step of the proof fails the proof with `worker.pool.environment_proof_failed` and the class `setup_failed`.
 - The steps are `volume`, `cache volume`, `start`, `bundle`, `clone`, `remove container` and `remove volume`.
 - The message is `The environment proof failed at <step>: <message>`. `<message>` is the trimmed last 4096 bytes of the step output. A runtime command step gives its error output.
 - A step with blank output gives the message `The environment proof failed at <step>.`. The message becomes `tail` of the proof file.
-- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a thread slot of the `server` placement gives its commands.
+- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a `server` instance gives its commands.
 - The proof runs no agent and spends no LLM budget.
 
 ### The failure of an execution
 
 - The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node, the stop and `digests`: the digest of each environment that the execution set up, from the stop detail.
-- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old slot says nothing about a newer environment. A group with no entry counts as the current digest, so a failure always closes the gate of some group and never loops the node.
+- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old instance says nothing about a newer environment. A group with no entry counts as the current digest, so a failure always closes the gate of some group and never loops the node.
 - For each other group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
 - The status of the group is then `failed`, and its nodes wait.
 
@@ -481,7 +475,7 @@ The component computes the status of a group in this order. The first rule that 
 
 - After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each changed repository binding to `pending` synchronously. A repository binding is changed when the write changed its row or its target. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A computation of the project whose read runs during the call writes no record and reads the inputs again. A pull between the commit and the computation therefore claims no node of a changed binding.
 - At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
-- At the execution setup of a slot at the `container` placement, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the slot. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the slots at their next claim.
+- At the execution setup of a `container` instance, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the instance. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the `container` instances at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
 - While the status of a group is `failed`, the component reads the commit of its base branch every 60 seconds (`COMMIT_CHECK_MS`). The read is one `git ls-remote` through the Repository component.
   - A changed commit reads the inputs again. The failure of the old commit no longer counts under rule 3 of [the status](#the-status). Each reader of the proof file treats that failure as absent and ignores `<tag>-proved` for that read, so a run proves the environment again at the new commit. The file stays on disk until the new run writes the file of the digest. At the `image` target, the run builds only a missing `<tag>`. At the `remote` target, the status becomes `none`.
@@ -516,13 +510,13 @@ The component computes the status of a group in this order. The first rule that 
 - The component implements `environmentsClaimable(projectId, resourceIdentities): boolean` for the [claim selection](scheduler-service.impl.md#the-environment-gate). It answers true when the status of each group is `none` or `ready`.
 - A group with no record answers false, and the component computes it.
 - It reads only process memory, so it runs inside the claim transaction.
-- The Project Service, not the component, implements `environmentsMixed(projectId, resourceIdentities): boolean` for [the node content](mission-service.impl.md#the-node-content). It reads the stored `environment` documents of the binding set inside the write transaction and answers true when the worker bindings run at the `container` placement and two stored documents differ in canonical JSON.
+- The Project Service, not the component, implements `environmentsMixed(projectId, resourceIdentities): boolean` for [the node content](mission-service.impl.md#the-node-content). It reads the stored `environment` documents of the binding set inside the write transaction and answers true when a worker binding of the project lists a `container` instance and two stored documents differ in canonical JSON.
 - It implements `slotImage(projectId, workerResourceIdentity, signal): Promise<string>` for [the slot image](worker-service.impl.md#the-slot-image). A worker binding names the repository binding of its `environment` key, else the only repository binding of the project. The promise resolves with `<worker.container_image>:<version>` when the worker binding names no repository binding, and with `<tag>` when the group of the named repository binding is `ready`. It waits through every other status. The signal ends the wait.
 
 ### Garbage collection
 
 - After each run, the component lists the images with the owner label and the reference `localhost/kanthord-env/<identity path>`. It removes each image whose tag is not the current digest, `<digest>-base` or `<digest>-proved`.
-- A removal that fails, for example for an image that a slot still runs, leaves the image to the next collection.
+- A removal that fails, for example for an image that a `container` instance still runs, leaves the image to the next collection.
 - It removes each proof file of the identity path whose digest is not the current digest.
 - A repository that fails again and again therefore keeps one digest on the disk.
 
@@ -554,9 +548,9 @@ The component computes the status of a group in this order. The first rule that 
 
 - `<version>` of a package manager comes from `packageManager` of `package.json`, else `latest`.
 - A `yarn.lock` that holds a line `__metadata:` is a lock file of yarn 2 or later, and its default version is `stable`. Another `yarn.lock` is a lock file of yarn 1, and its default version is `1.22.22`. The npm package `yarn` ends at 1.x, so the draft installs yarn through corepack.
-- A yarn draft sets `COREPACK_HOME=/usr/local/share/corepack` in `containerEnv`, so the slot user finds the version that the build prepared.
+- A yarn draft sets `COREPACK_HOME=/usr/local/share/corepack` in `containerEnv`, so the user of a `container` instance finds the version that the build prepared.
 - A Node stack with no lock file and a Python stack with `pyproject.toml` and no lock file take no setup command. Their checks are `node --version` and `npm --version`, or `python --version`.
-- The draft sets `containerEnv` so that every cache and every tool home lies in `/var/lib/kanthord`: `PATH` with `/var/lib/kanthord/.local/bin` first, `GOPATH=/var/lib/kanthord/go` and `CARGO_HOME=/var/lib/kanthord/.cache/cargo`, because the root of a slot is read-only.
+- The draft sets `containerEnv` so that every cache and every tool home lies in `/var/lib/kanthord`: `PATH` with `/var/lib/kanthord/.local/bin` first, `GOPATH=/var/lib/kanthord/go` and `CARGO_HOME=/var/lib/kanthord/.cache/cargo`, because the root of a `container` instance is read-only.
 - `flake.nix` takes precedence over every stack. A repository with only `flake.nix` counts as detected. It drafts `mcr.microsoft.com/devcontainers/base:bookworm` with the feature `ghcr.io/devcontainers/features/nix:1` and the option `multiUser: false`, the `onCreateCommand` `nix --extra-experimental-features 'nix-command flakes' print-dev-env /etc/kanthord-flake > /etc/kanthord-nix-env.sh` and `containerEnv` `BASH_ENV=/etc/kanthord-nix-env.sh`, so each `bash -c` of a slot loads the development shell. It checks `nix --version`.
 - When the workspace holds `flake.nix`, the KanthorD layer copies the whole workspace to `/etc/kanthord-flake/` before the first `onCreateCommand`, so a flake that imports a local file finds it. The copy skips `.git`. The build of a document without `flake.nix` copies nothing.
 - A repository with no manifest has no detected source.
@@ -577,13 +571,13 @@ The component computes the status of a group in this order. The first rule that 
 - The digest holds the variable names and the revision of each credential, never a value. A rotation is a new digest. A rotation through the route group writes no binding set, so it takes effect at the next computation of the group.
 - At the release, the component compares the newest live revision of each credential with the revision of the digest. On a mismatch, it ends the run with no proof file and computes the group again. A secret value in an output tail becomes `[redacted]` before it reaches the proof file or a log.
 - The operations are `project.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`. The route group registers before every route whose path holds `:project_id`. The CLI holds only the leaf `project environment secret set`, and the other operations are API only.
-- No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, a slot or a log. A private-registry install in a checkout runs in the slot, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
-- A command must not write a secret to a file of the image, because every slot of the image holds that file. The docs give the form `npm install -g @<scope>/<package> --@<scope>:registry=https://<registry>/ --//<registry>/:_authToken="$<variable>"`, which passes the secret to one command, and they name `npm config set` as the form that leaks.
+- No secret reaches `devcontainer build`, a feature, a Dockerfile, the proof, an instance or a log. A private-registry install in a checkout runs in the instance, next to the agent, so the docs tell the user to put it into `onCreateCommand`.
+- A command must not write a secret to a file of the image, because every `container` instance of the image holds that file. The docs give the form `npm install -g @<scope>/<package> --@<scope>:registry=https://<registry>/ --//<registry>/:_authToken="$<variable>"`, which passes the secret to one command, and they name `npm config set` as the form that leaks.
 
 ### The cache volume
 
 - Each group at the `image` target holds one volume `kanthord_cache_<id>`, with `<id>` derived from the owner, the project and the resource identity. It carries the owner label, `io.kanthord.cache_project=<project_id>` and `io.kanthord.cache_resource=<resource_identity>`.
-- Each slot of a worker binding that names the group and each proof container mount it at `/var/lib/kanthord/.cache`.
+- Each `container` instance of a worker binding that names the group and each proof container mount it at `/var/lib/kanthord/.cache`.
 - The KanthorD layer writes `npm_config_cache`, `npm_config_store_dir`, `PIP_CACHE_DIR`, `GOMODCACHE` and `CARGO_HOME` below that path into `ENV`, unless the document sets the variable.
 - The volume key is the group and not the digest, so a new digest keeps the cache warm. Garbage collection removes the volume of a group that no current binding holds.
 - Garbage collection lists the names with `<runtime> volume ls --filter label=io.kanthord.owner=<owner> --filter label=io.kanthord.cache_project --format '{{.Name}}'`.
@@ -623,12 +617,12 @@ The component computes the status of a group in this order. The first rule that 
 - The environment state holds `repairing: true` while a session of the group runs. The stop of the server aborts each session before it cancels the runs.
 - The waiting nodes continue when the status is `ready`.
 
-### The slot build before the Onboarding component
+### The instance build before the Onboarding component
 
-The first layer of the build builds the image at the slot start, before the Onboarding component exists. These rules hold until the Onboarding component replaces them.
+The first layer of the build builds the image at the start of a `container` instance, before the Onboarding component exists. These rules hold until the Onboarding component replaces them.
 
-- `EnvironmentImages` of `src/apps/server/environment-image.ts` builds the image synchronously at a slot start of the `container` placement when the tag is absent. One build runs for each tag.
-- DECIDED 2026-10-23 by Aelita, pending Ulrich: a stored environment wins over the repository devcontainer of the other repository bindings of the project. Two stored environments in one project fail the slot start with `project.environment.ambiguous`. The `environment` key of a worker binding replaces this rule.
+- `EnvironmentImages` of `src/apps/server/environment-image.ts` builds the image synchronously at the start of a `container` instance when the tag is absent. One build runs for each tag.
+- DECIDED 2026-10-23 by Aelita, pending Ulrich: a stored environment wins over the repository devcontainer of the other repository bindings of the project. Two stored environments in one project fail the start of the `container` instance with `project.environment.ambiguous`. The `environment` key of a worker binding replaces this rule.
 - A failed build logs `worker.pool.environment_image_failed` with the class `build_failed` or `image_invalid`, the tag and the last 4 KiB. The server keeps the failure of a tag for 15 minutes or until the next binding revision. The Onboarding run replaces this code with the proof file.
 
 ### The error codes of an environment
@@ -637,13 +631,13 @@ The first layer of the build builds the image at the slot start, before the Onbo
 | ---- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400  | `project.environment.invalid`                            | The environment document is no JSON object or holds a wrong type.                                                                                       |
 | 400  | `project.environment.key_refused`                        | The environment document holds a refused key, a server variable or a path that leaves the checkout.                                                     |
-| log  | `project.environment.key_refused`                        | Before the Onboarding component: a repository devcontainer file of a slot start holds a refused key.                                                    |
-| 400  | `project.bindings.worker.environment_required`           | A worker binding at the `container` placement omits `environment`, and the project holds two repository bindings or more.                               |
+| log  | `project.environment.key_refused`                        | Before the Onboarding component: a repository devcontainer file at the start of a `container` instance holds a refused key.                             |
+| 400  | `project.bindings.worker.environment_required`           | A worker binding that lists a `container` instance omits `environment`, and the project holds two repository bindings or more.                          |
 | 400  | `project.bindings.worker.environment_unknown`            | `environment` names no repository binding of the submitted set.                                                                                         |
-| 400  | `project.bindings.worker.field_forbidden`                | A worker binding at another placement holds `environment`.                                                                                              |
+| 400  | `project.bindings.worker.field_forbidden`                | An external-harness binding holds `environment`.                                                                                                        |
 | 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                                                 |
 | log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                                                      |
-| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                                               |
+| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of the image of a `container` instance failed with `build_failed` or `image_invalid`.                        |
 | log  | `project.onboarding.run_started`                         | A run of a group starts. It names the binding, the digest and the target.                                                                               |
 | log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                                                     |
 | log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`.             |
@@ -660,7 +654,7 @@ The Project Service holds no table of client identities and no secret of a clien
 [gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and is available.
 The JWT names one binding group by `project_id` and `resource_identity`, and no revision.
 The answer reads the latest row of that group. It refuses a disabled or removed binding, and a token whose `iat` is before the latest tombstone of the group.
-At the `worker` placement, the server derives the client identity of an instance for a binding from `master_key`. The label is `worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). No database holds it. A new binding generation or a new instance revision changes it.
+At every placement, the server derives the client identity of an instance for a binding from `master_key`. The label is `worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). No database holds it. A new binding generation or a new instance revision changes it.
 
 ## The binding screen of the dashboard
 
@@ -670,10 +664,12 @@ At the `worker` placement, the server derives the client identity of an instance
 - A list row of a paused project shows the badge `Paused`.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a worker binding holds a `Tags` field with one tag per line. The row of a worker binding shows one badge for each tag.
-- At the `worker` placement, the form of a worker binding holds an `Instances` multi-select in place of the count. It lists the live instances of the selected worker. It preselects the only instance when exactly one exists. It holds the link `Add instance` to the worker page.
+- The form of a worker binding of a worker that kanthord hosts holds the multi-select `Instances`. It holds no placement select and no count field. It lists the live instances of the selected worker, each as `<name> · <placement>`. It preselects the only instance when exactly one exists.
+- `Add instance` beside `Instances` opens a sheet with the name and the select `Placement`. The sheet creates the instance through `worker.instance.create` before the binding write and adds it to the selection. The `worker` placement continues on the worker page, because it needs the key and the copy blocks.
+- The form of an external-harness binding holds the number field `Instance count`.
 - The form shows the cross-project notice of [the worker pages](architecture.impl.md#the-worker-pages) when a selected instance serves bindings of another project.
-- The form states "A replacement instance starts after a removed instance ends its execution." when the draft removes an instance.
-- The row of a worker binding at the `worker` placement shows `· worker · <instance names>`, for example `· worker · box-coder, box-coder-2`. A registration row shows `· instance <name>`.
+- The form states "A removed instance finishes its execution, then takes no new work of this binding." when the draft removes an instance.
+- The row of a worker binding of a worker that kanthord hosts shows `· <instance names>`, for example `· box-coder, coder-1`. A registration row shows `· instance <name>` and the badge `Draining` while the binding no longer lists its instance.
 - The "no taker" view of the dashboard applies the match of [The match](scheduler-service.impl.md#the-match): the intent, the tags and the declared node states.
 - The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Binding prompts` holds the Binding prompt of each agent.
 - `Binding prompts` holds one row for each agent of the catalog: `swe@1`, `re@1` and `env@1`. The section makes no network call.
@@ -719,7 +715,7 @@ At the `worker` placement, the server derives the client identity of an instance
 - The section holds `Run onboarding again`, `Edit environment` and `Copy environment`. `Run onboarding again` calls `project.binding.environment.rebuild`. A success shows the toast "Onboarding of <binding> started.". A 409 `project.environment.run_active` shows an info toast, and another refusal shows an error toast with `Retry`. `Copy environment` copies the `environment` of `project.binding.environment.get` as indented JSON.
 - `Edit environment` opens a sheet with one text field that holds the stored environment as indented JSON. With no stored environment, the field is empty. `Save environment` calls `project.binding.environment.set`. The sheet checks before the send that the text is one JSON object, and it shows "The environment is not a JSON object. Remove the comments and the trailing commas." otherwise, because a `devcontainer.json` file often holds JSONC. A refusal of the server shows its message under the field. After a save, the binding sheet reads its entry again, so a later `Save binding` keeps the new environment.
 - The path `/projects/<project>?tab=bindings&environment=<binding name>` opens the sheet of that binding at its `Environment` section.
-- The form of a worker binding at the `container` placement holds the select `Environment`. It lists the repository bindings of the draft set. With one repository binding, it preselects it on a new binding. With two or more, the form marks the field as required. With none, the select is empty, not required, and shows "Add a repository binding first." The form writes the key only at the `container` placement.
+- The form of a worker binding holds the select `Environment` when its selection holds a `container` instance. It lists the repository bindings of the draft set. With one repository binding, it preselects it on a new binding. With two or more, the form marks the field as required. With none, the select is empty, not required, and shows "Add a repository binding first." The form writes the key only when the selection holds a `container` instance.
 
 ## Repository layout, build, test and release
 
@@ -742,7 +738,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers four address hosts: `ssh.github.com`, a host outside the GitHub SSH host set, `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The `ssh.github.com` address and the `github.com` address of one repository derive the same identity.
 - A test covers a binding write with a pinned host, and an unpinned host that refuses with 409. A host outside the host set answers `address_invalid` on the check.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.
-- A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
+- A test covers integer instance counts from 0 to 64 of an external-harness binding, invalid counts and the error code. It checks that 0 makes the binding unavailable.
 - Tests accept `tags` at 64 bytes and an absent field as `[]`. They refuse a longer tag, an upper-case tag, an empty segment, a repeated tag and a nonlist value with `project.bindings.worker.tags_invalid`.
 - Tests refuse a binding-set write that adds an unmatched pair with `project.bindings.worker.node_unmatched` and the node identities. They accept a write that keeps an earlier unmatched pair and adds none.
 - A test covers both GitHub actions, their capabilities and their implied expected end states. It refuses more than one action.
@@ -753,13 +749,12 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
-- A test covers each `placement` value and the refusal of an absent field with `project.bindings.worker.placement_required`. It covers the storage of the field as written and `placement: null` of an external harness.
-- A test covers the refusal of a change with `project.bindings.worker.placement_changed` and the refusal of the field on an external harness.
-- A test covers `project.bindings.worker.placement_unavailable` for each of its three reasons on an added binding.
-- A test covers the acceptance on `runtime_failed`, the acceptance of an edit of a live `container` binding, and a reused name that counts as added.
-- A test covers each refusal of `worker_instances`: `instances_required`, `instances_invalid`, `instance_unknown`, `instance_worker_mismatch` and `field_forbidden` in both directions. It covers the effective count of `workerBindingOf`.
-- A test covers a removal of an instance from `worker_instances`. It asserts that no registration ends in the write and that the `binding_version` of the removed and the kept instances increases.
-- A test covers a removal, a removal by omission and a revision to `instance_count: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
+- A test covers the refusal of `placement` on a native binding and on an external-harness binding with `project.bindings.worker.field_forbidden`.
+- A test covers each refusal of `worker_instances`: `instances_required`, `instances_invalid`, `instance_unknown`, `instance_worker_mismatch` and `field_forbidden` in both directions. It covers the effective count of `workerBindingOf` and a binding that lists instances of two placements.
+- A test covers a second listing of a `container` instance with `project.bindings.worker.instance_shared`, in the same project and in another project.
+- A test covers `environment_required` for a binding that lists a `container` instance, and a binding of `server` instances that omits the key with two repository bindings.
+- A test covers a removal of an instance from `worker_instances`. It asserts that no registration ends in the write, that the `binding_version` of the removed and the kept `worker` instances increases, and that a server instance keeps running.
+- A test covers a removal, a removal by omission and a revision to `worker_instances: []` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.

@@ -42,11 +42,11 @@ The origin of the environment of a repository binding. The source is a closed se
 
 ## environment target
 
-The place where the slots of a repository binding run their commands. The target is a closed set.
+The place where the worker instances of a repository binding run their commands. The target is a closed set.
 
-- **image**: A worker binding at the `container` placement names the repository binding. The Onboarding component builds an image.
+- **image**: A worker binding that lists a `container` instance names the repository binding. The Onboarding component builds an image.
 - **host**: The server host runs the commands. The Onboarding component builds no image and proves on the server host.
-- **remote**: Only worker bindings at the `worker` placement serve the project. The Onboarding component runs no proof, and the first execution proves the environment.
+- **remote**: Every listed instance of the project is at the `worker` placement, or only external harnesses serve the project. The Onboarding component runs no proof, and the first execution proves the environment.
 
 ## environment status
 
@@ -131,7 +131,6 @@ Project `atlas` holds four worker bindings.
 ```yaml
 name: macos-coder
 worker: coder@1
-placement: worker
 worker_instances:
   - mac-coder-1
   - mac-coder-2
@@ -255,7 +254,7 @@ The record of the operation names the execution identity.
 
 ## client identity
 
-The identity under which one worker instance, or one program of an external harness, registers under one worker binding. `kanthord auth jwt generate` generates it inside the machine JWT of an external harness. The server derives it for a pool slot and for a worker instance at the `worker` placement. It holds no secret. It is never reused, and it never moves to another worker binding.
+The identity under which one worker instance, or one program of an external harness, registers under one worker binding. `kanthord auth jwt generate` generates it inside the machine JWT of an external harness. The server derives it for a worker instance at every placement. It holds no secret. It is never reused, and it never moves to another worker binding.
 
 `ulrich` generates a machine JWT for worker binding `claude-main` of `claude-code@1` with `--project project_01K5ZN4M6Q8R0S2T4V6W8X0Y2Z --binding claude-main` and the name `Claude Code on ulrich-mbp`, and the command generates the client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` inside it.
 The program of `claude-code` presents that JWT, and the protected facility resolves the client identity to the worker binding `claude-main` and to its project.
