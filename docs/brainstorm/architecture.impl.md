@@ -1370,6 +1370,8 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - An act row shows the act label, `by a human`, and the time. `Show reason` reads its `reason` text through `tracking.text.get`.
 - An act with a link to an execution offers `Open trace` of that execution.
 - A depth-2 row of another span shows the label of [the span tree](#the-span-tree) of the trace page and its duration.
+- A depth-2 span with a start and no end shows `running` while its root span holds no end, or while the loaded pages hold no root span.
+- A depth-2 span with no end under a root span with an end shows `No end recorded` and no duration.
 - A root span of a loaded page can hold no end. While the page is visible in that case, it reads its loaded pages again every 5 seconds.
 - Otherwise the page reads once.
 - The node sheet offers `Timeline`, which opens `/timeline?node_id=<node id>`.
