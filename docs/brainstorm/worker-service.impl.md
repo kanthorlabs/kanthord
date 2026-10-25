@@ -836,7 +836,10 @@ Tests of the slot driver:
 - The container and its volume take the name `kanthord_slot_<client_id>`. Both carry the labels `io.kanthord.owner=<owner>` and `io.kanthord.client_id=<client_id>`.
 - `prepare()` runs `<runtime> ps --all --filter label=io.kanthord.owner=<owner> --format '{{.Names}}'`, then `<runtime> rm --force <name>` for each name.
 - `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes. The start sweep of [Isolation of a thread slot](#isolation-of-a-thread-slot) removes the volume of a removed binding.
-- Each launch first runs `<runtime> rm --force kanthord_slot_<client_id>`. An answer that holds "no such container", in any case, counts as success.
+- Each launch first runs `<runtime> rm --force kanthord_slot_<client_id>`.
+- A `rm --force` of `prepare()` or of a launch counts as success when it succeeds or answers "no such container", in any case.
+- When `rm --force` fails otherwise, the driver runs `<runtime> container inspect --format '{{.Id}}' <name>`. A failed inspect that answers "no such container" counts as success.
+- Every other inspect answer fails the removal with the error output of `rm --force`.
 - The removal of the slot volume of a removed binding is a [HANDOFF](HANDOFF.md#worker-service) item.
 
 ### The slot volume
