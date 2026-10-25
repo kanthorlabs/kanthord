@@ -279,7 +279,7 @@ Each write follows the commit of the transaction that changes the execution row.
 
 - The root start holds `kanthord.execution.kind`: `steps` for a claim that moves the node to `Executing`, and `evaluation` for a claim that moves it to `Evaluating`.
 - The root start holds `kanthord.worker.name`, the worker name of the claiming worker binding. The trace row takes its `worker_name` from it.
-- The root start holds `kanthord.queue.wait_ms`: the claim time minus `queued_at` of the claimed job. The wait includes a backoff of `available_at`.
+- The root start holds `kanthord.queue.wait_ms`: the claim time minus `queued_at` of the claimed job, and at least 0. The wait includes a backoff of `available_at`.
 - A job keeps the identity of the first job of its node. The time of that identity is not the time of the enqueue.
 - A new claim writes the root start. A work pull that answers an existing claim writes no root start.
 - The Scheduler ends the root span of every execution that it ends. `kanthord.execution.end` holds one of three values:

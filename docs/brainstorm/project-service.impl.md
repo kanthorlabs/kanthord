@@ -462,6 +462,11 @@ The component computes the status of a group in this order. The first rule that 
 - A check that ends with another exit code other than 0 joins the red baseline, and the proof passes.
 - At the `image` target, the proof starts one container of `<tag>` with the flags of a slot: uid 10001, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, a `tmpfs` at `/tmp`, the owner label, and a new volume at `/var/lib/kanthord`. The container idles under `tini`.
 - The host feeds the base-branch head into the container as a git bundle on standard input, and the container clones it into its home. Each command runs through `<runtime> exec`. The run removes the container and the volume at its end.
+- The container removal follows the rules of [names, labels and stale containers](worker-service.impl.md#names-labels-and-stale-containers).
+- At the `image` target, a failed step of the proof fails the proof with `worker.pool.environment_proof_failed` and the class `setup_failed`.
+- The steps are `volume`, `cache volume`, `start`, `bundle`, `clone`, `remove container` and `remove volume`.
+- The message is `The environment proof failed at <step>: <message>`. `<message>` is the trimmed last 4096 bytes of the step output. A runtime command step gives its error output.
+- A step with blank output gives the message `The environment proof failed at <step>.`. The message becomes `tail` of the proof file.
 - At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a thread slot of the `server` placement gives its commands.
 - The proof runs no agent and spends no LLM budget.
 
@@ -577,10 +582,13 @@ The component computes the status of a group in this order. The first rule that 
 
 ### The cache volume
 
-- Each group at the `image` target holds one volume `kanthord_cache_<id>`, with `<id>` derived from the owner, the project and the resource identity. It carries the owner label.
+- Each group at the `image` target holds one volume `kanthord_cache_<id>`, with `<id>` derived from the owner, the project and the resource identity. It carries the owner label, `io.kanthord.cache_project=<project_id>` and `io.kanthord.cache_resource=<resource_identity>`.
 - Each slot of a worker binding that names the group and each proof container mount it at `/var/lib/kanthord/.cache`.
 - The KanthorD layer writes `npm_config_cache`, `npm_config_store_dir`, `PIP_CACHE_DIR`, `GOMODCACHE` and `CARGO_HOME` below that path into `ENV`, unless the document sets the variable.
 - The volume key is the group and not the digest, so a new digest keeps the cache warm. Garbage collection removes the volume of a group that no current binding holds.
+- Garbage collection lists the names with `<runtime> volume ls --filter label=io.kanthord.owner=<owner> --filter label=io.kanthord.cache_project --format '{{.Name}}'`.
+- It then reads the labels of all listed volumes from the JSON output of one `<runtime> volume inspect <name>...`. An empty list runs no inspect.
+- A volume without a nonempty `io.kanthord.cache_project` or `io.kanthord.cache_resource` label stays.
 
 ### The limits of a run
 
@@ -625,25 +633,26 @@ The first layer of the build builds the image at the slot start, before the Onbo
 
 ### The error codes of an environment
 
-| HTTP | Code                                                     | Condition                                                                                                                                   |
-| ---- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400  | `project.environment.invalid`                            | The environment document is no JSON object or holds a wrong type.                                                                           |
-| 400  | `project.environment.key_refused`                        | The environment document holds a refused key, a server variable or a path that leaves the checkout.                                         |
-| log  | `project.environment.key_refused`                        | Before the Onboarding component: a repository devcontainer file of a slot start holds a refused key.                                        |
-| 400  | `project.bindings.worker.environment_required`           | A worker binding at the `container` placement omits `environment`, and the project holds two repository bindings or more.                   |
-| 400  | `project.bindings.worker.environment_unknown`            | `environment` names no repository binding of the submitted set.                                                                             |
-| 400  | `project.bindings.worker.field_forbidden`                | A worker binding at another placement holds `environment`.                                                                                  |
-| 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                                     |
-| log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                                          |
-| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                                   |
-| log  | `project.onboarding.run_started`                         | A run of a group starts. It names the binding, the digest and the target.                                                                   |
-| log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                                         |
-| log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`. |
-| log  | `project.onboarding.cache_collection_failed`             | The list or the removal of a cache volume fails. A removal names the project and the resource identity.                                     |
-| log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.     |
-| log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                 |
-| 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                    |
-| 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                   |
+| HTTP | Code                                                     | Condition                                                                                                                                               |
+| ---- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `project.environment.invalid`                            | The environment document is no JSON object or holds a wrong type.                                                                                       |
+| 400  | `project.environment.key_refused`                        | The environment document holds a refused key, a server variable or a path that leaves the checkout.                                                     |
+| log  | `project.environment.key_refused`                        | Before the Onboarding component: a repository devcontainer file of a slot start holds a refused key.                                                    |
+| 400  | `project.bindings.worker.environment_required`           | A worker binding at the `container` placement omits `environment`, and the project holds two repository bindings or more.                               |
+| 400  | `project.bindings.worker.environment_unknown`            | `environment` names no repository binding of the submitted set.                                                                                         |
+| 400  | `project.bindings.worker.field_forbidden`                | A worker binding at another placement holds `environment`.                                                                                              |
+| 400  | `project.bindings.repository.environment_secret_invalid` | An `environment_secrets` entry names an absent, archived or foreign credential, or an invalid variable.                                                 |
+| log  | `project.environment.ambiguous`                          | Before the Onboarding component: two repository bindings of the project hold a stored environment.                                                      |
+| log  | `worker.pool.environment_image_failed`                   | Before the Onboarding component: the build of a slot image failed with `build_failed` or `image_invalid`.                                               |
+| log  | `project.onboarding.run_started`                         | A run of a group starts. It names the binding, the digest and the target.                                                                               |
+| log  | `project.onboarding.run_ended`                           | A run ends. It names the binding, the digest, the target, the status and the class.                                                                     |
+| log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`.             |
+| log  | `project.onboarding.cache_collection_failed`             | The list, the inspect or the removal of a cache volume fails. A removal names the project and the resource identity.                                    |
+| log  | `worker.pool.environment_proof_failed`                   | A step of the proof at the `image` target fails. The record of `project.onboarding.run_failed` carries it in `err`, and the run records `setup_failed`. |
+| log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.                 |
+| log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                             |
+| 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                                |
+| 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                               |
 
 ## The client identity
 

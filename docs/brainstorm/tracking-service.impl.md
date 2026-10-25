@@ -57,6 +57,7 @@ A refused or failed write counts as a drop and raises no error.
 The Scheduler Service writes the root span and the [transition span](scheduler-service.impl.md#the-execution-trace) with the producer `scheduler`.
 The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) with the producer `mission`.
 It writes the [act trace](mission-service.impl.md#the-act-trace) of each human act on a node with the same producer.
+The Project Service writes the [environment trace](project-service.impl.md#the-environment-trace) with the producer `project`.
 
 ## Primary store
 
@@ -178,15 +179,20 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - `tracking.trace.list` answers one page of trace summaries, newest first by default. It filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type` and `q`.
 - `tracking.trace.list` also filters by the time range `from` and `to`, by [the overlap rule](#the-timeline-read) of the timeline read.
 - Every time range filter of the Tracking Service is named `from` and `to`, and it selects the traces by that overlap rule.
-  It also filters by a range of `started_at`, and by a minimum and a maximum of `duration_ms`, `total_tokens` and `cost_usd`.
+- `tracking.trace.list` also filters by a minimum and a maximum of `duration_ms`, `total_tokens` and `cost_usd`.
+  A trace with no `duration_ms` fails `min_duration_ms` and `max_duration_ms`.
 - `q` matches a case-insensitive substring of the trace, execution and node identities.
   It also matches the worker name, an agent name, a model, an error type and the stop reason.
 - `sort` takes `started_at`, `duration_ms`, `total_tokens` or `cost_usd`, always in descending order. The cursor holds the sort value and the row position.
+- Equal sort values follow the creation order of the trace in descending order. Under `started_at`, a trace with no start sorts by its creation time.
+- An open trace sorts last under `duration_ms`.
+- A cursor of another sort answers 400 `system.pagination.cursor_invalid`.
 - The list scans `tracking_trace`. The retention bounds that table, and no index other than a unique index exists.
 - `tracking.facet.get` answers the distinct worker names, agent names, models and error types, at most 200 values each.
   `project_id` limits it to the traces of one project.
 - `tracking.span.list` answers the spans of a trace in the order of their admission.
 - `tracking.session.entry.list` answers the entries of one session in the order of `sequence`. `tool_call_id` filters it to the result of one tool call.
+- `limit` takes 1 to 1000. It defaults to 100 for `tracking.trace.list` and `tracking.session.entry.list`, and to 500 for `tracking.span.list`.
 - `tracking.session.entry.get` answers one entry. An entry that the trace does not hold answers 404 `tracking.entry.not_found`.
 - A reader of an open trace reads the span list again and reads the entry list after its last cursor. The dashboard reads every 5 seconds while the trace is `open`.
 - A reader renders a span with a parent that the store does not hold at the top level, marked "parent not stored".
@@ -238,6 +244,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `tracking.analytics.cost` uses `GET /api/tracking/analytics/cost`, and `tracking.analytics.duration` uses `GET /api/tracking/analytics/duration`. Both have `human` access.
 - `to` defaults to the time of the read. `from` defaults to 7 days before `to`.
 - A range of more than 31 days answers 400 `tracking.analytics.range_invalid`. A `from` after `to` answers the same code.
+- The range check applies the default of a missing `from` or `to` first.
 - The read selects the traces whose window overlaps the range, by the rule of [the timeline read](#the-timeline-read). `project_id` and `node_id` filter the selected traces.
 - The read counts each span of a selected trace whose `start_time` lies from `from` to `to`, both inclusive.
 - The read takes the identities of the selected traces in one read transaction.
@@ -246,7 +253,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - The service yields to the event loop between two steps. A write that commits between two steps can show in a later step.
 - A cancelled request stops the read between two steps.
 - The service builds the groups and the percentiles in memory from the span rows and their trace rows.
-- `bucket` takes `none`, `hour`, `day` or `week`, and it defaults to `day`.
+- `bucket` takes `none`, `hour`, `day` or `week`. It defaults to `day` for the cost read and to `none` for the duration read.
 - A bucket starts on a UTC boundary of its size, and a week starts on Monday at 00:00 UTC. A span counts in the bucket of its `start_time`.
 - `bucket_start` holds the start of the bucket in Unix milliseconds, or null for `none`.
 - `worker_name`, `node_id` and `project_id` come from the trace row, and `operation` comes from the span row.
@@ -271,6 +278,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
   - `review_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `evaluation`.
   - `revision_turns`: one value for each node attempt with a `scheduler.execution` root span in the range.
+- Every measure other than `span_duration` ignores `operation`.
 - The value of `revision_turns` is the count of the `scheduler.transition` spans of the attempt from `Evaluating` to `Available` in the range.
 - The range cuts an attempt: a transition outside the range does not count.
 - The start of the first root span of the attempt in the range sets its bucket. The trace row of that root span sets its group fields.
@@ -294,6 +302,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `tracking.text.get` checks the trace first. A text of a deleted or unknown trace answers 404 `tracking.trace.not_found`. A text that a held trace does not hold answers 404 `tracking.text.not_found`.
 - A late record reuses the predicate of the sweep and needs no tombstone. The time of an execution identity is the time of its ULID. When that time is older than the retention, `tracking.telemetry.write` refuses every record with `trace_expired` and opens no trace row.
 - `serverSpan` drops a span of such an execution and counts the drop.
+- `serverTraceSpan` drops a span when `created_at` of its trace is older than the retention, and counts the drop.
 
 ## Configuration
 

@@ -125,7 +125,7 @@ The catalog holds one prompt declaration for `swe@1`, and `coder@1` references t
 The task message that a consumer sends to an agent session. The node revision that the attempt pins owns it.
 It belongs to no prompt part.
 The term names no closed set.
-The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
+The work prompt of task "Add reset token expiry" first states the name, the requirement and the criterion of its node as context. It then states the requirement, the criterion and the verifications of the task.
 
 ## prompt composer
 
