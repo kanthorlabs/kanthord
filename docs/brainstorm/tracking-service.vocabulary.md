@@ -140,8 +140,9 @@ The trace of a running execution of `Add password reset` is `open`.
 ## timeline
 
 A timeline is one ordered history of the stored traces of an execution, a node or a project.
-It orders the traces of its scope by their start, and it holds the root span of each trace and the spans directly below that root.
-The timeline of the node `Add password reset` holds each execution, each settlement and each human act on that node.
+It orders the traces of its scope by their start.
+It holds the root span of each trace and the spans directly below that root.
+The timeline of the node `Add password reset` holds each execution, each transition and each human act on that node.
 
 ## analytics
 

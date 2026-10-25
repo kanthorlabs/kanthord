@@ -1233,7 +1233,9 @@ The rules of the credential sections follow.
 - The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
 - The sidebar item `Workers` of the group `Workforce` opens `/workers`. The worker page `/workers/:workerName` and the instance page `/workers/:workerName/instances/:instanceName` sit under it. Each name in the path is URL-encoded, as on `/agents/:agentName`. [The worker pages](#the-worker-pages) hold the rules.
 - The sidebar item `Traces` of the group `Work` opens `/traces`, after `Scheduler`. The trace page `/traces/:traceId` sits under it. [The trace pages](#the-trace-pages) hold the rules.
-- The sidebar item `Timeline` of the group `Work` opens `/timeline`, after `Traces`. The sidebar item `Analytics` of the group `Work` opens `/analytics`, after `Timeline`. [The timeline page](#the-timeline-page) and [the analytics page](#the-analytics-page) hold the rules.
+- The sidebar item `Timeline` of the group `Work` opens `/timeline`, after `Traces`.
+- The sidebar item `Analytics` of the group `Work` opens `/analytics`, after `Timeline`.
+- [The timeline page](#the-timeline-page) and [the analytics page](#the-analytics-page) hold the rules of the two pages.
 - The sign-in screens call a saved KanthorD address a server, for example `Saved servers` and `Sign in to a KanthorD server`. The word instance names only a worker instance on the screen.
 
 ## The worker pages
@@ -1307,7 +1309,8 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The children of a span follow their start time. A span with a parent that the store does not hold sits at the top level with the note "parent not stored".
 - The labels are `Execution`, `Phase <phase>`, `Task <task id>`, `Verification <index>`, `Judgement`, `Evaluation` and `Git <step>`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
-  `scheduler.settlement` shows `Settlement <from state> -> <to state>`. The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
+  `scheduler.transition` shows `Transition <from state> -> <to state>`.
+  The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
 - The controls are a search field over the labels and the attribute values, and an `Errors only` toggle.
   The toggle group `All`, `Agent`, `Tools`, `Checks` and `Git` follows them. `Expand all` and `Collapse all` follow them.
 - `Errors only` keeps each error span and its ancestors. The search keeps each match and its ancestors.
@@ -1339,29 +1342,54 @@ The trace pages show what an execution did, so that a human can debug and optimi
 
 ### The timeline page
 
-- `/timeline` shows the [timeline](tracking-service.vocabulary.md#timeline) of one project or one node from `tracking.timeline.list` with depth 2. The query string holds `project_id` or `node_id`, and the time range.
-- The toolbar holds the project select and the time range. A node scope shows the node name with a link to the node and a `Show project` action instead of the select. `/timeline` with no scope selects the first project in name order.
-- The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The project scope defaults to `Last 24 hours`, and the node scope defaults to `All time`.
-- The page lists the traces in ascending order of their start. Each root span is one group row, and the depth-2 spans of its trace follow it, indented, in time order. A depth-2 item whose trace holds no stored root span shows under a group row of its trace marked "root not stored". `Load more` reads the next page through the cursor, and the items of a trace that the previous page cut join its group.
-- An execution row shows the node name in the project scope, `Execution` with the attempt and the kind `steps` or `evaluation` from `kanthord.execution.kind`, the worker from `worker_name` of the item, the start, the duration, the state badge and the stop reason badge. It offers `Open trace`, which opens `/traces/<trace_id>`.
-- A settlement row shows `Settlement <from state> -> <to state>`. A settlement with a rule shows "Paused at the failure limit: <count> of <limit>", "Paused at the further work limit: <count> of <limit>" or "Blocked at the rework limit: <count> of <limit>".
-- An act row shows the act label, `by a human`, and the time. `Show reason` reads its `reason` text through `tracking.text.get`. An act with a link to an execution offers `Open trace` of that execution.
+- `/timeline` shows the [timeline](tracking-service.vocabulary.md#timeline) of one project or one node from `tracking.timeline.list` with depth 2.
+- The query string holds `project_id` or `node_id`, and the time range.
+- The toolbar holds the project select and the time range. `/timeline` with no scope selects the first project in name order.
+- A node scope shows the node name with a link to the node and a `Show project` action instead of the select.
+- The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`.
+- The project scope defaults to `Last 24 hours`, and the node scope defaults to `All time`.
+- The page lists the traces in ascending order of their start. Each root span is one group row.
+- The depth-2 spans of a trace follow its group row, indented, in time order.
+- A depth-2 item whose trace holds no stored root span shows under a group row of its trace marked "root not stored".
+- `Load more` shows while `next_cursor` is not null, also after a page with no item. It reads the next page through the cursor.
+- The items of a trace that the previous page cut join its group.
+- An execution row shows `Execution` with the attempt and the kind `steps` or `evaluation` from `kanthord.execution.kind`. In the project scope, it also shows the node name.
+- An execution row shows the worker from `worker_name` of the item, the start, the duration, the state badge and the stop reason badge.
+- An execution row offers `Open trace`, which opens `/traces/<trace_id>`.
+- A transition row shows `Transition <from state> -> <to state>`. A transition with a rule shows one of three texts:
+  - "Paused at the failure limit: <count> of <limit>";
+  - "Paused at the further work limit: <count> of <limit>";
+  - "Blocked at the rework limit: <count> of <limit>".
+- An act row shows the act label, `by a human`, and the time. `Show reason` reads its `reason` text through `tracking.text.get`.
+- An act with a link to an execution offers `Open trace` of that execution.
 - A depth-2 row of another span shows the label of [the span tree](#the-span-tree) of the trace page and its duration.
-- While the page is visible and a root span of a loaded page has no end, the page reads its loaded pages again every 5 seconds. Otherwise it reads once.
-- The node sheet offers `Timeline`, which opens `/timeline?node_id=<node id>`. The project page header offers `Timeline`, which opens `/timeline?project_id=<project id>`.
+- A root span of a loaded page can hold no end. While the page is visible in that case, it reads its loaded pages again every 5 seconds.
+- Otherwise the page reads once.
+- The node sheet offers `Timeline`, which opens `/timeline?node_id=<node id>`.
+- The project page header offers `Timeline`, which opens `/timeline?project_id=<project id>`.
 - The empty text reads "No history in this range." A read failure shows the error and `Retry`.
 
 ### The analytics page
 
 - `/analytics` shows the [analytics](tracking-service.vocabulary.md#analytics) of the stored spans from `tracking.analytics.cost` and `tracking.analytics.duration`.
-- The toolbar holds the project filter with `All projects` first, the time range and the bucket. The time range offers `Last 24 hours`, `Last 7 days` and `Last 30 days`, with `Last 7 days` as the default. The bucket offers `Hour`, `Day` and `Week`, with `Day` as the default. The query string holds every value.
-- The `Cost` section holds the group select `Model`, `Agent`, `Provider`, `Worker`, `Node` and `Project`. It shows the totals of the range from a read with `group_by=none&bucket=none`, one row for each group and one row for each bucket. A row shows the turns, the input, output and cached tokens, `Est. cost` and a bar of its cost against the largest row.
-- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait` and `Revision turns`, and the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`. A row shows the count, p50, p90, p99 and max, and one bar from 0 to the largest max with marks at p50, p90 and p99.
+- The toolbar holds the project filter with `All projects` first, the time range and the bucket. The query string holds every value.
+- The time range offers `Last 24 hours`, `Last 7 days` and `Last 30 days`, with `Last 7 days` as the default.
+- The bucket offers `Hour`, `Day` and `Week`, with `Day` as the default.
+- The `Cost` section holds the group select `Model`, `Agent`, `Provider`, `Worker`, `Node` and `Project`.
+- The `Cost` section shows the totals of the range from a read with `group_by=none&bucket=none`.
+- The `Cost` section shows one row for each group and one row for each bucket.
+- A cost row shows the turns, the input, output and cached tokens, `Est. cost` and a bar of its cost against the largest row.
+- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait` and `Revision turns`.
+- The `Time` section holds the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`.
+- A time row shows the count, p50, p90, p99 and max.
+- A time row shows one bar from 0 to the largest max, with marks at p50, p90 and p99.
 - A group row of a node shows the node name, and a group row of a project shows the project name.
 - A section reads at the page load and at each change of a filter. `Refresh` reads again. The page reads nothing on a timer.
 - A read with `truncated: true` shows "The range holds more groups. Narrow the range or the filter."
-- The cost bar is the shadcn `Progress` primitive. The percentile bar of the `Time` section is a `Progress` from 0 to the largest max with three marks in the theme tokens. The text of each row repeats each value, so a bar holds no information alone.
-- The page uses no chart library, because a chart adds no fact to the rows that each bucket and each group already show.
+- The cost bar is the shadcn `Progress` primitive.
+- The percentile bar of the `Time` section is a `Progress` from 0 to the largest max with three marks in the theme tokens.
+- The text of each row repeats each value, so a bar holds no information alone.
+- The page uses no chart library.
 - The empty text of a section reads "No spans in this range." A read failure shows the error and `Retry`.
 
 ### The trace links of other pages
