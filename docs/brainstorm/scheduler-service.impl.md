@@ -289,6 +289,8 @@ Each write follows the commit of the transaction that changes the execution row.
 - A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, and `human` for a human act.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
+- A revoked trace keeps `stop_reason` null, because no stop reason exists. `kanthord.execution.end` holds `revoked`.
+- The timeline and the span detail show "Revoked by a human" for a revocation with the cause `human`.
 - A release, a loss and a revocation with the cause `assessment` each write one `scheduler.transition` span. It is a child of the root span, with the record identity `<root_span_id>:transition`.
 - A revocation with the cause `human` writes the root end only. The [act trace](mission-service.impl.md#the-act-trace) of the Mission Service holds that transition.
 - The start and the end of a transition span are the time of the transition, and its status is `Ok`.

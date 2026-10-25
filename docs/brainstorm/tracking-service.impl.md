@@ -176,6 +176,8 @@ The row of `tracking_trace` holds the summary columns of the trace.
 
 - `tracking.trace.get` answers the trace summary.
 - `tracking.trace.list` answers one page of trace summaries, newest first by default. It filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type` and `q`.
+- `tracking.trace.list` also filters by the time range `from` and `to`, by [the overlap rule](#the-timeline-read) of the timeline read.
+- Every time range filter of the Tracking Service is named `from` and `to`, and it selects the traces by that overlap rule.
   It also filters by a range of `started_at`, and by a minimum and a maximum of `duration_ms`, `total_tokens` and `cost_usd`.
 - `q` matches a case-insensitive substring of the trace, execution and node identities.
   It also matches the worker name, an agent name, a model, an error type and the stop reason.
@@ -197,8 +199,8 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - The scope selects every trace whose row names that execution, that node or that project.
 - The traces of a node hold its executions and the [act traces](mission-service.impl.md#the-act-trace) of its human acts.
 - The start of a trace is `started_at` of its row, else `created_at`. The window of a trace runs from its start to `ended_at`, or stays open with no `ended_at`.
-- `window_from` and `window_to` bound the range of the read in Unix milliseconds. The read selects each trace whose window overlaps the range.
-- A trace overlaps the range when it starts at or before `window_to`, and it ends at or after `window_from` or holds no `ended_at`. A missing bound leaves that side open.
+- `from` and `to` bound the range of the read in Unix milliseconds. The read selects each trace whose window overlaps the range.
+- A trace overlaps the range when it starts at or before `to`, and it ends at or after `from` or holds no `ended_at`. A missing bound leaves that side open.
 - `depth` takes `1` or `2`, and it defaults to `2`. Depth 1 answers the root span of each selected trace.
 - Depth 2 also answers each span whose parent is the root span of its trace.
 - A depth-2 span is in the answer also when the store holds no row of its root span.
@@ -227,17 +229,17 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - A page can hold fewer than `limit` items, or no item, and still hold a `next_cursor`. A reader reads on until `next_cursor` is null.
 - A cursor of another form answers 400 `system.pagination.cursor_invalid`.
 - The CLI command is `kanthord tracking timeline list`. It takes exactly one of `--execution <execution-id>`, `--node <node-id>` and `--project <project-id>`.
-- It also takes `--depth`, `--from <unix-ms>`, `--to <unix-ms>`, `--limit` and `--cursor`. `--from` and `--to` set `window_from` and `window_to`.
+- It also takes `--depth`, `--from <unix-ms>`, `--to <unix-ms>`, `--limit` and `--cursor`. `--from` and `--to` set `from` and `to`.
 
 ## The analytics reads
 
 The analytics reads add up the measurements of the stored spans. They derive no measurement of an operation. A duration is the difference of the two times that the producer of a span set.
 
 - `tracking.analytics.cost` uses `GET /api/tracking/analytics/cost`, and `tracking.analytics.duration` uses `GET /api/tracking/analytics/duration`. Both have `human` access.
-- `window_to` defaults to the time of the read. `window_from` defaults to 7 days before `window_to`.
-- A range of more than 31 days answers 400 `tracking.analytics.range_invalid`. A `window_from` after `window_to` answers the same code.
+- `to` defaults to the time of the read. `from` defaults to 7 days before `to`.
+- A range of more than 31 days answers 400 `tracking.analytics.range_invalid`. A `from` after `to` answers the same code.
 - The read selects the traces whose window overlaps the range, by the rule of [the timeline read](#the-timeline-read). `project_id` and `node_id` filter the selected traces.
-- The read counts each span of a selected trace whose `start_time` lies from `window_from` to `window_to`, both inclusive.
+- The read counts each span of a selected trace whose `start_time` lies from `from` to `to`, both inclusive.
 - The read takes the identities of the selected traces in one read transaction.
 - It then reads their spans in steps of at most 100 traces, through the primary key of `tracking_span`.
 - Each step runs in its own read transaction.
@@ -277,7 +279,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - A percentile `p` of `n` sorted values `x[0]` to `x[n - 1]` is `x[k] + (h - k) * (x[k + 1] - x[k])`.
 - In that formula, `h = (n - 1) * p` and `k` is the integer part of `h`. The percentile is `x[n - 1]` when `k` is `n - 1`.
 - The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`.
-- `--project <project-id>` and `--node <node-id>` set `project_id` and `node_id`. `--from <unix-ms>` and `--to <unix-ms>` set `window_from` and `window_to`.
+- `--project <project-id>` and `--node <node-id>` set `project_id` and `node_id`. `--from <unix-ms>` and `--to <unix-ms>` set `from` and `to`.
 - `--bucket`, `--group-by`, `--measure` and `--operation` set the field of their name.
 
 ## Retention
@@ -307,10 +309,10 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.retention_days` defaults to 30. A sweep runs at the start and every hour, with at most 20 rows in each transaction and 50 transactions in one sweep.
 - RULED 2026-10-22 under the delegation of Ulrich. The entry bound is 61440 bytes, and the cut limits are 4096, 1024 and 256 characters.
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.facet.get` answers at most 200 values for each facet. The dashboard reads an open trace again every 5 seconds.
-- DECIDED 2026-10-25 by Aelita, pending Ulrich. The timeline read answers depth 1 or 2 across traces in the order of the trace start, at most 1000 items, 500 by default.
-- DECIDED 2026-10-25 by Aelita, pending Ulrich. The analytics reads select the traces whose window overlaps the range, and they read their spans in steps of at most 100 traces.
-- DECIDED 2026-10-25 by Aelita, pending Ulrich. The analytics reads answer at most 1000 items, and they take a range of 7 days by default and 31 days at most.
-- DECIDED 2026-10-25 by Aelita, pending Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
+- RULED 2026-10-25 by Ulrich. The timeline read answers depth 1 or 2 across traces in the order of the trace start, at most 1000 items, 500 by default.
+- RULED 2026-10-25 by Ulrich. The analytics reads select the traces whose window overlaps the range, count only the spans that start inside it, and read their spans in steps of at most 100 traces.
+- RULED 2026-10-25 by Ulrich. The analytics reads answer at most 1000 items, and they take a range of 7 days by default and 31 days at most.
+- RULED 2026-10-25 by Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
 
 ## Capture and packaging
 

@@ -1311,6 +1311,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
   `scheduler.transition` shows `Transition <from state> -> <to state>`.
   The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
+- The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`.
 - The controls are a search field over the labels and the attribute values, and an `Errors only` toggle.
   The toggle group `All`, `Agent`, `Tools`, `Checks` and `Git` follows them. `Expand all` and `Collapse all` follow them.
 - `Errors only` keeps each error span and its ancestors. The search keeps each match and its ancestors.
@@ -1355,6 +1356,7 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The items of a trace that the previous page cut join its group.
 - An execution row shows `Execution` with the attempt and the kind `steps` or `evaluation` from `kanthord.execution.kind`. In the project scope, it also shows the node name.
 - An execution row shows the worker from `worker_name` of the item, the start, the duration, the state badge and the stop reason badge.
+- A revoked execution row shows "Revoked by a human" or "Revoked by a review" in place of the stop reason badge.
 - An execution row offers `Open trace`, which opens `/traces/<trace_id>`.
 - A transition row shows `Transition <from state> -> <to state>`. A transition with a rule shows one of three texts:
   - "Paused at the failure limit: <count> of <limit>";
