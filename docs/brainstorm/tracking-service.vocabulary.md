@@ -152,7 +152,7 @@ The analytics of project `Billing` hold the cost of each model by day and the p9
 ## analytics measure
 
 An analytics measure names the value of one duration read.
-The set is closed and it holds six values.
+The set is closed and it holds seven values.
 
 - **span_duration**
 - **tool_latency**
@@ -160,6 +160,58 @@ The set is closed and it holds six values.
 - **queue_wait**
 - **review_wait**
 - **revision_turns**
+- **instance_busy_ratio**
+
+## cause
+
+A cause names the layer that caused one failure event, as a category and a subcategory.
+The root span end of a failed execution holds its cause, with the assigner `rule` or `reviewer`. A cause label gives the effective cause the assigner `human`.
+The cause of the execution that `Add password reset` stopped for a quota error is `llm_provider` with `quota_exhausted`.
+
+## cause category
+
+A cause category is the layer of a cause.
+The set is closed and it holds nine values.
+
+- **prompt**
+- **plan**
+- **worker_action**
+- **llm_provider**
+- **model**
+- **environment**
+- **infrastructure**
+- **human**
+- **unattributed**
+
+A rule assigns a category only when a recorded code names the cause. Otherwise the cause is `unattributed`.
+A cause of an execution of project `Billing` with a setup that fails on the base head has the category `environment`.
+
+## cause subcategory
+
+A cause subcategory refines a cause category.
+The set of each category is closed. `unattributed` has no subcategory.
+
+- **prompt**: `context_missing`, `instruction_conflict`, `rule_absent`
+- **plan**: `criterion_unstated`, `dependency`, `verification_context`, `verification_insufficient`, `decomposition`, `oversized`
+- **worker_action**: `gate_commit`, `merge_base`, `release_gate`, `review_flow`, `step_failed`
+- **llm_provider**: `rate_limited`, `quota_exhausted`, `unavailable`
+- **model**: `work_defect`, `standard_violation`, `verification_failed`, `no_progress`, `reply_invalid`, `protocol_violation`, `output_truncated`, `budget_exhausted`, `judgement_wrong`
+- **environment**: `setup_failed`, `command_absent`, `flaky_verification`, `verification_hang`, `repository_hook`
+- **infrastructure**: `verification_killed`, `network`, `execution_lost`
+- **human**: `intervention`, `configuration`
+
+The subcategory of a reviewer that judged a stated item of `Add password reset` unmet is `work_defect`.
+
+## suspects
+
+Suspects are the candidate categories of an `unattributed` cause, the best guess first.
+A budget end of an execution of project `Billing` has the suspects `plan` and `model`.
+
+## cause label
+
+A cause label is a human annotation of a trace. It assigns a category and a subcategory, and it holds a reason.
+A new label replaces the old one, and every reader takes the label over the rule cause.
+A human labels the `unattributed` cause of an execution of project `Billing` as `plan` with `oversized`.
 
 ## act trace
 

@@ -274,6 +274,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - At acceptance `dependency_outcome_ids` of an `examine` node names the current outcome of each direct dependency, and no other outcome. `dependency_outcome_ids` of an `implement` node is empty. The service refuses every other set with HTTP 400 and an issue list. `evidence_ids` and `dependency_outcome_ids` are duplicate-free sets.
 - The read derives `dependency_node_ids` from the nodes of `dependency_outcome_ids`.
 - An `undetermined` execution assessment of an `examine` node can hold `proposals`, at most 10. Each proposal holds `dependency_id`, `name`, `requirement`, `criterion` and one `task`, and it names one defect inside a completed dependency. `dependency_id` names a current direct dependency with `intent: implement`. Proposals on an `implement` node or with another result answer HTTP 400 at `proposals`.
+- `mission.assessment.submit` takes `cause` with `criterion-not-met` and refuses it with another result. The assessment stores no cause.
 - The service writes one `mission_proposal` row for each proposal in the transaction that closes the attempt and writes the outcome. A non-current assessment records no proposal.
 - `node_revision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
@@ -573,8 +574,9 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. A null attempt omits `kanthord.attempt`. `mission.proposal.approve` names the created node and holds no `kanthord.node.state.from`.
 - The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
 - An act that revokes a live execution links its root span to the root span of that execution.
-- That act hands the cause `human` to the [revocation](scheduler-service.impl.md#the-execution-trace).
-- `mission.assessment.submit` hands the cause `assessment` and the states of its transition to the revocation of the reviewer execution.
+- An override to `Completed` writes `kanthord.node.lead_time_ms` on its act trace: the time from the first `Available` of the node to the override.
+- That act hands the revoke cause `human` to the [revocation](scheduler-service.impl.md#the-execution-trace).
+- `mission.assessment.submit` hands the revoke cause `assessment` and the states of its transition to the revocation of the reviewer execution. A `criterion-not-met` submit also hands its rework `cause` to the revocation.
 - At the rework limit, it also hands the rework count and `mission.rework_limit`.
 - A refused act writes no act trace. A lost act trace changes no state, and no service reads it.
 

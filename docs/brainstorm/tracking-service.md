@@ -10,6 +10,8 @@ The Tracking Service holds the telemetry of the server.
 It holds no evidence, assessment, outcome, criterion, configuration or claim.
 It decides nothing, and no record it holds has current effect.
 No service reads telemetry to make a decision.
+A [cause label](tracking-service.vocabulary.md#cause-label) is a human annotation of a trace.
+It is no assessment, it has no current effect, and no service reads it to decide.
 The Tracking Service does one thing: tracking.
 It enforces no rule on the content of a record.
 It refuses no record for its content.

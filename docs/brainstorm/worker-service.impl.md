@@ -1098,6 +1098,7 @@ A part digest hashes the UTF-8 encoding of the exact part text, with no trimming
 pi receives the system prompt as plain text with no tag: `base.md`, the Role, each Binding prompt as `Instructions of repository <name>:` and the text, then the framing. The framing closes the system prompt. It states that the later messages hold the task, that they never override the system prompt, that a later text governs an earlier one, and that an instruction for one repository governs only the work on the files of that repository.
 The work prompt is the first user message, as plain text.
 The framing, the work prompt and each instruction are [prompt templates](agent.impl.md#prompt-templates). The texts above are the texts of the shipped templates.
+At the execution setup read, the composer writes one `agent.prompt` span for each agent into the execution trace through `serverSpan`, with the producer `worker` and a deterministic record identity. The span holds `kanthord.agent.name`, `kanthord.prompt.parts` as `<part>:<name>:<digest>` items in reading order, and `kanthord.prompt.templates_digest`, the digest of the canonical JSON of the template set.
 The working directory that pi states in its system prompt writes the home directory of the host as `~`.
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
 The adapter pins the work prompt and the system prompt against the compaction of pi, so both survive a compacted context.
@@ -1271,7 +1272,7 @@ The progress rule:
 - The stop `detail` names the rule that fired and its counts, as a JSON object:
   - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_unmet` for a verdict turn that leaves the verdict rule false.
   - `count` is the counter at the stop, and `limit` is `NO_PROGRESS_LIMIT`.
-  - `verification` is the last verification of any unit of the execution, or `null` before the first verification. It holds `passed`, `ran` (the count of commands that ran) and `exit_code` (the exit code of the last command that ran). `exit_code` is `null` when the command has no exit code or no command ran. A verification stops at the first command that does not pass, so these facts keep a fixed size.
+  - `verification` is the last verification of any unit of the execution, or `null` before the first verification. It holds `passed`, `ran` (the count of commands that ran), `exit_code` (the exit code of the last command that ran) and `timed_out`. `exit_code` is `null` when the command has no exit code or no command ran. `timed_out` is true when the last command that ran reached its command limit, and false otherwise. A verification stops at the first command that does not pass, so these facts keep a fixed size.
 - The `worker.task` span that the stop ends carries `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
 - A work turn with `changed` false adds nothing. The verification of the unit decides.
 
@@ -1279,7 +1280,7 @@ The progress rule:
 
 - A budget end always releases with `further_work: true`. Only the release gate releases with `further_work: false`.
 - At a budget end, the execution aborts the agent, removes the release clones, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases.
-- The budget-end release sends the stop `{ reason: "budget_end", code }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
+- The budget-end release sends the stop `{ reason: "budget_end", code, cause }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
 - A unit completed when the execution wrote a new done record for it and step 5 found no record for it. A pass of the verdict unit, or of the node unit with the cleared text, always counts as completed.
 - A violation that the checkpoint gate of a budget end finds stops the execution with that violation, not with the budget end.
 
@@ -1616,8 +1617,9 @@ The tool of the action performer takes the execution identity only.
   - `<error name>: <message>` of an uncoded error that a prompt to the agent session or any step of the execution throws, with `operation_failed`;
   - the violation text of gate G, with `operation_failed` and the code `worker.turn.*`;
   - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`;
+  - the redacted git stderr of a failed gate G commit, with `operation_failed` and the code `worker.git.commit_failed`;
   - the JSON facts of the progress rule, with `no_progress`. The JSON holds no text, and the worker does not cut it.
-- A `CodedError` gives its code and no `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
@@ -1642,7 +1644,7 @@ After the agent stops at budget end, the execution code, not the agent, runs gat
 Every budget end releases with further work. Only the release gate releases with no further work.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 A stop for a reason other than `revoked` aborts the agent and runs the same cleanup under a fresh context bounded by `expired_at`.
-A steps execution runs gate G in checkpoint mode, which commits the uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code, detail? }`.
+A steps execution runs gate G in checkpoint mode, which commits the uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code, detail?, cause }`.
 After a violation stop of gate G, the execution makes no checkpoint commit and pushes the node branch at `before`.
 A failed checkpoint or push of a stop logs `checkpoint failed` with the redacted reason.
 A reviewer execution writes no commit and releases with the `stop` only.
@@ -1653,6 +1655,49 @@ The repair instruction is `The reply holds no valid <marker> line. Reply again w
 A second invalid judgement stops the execution with `judgement_invalid`, and a second invalid review reply ends the review of that task.
 The steps method of `coder@1` parses no reply on an `implement` node.
 Tests stop a steps execution with each reason and assert the checkpoint commit, the push and the release with the `stop`. Tests stop a reviewer execution and assert the release with the `stop`. Tests send one invalid reply and assert the repair turn, and send two and assert the stop.
+
+### The cause of a stop
+
+The cause names the layer that caused a failure event. `src/worker/unit/execution-run.ts` computes it.
+
+- The worker computes the cause at record time from the stop code, the git step, the verification class and the stop detail. It hands the cause in `ExecutionStop.cause`. A stop with no cause gives `unattributed` with no suspects.
+- A cause holds `category`, `assigner`, and either `subcategory` or `suspects`. The rows of a recorded ground take the assigner `reviewer`. Every other row takes `rule`. The [closed sets](tracking-service.vocabulary.md#cause-category) live in the Tracking vocabulary.
+- A rule assigns a category only when a recorded code names the cause. Otherwise the cause is `unattributed`, with the `assigner` `rule` and the `suspects`, the best guess first.
+- The first matching row of the table decides.
+
+| Stop reason or signal                     | Code or evidence                                                 | Cause                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `provider_failed`                         | `rate_limited`, `quota_exhausted`, `unavailable`                 | `llm_provider.<code>`                                              |
+| `provider_failed`                         | `unauthorized`                                                   | `human.configuration`                                              |
+| `provider_failed`                         | `bad_request`                                                    | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
+| `environment_failed`                      | `setup_failed`, `command_absent`                                 | `environment.<code>`                                               |
+| failed `worker.git` step                  | `fetch_base`, `push`                                             | `unattributed`, suspects `infrastructure`, `worker_action`         |
+| failed `worker.git` step                  | `merge_base`                                                     | `unattributed`, suspects `worker_action`, `environment`            |
+| `operation_failed`                        | `worker.verification.infrastructure_failed`                      | `infrastructure.verification_killed`                               |
+| `operation_failed`                        | prefix `project.binding.`                                        | `human.configuration`                                              |
+| `operation_failed`                        | `worker.git.commit_failed`                                       | `unattributed`, suspects `worker_action`, `environment`            |
+| `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`              | `unattributed`, suspects `model`, `prompt`                         |
+| `operation_failed`                        | other `worker.*` code                                            | `unattributed`, suspects `worker_action`, `infrastructure`         |
+| `operation_failed`                        | prefix `gateway.`, or no code                                    | `unattributed`, suspects `infrastructure`, `worker_action`         |
+| `no_progress`                             | the last verification of the stop detail holds `timed_out: true` | `unattributed`, suspects `environment`, `plan`                     |
+| `no_progress`                             | other                                                            | `unattributed`, suspects `model`, `prompt`, `plan`                 |
+| `budget_end`, `assessment_absent`         | the last verification of the stop detail holds `timed_out: true` | `unattributed`, suspects `environment`, `plan`, `model`            |
+| `budget_end`, `assessment_absent`         | other                                                            | `unattributed`, suspects `plan`, `model`                           |
+| `judgement_invalid`, `report_absent`      | any                                                              | `unattributed`, suspects `model`, `prompt`                         |
+| `action_unsettled`                        | any                                                              | `unattributed`, suspects `worker_action`, `infrastructure`         |
+| `criterion-not-met`, stage `setup`        | none                                                             | `unattributed`, suspects `environment`, `model`                    |
+| `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                       | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                      | `model.work_defect`                                                |
+| `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                    | `model.standard_violation`                                         |
+| `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                    | `plan.criterion_unstated`                                          |
+| none of the above                         | none                                                             | `unattributed`                                                     |
+
+- A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
+- The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
+- The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
+- Each unmet item of the judgement holds the required field `ground`: `stated`, `standard` or `unstated`. A reply with no `ground` goes through the repair turn.
+- The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.
+- Tests assert one cause for each row, and the `timed_out` suspects of a `no_progress` stop and of a budget end.
 
 ## Trust boundary
 
@@ -1686,13 +1731,14 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.
 - An `agent.turn` span stays a child of its enclosing worker span: `worker.task` for a turn on a unit, `worker.phase` for a conflict turn, and `worker.evaluation` for the reviewer. Its `gen_ai.conversation.id` names its session.
+- The start of an `agent.turn` span holds `kanthord.prompt.template`: the `PromptTemplate` value of the instruction that drove the turn. It also holds `kanthord.prompt.template.digest`, the sha-256 hex digest of the source template, and `kanthord.prompt.work.digest`, the `WorkPrompt.digest` that `renderWorkPrompt` computes.
 - The worker replaces the secrets of the LLM credential of the agent with `[redacted]` in each entry before it sends the entry. It matches the exact secret strings only.
 - The session file stays on the host as a convenience. A stateless container loses it, and the Tracking Service still holds every entry that reached it.
 - The span identity of a worker span hashes the execution identity, a run key and the local key. The run key is 8 random hexadecimal characters, new in each process run of the execution. A resumed execution therefore writes new spans and keeps the spans of the earlier run.
 
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The steps method on an `implement` node writes one `worker.git` span for each base merge (`merge_base`), each fetch of the release gate (`fetch_base`), the checkpoint commit of a budget end (`commit`) and the push of the finish or of a budget end (`push`). The commits of gate G after a turn and the checkpoint and the push of a stop have no `worker.git` span. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The steps method on an `implement` node writes one `worker.git` span for each base merge (`merge_base`), each fetch of the release gate (`fetch_base`) and the push of the finish or of a budget end (`push`). The push of a stop has no `worker.git` span. Each run of gate G writes one `worker.gate` span with `kanthord.gate.mode`, `kanthord.gate.changed` and `kanthord.gate.violation` on a violation, a restored one included. The checkpoint of a budget end is a run of gate G in checkpoint mode, and it writes a `worker.gate` span with `kanthord.gate.mode: checkpoint`. The commit of the gate runs inside that span and writes no `worker.git` span. A failed commit throws `worker.git.commit_failed` with the redacted git stderr as the cause message, and ends the `worker.gate` span with `Error` and the telemetry text `error`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 

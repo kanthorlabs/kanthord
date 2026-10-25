@@ -1282,8 +1282,8 @@ The trace pages show what an execution did, so that a human can debug and optimi
 ### The trace list
 
 - `/traces` lists the trace summaries of every project, newest first, 50 rows per page with a pager.
-- The toolbar holds the project filter, the state filter, the time range and the search field. `More filters` reveals the worker, agent, model and error type filters, the minimum duration, the minimum tokens, the minimum cost and the sort.
-- The worker, agent, model and error type filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
+- The toolbar holds the project filter, the state filter, the time range and the search field. `More filters` reveals the worker, agent, model, error type and cause category filters, the minimum duration, the minimum tokens, the minimum cost and the sort.
+- The worker, agent, model, error type and `cause_category` filters read their options from `tracking.facet.get`. The state filter offers `open`, `ok` and `error` with the labels `Open`, `OK` and `Error`.
 - The time range offers `Last hour`, `Last 24 hours`, `Last 7 days`, `Last 30 days` and `All time`. The default is `Last 7 days`.
 - The search field sends `q` after 300 ms without a keystroke.
 - The query string holds every filter value and the sort, so a link reproduces the first page of the list.
@@ -1297,6 +1297,10 @@ The trace pages show what an execution did, so that a human can debug and optimi
 - The header shows the node name with a link to the node, the state badge and the stop reason badge.
 - The header facts are the project, the execution, the attempt, the worker, the start, the duration, the input, output and cached tokens, and `Est. cost`.
 - A trace with an error shows `Jump to first error`. It selects `first_error_span_id` on the `Span tree` tab.
+- The dashboard computes no cause. It only picks the span that it highlights as the cause.
+- An `unattributed` cause shows "Unattributed. Suspects: ..." with the action `Label cause`.
+- `Label cause` calls `tracking.cause.label` with a category, a subcategory and a `reason`.
+- The trace page charts the input tokens of each `agent.turn`.
 - The page holds two tabs, `Span tree` and `Conversation`. The query string holds `tab`, `span`, `session` and `entry`, so a link opens one span or one entry.
 - While the page is visible, an `open` trace reads its summary and its spans again every 5 seconds. It reads its entries after the last cursor. The header shows `Live` and a `Pause updates` toggle. A trace in the state `ok` or `error` reads once.
 - A read of a deleted or unknown trace shows "This trace is expired or unknown." with a link back to the list.

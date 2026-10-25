@@ -440,7 +440,7 @@ Four rules of the end need attention:
 
 - **A budget end always gives further work.** Only the release gate releases with `further_work: false`. A budget end during a verification, or during the release gate, also releases with `further_work: true`. The next execution plans the units again from the done records and runs the release gate.
 - **The checkpoint commit is not a result.** At a budget end or a stop, gate G in checkpoint mode commits the work in progress with the message of the current unit, for example `feat: document the route`. It writes no done record. The next execution finds the unit pending at step 6 and continues it. Two exceptions apply. A checkpoint commit of the verdict unit is new work after the judged commit, so the verdict rule holds at the next step 6, and the verdict unit does not run again. A checkpoint commit of a routed unit that already holds a matching done record leaves that unit done. In both cases, the release gate of the next execution decides. Today a checkpoint commit therefore can satisfy the verdict rule.
-- **The `budget_end` stop marks a stalled execution.** The release carries `stop: { "reason": "budget_end", "code": "turns" }` only when no unit [completed](#the-done-record) in that `implement` execution. The code is `wall_time` when the wall time ended first. Such releases count toward `mission.further_work_limit`. A release without that stop resets the count.
+- **The `budget_end` stop marks a stalled execution.** The release carries `stop: { "reason": "budget_end", "code": "turns", "cause": { ... } }` only when no unit [completed](#the-done-record) in that `implement` execution. The code is `wall_time` when the wall time ended first. Such releases count toward `mission.further_work_limit`. A release without that stop resets the count.
 - **A violation wins over a budget end.** When the budget ends inside a turn, the worker runs no write-mode gate. The checkpoint gate then checks the git state. A violation there restores `before` and ends the execution with the violation stop, not with the budget end.
 
 All cleanup after a budget end or a stop runs under `expired_at`, not under the spent budget: every git command of gate G, the restore sequence, the push and the release. The claim keeps a reserve of 10 minutes after the budget for this cleanup.
@@ -509,7 +509,12 @@ In the first turn, `swe@1` runs `git checkout -b experiment`. G1 finds `HEAD` at
   "stop": {
     "reason": "operation_failed",
     "code": "worker.turn.branch_changed",
-    "detail": "Error: The HEAD of checkout api is refs/heads/experiment, not [redacted]"
+    "detail": "Error: The HEAD of checkout api is refs/heads/experiment, not [redacted]",
+    "cause": {
+      "category": "unattributed",
+      "suspects": ["model", "prompt"],
+      "assigner": "rule"
+    }
   }
 }
 ```
@@ -530,7 +535,12 @@ The host runs out of memory, and the kernel kills `npm test -- healthz` with exi
   "stop": {
     "reason": "operation_failed",
     "code": "worker.verification.infrastructure_failed",
-    "detail": "{\"exit_code\":137,\"signal\":null,\"timed_out\":false,\"command\":\"npm test -- healthz\"}"
+    "detail": "{\"exit_code\":137,\"signal\":null,\"timed_out\":false,\"command\":\"npm test -- healthz\"}",
+    "cause": {
+      "category": "infrastructure",
+      "subcategory": "verification_killed",
+      "assigner": "rule"
+    }
   }
 }
 ```
@@ -550,7 +560,18 @@ The stop is `null` because one unit completed in this execution. The node moves 
 When no unit completes before the budget ends, the release carries the stop, and the count toward `mission.further_work_limit` grows:
 
 ```json
-{ "further_work": true, "stop": { "reason": "budget_end", "code": "turns" } }
+{
+  "further_work": true,
+  "stop": {
+    "reason": "budget_end",
+    "code": "turns",
+    "cause": {
+      "category": "unattributed",
+      "suspects": ["plan", "model"],
+      "assigner": "rule"
+    }
+  }
+}
 ```
 
 ### The wall time ends during a verification
@@ -567,7 +588,12 @@ The worker commits the second task and runs `grep -q '/healthz' docs/api.md`. Th
   "stop": {
     "reason": "no_progress",
     "code": null,
-    "detail": "{\"rule\":\"unchanged_revision\",\"count\":2,\"limit\":2,\"verification\":{\"passed\":false,\"ran\":1,\"exit_code\":1}}"
+    "detail": "{\"rule\":\"unchanged_revision\",\"count\":2,\"limit\":2,\"verification\":{\"passed\":false,\"ran\":1,\"exit_code\":1,\"timed_out\":false}}",
+    "cause": {
+      "category": "unattributed",
+      "suspects": ["model", "prompt", "plan"],
+      "assigner": "rule"
+    }
   }
 }
 ```
@@ -598,7 +624,12 @@ The provider answers 429 to a model call. The turn ends with `stopReason: "error
   "stop": {
     "reason": "provider_failed",
     "code": "rate_limited",
-    "detail": "429 Too Many Requests: rate limit exceeded"
+    "detail": "429 Too Many Requests: rate limit exceeded",
+    "cause": {
+      "category": "llm_provider",
+      "subcategory": "rate_limited",
+      "assigner": "rule"
+    }
   }
 }
 ```
@@ -678,7 +709,7 @@ The target is `before` after a violation, and the head of the checkout after a v
 - A `worker.phase` span for each phase: `prepare` covers step 3, `start` covers steps 5 and 6, `tasks` covers steps 7 to 9, and `finish` covers steps 10 and 11 and the checkpoint of a budget end.
 - A `worker.task` span for each run of a unit. `kanthord.task.id` is the task id, or the node id for the node unit. `kanthord.task.result` is `complete` or `budget_end`. A `no_progress` stop adds `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
 - A `worker.verification` span for each command run. The spans of the release gate have the `tasks` phase span as their parent.
-- A `worker.git` span for the merge of step M (`merge_base`), the fetch of step 8 (`fetch_base`), the checkpoint commit of a budget end (`commit`) and the push of step 10 or of a budget end (`push`). The commits of gate G after a turn, and the checkpoint and the push of a stop, have no `worker.git` span.
+- A `worker.git` span for the merge of step M (`merge_base`), the fetch of step 8 (`fetch_base`) and the push of step 10 or of a budget end (`push`). The push of a stop has no `worker.git` span. Each run of gate G writes one `worker.gate` span, also the checkpoint of a budget end, and its commit writes no `worker.git` span.
 - `agent.turn` and `agent.tool` spans below the span that encloses the turn. An external harness writes the same `agent.turn` and `agent.tool` spans.
 
 The worker process also writes one JSON log line to stderr for each event of the method, for example `units planned`, `task started`, `task committed`, `task verified`, `done recorded`, `done record skipped`, `verdict planned`, `verdict rule checked`, `release verified`, `release failure routed`, `base merged`, `turn violation` and `root entries removed`. A line holds identities and results, and no agent content.

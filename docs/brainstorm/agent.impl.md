@@ -297,6 +297,7 @@ The Agent component owns these keys of the section `agent`.
 - `tasks` lists the tasks of the node for the work prompt of the node unit, and is empty for the work prompt of a task.
 - `node` holds the name, the requirement and the criterion of the node for the work prompt of a task. It is null for every other work prompt.
 - `marker` is the marker that the worker parses. A replacement of `evaluation` or `repair` keeps the marker line, or the worker treats the reply as invalid.
+- The shipped `evaluation` text holds the `ground` instruction: "Give each unmet item a ground: stated for a requirement or criterion of the work prompt, standard for a default-standard rule, unstated for a defect that neither states." A replacement of `evaluation` keeps it, or the reply goes through the repair turn.
 - The loader reads only the files of the template names above. A file `task-judgement.md` or `task-choice.md` in `prompts` is unused, and the loader gives no warning.
 - Tests cover the shipped set, a replacement, each rejection, a render without a value and the absence of escaping.
 
