@@ -574,7 +574,9 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - The method calls the revocation of the Scheduler in the same transaction with the revoke cause `human`. The revocation sets `ended_at`, counts no loss and no failure, and sets no hold.
 - The revocation neither counts nor ends the consecutive failure count of the node.
 - The transaction inserts the job when the node is claimable, with no `available_at`.
-- An execution that is no longer live answers with no change, so a release that commits first wins.
+- An execution that is no longer live answers null with no change, so a release that commits first wins.
+- The method records the revoked claim in an `ExecutionEnds` through `endLiveClaim`, as every human act that revokes a live execution does. It answers that `ExecutionEnds` to the Worker transaction.
+- After the commit, the Worker Service hands that `ExecutionEnds` to the Mission collaboration `reportExecutionEnds(ends)`. The method runs `reportEnds`, so the Scheduler reports `executionRevoked` after the commit on the path of every other revocation.
 - The archive is a Worker act, so the Mission Service writes no act trace for it. The execution trace records `revoked` with the cause `human.intervention`.
 
 ## The act trace
@@ -721,7 +723,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 
 - Tests accept a `Text` value of `mission.text_max_bytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
 
-- Tests call `revokeForInstanceArchive` for a live steps claim and a live evaluation claim. They assert `Executing -> Available` and `Evaluating -> Waiting`, an open attempt, an unchanged consecutive failure count, a job with no `available_at`, and no change for an execution that ended first.
+- Tests call `revokeForInstanceArchive` for a live steps claim and a live evaluation claim. They assert `Executing -> Available` and `Evaluating -> Waiting`, an open attempt, an unchanged consecutive failure count, a job with no `available_at`, and no change for an execution that ended first. A test hands the answered `ExecutionEnds` to `reportExecutionEnds` and asserts the execution trace `revoked` with the revoke cause `human` and no act trace.
 
 - Tests list every open attempt of a changed content owner in `open_attempts_unchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
 

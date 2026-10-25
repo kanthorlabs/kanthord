@@ -500,6 +500,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - The archive refuses while a binding that is no tombstone lists the instance, with 409 `worker.instance.in_use` and `details.bindings`. `force` changes no part of this refusal.
 - Without `force`, the archive refuses while a registration of the instance is the claimant of an execution with a null `ended_at`, with 409 `worker.instance.in_use` and `details.executions`. A draining execution therefore ends before the archive.
 - With `force: true`, the archive revokes that execution in its transaction. It calls the Mission collaboration `revokeForInstanceArchive(tx, executionId)`.
+- The transaction keeps the `ExecutionEnds` that the collaboration answers. After the commit, the archive calls the Mission collaboration `reportExecutionEnds(ends)`, under [mission-service.impl.md](mission-service.impl.md#the-forced-archive-revocation).
 - The Mission Service moves the node `Executing -> Available` or `Evaluating -> Waiting` and inserts its job with no hold. The attempt stays open, under [mission-service.md](mission-service.md#state-transitions).
 - In that transaction, the Scheduler revokes the claim with its [revocation](scheduler-service.md#claims-and-counts): `ended_at` set, no loss and no failure count. The revoke cause is `human`.
 - A `worker` process learns of the end at its next call and aborts the execution. The pool host stops a server instance after the commit.
