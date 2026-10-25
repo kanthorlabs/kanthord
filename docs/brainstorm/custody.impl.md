@@ -214,6 +214,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The envelope has no forward secrecy. A client secret that leaks later opens every recorded envelope of its client identity.
 - The handover carries the revisions that the execution pins.
 - Custody refreshes no pinned revision on the server while a live execution holds it.
+- The record verify of a `server` row writes a refreshed OAuth value by the same digest rule. [The OAuth refresh of a verify](llm.impl.md#the-oauth-refresh-of-a-verify) states the rule.
 - Two executions can hold one revision at once.
 - The refresh-token rotation behaviour of concurrent holders remains a provider constraint.
 - Custody logs the execution identity, the record identity, `client_id` and `runtime_identity` of each handover and report, and `instance_id` at the `worker` placement, never material.

@@ -261,16 +261,28 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
 - The healthcheck reads `holder` first. An instance copy reports `unknown` with `failure_reason: held_by_instance` and releases nothing. [The health of an instance copy](#the-health-of-an-instance-copy) states the report of the instance.
 - The [LLM providers](#the-llm-provider) supply the checks.
-- No check refreshes an OAuth record. An expired access token of an `openai-codex` or `anthropic-subscription` record answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
+- Only the record verify refreshes an OAuth record, by [the OAuth refresh of a verify](#the-oauth-refresh-of-a-verify). In every other check, an expired access token of an `openai-codex` or `anthropic-subscription` record answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
 - The `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides the result of an expired record.
 - Each failure carries a value of [the failure reason of an HTTP check](gateway-service.impl.md#the-failure-reason-of-an-http-check). A check that exceeds its deadline reports `unknown` with `failure_reason: deadline_exceeded`.
 - Credential and agent provider healthchecks share an implementation where appropriate, not ownership.
 - The `openai-codex` check, the `anthropic-subscription` check and the `opencode-go` check make a model call.
 - The `anthropic-subscription` check builds its call as the `openai-codex` check does, under the pi provider `anthropic`.
-- The `openai-codex` check builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. The store lives for the call, and nothing writes back to custody.
+- The `openai-codex` check builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. Outside the record verify, the store lives for the call, and nothing writes back to custody.
 - A pi call with an OAuth credential carries no `apiKey` option. pi takes the API key path whenever the options hold the `apiKey` key, even with a `null` value.
 - The `opencode-go` check builds its call through the pi `opencode-go` provider with the stored API key and the smallest token limit.
 - The Copilot check writes no minted token back to the record.
+
+### The OAuth refresh of a verify
+
+- The record verify of an `openai-codex` or `anthropic-subscription` record of the holder `server` gives the check a pi credential store of custody. The check passes that store to the pi call in place of the store of one call.
+- pi-ai resolves the authentication of the call. It refreshes an access token that expires within 5 minutes with the stored refresh token, under `CredentialStore.modify`, and the model call uses the new access token.
+- The custody store writes the refreshed value inside `modify`, in place at the same revision. It uses `applyReport`, the digest rule of a [refresh report](custody.impl.md#the-credential-handover). A refresh adds no revision.
+- The workbench credential store and the verify store share this write. The write refuses a revision that a live execution pins.
+- The verify gives no store when a live execution pins the revision, because the execution holds the refresh token. An expired access token then answers `unauthorized` without a remote call.
+- A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change. The verify log names the reason `access token refresh failed`.
+- The verify of an instance copy answers 409 `credential.credential.held_by_instance`, as before. The instance refreshes its own copy.
+- The `github-copilot` check sends the stored GitHub token and refreshes nothing.
+- The verify adds no error code.
 
 ## Tests
 
@@ -278,6 +290,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and a `base_url` change at rotation alone.
 - Tests cover a model removal with dependents and concurrent changes.
 - Tests cover the check of every LLM provider, its `connection` mapping, the healthcheck status mapping, expired OAuth and forbidden calls.
+- Tests cover the OAuth refresh of a verify: a refresh through pi-ai written in place, a failed refresh, and a revision that a live execution pins. The tests fake the network and make no remote call.
 - Tests assert that a refused model call maps 401 and 403 to `unauthorized` through the status in `errorMessage`.
 - Tests assert that `LLM_PROVIDERS` and `verifiable` agree, and that `llm.provider.check` refuses a platform without a check.
 - Tests cover the model check: the tool round trip, a reply without a tool call, each provider failure code, redaction of the secrets, an unknown model, an unsupported reasoning effort, an expired OAuth access token and the `openai-compatible` runtime path.
