@@ -168,10 +168,26 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - `agent_names`, `models` and `error_types` are JSON arrays of the distinct values of `kanthord.agent.name`, of `gen_ai.request.model` and `gen_ai.response.model`, and of `error.type`. Each array holds at most 128 values.
 - `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens` and `cost_usd` add up `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read.input_tokens`, `gen_ai.usage.cache_creation.input_tokens` and `kanthord.usage.cost_usd` of the spans.
 - `span_count`, `turn_count` and `tool_count` count the stored spans, the `agent.turn` spans and the `agent.tool` spans.
-- `error_count` counts the spans with the status `Error`. `first_error_span_id` names the first span other than the root span that took the status `Error`.
+- `error_count` counts the spans with the status `Error`. `first_error_span_id` names the first span other than the root span that took the status `Error` and holds no `error.type` `tool_error` or `stopped`.
 - The admission of a span updates the summary in the same transaction. It adds only the values that the record adds, because no record replaces a value. A repeat changes nothing.
 - A read answers `duration_ms` as `ended_at - started_at`, and `total_tokens` as `input_tokens + output_tokens`.
 - `kanthord.usage.cost_usd` holds the cost that pi computes from its model price table. The dashboard labels it as an estimate. A subscription credential costs nothing at the provider.
+
+## The cause
+
+The cause names the layer that caused a failure event. The Worker Service owns the [cause rule table](worker-service.impl.md#the-cause-of-a-stop), and the Scheduler Service passes the cause to the root span end.
+
+- The root span end holds `kanthord.cause.category`, `kanthord.cause.subcategory` and `kanthord.cause.assigner`. The [assigner](tracking-service.vocabulary.md#cause) is `rule` or `reviewer`.
+- A cause of the category `unattributed` holds `kanthord.cause.suspects` instead of a subcategory: the candidate categories, the best guess first.
+- The Tracking Service stores these attributes as it receives them. It derives no cause, and it holds no cause column. The schema of `tracking.db` stays unchanged.
+- `tracking.cause.label` has `human` access. Its input holds the trace, the category, the subcategory and a reason. It validates the category and the subcategory against the closed sets of the [vocabulary](tracking-service.vocabulary.md#cause-category).
+- An unknown trace answers 404 `tracking.trace.not_found`.
+- The operation writes one span `tracking.cause_label` under the root span, with the span identity `<root_span_id>.cause_label` and the producer `tracking`.
+- The label span holds `kanthord.cause.category`, `kanthord.cause.subcategory`, the human identity and the telemetry text `reason`.
+- A new label replaces the span row, its attributes and its `reason` text.
+- The effective cause of a trace is the cause of the label span when the store holds one, else the cause of the root span end.
+- Every reader of a cause takes the effective cause: the list filter, the list item, the facet, the rollups and the trace page.
+- A reader reads the label span and the root span through the primary key of `tracking_span`.
 
 ## Reads
 
@@ -179,7 +195,9 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - `tracking.trace.list` answers one page of trace summaries, newest first by default.
 - Each item of `tracking.trace.list` also holds `root_operation` and `root_attributes`: the `operation` and the `attributes` of the root span.
   Both are null while the store holds no root span. The list reads the root span through the primary key of `tracking_span`.
-- `tracking.trace.list` filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type` and `q`.
+- Each item of `tracking.trace.list` also holds `cause`: the effective cause, or null when the trace holds none. The list joins the label span through the primary key, as the filter does.
+- `tracking.trace.list` filters by `project_id`, `node_id`, `execution_id`, `worker_name`, `agent_name`, `model`, `state`, `error_type`, `cause_category` and `q`.
+  `cause_category` selects the traces whose [effective cause](#the-cause) holds that category. The filter reads the label span, else the root span, of each scanned trace through the primary key of `tracking_span`.
 - `tracking.trace.list` also filters by the time range `from` and `to`, by [the overlap rule](#the-timeline-read) of the timeline read.
 - Every time range filter of the Tracking Service is named `from` and `to`, and it selects the traces by that overlap rule.
 - A `from` after `to` answers 400 `tracking.filter.range_invalid` on every read that takes `from` and `to`.
@@ -192,7 +210,8 @@ The row of `tracking_trace` holds the summary columns of the trace.
 - An open trace sorts last under `duration_ms`.
 - A cursor of another sort answers 400 `system.pagination.cursor_invalid`.
 - The list scans `tracking_trace`. The retention bounds that table, and no index other than a unique index exists.
-- `tracking.facet.get` answers the distinct worker names, agent names, models and error types, at most 200 values each.
+- `tracking.facet.get` answers the distinct worker names, agent names, models, error types and `cause_categories`, at most 200 values each.
+  `cause_categories` holds the categories of the effective causes.
   `project_id` limits it to the traces of one project.
 - `tracking.span.list` answers the spans of a trace in the order of their admission.
 - `tracking.session.entry.list` answers the entries of one session in the order of `sequence`. `tool_call_id` filters it to the result of one tool call.
@@ -290,6 +309,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - An item holds `key`, `bucket_start`, `count`, `p50`, `p90`, `p99`, `mean` and `max`. The unit is milliseconds, and a count for `revision_turns`. The order measure is `count`.
 - A percentile `p` of `n` sorted values `x[0]` to `x[n - 1]` is `x[k] + (h - k) * (x[k + 1] - x[k])`.
 - In that formula, `h = (n - 1) * p` and `k` is the integer part of `h`. The percentile is `x[n - 1]` when `k` is `n - 1`.
+- `instance_busy_ratio` is the sum of `duration_ms` of the root spans of the selected traces for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
 - The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`.
 - `--project <project-id>` and `--node <node-id>` set `project_id` and `node_id`. `--from <unix-ms>` and `--to <unix-ms>` set `from` and `to`.
 - `--bucket`, `--group-by`, `--measure` and `--operation` set the field of their name.
@@ -326,6 +346,9 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - RULED 2026-10-25 by Ulrich. The analytics reads select the traces whose window overlaps the range, count only the spans that start inside it, and read their spans in steps of at most 100 traces.
 - RULED 2026-10-25 by Ulrich. The analytics reads answer at most 1000 items, and they take a range of 7 days by default and 31 days at most.
 - RULED 2026-10-25 by Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
+- RULED 2026-10-25 by Ulrich. The cause lives only as `kanthord.cause.*` on the root span end. The Tracking Service derives no cause and adds no cause column. `tracking.trace.list` filters by `cause_category`, and `tracking.facet.get` answers `cause_categories`.
+- RULED 2026-10-25 by Ulrich. `tracking.cause.label` writes the span `tracking.cause_label` with the span identity `<root_span_id>.cause_label`. A new label replaces the old one, and every reader takes the label over the rule cause.
+- RULED 2026-10-25 by Ulrich. The producer records each fact, and an analytics read only adds up and divides. `instance_busy_ratio` sums the root `duration_ms` per `kanthord.worker.instance`.
 
 ## Capture and packaging
 

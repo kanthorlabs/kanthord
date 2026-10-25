@@ -161,6 +161,57 @@ The set is closed and it holds six values.
 - **review_wait**
 - **revision_turns**
 
+## cause
+
+A cause names the layer that caused one failure event, as a category and a subcategory.
+The root span end of a failed execution holds its cause, and its assigner is `rule` or `reviewer`.
+The cause of the execution that `Add password reset` stopped for a quota error is `llm_provider` with `quota_exhausted`.
+
+## cause category
+
+A cause category is the layer of a cause.
+The set is closed and it holds nine values.
+
+- **prompt**
+- **plan**
+- **worker_action**
+- **llm_provider**
+- **model**
+- **environment**
+- **infrastructure**
+- **human**
+- **unattributed**
+
+A rule assigns a category only when a recorded code names the cause. Otherwise the cause is `unattributed`.
+A cause of the execution `Billing` with a setup that fails on the base head has the category `environment`.
+
+## cause subcategory
+
+A cause subcategory refines a cause category.
+The set of each category is closed. `unattributed` has no subcategory.
+
+- **prompt**: `context_missing`, `instruction_conflict`, `rule_absent`
+- **plan**: `criterion_unstated`, `dependency`, `verification_context`, `verification_insufficient`, `decomposition`, `oversized`
+- **worker_action**: `gate_commit`, `merge_base`, `release_gate`, `review_flow`, `step_failed`
+- **llm_provider**: `rate_limited`, `quota_exhausted`, `unavailable`
+- **model**: `work_defect`, `standard_violation`, `verification_failed`, `no_progress`, `reply_invalid`, `protocol_violation`, `output_truncated`, `budget_exhausted`, `judgement_wrong`
+- **environment**: `setup_failed`, `command_absent`, `flaky_verification`, `verification_hang`, `repository_hook`
+- **infrastructure**: `verification_killed`, `network`, `execution_lost`
+- **human**: `intervention`, `configuration`
+
+The subcategory of a reviewer that judged a stated item of `Add password reset` unmet is `work_defect`.
+
+## suspects
+
+Suspects are the candidate categories of an `unattributed` cause, the best guess first.
+A budget end of the execution `Billing` has the suspects `plan` and `model`.
+
+## cause label
+
+A cause label is a human annotation of a trace. It assigns a category and a subcategory, and it holds a reason.
+A new label replaces the old one, and every reader takes the label over the rule cause.
+A human labels the `unattributed` cause of the execution `Billing` as `plan` with `oversized`.
+
 ## act trace
 
 An act trace is the trace of one human act on a node. Its root span names the operation of the act.
