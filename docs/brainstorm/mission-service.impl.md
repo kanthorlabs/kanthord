@@ -49,7 +49,7 @@ An execution assessment is the exception: it stores the execution identity, and 
 - `bindings` is a list of binding identities of the project. A read answers the pinned identities, and a node write and an unblock content change take identities. A plan file names each binding by its name.
 
 A node write, and an import that creates a node, resolve each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding. The write pins that revision and checks the rule table.
-An import of an existing node keeps a pinned revision with the same name and the same `resource_identity`, unless a removal of that binding follows the pin.
+An import of an existing nonterminal node keeps a pinned revision with the same name and the same `resource_identity`, unless a removal of that binding follows the pin. An import resolves no binding of a terminal node under [Export and the two formats](#export-and-the-two-formats).
 The write accepts the identity of a revision of the current binding of that resource. An identity from before a removal of that binding answers `mission.node.bindings_invalid`, also when a binding of the same resource exists again.
 The intent of the node determines the column.
 A node names every binding that it uses, and the write takes no binding from the project.
@@ -195,8 +195,13 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - An import covers the whole mission and carries no scope.
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
-- The import compares the bindings of a node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
+- The import compares the bindings of a nonterminal node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
+- An import compares no content of a terminal node. A terminal node with an unchanged `filename` is a no-op.
+- The import resolves no binding name and no `depends_on` name of a terminal node, and it writes no revision for it. The node keeps its pinned bindings and its dependencies. The import compares a task of a terminal node by its `filename` and its node alone.
+- A new `filename` of a terminal node answers 409 `mission.import.terminal_change`. A task that enters, leaves or changes its `filename` in a terminal node answers the same code. An omitted terminal node also answers it.
+- A nonterminal node can name a terminal node in `depends_on`. An import that retires a node keeps the dependency of a terminal dependent on that node.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
+- The preview digest covers the mission identity, the mission version, the normalized entries and the sorted `creates`, `updates` and `retirements` sets. A classification change between the preview and the apply, for example after a discard, answers 409 `mission.import.retirement_mismatch`.
 - The import result maps each node file name to its node identity and each task file name to its task identity.
 - A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
@@ -815,7 +820,9 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
 - Tests include terminal nodes in unchanged export-import cycles and assert a no-op.
-- Tests re-import the export of a mission with a `Completed` node after a new revision of its binding. They assert a no-op for that node and keep its pinned binding revision. They assert a change for a pin from before a removal of its binding.
+- Tests re-import the export of a mission with a `Completed` node and one new plan file. The binding of that node has a new revision, a new name or a removal. They assert a no-op for that node, keep its pinned binding revision and create the new node. They assert a change for a nonterminal node with a pin from before a removal of its binding.
+- Tests import an edited plan file and an edited task file of a `Completed` node. They assert a no-op and no new revision.
+- Tests refuse a new `filename`, a task change and a retirement of a `Completed` node with `mission.import.terminal_change`.
 - Tests assert human-only access and both exact export answer shapes.
 - Tests accept an export at 10 MiB and assert 413 `mission.export.too_large` above that bound.
 - Tests import raw Markdown through the Mission Service parser and JSON through the same node validation rules.
@@ -830,6 +837,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that a terminal dependent keeps its dependency.
 - Tests assert that preview changes no state and answers the same refusals.
 - Tests assert that a stale mission version and a changed digest refuse the apply with no effect.
+- Tests preview an edit of a `Pending` node, discard the node, and refuse the apply with `mission.import.retirement_mismatch`.
 - Tests assert that one retirement increments the mission version once.
 - Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
 - Tests refuse an `implement` node verification that no task of the node holds with the exact text with `mission.import.verification_uncovered`, and the apply writes nothing. Tests accept an `implement` node with no task on every write path.
