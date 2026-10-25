@@ -55,6 +55,7 @@ erDiagram
         integer revision "unique with name, starts at 1"
         text public_key "base64url, 32-byte X25519 public key"
         text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key"
+        integer slot_count "1 to 64, default 1, copied by a Reset key"
         integer created_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -264,7 +265,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A write derives `resource_identity` from the configuration of the binding. A human never enters it.
 - A write compares each submitted binding with the current binding of the same name. An unchanged configuration inserts no row. A changed configuration of the same resource inserts the next revision of the group. A changed resource inserts a tombstone in the old group and revision 1 of the new group. A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again. A name that the submission omits takes a tombstone, and its rows stay.
 - A write refuses a change of the worker of an existing worker binding under the same name.
-- The `config` of a worker binding at `placement: worker` holds `worker_instances` and no `instance_count`. `worker_instances` is a list of 0 to 64 unique names of live instances of its worker. At another placement it holds `instance_count` and no `worker_instances`. The length of `worker_instances` is the instance count of the binding.
+- The `config` of a worker binding at `placement: worker` holds `worker_instances` and no `instance_count`. `worker_instances` is a list of 0 to 64 unique names of live instances of its worker. At another placement it holds `instance_count` and no `worker_instances`. The sum of the `slot_count` of the listed instances is the instance count of the binding.
 - `config` holds the configuration of its kind: [repository](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#repository-configuration--proposed-fields), [worker](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
 
 ### Worker Service
@@ -273,6 +274,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `name` takes the binding-name form. A taken name answers 409 `worker.instance.name_conflict`, an archived name included. The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`.
 - `worker` names a catalog worker that kanthord hosts. The Worker Service validates the name form, the worker and the key form before the write. `name` and `worker` never change.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived, and an archive is final.
+- `slot_count` is an integer from 1 to 64 with the default 1. The Worker Service validates it before the write. A slot count write changes the live revision in place, and a Reset key copies the value to the next revision.
 - Only a Reset key inserts a revision. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
 - An archive ends the live revision and every live registration of the instance. It is refused with 409 `worker.instance.in_use` while a worker binding that is no tombstone lists the instance. It is also refused while a registration of the instance holds a live execution.
 

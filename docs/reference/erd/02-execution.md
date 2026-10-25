@@ -57,6 +57,7 @@ erDiagram
         text client_id "client_identity_ + ULID"
         text client_name "display name, 1-64 chars"
         text instance_id "worker instance revision, null at server and container"
+        integer slot "instance slot 0 to 63, null at server and container"
         integer registered_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -215,10 +216,10 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 ### Worker Service
 
 - `worker_registration` holds one row for each registration of a worker instance under one worker binding. `worker.register` inserts the row, and `id` is the runtime identity.
-- A worker instance at the `server` or the `container` placement, and an external harness program, hold one registration. A worker instance at the `worker` placement holds one registration for each worker binding that lists it, and `instance_id` holds its live revision. `instance_id` is null at every other placement.
+- A worker instance at the `server` or the `container` placement, and an external harness program, hold one registration. A worker instance at the `worker` placement holds one registration for each slot and each worker binding that lists it, `instance_id` holds its live revision, and `slot` holds the slot number. `instance_id` and `slot` are null at every other placement.
 - `worker_registration` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
 - The live registrations of a worker binding are the rows of that group where `ended_at` is null.
-- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. At the `worker` placement, the instance count is the length of `worker_instances`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
+- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. At the `worker` placement, the instance count is the sum of the `slot_count` of the instances of `worker_instances`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
 - `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
