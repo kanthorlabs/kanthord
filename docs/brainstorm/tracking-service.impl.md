@@ -57,6 +57,7 @@ A refused or failed write counts as a drop and raises no error.
 The Scheduler Service writes the root span and the [transition span](scheduler-service.impl.md#the-execution-trace) with the producer `scheduler`.
 The Mission Service writes the span of a [failed upload check](mission-service.impl.md#object-evidence) with the producer `mission`.
 It writes the [act trace](mission-service.impl.md#the-act-trace) of each human act on a node with the same producer.
+It writes the [import trace](mission-service.impl.md#the-import-trace) of each import apply with the same producer.
 The Worker Service writes the [`agent.prompt` span](worker-service.impl.md#prompt-composition) with the producer `worker`.
 The Tracking Service writes the [cause label span](#the-cause) with the producer `tracking`.
 The Project Service writes the [environment trace](project-service.impl.md#the-environment-trace) with the producer `project`.
