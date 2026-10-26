@@ -20,7 +20,9 @@ Write one command that does these steps in the root of the repository:
 2. Select the test files that the change set reaches.
 3. Run the selected test files. Run each failed test file once more.
 4. Write one JSON report to the path that `KANTHORD_AFFECTED_REPORT` names.
-5. When the report lists no failed test, exit with code 0. When it lists one or more, exit with another code.
+5. When the report lists no failed test, exit with code 0. When it lists one or more, exit with code 1.
+
+Do not exit with code 127 or with a code from 129 to 192. KanthorD reads exit code 127 as an absent command, and it can stop the execution with `command_absent`. KanthorD reads a code from 129 to 192 as a signal end. It runs the command once more and then stops with `worker.verification.infrastructure_failed`.
 
 KanthorD runs the command with `bash -c` in the checkout of the repository, at the node head. The command thus runs the selector code of the node head. The environment of the command is the environment of a verification, plus three variables:
 
@@ -31,6 +33,8 @@ KanthorD runs the command with `bash -c` in the checkout of the repository, at t
 | `KANTHORD_BASE_COMMIT`     | The merge base of `origin/<base_branch>` and the node head. The changes file uses this commit. |
 
 KanthorD writes the changes file in the workspace, outside every checkout. It removes the changes file and the report file after the run.
+
+After a failure at the node head, KanthorD runs the command of the base-branch declaration on the base head, with the same changes file. A path of the changes file can thus be absent from that checkout, for example an added file. The command must accept such a path.
 
 ### The changes file
 
@@ -93,7 +97,7 @@ KanthorD computes `files` with `git diff --name-status -z --find-renames <base_c
 | `flaky`        | The test id of each test that failed and then passed in the second run of its file.             |
 | `excluded_e2e` | Each end-to-end test file that the change set reaches and that the selection leaves out.        |
 
-A test id is `{ "file": "<test file>", "name": "<full name>" }`. Join the suite names and the test name with `>` for the full name. A test file that fails to load gives one id with the file path as its name.
+A test id is `{ "file": "<test file>", "name": "<full name>" }`. Join the suite names and the test name with a space, `>` and a space for the full name, for example `server > answers 200`. A test file that fails to load gives one id with the file path as its name.
 
 KanthorD checks the report with a strict schema. These rules apply:
 
@@ -143,10 +147,24 @@ The worker reads the file at every placement: `server`, `container` and `worker`
 
 ## 4. Check the command outside KanthorD
 
-Write `/tmp/changes.json` in the form of [the changes file](#the-changes-file), with the changes of your branch. Then run the command with the three variables:
+Write `/tmp/changes.json` in the form of [the changes file](#the-changes-file), with the changes of your branch. Write your base branch in place of `<base_branch>`. This command uses `jq`:
 
 ```sh
-base=$(git merge-base origin/main HEAD)
+base=$(git merge-base origin/<base_branch> HEAD)
+git diff --name-status --find-renames "$base" HEAD |
+  jq -R -s --arg base "$base" --arg head "$(git rev-parse HEAD)" '
+    split("\n") | map(select(length > 0) | split("\t") |
+      if .[0][0:1] == "R" then {path: .[2], status: "renamed", previous_path: .[1]}
+      elif .[0] == "A" then {path: .[1], status: "added"}
+      elif .[0] == "D" then {path: .[1], status: "deleted"}
+      else {path: .[1], status: "modified"} end)
+    | {version: 1, binding_id: "local", repository: "local",
+       base_commit: $base, head_commit: $head, files: .}' >/tmp/changes.json
+```
+
+Then run the command with the three variables:
+
+```sh
 KANTHORD_CHANGES=/tmp/changes.json \
 KANTHORD_AFFECTED_REPORT=/tmp/report.json \
 KANTHORD_BASE_COMMIT="$base" \
