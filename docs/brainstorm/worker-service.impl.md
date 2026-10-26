@@ -1367,8 +1367,10 @@ The target is `before` in the violation path, the head of the checkout step in p
 4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline, with no rerun of a code failure.
 5. It removes the release directory after the run, in a `finally` block, so a budget end and a stop also remove it.
 6. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
-7. When every command passes, the gate logs `release verified` and the flow goes to the push.
-8. Otherwise the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
+7. When a command fails, the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
+8. When every command passes, the gate runs [the affected test run](#the-affected-test-run) of each checkout in its release clone. The release clone holds `refs/remotes/origin/*` of the live checkout, and the base check uses `state.base`.
+9. The verdict `failed` gives the node unit one revision turn with the `task-revision` text of the affected failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
+10. When each verdict is `passed`, `base_red` or `absent`, the gate logs `release verified` with the affected verdict, and the flow goes to the push.
 
 - The release gate compares no trees. The verdict rule applies at the unit level.
 - A failure of the release gate never resets the head.
@@ -1419,6 +1421,7 @@ Both tests check that each checkout stays clean and that each asset path is rela
 A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 The runner classifies each command result. The first matching rule decides: a spent budget, a kill at the wall deadline or no start before the deadline is a budget end; a kill at `COMMAND_LIMIT_MS` (`timed_out: true`) or a cancellation is a code failure; a spawn error, a signal or an exit code from 129 to 192 is an infrastructure failure; exit code 0 is a pass; exit code 127 follows [the environment classification](#the-environment-classification); any other exit code is a code failure.
+At the release gate and at the evaluation of an `implement` node, [the affected test run](#the-affected-test-run) follows only after every listed verification passes.
 An infrastructure failure runs once more, unless the deadline passed or the context ended. The rerun result takes the same rules, and a pass on it is a pass.
 A second infrastructure failure stops the execution with `operation_failed`, the code `worker.verification.infrastructure_failed` and a detail with the JSON of the exit code, the signal, `timed_out` and the command. `infrastructureStop` builds it. The coder and the reviewer apply these rules.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
@@ -1466,6 +1469,197 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The worker caches the base result for the execution by the base commits, the environment digests and the command.
 - The stop detail holds the JSON of the exit code, the signal, `timed_out`, the command and `digests`, the map from the resource identity of each repository binding of the node to its current digest at the setup, from `environmentDigestOf`. A binding with a null environment, for example the source `none` or a `server` placement with no stored environment, also takes its entry.
 - An `environment_failed` stop never becomes a revision turn of `swe@1`.
+
+## The affected test run
+
+The worker runs the affected test command of each repository at each release gate and at each evaluation of an `implement` node.
+The repository owns the map from changed files to tests, the selection and the test run. KanthorD runs one repository command, the affected test command.
+KanthorD owns the change set, the run, the verdict, the evidence and the spans.
+The worker enforces the verdict. The admission of the Mission Service does not change, under [Evidence content](mission-service.impl.md#evidence-content).
+
+### The run points
+
+| Point                                     | Affected run                                     | Verdict `failed`                                            |
+| ----------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------- |
+| Task verification after a turn            | No                                               | —                                                           |
+| Release gate of an `implement` node       | Yes, after every listed command passes           | One revision turn of the node unit                          |
+| Evaluation of an `implement` node         | Yes, after every listed command and setup passes | `criterion-not-met`, stage `affected`, before the judgement |
+| Steps and evaluation of an `examine` node | No                                               | —                                                           |
+
+- Only an `implement` node with a repository checkout runs the affected command.
+- Each repository of a node runs its own command on its own change set. The commands run in checkout order, after the listed commands.
+- The affected run keeps a listed test in its selection, so a test file can run twice.
+- The wall budget of the execution covers the affected run.
+- A node can edit its own selector so that it selects fewer tests. KanthorD accepts this limit, because the CI of the repository runs the whole suite before the landing.
+
+### The command
+
+- The worker reads [the affected test declaration](project-service.impl.md#the-affected-test-declaration) of each checkout at the base-branch head, at every placement. A node cannot change the command that judges it.
+- A checkout with no declaration has the verdict `absent`.
+- The worker runs `command` with `bash -c` in the checkout directory of the repository, at the node head. The command thus runs the selector code of the node head.
+- The command runs under `time_limit_s` of the declaration and under the wall deadline of the execution.
+- The child environment equals the environment of a verification, plus three variables:
+
+| Variable                   | Value                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `KANTHORD_CHANGES`         | The absolute path of the changes file.                                                       |
+| `KANTHORD_AFFECTED_REPORT` | The absolute path where the command writes its report. The file does not exist at the start. |
+| `KANTHORD_BASE_COMMIT`     | The merge-base commit.                                                                       |
+
+- The worker writes both files in `<workspace key>/affected/<binding name>/`, outside every checkout, with mode `0600`. It removes the directory after the run.
+- With no `KANTHORD_CHANGES`, the command computes the change set from `origin/<base branch>` and the working tree, and it prints the report. The command thus also runs outside KanthorD.
+
+### The changes file
+
+- The diff base is the merge base of the base branch and the node head.
+- KanthorD computes `files` with `git diff --name-status -z --find-renames <base_commit> <head_commit>`.
+- `status` is one of `added`, `modified`, `deleted` and `renamed`. A type change (`T`) reads as `modified`. A copy is not detected.
+- A `renamed` entry holds `previous_path`.
+- Each path is relative to the root of the repository and uses `/`.
+
+```json
+{
+  "version": 1,
+  "binding_id": "binding_01M5SQ3VMP6H1MR49ZHN0EKBDC",
+  "repository": "engine",
+  "base_commit": "f0d09a0cbb8f53f69a21d3163c4bd626b00026cf",
+  "head_commit": "88e07e90b2f48caaeebcc7b010b5d6e3f5aed770",
+  "files": [
+    { "path": "src/tracking/contract.ts", "status": "modified" },
+    { "path": "src/tracking/analytics-bucket.ts", "status": "modified" }
+  ]
+}
+```
+
+### The report
+
+- The command writes one JSON report to `KANTHORD_AFFECTED_REPORT`. The exit code is the verdict of the selector, and it is 0 exactly when `failed` is empty.
+- `selection` is one of `related`, `all` and `none`. When the map is unsure, the selector selects all tests in its scope.
+- `reason` is a nonblank text of at most 256 bytes for `all`, and null otherwise.
+- `tests` lists each selected test file. `none` requires an empty list.
+- `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with `>`. A file that fails to load gives one id with the file path as its name.
+- Each `file` of `failed` and `flaky` is in `tests`. `failed` and `flaky` hold no common id.
+- The selector retries a failed test file once. A test that fails and then passes is flaky.
+- `excluded_e2e` lists each e2e test file that the selection reached and left out.
+- The report is at most 1 MiB. Each list holds at most 10000 entries, and each text is at most 1024 bytes.
+- KanthorD parses the report with a strict schema. A missing report, an invalid report, or an exit code that does not match `failed`, is an invalid report.
+
+```json
+{
+  "version": 1,
+  "selection": "related",
+  "reason": null,
+  "tests": [
+    "src/tracking/analytics-bucket.test.ts",
+    "src/tracking/service.test.ts"
+  ],
+  "failed": [
+    {
+      "file": "src/tracking/service.test.ts",
+      "name": "a duration query holds a measure of the closed set"
+    }
+  ],
+  "flaky": [],
+  "excluded_e2e": ["src/apps/server/e2e-native-methods.test.ts"]
+}
+```
+
+### The verdict of one repository
+
+- KanthorD counts a flaky test as failed when its file is in the change set, and lists it in `promoted_flaky`. A flaky test in another file passes, and the report, the evidence and the span name it.
+
+| Verdict    | Condition                                                                                                                                                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `absent`   | The repository holds no declaration.                                                                                                                                                                                       |
+| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                                     |
+| `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with exit 0 at the base. Also an invalid report or a time-limit end at the head, with a valid base result in time. |
+| `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                                            |
+
+- `passed`, `base_red` and `absent` pass the release gate and go to the reviewer. `base_red` routes no revision and gives no `criterion-not-met`.
+
+### The base check
+
+- On a failure at the head, KanthorD runs the same command with the same changes file on the base head, in the base-head clone of [the environment classification](#the-environment-classification).
+- An invalid report or a time-limit end at the head first runs the base check. A valid base result in time gives `failed`.
+- After a test failure at the head, an invalid report or a time-limit end of the base run gives no `base_red`, and the head failure counts.
+- KanthorD does not rerun the whole command after a test failure.
+
+### The stops
+
+| Condition                                                   | Stop                                                                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Invalid declaration                                         | `environment_failed`, class `affected_invalid`                                          |
+| Invalid report at the head and at the base                  | `environment_failed`, class `affected_invalid`                                          |
+| `time_limit_s` ends the command at the head and at the base | `environment_failed`, class `affected_timeout`                                          |
+| The wall deadline ends the command                          | The `budget_end` class                                                                  |
+| A signal end, or an exit from 129 to 192                    | The `infrastructure` class: one rerun, then `worker.verification.infrastructure_failed` |
+| Exit 127 at the head and at the base                        | `environment_failed`, class `command_absent`                                            |
+
+- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. The stop detail holds the binding, the head commit, the command, the exit code and the parse error or the limit.
+- The release of the stop follows [the failure of an execution](project-service.impl.md#the-failure-of-an-execution). A new base commit, or a rebuild, opens the gate again.
+- The existing limits stay: the `no_progress` rule of the unit loop, the wall budget and the rework limit of the Mission Service.
+
+### The evaluation
+
+1. The evaluation runs the listed commands and submits the evidence `Evaluation verification results`.
+2. When the listed commands and the setup pass, it runs the affected command of each checkout. The change set comes from the snapshot checkout, with the base of `addedFiles` of `evaluation-input.ts`.
+3. It submits the evidence `Affected test results`.
+4. The verdict `failed` gives `criterion-not-met` with the stage `affected` and the affected failure report as the rationale. No agent judges it.
+5. The verdicts `passed` and `base_red` go to the reviewer in the [evaluation prompt](agent.impl.md#prompt-templates).
+
+- `prepareEvaluation` excludes the evidence with the subject `Affected test results` from the support assets, from `snapshotOf` and from `placedOf`.
+- The evidence holds one `produced` asset, `application/json`, canonical JSON:
+
+```json
+{
+  "version": 1,
+  "verdict": "failed",
+  "repositories": [
+    {
+      "binding_id": "binding_01M5SQ3VMP6H1MR49ZHN0EKBDC",
+      "repository": "engine",
+      "command": "pnpm --silent run test:affected",
+      "base_commit": "f0d09a0cbb8f53f69a21d3163c4bd626b00026cf",
+      "head_commit": "88e07e90b2f48caaeebcc7b010b5d6e3f5aed770",
+      "changed_files": 10,
+      "verdict": "failed",
+      "exit_code": 1,
+      "signal": null,
+      "duration_ms": 0,
+      "report": {
+        "version": 1,
+        "selection": "related",
+        "reason": null,
+        "tests": ["..."],
+        "failed": ["..."],
+        "flaky": [],
+        "excluded_e2e": ["..."]
+      },
+      "promoted_flaky": [],
+      "base_run": {
+        "commit": "f0d09a0cbb8f53f69a21d3163c4bd626b00026cf",
+        "exit_code": 0,
+        "failed": []
+      },
+      "output": "<the last 4 KiB>"
+    }
+  ]
+}
+```
+
+- `promoted_flaky` lists each flaky test id that KanthorD counts as failed under the flaky rule.
+
+### The revision text
+
+The release gate renders `task-revision` with a rationale of this form:
+
+```text
+The affected test run of repository engine failed. KanthorD ran `pnpm --silent run test:affected` for 10 changed files. The run selected 177 test files, and 1 test failed: src/tracking/service.test.ts > a duration query holds a measure of the closed set. Each selected test imports a changed file directly or through other files. Change the code or the test so that every selected test passes.
+```
+
+The results hold the affected command with its exit code. The output is the last 4 KiB of the run.
+
+The spans of the affected run follow [tracking-service.impl.md](tracking-service.impl.md#the-affected-run-spans).
 
 ## Workspace
 
@@ -1687,6 +1881,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `action_unsettled`                        | any                                                              | `unattributed`, suspects `worker_action`, `infrastructure`         |
 | `criterion-not-met`, stage `setup`        | none                                                             | `unattributed`, suspects `environment`, `model`                    |
 | `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                       | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `affected`     | any                                                              | `unattributed`, suspects `model`, `plan`                           |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                      | `model.work_defect`                                                |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                    | `model.standard_violation`                                         |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                    | `plan.criterion_unstated`                                          |
@@ -1694,7 +1889,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
-- The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
+- The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
 - Each unmet item of the judgement holds the required field `ground`: `stated`, `standard` or `unstated`. A reply with no `ground` goes through the repair turn.
 - The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.
 - Tests assert one cause for each row, and the `timed_out` suspects of a `no_progress` stop and of a budget end.
