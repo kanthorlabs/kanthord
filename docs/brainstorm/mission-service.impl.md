@@ -198,7 +198,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - The import compares the bindings of a nonterminal node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
 - An import compares no content of a terminal node. A terminal node with an unchanged `filename` is a no-op.
 - The import resolves no binding name and no `depends_on` name of a terminal node, and it writes no revision for it. The node keeps its pinned bindings and its dependencies. The import compares a task of a terminal node by its `filename` and its node alone.
-- A new `filename` of a terminal node answers 409 `mission.import.terminal_change`. A task that enters, leaves or changes its `filename` in a terminal node answers the same code. An omitted terminal node also answers it.
+- A new `filename` of a terminal node answers 409 `mission.import.terminal_change`. A task that enters, leaves or changes its `filename` in a terminal node answers the same code. An omitted terminal node also answers it. To remove a node that holds an attempt, a human discards it, then keeps its unchanged file in the plan.
 - A nonterminal node can name a terminal node in `depends_on`. An import that retires a node keeps the dependency of a terminal dependent on that node.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
 - The preview digest covers the mission identity, the mission version, the normalized entries and the sorted `creates`, `updates` and `retirements` sets. A classification change between the preview and the apply, for example after a discard, answers 409 `mission.import.retirement_mismatch`.
@@ -586,6 +586,20 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - `mission.assessment.submit` hands the revoke cause `assessment` and the states of its transition to the revocation of the reviewer execution. A `criterion-not-met` submit also hands its rework `cause` to the revocation.
 - At the rework limit, it also hands the rework count and `mission.rework_limit`.
 - A refused act writes no act trace. A lost act trace changes no state, and no service reads it.
+
+## The import trace
+
+Each import apply writes one trace through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project and no node, and it holds a null attempt.
+
+- The operation of the root span is `mission.import`. The root span starts and ends at the time of the apply.
+- The root span holds `kanthord.project.id`, `kanthord.mission.id`, `kanthord.mission.version.from`, `kanthord.mission.version.to`, `kanthord.import.creates`, `kanthord.import.updates`, `kanthord.import.retirements`, `kanthord.import.removed_edges` and `kanthord.human.username`, the account of the actor.
+- The four `kanthord.import.*` counts are the counts of the `creates`, `updates`, `retirements` and `removed_edges` sets of the plan check.
+- An applied import has the status `Ok`. `kanthord.mission.version.to` is the mission version after the commit.
+- A refused apply has the status `Error`. `error.type` holds the error code. `kanthord.import.violation_codes` holds the distinct violation codes, sorted, at most 128. `kanthord.mission.version.to` equals `kanthord.mission.version.from`.
+- A refused apply is an apply that fails after the plan check, for example with a violation or with `mission.import.retirement_mismatch`.
+- The reason of the apply is the telemetry text `reason` of the root span.
+- A preview writes no trace. An apply that fails before the plan check, for example with a stale mission version, writes no trace.
+- A failed trace write never fails the import. A lost import trace changes no state, and no service reads it.
 
 ## The rebind
 
