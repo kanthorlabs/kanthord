@@ -414,7 +414,7 @@ After a human unblock with no verdict, a cleared assessment that does not pass g
 Before a release with evidence, the execution runs the release gate.
 The release gate merges `origin/<base_branch>` again in every checkout and runs every verification of the node and of each task in a clean local clone of each checkout.
 A failed verification of the release gate sends a revision turn to the unit that owns the command, and the release gate runs again after that unit passes.
-After every verification passes, the release gate of an `implement` node runs the affected test command of each repository that declares one. A failure of that run sends a revision turn to the node unit.
+After every verification passes, the release gate of an `implement` node runs the affected test command of each repository that declares one. The verdict `failed` of that run sends a revision turn to the node unit.
 The release gate is the only path to a release with no further work.
 The execution pushes the node branch of every checkout before every release, and it submits the evidence only after every push succeeds.
 Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding.
@@ -619,7 +619,7 @@ The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
-On an `implement` node, the evaluation runs the affected test command of each repository that declares one before the judgement. A failure of that run gives `criterion-not-met` with no judgement. [worker-service.impl.md](worker-service.impl.md#the-affected-test-run) holds the rules.
+On an `implement` node, the evaluation runs the affected test command of each repository that declares one before the judgement. The verdict `failed` of that run gives `criterion-not-met` with no judgement. [worker-service.impl.md](worker-service.impl.md#the-affected-test-run) holds the rules.
 For an `examine` node, the judgement can hold one fix-node proposal for each defect inside a direct `implement` dependency.
 A judgement with proposals writes an `undetermined` assessment that holds them.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.

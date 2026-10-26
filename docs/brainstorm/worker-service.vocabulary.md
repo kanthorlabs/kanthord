@@ -403,7 +403,7 @@ The report of "Add password reset" holds `selection: "related"` and one failed t
 
 ## test id
 
-A test id is `{ file, name }`: the test file and the full name of the test, with the names of its suites and its own name joined by `>`.
+A test id is `{ file, name }`: the test file and the full name of the test, with the names of its suites and its own name joined with a space, `>` and a space.
 `{ "file": "src/auth/reset.test.ts", "name": "reset > rejects an expired token" }` is a test id.
 
 ## resource budget

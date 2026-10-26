@@ -1537,7 +1537,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - `selection` is one of `related`, `all` and `none`. When the map is unsure, the selector selects all tests in its scope.
 - `reason` is a nonblank text of at most 256 bytes for `all`, and null otherwise.
 - `tests` lists each selected test file. `none` requires an empty list.
-- `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with `>`. A file that fails to load gives one id with the file path as its name.
+- `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with a space, `>` and a space. A file that fails to load gives one id with the file path as its name.
 - Each `file` of `failed` and `flaky` is in `tests`. `failed` and `flaky` hold no common id.
 - The selector retries a failed test file once. A test that fails and then passes is flaky.
 - `excluded_e2e` lists each e2e test file that the selection reached and left out.
@@ -1608,7 +1608,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 5. The verdicts `passed` and `base_red` go to the reviewer in the [evaluation prompt](agent.impl.md#prompt-templates).
 
 - `prepareEvaluation` excludes the evidence with the subject `Affected test results` from the support assets, from `snapshotOf` and from `placedOf`.
-- The evidence holds one `produced` asset, `application/json`, canonical JSON:
+- The asset of the evidence follows [Evidence content](mission-service.impl.md#evidence-content). Its content is this canonical JSON:
 
 ```json
 {
@@ -1631,7 +1631,12 @@ The worker enforces the verdict. The admission of the Mission Service does not c
         "selection": "related",
         "reason": null,
         "tests": ["..."],
-        "failed": ["..."],
+        "failed": [
+          {
+            "file": "src/tracking/service.test.ts",
+            "name": "a duration query holds a measure of the closed set"
+          }
+        ],
         "flaky": [],
         "excluded_e2e": ["..."]
       },
