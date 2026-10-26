@@ -86,7 +86,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
 - The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.
 - A registration that ends by expiry frees one place under the instance count of its binding.
-- The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. It ends every live registration of the group in the transaction of the caller and opens no transaction. A removed or unavailable worker binding holds no live registration.
+- The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. It ends every live registration of the group in the transaction of the caller and opens no transaction. A removed worker binding, or an external-harness binding with `instance_count: 0`, holds no live registration. A native binding with `worker_instances: []` keeps the draining registrations until their executions end.
 - A registration of a binding whose live registrations reach its instance count, or of an unavailable binding, answers 409 `worker.registration.slot_unavailable`, the code of the resume.
 - The same client identity registers again with a fresh idempotency key, after an expiry or after its deregistration.
 - The expiry proves no stop, and physical stop and capacity reuse are the B9 items SC5 and W5.
