@@ -14,6 +14,7 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | How do I go from a fresh install to a first task? | [From a fresh install to the first task](tutorials/first-task.md)                                                                 |
 | How do I run it in a container?                   | [Run in a container](how-to-guides/run-in-a-container.md)                                                                         |
 | How do I reach it from a phone or a domain?       | [Mac with Tailscale](how-to-guides/run-on-a-mac-with-tailscale.md), [VPS](how-to-guides/run-on-a-vps.md)                          |
+| How do I run the tests that a change reaches?     | [Declare the affected tests of a repository](how-to-guides/declare-affected-tests.md)                                             |
 | How do I authenticate?                            | [Human JWT generation](reference/auth/jwt.md) and [verification](reference/gateway/verify.md)                                     |
 | How does the system work?                         | [Service architecture](explanation/architecture.md)                                                                               |
 | How does a worker do the work of a node?          | [Workers explained](explanation/worker.md)                                                                                        |
