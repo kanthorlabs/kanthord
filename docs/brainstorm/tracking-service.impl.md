@@ -71,18 +71,18 @@ The Worker Service writes these facts for [the affected test run](worker-service
 - An affected span holds `kanthord.binding.id` and `kanthord.commit` of the tested head. A base span holds the base commit.
 - An affected span adds these attributes at its end:
 
-| Attribute                              | Type     | Value                                               |
-| -------------------------------------- | -------- | --------------------------------------------------- |
-| `kanthord.affected.verdict`            | string   | `passed`, `failed` or `base_red`                    |
-| `kanthord.affected.selection`          | string   | `related`, `all`, `none` or `invalid`               |
-| `kanthord.affected.reason`             | string   | The reason of `all`. Absent otherwise.              |
-| `kanthord.affected.changed_count`      | int      | Entries of the change set                           |
-| `kanthord.affected.test_count`         | int      | Entries of `tests`                                  |
-| `kanthord.affected.failed_count`       | int      | Failed test ids, after the flaky rule               |
-| `kanthord.affected.flaky_count`        | int      | Flaky test ids, after the flaky rule                |
-| `kanthord.affected.excluded_e2e_count` | int      | Entries of `excluded_e2e`                           |
-| `kanthord.affected.tests`              | string[] | The first 128 entries of `tests` (`COLLECTION_MAX`) |
-| `kanthord.affected.failed`             | string[] | The first 128 failed test ids as `<file> > <name>`  |
+| Attribute                              | Type     | Value                                                                        |
+| -------------------------------------- | -------- | ---------------------------------------------------------------------------- |
+| `kanthord.affected.verdict`            | string   | `passed`, `failed` or `base_red`                                             |
+| `kanthord.affected.selection`          | string   | `related`, `all`, `none` or `invalid`                                        |
+| `kanthord.affected.reason`             | string   | The reason of `all`. Absent otherwise.                                       |
+| `kanthord.affected.changed_count`      | int      | Entries of the change set                                                    |
+| `kanthord.affected.test_count`         | int      | Entries of `tests`                                                           |
+| `kanthord.affected.failed_count`       | int      | Failed test ids, after the flaky rule                                        |
+| `kanthord.affected.flaky_count`        | int      | Flaky test ids, after the flaky rule                                         |
+| `kanthord.affected.excluded_e2e_count` | int      | Entries of `excluded_e2e`                                                    |
+| `kanthord.affected.tests`              | string[] | The first 128 entries of `tests` (`COLLECTION_MAX`), and at most 16384 bytes |
+| `kanthord.affected.failed`             | string[] | The first 128 failed test ids as `<file> > <name>`, and at most 16384 bytes  |
 
 - The texts of the span stay `command` and `output`.
 - `worker.release_gate` ends with `kanthord.release_gate.affected`, the verdict of the node, `absent` included.

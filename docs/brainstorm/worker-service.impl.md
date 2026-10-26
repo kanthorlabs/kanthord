@@ -1568,12 +1568,12 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 - KanthorD counts a flaky test as failed when its file is in the change set, and lists it in `promoted_flaky`. A flaky test in another file passes, and the report, the evidence and the span name it.
 
-| Verdict    | Condition                                                                                                                                                                                                                  |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `absent`   | The repository holds no declaration.                                                                                                                                                                                       |
-| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                                     |
-| `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with exit 0 at the base. Also an invalid report or a time-limit end at the head, with a valid base result in time. |
-| `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                                            |
+| Verdict    | Condition                                                                                                                                                                                                                   |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `absent`   | The repository holds no declaration.                                                                                                                                                                                        |
+| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                                      |
+| `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with a valid base report. Also an invalid report or a time-limit end at the head, with a valid base result in time. |
+| `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                                             |
 
 - `passed`, `base_red` and `absent` pass the release gate and go to the reviewer. `base_red` routes no revision and gives no `criterion-not-met`.
 
@@ -1583,19 +1583,21 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - An invalid report or a time-limit end at the head first runs the base check. A valid base result in time gives `failed`.
 - After a test failure at the head, an invalid report or a time-limit end of the base run gives no `base_red`, and the head failure counts.
 - KanthorD does not rerun the whole command after a test failure.
+- A setup failure of the base-head clone stops the execution with `environment_failed` and the class `setup_failed`.
 
 ### The stops
 
-| Condition                                                   | Stop                                                                                    |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Invalid declaration                                         | `environment_failed`, class `affected_invalid`                                          |
-| Invalid report at the head and at the base                  | `environment_failed`, class `affected_invalid`                                          |
-| `time_limit_s` ends the command at the head and at the base | `environment_failed`, class `affected_timeout`                                          |
-| The wall deadline ends the command                          | The `budget_end` class                                                                  |
-| A signal end, or an exit from 129 to 192                    | The `infrastructure` class: one rerun, then `worker.verification.infrastructure_failed` |
-| Exit 127 at the head and at the base                        | `environment_failed`, class `command_absent`                                            |
+| Condition                                                             | Stop                                                                                    |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Invalid declaration                                                   | `environment_failed`, class `affected_invalid`                                          |
+| No valid head report, and an invalid report at the base               | `environment_failed`, class `affected_invalid`                                          |
+| No valid head report, and `time_limit_s` ends the command at the base | `environment_failed`, class `affected_timeout`                                          |
+| The wall deadline ends the command                                    | The `budget_end` class                                                                  |
+| A signal end, or an exit from 129 to 192                              | The `infrastructure` class: one rerun, then `worker.verification.infrastructure_failed` |
+| No valid head report, and exit 127 at the base                        | `environment_failed`, class `command_absent`                                            |
 
-- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. The stop detail holds the binding, the head commit, the command, the exit code and the parse error or the limit.
+- With no valid report at the head, the class of the base result decides the stop. An invalid report, a time-limit end and exit 127 at the head are no valid report.
+- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. The stop detail holds the binding, the commit of the base head, the command, the exit code and the parse error or the limit.
 - The release of the stop follows [the failure of an execution](project-service.impl.md#the-failure-of-an-execution). A new base commit, or a rebuild, opens the gate again.
 - The existing limits stay: the `no_progress` rule of the unit loop, the wall budget and the rework limit of the Mission Service.
 
