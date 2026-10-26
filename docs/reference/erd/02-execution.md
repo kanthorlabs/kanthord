@@ -122,7 +122,7 @@ erDiagram
         text evidence_ids "JSON set"
         text dependency_outcome_ids "JSON set, empty for an implement node and a human assessment"
         text tested_input "JSON TestedInput, null for a human assessment"
-        text gate_files "JSON list of binding_id and paths, null with no changed gate file"
+        text gate_files "JSON list of binding_id and paths, null when the submit omits it and for a human assessment"
         text execution_id "execution_ + ULID, null for a human assessment"
         text actor "JSON human Actor, null for an execution assessment"
         integer node_revision "pin of the attempt, or current at the act for attempt 0"

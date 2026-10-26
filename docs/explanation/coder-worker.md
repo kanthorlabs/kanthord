@@ -419,7 +419,7 @@ A flaky test of the report counts as failed when its file is in the change set. 
 
 | #   | Result at the node head                                                    | Class           | What the worker does                                                                |
 | --- | -------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------- |
-| 1   | `time_limit_s` ended the command                                           | Timeout         | Stops with `environment_failed` and the code `affected_timeout`. Runs no base check |
+| 1   | `time_limit_s` ended the command                                           | Timeout         | Stops with `environment_failed` and the code `affected_timeout`, with no base check |
 | 2   | The command exited with code 127                                           | No valid report | Runs the base check                                                                 |
 | 3   | No report, an invalid report, or an exit code that does not match `failed` | No valid report | Runs the base check                                                                 |
 | 4   | A valid report with one or more failed tests after the flaky rule          | Failed tests    | Runs the base check                                                                 |
@@ -442,7 +442,7 @@ The base check uses the setup of the base-head clone. When that setup fails, the
 
 The verdict of the node is the first verdict of this list that one checkout holds: `failed`, `base_red`, `passed`, `absent`. `base_red` passes the release gate and goes to the reviewer. It routes no revision turn and gives no `criterion-not-met`.
 
-The declaration can list **gate files** in `gate_files`, for example the selector of the repository. The worker compares them with the change set, also with the previous path of a rename. The evaluation records each changed gate file in the assessment. A human then lands the node: a pull request with the landing `kanthord` gets no merge from KanthorD, and its text names each changed gate file. KanthorD refuses a `merge_push` action of that node.
+The declaration can list **gate files** in `gate_files`, for example the selector of the repository. The worker compares them with the change set, also with the previous path of a rename. The evaluation records each changed gate file in the assessment. A human then lands the node. KanthorD does not merge its pull request, also with the landing `kanthord`. The pull request text names each changed gate file. KanthorD refuses a `merge_push` action of that node.
 
 The revision text of a `failed` verdict names the repository, the command and the count of changed files. It also names the count of selected test files and each failed test, at most 20. For example:
 

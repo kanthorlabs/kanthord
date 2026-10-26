@@ -1429,7 +1429,7 @@ The reviewer reruns a code failure up to 2 times on the same commit, unless the 
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
-The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only --no-renames <base>...HEAD`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
+The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
 The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
@@ -1510,7 +1510,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 - The worker writes both files in `<workspace key>/affected/<binding name>/`, outside every checkout, with mode `0600`. It removes the directory after the run.
 - With no `KANTHORD_CHANGES`, the command computes the change set from `origin/<base branch>` and the working tree, and it prints the report. The command thus also runs outside KanthorD.
-- The worker computes the changed gate files of each repository with `changedGateFiles`. A path of `gate_files` of the base declaration is a changed gate file when it equals the `path` or the `previous_path` of an entry of the change set. The list holds each path once, sorted.
+- The worker computes the changed gate files of each repository with `changedGateFiles`. A changed gate file is a path of `gate_files` of the base declaration. It equals the `path` or the `previous_path` of an entry of the change set. The list holds each path once, sorted.
 
 ### The changes file
 
@@ -1603,7 +1603,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 | No valid head report, and exit 127 at the base                        | `environment_failed`, class `command_absent`                                            |
 
 - With no valid report at the head, the class of the base result decides the stop. An invalid report and exit 127 at the head are no valid report.
-- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. A stop after the base check holds the binding, the commit of the base head, the command, the exit code and the parse error or the limit in its detail.
+- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. The detail of a stop after the base check holds the binding, the commit of the base head, the command and the exit code. It also holds the parse error or the limit.
 - The detail of a time-limit stop at the head holds `binding_id`, the head commit as `commit`, `command` and `time_limit_s`. `redactedDetail` keeps `binding_id` and `commit` of every affected stop detail and passes every other string value through `redactReason`.
 - The release of the stop follows [the failure of an execution](project-service.impl.md#the-failure-of-an-execution). A new base commit, or a rebuild, opens the gate again.
 - The existing limits stay: the `no_progress` rule of the unit loop, the wall budget and the rework limit of the Mission Service.
@@ -1720,9 +1720,9 @@ B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, acros
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
 The operands take the node branch from `node_branch` of the claim.
 It passes the request key `<node id>/<attempt>/<FrozenAction.key>`, and it appends the snapshot commit for `merge_push`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6`. For the reuse of a pull request, it appends the number of the reused pull request and the snapshot commit, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9`.
-After a `kanthord` landing pull request action submits its request evidence, and `gate_files` of its action context entry is empty, the action performer calls `intake.action.perform` once more with `merge_evidence_id` set to the evidence identity. The merge request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request/merge/b4c5d6`. A failed merge changes no return item.
+A `kanthord` landing pull request action submits its request evidence. When `gate_files` of its action context entry is empty, the action performer then calls `intake.action.perform` once more with `merge_evidence_id` set to the evidence identity. The merge request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request/merge/b4c5d6`. A failed merge changes no return item.
 
-After the dispatch loop, the action performer calls `intake.action.perform` once per required `kanthord` landing pull request action whose request evidence has no end state and whose `gate_files` is empty.
+After the dispatch loop, the action performer calls `intake.action.perform` once per required `kanthord` landing pull request action whose request evidence has no end state. It skips an action whose `gate_files` is not empty.
 It passes `merge_evidence_id` = that request evidence id and the new tested commit.
 The request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`.
 A failed call changes no return item and logs a warning with the evidence identity.
@@ -1843,7 +1843,7 @@ An external harness must release before the `expired_at` of its execution record
 Every execution learns of the end from a claim check or from its first refused call, and aborts then. The placement of its instance changes no part of this rule.
 A native execution reads its claim after each agent turn and before each task cycle.
 A claim that is not `running`, or a read that the Scheduler refuses as ended, ends the execution as `revoked`. A read that fails for another reason ends nothing.
-A credential report or a release lookup that the server refuses as ended also ends the execution as `revoked`. The refusal code is `gateway.invocation.execution_proof_failed` or `scheduler.execution.not_running`. KanthorD drops the refused report, sends no release and keeps the worker in its pull loop.
+A credential report that the server refuses as ended also ends the execution as `revoked`. So does the claim read after a lost release answer. The refusal code is `gateway.invocation.execution_proof_failed` or `scheduler.execution.not_running`. After a refused credential report, KanthorD sends no release. The worker stays in its pull loop.
 A pause of the node therefore stops a native execution within one agent turn.
 On revocation or loss, the execution aborts its pi session and dispatches nothing after.
 Abort does not prove that every descendant process stops.
