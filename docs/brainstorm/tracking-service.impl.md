@@ -316,7 +316,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `instance_busy_ratio`: the sum of `duration_ms` of the root spans in the range for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
 - Every measure other than `span_duration` ignores `operation`.
 - `instance_busy_ratio` takes the `group_by` value `worker_instance` only. Another `group_by` with `instance_busy_ratio` answers 400 `gateway.request.validation_failed`.
-- The `key` of an `instance_busy_ratio` item is the instance name. Its item holds `key`, `bucket_start`, `count` (the root spans) and `ratio`, and no percentile.
+- The `key` of an `instance_busy_ratio` item is the instance key of [the execution trace](scheduler-service.impl.md#the-execution-trace). It covers every placement. Its item holds `key`, `bucket_start`, `count` (the root spans) and `ratio`, and no percentile.
 - An open root span adds nothing. A root span that starts inside the range adds its time up to the end of the range or of its bucket. With a `bucket`, the length of the bucket replaces the length of the range.
 - The value of `revision_turns` is the count of the `scheduler.transition` spans of the attempt from `Evaluating` to `Available` in the range.
 - The range cuts an attempt: a transition outside the range does not count.
