@@ -63,9 +63,7 @@ The import condition is state `Pending` or `Available` with attempt `0`. The imp
 These additional rules apply:
 
 - An import compares no content of a terminal node (`Completed` or `Discarded`). A terminal node with an unchanged `filename` is a no-op. The import resolves no binding name and no `depends_on` name of that node.
-- The import fails with `mission.import.terminal_change` for a new `filename` of a terminal node. It also fails for a task that enters, leaves or changes its `filename` in that node, and for a retirement of that node. The message of a retirement is "Import cannot retire a terminal node. Keep its unchanged file in the plan.".
-- A retirement of a node that holds an attempt fails with `mission.import.condition_failed`. The message is "Import cannot retire a node that holds an attempt. Discard the node, then keep its unchanged file in the plan.".
-- To remove a node that holds an attempt, discard it, then keep its unchanged file in the plan. An import that omits the file of a discarded node fails with `mission.import.terminal_change`.
+- The import fails with `mission.import.terminal_change` for a new `filename` of a terminal node. It also fails for a task that enters, leaves or changes its `filename` in that node, and for a retirement of that node.
 - A change of only `depends_on` requires a nonterminal node, not the import condition. The dependency rules of [dependency](dependency.md#function-description) apply.
 - A new dependency of a kept node requires no live claim on that node. Only apply checks this rule.
 - An import that adds an unmatched pair of a node and a claimable state fails with `mission.node.tags_unmatched`. The preview lists one violation for each node file with an added pair.
@@ -78,7 +76,7 @@ The import does not unblock a node, reopen an attempt or change priority. It rec
 
 ### Re-import an applied plan
 
-The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`. To remove a node that holds an attempt, discard it, then keep its unchanged file in the plan.
+The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`.
 
 To edit an applied plan:
 
@@ -117,7 +115,7 @@ The `apply.json` of the apply:
 }
 ```
 
-The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path. To remove a node that holds an attempt, discard it, then keep its unchanged file in the plan. An import that omits the file of a discarded node fails with `mission.import.terminal_change`.
+The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path.
 
 ## Expected response
 
