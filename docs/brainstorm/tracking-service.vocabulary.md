@@ -196,7 +196,7 @@ The set of each category is closed. `unattributed` has no subcategory.
 - **worker_action**: `gate_commit`, `merge_base`, `release_gate`, `review_flow`, `step_failed`
 - **llm_provider**: `rate_limited`, `quota_exhausted`, `unavailable`
 - **model**: `work_defect`, `standard_violation`, `verification_failed`, `no_progress`, `reply_invalid`, `protocol_violation`, `output_truncated`, `budget_exhausted`, `judgement_wrong`
-- **environment**: `setup_failed`, `command_absent`, `flaky_verification`, `verification_hang`, `repository_hook`
+- **environment**: `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout`, `flaky_verification`, `verification_hang`, `repository_hook`
 - **infrastructure**: `verification_killed`, `network`, `execution_lost`
 - **human**: `intervention`, `configuration`
 

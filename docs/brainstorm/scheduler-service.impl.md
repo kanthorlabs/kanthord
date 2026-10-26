@@ -63,7 +63,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   `false` states that the execution of the attempt requires no further work.
   `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed`.
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
-  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent`.
+  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent | affected_invalid | affected_timeout`.
   A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance).
   A `stop` requires `further_work: true`, and a `stop` with `further_work: false` answers 400 `gateway.request.validation_failed`.
   The Mission Service reads both fields for routing in the release transaction. The execution row stores `stop`, and nothing stores `further_work`.
@@ -230,7 +230,7 @@ The collaborations of the match are below.
 
 ## The environment gate
 
-- The stop reason `environment_failed` ends an execution whose environment fails, under [the environment classification](worker-service.impl.md#the-environment-classification). Its `stop.code` is `setup_failed` or `command_absent`, the closed set `EnvironmentFailure` of `src/scheduler/contract.ts`.
+- The stop reason `environment_failed` ends an execution whose environment fails, under [the environment classification](worker-service.impl.md#the-environment-classification) and [the affected test run](worker-service.impl.md#the-stops). Its `stop.code` is `setup_failed`, `command_absent`, `affected_invalid` or `affected_timeout`, the closed set `EnvironmentFailure` of `src/scheduler/contract.ts`.
 - DECIDED 2026-10-23 by Aelita, pending Ulrich: the first layer, before the Onboarding component exists, gives consecutive `environment_failed` releases of a node the growing stop backoff, and the node moves to `Paused` at `mission.consecutive_failure_limit`. The code of the first layer holds this rule.
 - The Onboarding component replaces that rule with the gate below. From then on, an `environment_failed` stop neither counts nor ends the count of [the loss settlement](#loss-settlement), and it sets no `available_at`. The node returns to `Available` or `Waiting`.
 - After the commit of an `environment_failed` release, the release calls `environmentFailed(input)` of the [Onboarding component](project-service.impl.md#the-failure-of-an-execution) with the resource identities of the repository bindings of the node. The environment of each binding is then `failed`.

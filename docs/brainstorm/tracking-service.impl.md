@@ -62,6 +62,33 @@ The Worker Service writes the [`agent.prompt` span](worker-service.impl.md#promp
 The Tracking Service writes the [cause label span](#the-cause) with the producer `tracking`.
 The Project Service writes the [environment trace](project-service.impl.md#the-environment-trace) with the producer `project`.
 
+## The affected run spans
+
+The Worker Service writes these facts for [the affected test run](worker-service.impl.md#the-affected-test-run).
+
+- Each affected run is one `worker.verification` span under `worker.release_gate` or `worker.evaluation`.
+- Every `worker.verification` span holds `kanthord.verification.kind`: `listed`, `affected` or `affected_base`.
+- An affected span holds `kanthord.binding.id` and `kanthord.commit` of the tested head. A base span holds the base commit.
+- An affected span adds these attributes at its end:
+
+| Attribute                              | Type     | Value                                               |
+| -------------------------------------- | -------- | --------------------------------------------------- |
+| `kanthord.affected.verdict`            | string   | `passed`, `failed` or `base_red`                    |
+| `kanthord.affected.selection`          | string   | `related`, `all`, `none` or `invalid`               |
+| `kanthord.affected.reason`             | string   | The reason of `all`. Absent otherwise.              |
+| `kanthord.affected.changed_count`      | int      | Entries of the change set                           |
+| `kanthord.affected.test_count`         | int      | Entries of `tests`                                  |
+| `kanthord.affected.failed_count`       | int      | Failed test ids, after the flaky rule               |
+| `kanthord.affected.flaky_count`        | int      | Flaky test ids, after the flaky rule                |
+| `kanthord.affected.excluded_e2e_count` | int      | Entries of `excluded_e2e`                           |
+| `kanthord.affected.tests`              | string[] | The first 128 entries of `tests` (`COLLECTION_MAX`) |
+| `kanthord.affected.failed`             | string[] | The first 128 failed test ids as `<file> > <name>`  |
+
+- The texts of the span stay `command` and `output`.
+- `worker.release_gate` ends with `kanthord.release_gate.affected`, the verdict of the node, `absent` included.
+- `worker.evaluation` ends with `kanthord.evaluation.affected`. `kanthord.evaluation.stage` takes the [stage values](worker-service.impl.md#the-cause-of-a-stop) of the Worker Service.
+- A stop of the class `affected_invalid` or `affected_timeout` writes the stop attributes of every other stop.
+
 ## Primary store
 
 The primary store is a SQLite database.

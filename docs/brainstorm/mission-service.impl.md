@@ -366,6 +366,7 @@ Repository evidence remains an address, not an upload of repository content.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
 - An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
 - `requirement_key` holds only the key of a `FrozenAction`; every other evidence holds no requirement key.
+- The [affected test run](worker-service.impl.md#the-affected-test-run) submits a separate evidence with the subject `Affected test results`: one `produced` asset of `application/json`, no `verification` field and no requirement key. Its identity joins `evidence_ids` of the assessment. It covers no verification, so the coverage rule of [the verifications](#the-verifications) does not change.
 - An evidence has no natural key. A repeat after a server restart or after the replay window of the Gateway creates a new evidence, and the service accepts that duplicate.
 
 - A repository address holds `binding_id` and `commit`.
