@@ -78,7 +78,7 @@ The import does not unblock a node, reopen an attempt or change priority. It rec
 
 ### Re-import an applied plan
 
-The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`. To remove such a node, follow the [retirement exit](#import-condition).
+The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`. To remove a node that holds an attempt, follow the [retirement exit](#import-condition).
 
 To edit an applied plan:
 
