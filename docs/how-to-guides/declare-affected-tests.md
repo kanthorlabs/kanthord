@@ -22,7 +22,7 @@ Write one command that does these steps in the root of the repository:
 4. Write one JSON report to the path that `KANTHORD_AFFECTED_REPORT` names.
 5. When the report lists no failed test, exit with code 0. When it lists one or more, exit with code 1.
 
-Do not exit with code 127 or with a code from 129 to 192. KanthorD reads exit code 127 as an absent command, and it can stop the execution with `command_absent`. KanthorD reads a code from 129 to 192 as a signal end. It runs the command once more and then stops with `worker.verification.infrastructure_failed`.
+Do not exit with code 127 or with a code from 129 to 192. KanthorD reads exit code 127 as an absent command, and it can stop the execution with `command_absent`. KanthorD reads a code from 129 to 192 as a signal end. It runs the command once more. When the rerun also ends with a signal, KanthorD stops the execution with `worker.verification.infrastructure_failed`.
 
 KanthorD runs the command with `bash -c` in the checkout of the repository, at the node head. The command thus runs the selector code of the node head. The environment of the command is the environment of a verification, plus three variables:
 
@@ -97,7 +97,7 @@ KanthorD computes `files` with `git diff --name-status -z --find-renames <base_c
 | `flaky`        | The test id of each test that failed and then passed in the second run of its file.             |
 | `excluded_e2e` | Each end-to-end test file that the change set reaches and that the selection leaves out.        |
 
-A test id is `{ "file": "<test file>", "name": "<full name>" }`. Join the suite names and the test name with a space, `>` and a space for the full name, for example `server > answers 200`. A test file that fails to load gives one id with the file path as its name.
+A test id is `{ "file": "<test file>", "name": "<full name>" }`. Join the suite names and the test name with a space, `>` and a space. An example full name is `server > answers 200`. A test file that fails to load gives one id with the file path as its name.
 
 KanthorD checks the report with a strict schema. These rules apply:
 
