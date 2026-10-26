@@ -596,7 +596,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - The four `kanthord.import.*` counts are the counts of the `creates`, `updates`, `retirements` and `removed_edges` sets of the plan check.
 - An applied import has the status `Ok`. `kanthord.mission.version.to` is the mission version after the commit.
 - A refused apply has the status `Error`. `error.type` holds the error code. `kanthord.import.violation_codes` holds the distinct violation codes, sorted, at most 128. `kanthord.mission.version.to` equals `kanthord.mission.version.from`.
-- A refused apply is an apply that fails after the plan check, for example with a violation or with `mission.import.retirement_mismatch`.
+- A refused apply is an apply that answers an error code after the plan check, for example a violation code or `mission.import.retirement_mismatch`. Any other failure writes no trace.
 - The reason of the apply is the telemetry text `reason` of the root span.
 - A preview writes no trace. An apply that fails before the plan check, for example with a stale mission version, writes no trace.
 - A failed trace write never fails the import. A lost import trace changes no state, and no service reads it.
