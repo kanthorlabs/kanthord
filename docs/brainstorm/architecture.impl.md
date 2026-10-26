@@ -1467,7 +1467,7 @@ The prompt block:
   - An `agent.turn` shows the provider error, else the model reply. Then it shows the tool calls with a link to each tool span, and the thinking in a `Reveal`.
   - The causal turn of a `provider_failed` stop shows `kanthord.stop.detail` of the root span as its error.
   - An `agent.tool` shows its result text with the outcome, then the arguments of its call from the model reply entry of its turn.
-  - A `worker.verification` shows the `output` text, `process.exit.code` and `kanthord.verification.timed_out`, then the `command` text.
+  - A `worker.verification` shows the `output` text, `process.exit.code`, `kanthord.verification.timed_out` and `kanthord.verification.kind`, then the `command` text. An affected span also shows the selection, the counts, the reason and the failed test ids of [the affected run spans](tracking-service.impl.md#the-affected-run-spans).
   - A `worker.git` and a `worker.gate` show the `error` text and `kanthord.gate.violation`, then `kanthord.git.step`, `kanthord.gate.mode` and `kanthord.gate.changed`.
   - A `worker.task` shows the stop facts `kanthord.stop.*`, then `kanthord.task.revision_count`.
   - A `worker.evaluation` shows `kanthord.evaluation.result`, `kanthord.evaluation.stage`, `kanthord.evaluation.unmet_grounds` and the `rationale` text.

@@ -384,6 +384,26 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a slot reads the same revision. A node that pins an earlier revision therefore runs the current environment.
 - At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there. The docs of `environment show` name them as ignored, and the answer holds no field for them. The repository devcontainer applies only at the `container` placement.
 
+## The affected test declaration
+
+A repository declares its affected test command in the file `.kanthord/affected-tests.json` at the root of the repository. The worker runs it under [the affected test run](worker-service.impl.md#the-affected-test-run).
+
+```json
+{
+  "version": 1,
+  "command": "pnpm --silent run test:affected",
+  "time_limit_s": 600
+}
+```
+
+- The worker reads the file with `fileAtRevision` at `origin/<base branch>`, as `environmentOf` reads `.devcontainer/devcontainer.json`.
+- The read applies at the `server`, `worker` and `container` placements. It does not depend on the stored environment or on the target of the environment.
+- An absent file means no command.
+- `version` is 1. `command` is one nonblank string.
+- `time_limit_s` is optional, an integer from 60 to 3600. The default is 600, the value of `COMMAND_LIMIT_MS`.
+- A file that is no JSON object, that holds another key, or that holds a wrong type stops the execution with `environment_failed` and the class `affected_invalid`. The detail names the file and the parse error.
+- No proof of the Onboarding component runs the command. The first release gate of a node runs it first.
+
 ## The Onboarding component
 
 The Onboarding component of the Project Service lives in `src/project/onboarding.ts`. It resolves, builds and proves the environment of each repository binding in the server process. It holds no table, no column, no worker and no claim.
@@ -441,7 +461,7 @@ The component computes the status of a group in this order. The first rule that 
 - The proof file of a digest is `environments/<identity path>/<digest>.json` of the state directory. The component writes it to a temporary file of the same directory with mode `0600` and renames it.
 - It holds `digest`, `outcome` (`passed` or `failed`), `class`, `origin` (`onboarding` or `execution`), `execution_id`, `command`, `exit_code`, `tail`, `reproduce`, `checks`, `repairs`, `ended_at` and `commit`.
 - `commit` is the base-branch commit of the read that started the run. For the origin `execution`, it is the commit of the last read of the group.
-- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed` or `command_absent`.
+- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed`, `command_absent`, `affected_invalid` or `affected_timeout`. Only the origin `execution` writes `affected_invalid` and `affected_timeout`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
 - `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.

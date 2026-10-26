@@ -10,5 +10,6 @@ These pages answer “How do I do this task?” Each guide is a short sequence o
 - [Run kanthord under a path prefix](run-under-a-path-prefix.md): run the single binary under a path such as `/s/kanthord` behind any reverse proxy, or on a home server with Cloudflare Tunnel and nginx.
 - [Isolate worker instances in containers](isolate-worker-instances-in-containers.md): run each instance of a worker binding in its own container on the host of the single binary. An agent command then reads no file of the server.
 - [Add a toolchain to the worker image](add-a-toolchain-to-the-worker-image.md): build an image with Node.js or another toolchain for the server container.
+- [Declare the affected tests of a repository](declare-affected-tests.md): write the selector command and `.kanthord/affected-tests.json`, so that each `implement` node runs the tests that its change reaches.
 
 For the exact commands and options, see the [reference](../reference/README.md).
