@@ -109,6 +109,8 @@ The schema accepts `follows` type `action_end_state` with a `binding` name, but 
 - `human`: a human merges the pull request.
 - `kanthord`: after the pull request is recorded, the action performer of the Worker Service requests the merge as a separate write. The Intake Service merges the pull request with the tested commit as the head guard. A refused merge leaves the pull request open for a human.
 
+A node whose change set changes a gate file lands with `human` for that attempt, whatever value `landing` holds. A gate file is a path of `gate_files` in the [affected test declaration](../../how-to-guides/declare-affected-tests.md#2-write-the-declaration) of the base branch. The pull request body names each changed gate file. The Mission Service refuses a `merge_push` action of that attempt with `mission.authorization.refused` and the reason `gate_file_changed`.
+
 Only a `pull_request` action holds `landing`. A `merge_push` action with `landing` fails with `400 gateway.request.validation_failed` at the `landing` path.
 
 **Worker**

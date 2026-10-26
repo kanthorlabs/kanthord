@@ -417,12 +417,13 @@ For each checkout, the worker does these steps:
 
 A flaky test of the report counts as failed when its file is in the change set. A flaky test in another file passes. The worker classifies the result of the command at the node head. The first row that matches decides:
 
-| #   | Result at the node head                                                    | Class           | What the worker does |
-| --- | -------------------------------------------------------------------------- | --------------- | -------------------- |
-| 1   | `time_limit_s` ended the command, or the command exited with code 127      | No valid report | Runs the base check  |
-| 2   | No report, an invalid report, or an exit code that does not match `failed` | No valid report | Runs the base check  |
-| 3   | A valid report with one or more failed tests after the flaky rule          | Failed tests    | Runs the base check  |
-| 4   | A valid report with no failed test after the flaky rule                    | Passed          | Verdict `passed`     |
+| #   | Result at the node head                                                    | Class           | What the worker does                                                                |
+| --- | -------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------- |
+| 1   | `time_limit_s` ended the command                                           | Timeout         | Stops with `environment_failed` and the code `affected_timeout`, with no base check |
+| 2   | The command exited with code 127                                           | No valid report | Runs the base check                                                                 |
+| 3   | No report, an invalid report, or an exit code that does not match `failed` | No valid report | Runs the base check                                                                 |
+| 4   | A valid report with one or more failed tests after the flaky rule          | Failed tests    | Runs the base check                                                                 |
+| 5   | A valid report with no failed test after the flaky rule                    | Passed          | Verdict `passed`                                                                    |
 
 The wall deadline, a signal and an exit code from 129 to 192 follow the classes of [step 7](#step-7-the-unit-loop). The wall deadline gives a budget end. The other results give one rerun, and then `worker.verification.infrastructure_failed`.
 
@@ -440,6 +441,8 @@ The **base check** runs the same command with the same changes file in the clone
 The base check uses the setup of the base-head clone. When that setup fails, the execution stops with `environment_failed` and the code `setup_failed`.
 
 The verdict of the node is the first verdict of this list that one checkout holds: `failed`, `base_red`, `passed`, `absent`. `base_red` passes the release gate and goes to the reviewer. It routes no revision turn and gives no `criterion-not-met`.
+
+The declaration can list **gate files** in `gate_files`, for example the selector of the repository. The worker compares them with the change set, also with the previous path of a rename. The evaluation records each changed gate file in the assessment. A human then lands the node. KanthorD does not merge its pull request, also with the landing `kanthord`. The pull request text names each changed gate file. KanthorD refuses a `merge_push` action of that node.
 
 The revision text of a `failed` verdict names the repository, the command and the count of changed files. It also names the count of selected test files and each failed test, at most 20. For example:
 

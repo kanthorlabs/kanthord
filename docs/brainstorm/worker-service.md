@@ -659,13 +659,14 @@ kanthord leaves the earlier pull request open, and a human closes it.
 A revision that removes a repository binding from a node leaves the node branch and the open pull request of that binding in place, and a human closes them.
 The requested-changes text of the unblock reads names the repository binding of each change request.
 
-After the action performer submits the request evidence of a `kanthord` landing pull request, it calls `intake.action.perform` once more.
+After the action performer submits the request evidence of a `kanthord` landing pull request, it calls `intake.action.perform` once more, unless the binding holds a changed gate file in the current assessment.
 It passes the evidence identity of that submission.
 The Intake Service records this call as `github.pull_request_merge` and merges the pull request.
 When the base branch already contains the snapshot commit, the request evidence holds a `branch_push` address, and the action performer makes no merge call.
-After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence.
+After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence and no changed gate file.
 This request uses the current tested commit, so a rework or a restart gets its merge.
 A failed merge changes no return item of the action performer and logs a warning with the evidence identity.
+With a changed gate file, the action performer requests no merge, and a human merges the pull request.
 
 For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.

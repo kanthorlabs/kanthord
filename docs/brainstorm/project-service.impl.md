@@ -21,6 +21,7 @@ The GitHub action catalog holds exactly two actions.
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
 - `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
 - Each action implies its expected end state. Only `pull_request` takes a parameter: the optional `landing`, `human` or `kanthord`, default `human`. With `kanthord`, the action performer requests the merge as a separate outbound write after the request evidence of the attempt exists. With `human`, a human merges. The frozen action copies `landing` with `base_branch`.
+- A change set that changes a gate file of the base declaration lands with `human` for that attempt, whatever `landing` the binding declares. The current assessment of the attempt records the changed gate files under [the affected test run](worker-service.impl.md#the-affected-test-run). The Mission Service refuses a `merge_push` action of that binding for that attempt with `gate_file_changed`.
 - A repository strategy holds at most one action, because a policy configures one external action.
 - The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
 
@@ -401,6 +402,7 @@ A repository declares its affected test command in the file `.kanthord/affected-
 - An absent file means no command.
 - `version` is 1. `command` is one nonblank string.
 - `time_limit_s` is optional, an integer from 60 to 3600. The default is 600, the value of `COMMAND_LIMIT_MS`.
+- `gate_files` is optional, a list of at most 10000 nonblank repository paths with `/`. The default is `[]`. KanthorD compares each path with the paths of the change set as an exact string, with no glob.
 - A file that is no JSON object, that holds another key, or that holds a wrong type stops the execution with `environment_failed` and the class `affected_invalid`. The detail names the file and the parse error.
 - No proof of the Onboarding component runs the command. The first release gate of a node runs it first.
 
