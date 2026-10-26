@@ -1859,34 +1859,35 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 - A rule assigns a category only when a recorded code names the cause. Otherwise the cause is `unattributed`, with the `assigner` `rule` and the `suspects`, the best guess first.
 - The first matching row of the table decides.
 
-| Stop reason or signal                     | Code or evidence                                                 | Cause                                                              |
-| ----------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `provider_failed`                         | `rate_limited`, `quota_exhausted`, `unavailable`                 | `llm_provider.<code>`                                              |
-| `provider_failed`                         | `unauthorized`                                                   | `human.configuration`                                              |
-| `provider_failed`                         | `bad_request`                                                    | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
-| `environment_failed`                      | `setup_failed`, `command_absent`                                 | `environment.<code>`                                               |
-| failed `worker.git` step                  | `fetch_base`, `push`                                             | `unattributed`, suspects `infrastructure`, `worker_action`         |
-| failed `worker.git` step                  | `merge_base`                                                     | `unattributed`, suspects `worker_action`, `environment`            |
-| `operation_failed`                        | `worker.verification.infrastructure_failed`                      | `infrastructure.verification_killed`                               |
-| `operation_failed`                        | prefix `project.binding.`                                        | `human.configuration`                                              |
-| `operation_failed`                        | `worker.git.commit_failed`                                       | `unattributed`, suspects `worker_action`, `environment`            |
-| `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`              | `unattributed`, suspects `model`, `prompt`                         |
-| `operation_failed`                        | other `worker.*` code                                            | `unattributed`, suspects `worker_action`, `infrastructure`         |
-| `operation_failed`                        | prefix `gateway.`, or no code                                    | `unattributed`, suspects `infrastructure`, `worker_action`         |
-| `no_progress`                             | the last verification of the stop detail holds `timed_out: true` | `unattributed`, suspects `environment`, `plan`                     |
-| `no_progress`                             | other                                                            | `unattributed`, suspects `model`, `prompt`, `plan`                 |
-| `budget_end`, `assessment_absent`         | the last verification of the stop detail holds `timed_out: true` | `unattributed`, suspects `environment`, `plan`, `model`            |
-| `budget_end`, `assessment_absent`         | other                                                            | `unattributed`, suspects `plan`, `model`                           |
-| `judgement_invalid`, `report_absent`      | any                                                              | `unattributed`, suspects `model`, `prompt`                         |
-| `action_unsettled`                        | any                                                              | `unattributed`, suspects `worker_action`, `infrastructure`         |
-| `criterion-not-met`, stage `setup`        | none                                                             | `unattributed`, suspects `environment`, `model`                    |
-| `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                       | `unattributed`, suspects `model`, `plan`                           |
-| `criterion-not-met`, stage `affected`     | any                                                              | `unattributed`, suspects `model`, `plan`                           |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                      | `model.work_defect`                                                |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                    | `model.standard_violation`                                         |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                    | `plan.criterion_unstated`                                          |
-| none of the above                         | none                                                             | `unattributed`                                                     |
+| Stop reason or signal                     | Code or evidence                                                         | Cause                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `provider_failed`                         | `rate_limited`, `quota_exhausted`, `unavailable`                         | `llm_provider.<code>`                                              |
+| `provider_failed`                         | `unauthorized`                                                           | `human.configuration`                                              |
+| `provider_failed`                         | `bad_request`                                                            | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
+| `environment_failed`                      | `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout` | `environment.<code>`                                               |
+| failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
+| failed `worker.git` step                  | `merge_base`                                                             | `unattributed`, suspects `worker_action`, `environment`            |
+| `operation_failed`                        | `worker.verification.infrastructure_failed`                              | `infrastructure.verification_killed`                               |
+| `operation_failed`                        | prefix `project.binding.`                                                | `human.configuration`                                              |
+| `operation_failed`                        | `worker.git.commit_failed`                                               | `unattributed`, suspects `worker_action`, `environment`            |
+| `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`                      | `unattributed`, suspects `model`, `prompt`                         |
+| `operation_failed`                        | other `worker.*` code                                                    | `unattributed`, suspects `worker_action`, `infrastructure`         |
+| `operation_failed`                        | prefix `gateway.`, or no code                                            | `unattributed`, suspects `infrastructure`, `worker_action`         |
+| `no_progress`                             | the last verification of the stop detail holds `timed_out: true`         | `unattributed`, suspects `environment`, `plan`                     |
+| `no_progress`                             | other                                                                    | `unattributed`, suspects `model`, `prompt`, `plan`                 |
+| `budget_end`, `assessment_absent`         | the last verification of the stop detail holds `timed_out: true`         | `unattributed`, suspects `environment`, `plan`, `model`            |
+| `budget_end`, `assessment_absent`         | other                                                                    | `unattributed`, suspects `plan`, `model`                           |
+| `judgement_invalid`, `report_absent`      | any                                                                      | `unattributed`, suspects `model`, `prompt`                         |
+| `action_unsettled`                        | any                                                                      | `unattributed`, suspects `worker_action`, `infrastructure`         |
+| `criterion-not-met`, stage `setup`        | none                                                                     | `unattributed`, suspects `environment`, `model`                    |
+| `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                               | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `affected`     | any                                                                      | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                              | `model.work_defect`                                                |
+| `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                            | `model.standard_violation`                                         |
+| `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                            | `plan.criterion_unstated`                                          |
+| none of the above                         | none                                                                     | `unattributed`                                                     |
 
+- The stop classes `affected_invalid` and `affected_timeout` take the cause `environment.<code>`, as `setup_failed` and `command_absent` do.
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
