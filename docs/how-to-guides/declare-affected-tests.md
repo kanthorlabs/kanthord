@@ -20,7 +20,7 @@ Write one command that does these steps in the root of the repository:
 2. Select the test files that the change set reaches.
 3. Run the selected test files. Run each failed test file once more.
 4. Write one JSON report to the path that `KANTHORD_AFFECTED_REPORT` names.
-5. Exit with code 0 when the report lists no failed test. Exit with another code when it lists one or more.
+5. When the report lists no failed test, exit with code 0. When it lists one or more, exit with another code.
 
 KanthorD runs the command with `bash -c` in the checkout of the repository, at the node head. The command thus runs the selector code of the node head. The environment of the command is the environment of a verification, plus three variables:
 
@@ -103,7 +103,7 @@ KanthorD checks the report with a strict schema. These rules apply:
 - The report holds at most 1 MiB. Each list holds at most 10000 entries. Each text holds at most 1024 bytes.
 - The exit code is 0 exactly when `failed` is empty.
 
-A missing report, a report that breaks a rule, or an exit code that does not match `failed` is an invalid report.
+An absent report, a report that breaks a rule, or an exit code that does not match `failed` is an invalid report.
 
 When the map from a changed file to its tests is not certain, select every test in the scope of the selector. Set `selection` to `all`, and write the cause in `reason`.
 
@@ -143,7 +143,7 @@ The worker reads the file at every placement: `server`, `container` and `worker`
 
 ## 4. Check the command outside KanthorD
 
-Write a changes file for your branch, then run the command with the three variables:
+Write `/tmp/changes.json` in the form of [the changes file](#the-changes-file), with the changes of your branch. Then run the command with the three variables:
 
 ```sh
 base=$(git merge-base origin/main HEAD)
