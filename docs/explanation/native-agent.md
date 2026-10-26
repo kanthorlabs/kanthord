@@ -159,7 +159,7 @@ The same order, as a table:
 | 6   | Pinned message | Work prompt                                                         | None                       |
 | 7   | Conversation   | Later instructions and replies                                      | Human messages and replies |
 
-The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. For an `implement` node, it also lists the [affected test command](coder-worker.md#the-affected-test-run) of each repository with a valid declaration, under `## Affected tests`. The model receives it once, at row 6. Row 7 holds what comes after it: the revision instructions, the judgement instructions of `reviewer@1` and the replies of the agent.
+The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. For an `implement` node, it also holds the section `## Affected tests`. That section lists the [affected test command](coder-worker.md#the-affected-test-run) of each repository with a valid declaration. The model receives it once, at row 6. Row 7 holds what comes after it: the revision instructions, the judgement instructions of `reviewer@1` and the replies of the agent.
 
 The agent `env@1` repairs a failed environment of a repository binding on the server. Its system prompt holds `base.md`, `env@1.md`, the binding prompt of its own binding and the worker framing. Its first message holds the failure. It has no Workbench session.
 

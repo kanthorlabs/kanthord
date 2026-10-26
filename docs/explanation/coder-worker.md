@@ -386,10 +386,10 @@ The units can pass one by one while the node as a whole fails. Task 2 can break 
 1. For each checkout, the worker clones the live checkout into `workspaces/<node_id>/release/`, in the layout of the agent root. It runs `git clone --local --no-checkout`, copies the `origin` remote-tracking refs of the live checkout, sets the `origin` URL to the repository address, and checks out the head, detached. The clone holds no ignored file and no untracked file of the live checkout.
 2. It runs the verifications of the node, then the verifications of each task in the order of the plan, at the agent root of the clones. It classifies each result as at step 7. It runs no rerun of a code failure.
 3. It removes the clones after the run, also at a budget end or a stop.
-4. When a command fails, the worker finds the **owner** of the first failed command: the node unit for a node command, the task for a task command. It sends that unit one revision turn with the failed result and its output, and the loop of step 7 runs that unit. After the unit passes, the execution comes back to step 8.
+4. When a command fails, the worker finds the **owner** of the first failed command. The owner is the node unit for a node command, and the task for a task command. It sends that unit one revision turn with the failed result and its output, and the loop of step 7 runs that unit. After the unit passes, the execution comes back to step 8.
 5. When every command passes, the worker runs [the affected test run](#the-affected-test-run) of each checkout in its clone, in checkout order.
 6. The verdict `failed` sends the node unit one revision turn with the text of the affected failure. After the node unit passes, the execution comes back to step 8.
-7. When the verdict of each checkout is `passed`, `base_red` or `absent`, the worker logs `release verified` with the affected verdict, and the execution goes to step 10.
+7. When the verdict of each checkout is `passed`, `base_red` or `absent`, the worker logs `release verified` with the affected verdict. The execution then goes to step 10.
 
 A failure of the release gate never resets the head. The live checkout stays the place of the unit loop, so installed dependencies persist between turns. The unchanged-turn counter also covers the routed revision turns. Two routed revision turns in a row that change no file therefore stop with `no_progress`.
 
@@ -415,7 +415,7 @@ For each checkout, the worker does these steps:
 5. It reads the report and decides the verdict of the checkout.
 6. It removes `affected/<binding name>/`.
 
-A flaky test of the report counts as failed when its file is in the change set. A flaky test in another file passes. The worker classifies the result of the command at the node head. The first matching row decides:
+A flaky test of the report counts as failed when its file is in the change set. A flaky test in another file passes. The worker classifies the result of the command at the node head. The first row that matches decides:
 
 | #   | Result at the node head                                                    | Class           | What the worker does |
 | --- | -------------------------------------------------------------------------- | --------------- | -------------------- |
@@ -424,7 +424,7 @@ A flaky test of the report counts as failed when its file is in the change set. 
 | 3   | A valid report with one or more failed tests after the flaky rule          | Failed tests    | Runs the base check  |
 | 4   | A valid report with no failed test after the flaky rule                    | Passed          | Verdict `passed`     |
 
-The wall deadline, a signal and an exit code from 129 to 192 follow the classes of [step 7](#step-7-the-unit-loop): a budget end, or one rerun and then `worker.verification.infrastructure_failed`.
+The wall deadline, a signal and an exit code from 129 to 192 follow the classes of [step 7](#step-7-the-unit-loop). The wall deadline gives a budget end. The other results give one rerun, and then `worker.verification.infrastructure_failed`.
 
 The **base check** runs the same command with the same changes file in the clone of the base-branch head. The base check then decides:
 
@@ -441,7 +441,7 @@ The base check uses the setup of the base-head clone. When that setup fails, the
 
 The verdict of the node is the first verdict of this list that one checkout holds: `failed`, `base_red`, `passed`, `absent`. `base_red` passes the release gate and goes to the reviewer. It routes no revision turn and gives no `criterion-not-met`.
 
-The revision text of a `failed` verdict names the repository, the command, the count of changed files, the count of selected test files and each failed test, at most 20. For example:
+The revision text of a `failed` verdict names the repository, the command and the count of changed files. It also names the count of selected test files and each failed test, at most 20. For example:
 
 ```text
 The affected test run of repository api failed. KanthorD ran `npm run --silent test:affected` for 2 changed files. The run selected 2 test files, and 1 test failed: src/server.test.ts > server > answers 200 on GET /healthz. Each selected test imports a changed file directly or through other files. Change the code or the test so that every selected test passes.
