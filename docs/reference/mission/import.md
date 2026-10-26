@@ -78,7 +78,7 @@ The import does not unblock a node, reopen an attempt or change priority. It rec
 
 ### Re-import an applied plan
 
-The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`. To remove a node that holds an attempt, discard it, then keep its unchanged file in the plan.
+The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`. To remove such a node, follow the [retirement exit](#import-condition).
 
 To edit an applied plan:
 
@@ -117,7 +117,7 @@ The `apply.json` of the apply:
 }
 ```
 
-The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path. To remove a node that holds an attempt, discard it, then keep its unchanged file in the plan. An import that omits the file of a discarded node fails with `mission.import.terminal_change`.
+The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path. To remove a node that holds an attempt, follow the [retirement exit](#import-condition).
 
 ## Expected response
 
