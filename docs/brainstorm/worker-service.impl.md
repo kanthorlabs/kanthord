@@ -120,10 +120,11 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The handler ends the registration and frees its slot through the Project instance-count collaboration in the same transaction, as registration takes it.
 - Every target that is no live registration of the caller answers 404 `worker.registration.not_found`. This includes an unknown or ended identity, the registration of another client and a newer registration of the same client identity, which stays intact. A delayed request for an ended runtime identity never ends a newer registration.
 - The answer is 200 `{ runtime_identity, registered: false }`.
-- A retry with the same `Idempotency-Key`, caller and target replays the recorded answer after the end, inside one process and the TTL. The operation declares no `replayGuard`. Authentication grants no bypass for a revoked credential or unavailable binding.
+- A retry with the same `Idempotency-Key`, caller and target replays the recorded answer after the end, inside one process and the TTL. The operation declares no `replayGuard`. Authentication grants no bypass for a revoked credential. An ended group gets no handler run, under the ended group answer below.
+- For an ended group, `worker.registration.deregister` answers 404 `worker.registration.ended`. A group ends when its binding is removed, its effective instance count is 0, or a tombstone newer than the token exists. That answer runs no handler and changes no state. Every other authentication failure keeps its 401. Authentication gives this answer before the handler, so it replaces 404 `worker.registration.not_found` for each target.
 - A retry after a restart runs the handler again. It ends the registration when the registration is still live, and it answers 404 when the registration already ended. The worker application and harness extension read that 404 after their own call as the end of their registration.
 - The operation proves no process stop, releases no execution and authorizes no workspace reuse. A live execution follows the [Scheduler liveness rules](scheduler-service.md#liveness). Physical stop and capacity reuse stay B9 SC5 and W5.
-- Tests assert end and slot release in one transaction, same-key replay after the end, a post-restart retry that ends a live registration or answers 404 for an ended one, and 404 for each non-owned target. They assert that a newer registration stays intact and the worker unit calls it at graceful stop.
+- Tests assert end and slot release in one transaction, same-key replay after the end, a post-restart retry that ends a live registration or answers 404 for an ended one, and 404 for each non-owned target. They assert that a newer registration stays intact and the worker unit calls it at graceful stop. They assert 404 `worker.registration.ended` with no handler run for a removed binding, a count of 0 and a tombstone newer than the token, and 401 for each other authentication failure.
 
 ## Resume of a registration
 
@@ -177,7 +178,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The application deregisters only a registration whose runtime identity it knows.
 - The application deregisters at a stop only when no execution is live and no work pull answer failed its schema. An upgrade stops the old process before it starts the new one.
 - A work pull answer that fails its schema ends the pull loop with `gateway.client.answer_invalid`. The application deregisters nothing and exits 1. A restart of the same instance inside the heartbeat window resumes the same registration and the same claim.
-- It exits 0 after a successful deregistration of each registration, or after the 404 that ends a registration. Any other deregistration or cleanup failure exits 1 without a retry.
+- It exits 0 after a successful deregistration of each registration, or after a 404 `worker.registration.not_found` or `worker.registration.ended`. Any other deregistration or cleanup failure exits 1 without a retry.
 - An execution that ends with a release or a closure leaves the registration live, and the application pulls again. A release with a `stop` is a release. An execution that ends with no release and no closure exits 1.
 - A stop during a live execution exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
 - A superseded connection exits with status 3 under [The instance exchange](#the-instance-exchange). Every other stop diagnostic exits 1.
