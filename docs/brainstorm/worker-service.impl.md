@@ -1429,6 +1429,8 @@ The reviewer reruns a code failure up to 2 times on the same commit, unless the 
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
+The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only --no-renames <base>...HEAD`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
+The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
@@ -1508,6 +1510,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 - The worker writes both files in `<workspace key>/affected/<binding name>/`, outside every checkout, with mode `0600`. It removes the directory after the run.
 - With no `KANTHORD_CHANGES`, the command computes the change set from `origin/<base branch>` and the working tree, and it prints the report. The command thus also runs outside KanthorD.
+- The worker computes the changed gate files of each repository with `changedGateFiles`. A path of `gate_files` of the base declaration is a changed gate file when it equals the `path` or the `previous_path` of an entry of the change set. The list holds each path once, sorted.
 
 ### The changes file
 
@@ -1540,6 +1543,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with a space, `>` and a space. A file that fails to load gives one id with the file path as its name.
 - Each `file` of `failed` and `flaky` is in `tests`. `failed` and `flaky` hold no common id.
 - The selector retries a failed test file once. A test that fails and then passes is flaky.
+- The KanthorD selectors rerun the failed test files only when 8 or fewer files hold a failed id, the limit `RERUN_FILE_LIMIT`. With more files, the report lists every failed id in `failed` and an empty `flaky`.
 - `excluded_e2e` lists each e2e test file that the selection reached and left out.
 - The report is at most 1 MiB. Each list holds at most 10000 entries, and each text is at most 1024 bytes.
 - KanthorD parses the report with a strict schema. A missing report, an invalid report, or an exit code that does not match `failed`, is an invalid report.
@@ -1568,19 +1572,20 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 - KanthorD counts a flaky test as failed when its file is in the change set, and lists it in `promoted_flaky`. A flaky test in another file passes, and the report, the evidence and the span name it.
 
-| Verdict    | Condition                                                                                                                                                                                                                   |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `absent`   | The repository holds no declaration.                                                                                                                                                                                        |
-| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                                      |
-| `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with a valid base report. Also an invalid report or a time-limit end at the head, with a valid base result in time. |
-| `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                                             |
+| Verdict    | Condition                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `absent`   | The repository holds no declaration.                                                                                                                                                                    |
+| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                  |
+| `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with a valid base report. Also an invalid report at the head, with a valid base result in time. |
+| `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                         |
 
 - `passed`, `base_red` and `absent` pass the release gate and go to the reviewer. `base_red` routes no revision and gives no `criterion-not-met`.
 
 ### The base check
 
 - On a failure at the head, KanthorD runs the same command with the same changes file on the base head, in the base-head clone of [the environment classification](#the-environment-classification).
-- An invalid report or a time-limit end at the head first runs the base check. A valid base result in time gives `failed`.
+- An invalid report or exit 127 at the head first runs the base check. A valid base result in time gives `failed`.
+- A time-limit end at the head runs no base check. It stops the execution under [the stops](#the-stops).
 - After a test failure at the head, an invalid report or a time-limit end of the base run gives no `base_red`, and the head failure counts.
 - KanthorD does not rerun the whole command after a test failure.
 - A setup failure of the base-head clone stops the execution with `environment_failed` and the class `setup_failed`.
@@ -1590,14 +1595,16 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 | Condition                                                             | Stop                                                                                    |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Invalid declaration                                                   | `environment_failed`, class `affected_invalid`                                          |
+| `time_limit_s` ends the command at the head                           | `environment_failed`, class `affected_timeout`                                          |
 | No valid head report, and an invalid report at the base               | `environment_failed`, class `affected_invalid`                                          |
 | No valid head report, and `time_limit_s` ends the command at the base | `environment_failed`, class `affected_timeout`                                          |
 | The wall deadline ends the command                                    | The `budget_end` class                                                                  |
 | A signal end, or an exit from 129 to 192                              | The `infrastructure` class: one rerun, then `worker.verification.infrastructure_failed` |
 | No valid head report, and exit 127 at the base                        | `environment_failed`, class `command_absent`                                            |
 
-- With no valid report at the head, the class of the base result decides the stop. An invalid report, a time-limit end and exit 127 at the head are no valid report.
-- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. The stop detail holds the binding, the commit of the base head, the command, the exit code and the parse error or the limit.
+- With no valid report at the head, the class of the base result decides the stop. An invalid report and exit 127 at the head are no valid report.
+- `affected_invalid` and `affected_timeout` belong to `EnvironmentFailure`. A stop after the base check holds the binding, the commit of the base head, the command, the exit code and the parse error or the limit in its detail.
+- The detail of a time-limit stop at the head holds `binding_id`, the head commit as `commit`, `command` and `time_limit_s`. `redactedDetail` keeps `binding_id` and `commit` of every affected stop detail and passes every other string value through `redactReason`.
 - The release of the stop follows [the failure of an execution](project-service.impl.md#the-failure-of-an-execution). A new base commit, or a rebuild, opens the gate again.
 - The existing limits stay: the `no_progress` rule of the unit loop, the wall budget and the rework limit of the Mission Service.
 
@@ -1609,6 +1616,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 4. The verdict `failed` gives `criterion-not-met` with the stage `affected` and the affected failure report as the rationale. No agent judges it.
 5. The verdicts `passed` and `base_red` go to the reviewer in the [evaluation prompt](agent.impl.md#prompt-templates).
 
+- The assessment submit holds the changed gate files of each repository in `gate_files`, as `{ binding_id, paths }`. The evaluation omits the key when no gate file changed.
 - `prepareEvaluation` excludes the evidence with the subject `Affected test results` from the support assets, from `snapshotOf` and from `placedOf`.
 - The asset of the evidence follows [Evidence content](mission-service.impl.md#evidence-content). Its content is this canonical JSON:
 
@@ -1712,12 +1720,14 @@ B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, acros
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
 The operands take the node branch from `node_branch` of the claim.
 It passes the request key `<node id>/<attempt>/<FrozenAction.key>`, and it appends the snapshot commit for `merge_push`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6`. For the reuse of a pull request, it appends the number of the reused pull request and the snapshot commit, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9`.
-After a `kanthord` landing pull request action submits its request evidence, the action performer calls `intake.action.perform` once more with `merge_evidence_id` set to the evidence identity. The merge request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request/merge/b4c5d6`. A failed merge changes no return item.
+After a `kanthord` landing pull request action submits its request evidence, and `gate_files` of its action context entry is empty, the action performer calls `intake.action.perform` once more with `merge_evidence_id` set to the evidence identity. The merge request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request/merge/b4c5d6`. A failed merge changes no return item.
 
-After the dispatch loop, the action performer calls `intake.action.perform` once per required `kanthord` landing pull request action whose request evidence has no end state.
+After the dispatch loop, the action performer calls `intake.action.perform` once per required `kanthord` landing pull request action whose request evidence has no end state and whose `gate_files` is empty.
 It passes `merge_evidence_id` = that request evidence id and the new tested commit.
 The request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`.
 A failed call changes no return item and logs a warning with the evidence identity.
+`gate_files` of an action context entry holds the changed gate files of the binding in the current assessment of the attempt.
+When a nonempty `gate_files` skips a merge, the action performer logs the warning "merge skipped: gate files changed" with `evidence_id` and `gate_files`. The pull request then waits for a human.
 
 The operation and the tool answer `{ tool_name: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.
@@ -1833,6 +1843,7 @@ An external harness must release before the `expired_at` of its execution record
 Every execution learns of the end from a claim check or from its first refused call, and aborts then. The placement of its instance changes no part of this rule.
 A native execution reads its claim after each agent turn and before each task cycle.
 A claim that is not `running`, or a read that the Scheduler refuses as ended, ends the execution as `revoked`. A read that fails for another reason ends nothing.
+A credential report or a release lookup that the server refuses as ended also ends the execution as `revoked`. The refusal code is `gateway.invocation.execution_proof_failed` or `scheduler.execution.not_running`. KanthorD drops the refused report, sends no release and keeps the worker in its pull loop.
 A pause of the node therefore stops a native execution within one agent turn.
 On revocation or loss, the execution aborts its pi session and dispatches nothing after.
 Abort does not prove that every descendant process stops.

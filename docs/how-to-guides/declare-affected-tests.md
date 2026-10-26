@@ -18,7 +18,7 @@ Write one command that does these steps in the root of the repository:
 
 1. Read the change set from the file that `KANTHORD_CHANGES` names.
 2. Select the test files that the change set reaches.
-3. Run the selected test files. Run each failed test file once more.
+3. Run the selected test files. Run each failed test file once more. Set a limit on the reruns. The KanthorD selectors rerun the failed files only when 8 or fewer files hold a failed test. With more files, they report each failed test in `failed` and an empty `flaky`.
 4. Write one JSON report to the path that `KANTHORD_AFFECTED_REPORT` names.
 5. When the report lists no failed test, exit with code 0. When it lists one or more, exit with code 1.
 
@@ -119,15 +119,17 @@ Write the file `.kanthord/affected-tests.json` in the root of the repository:
 {
   "version": 1,
   "command": "npm run --silent test:affected",
-  "time_limit_s": 600
+  "time_limit_s": 600,
+  "gate_files": ["package.json", "scripts/affected-tests.mjs"]
 }
 ```
 
-| Field          | Value                                                                                               |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| `version`      | Required. `1`.                                                                                      |
-| `command`      | Required. The selector command, as one nonblank string.                                             |
-| `time_limit_s` | Optional. The time limit of one run of the command in seconds, from 60 to 3600. The default is 600. |
+| Field          | Value                                                                                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `version`      | Required. `1`.                                                                                                                                                                                                                                         |
+| `command`      | Required. The selector command, as one nonblank string.                                                                                                                                                                                                |
+| `time_limit_s` | Optional. The time limit of one run of the command in seconds, from 60 to 3600. The default is 600.                                                                                                                                                    |
+| `gate_files`   | Optional. The repository paths, with `/`, of the files that the command depends on, for example the selector and the test runner configuration. The default is `[]`. KanthorD compares each path with the change set as an exact string, with no glob. |
 
 The file holds no other key. A file that is not valid JSON, that holds another key or that holds a wrong type is an invalid declaration.
 
@@ -180,6 +182,8 @@ The next release gate and the next evaluation of each `implement` node of the re
 
 When a test fails on the node head, KanthorD runs the command on the base head. When each failed test of the node head also fails on the base head, the verdict is `base_red`, and the node passes. Otherwise the node fails. A flaky test counts as failed only when its file is in the change set.
 
+When the change set of a node changes a gate file, a human merges the pull request of the node, also with the landing `kanthord`. The pull request text names each changed gate file. KanthorD refuses a `merge_push` action of that node. See [`strategy.action.landing`](../reference/project/binding.md).
+
 ## Examples
 
 The KanthorD repositories declare their own affected tests:
@@ -187,13 +191,18 @@ The KanthorD repositories declare their own affected tests:
 - [kanthord-engine](https://github.com/kanthorlabs/kanthord-engine/blob/main/scripts/affected-tests.mjs) maps each changed file to its tests through the import graph and runs them with `pnpm --silent run test:files`. Its declaration runs `pnpm --silent run test:affected`.
 - [kanthord-apps](https://github.com/kanthorlabs/kanthord-apps/blob/main/scripts/affected-tests.mjs) selects the tests with `vitest related` and runs them with vitest.
 
+Each declaration lists its gate files in `gate_files`:
+
+- kanthord-engine: `.kanthord/affected-tests.json`, `package.json`, `scripts/affected-tests.mjs`, `scripts/affected-reporter.mjs`, `scripts/test-reporter.mjs`, `scripts/test-path.mjs` and `scripts/pi-tools.mjs`.
+- kanthord-apps: `.kanthord/affected-tests.json`, `package.json`, `scripts/affected-tests.mjs`, `vite.config.ts` and `test/setup.ts`.
+
 Both scripts compute the change set from `origin/main` and the working tree when `KANTHORD_CHANGES` is not set. They also print the report on standard output.
 
 ## Troubleshooting
 
-| Symptom                                                                        | Cause and fix                                                                                                                                                                    |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The execution stops with `environment_failed` and the code `affected_invalid`. | The declaration is invalid. Or the command gives no valid report on the node head, and writes no valid report on the base head. Fix the file or the selector on the base branch. |
-| The execution stops with `environment_failed` and the code `affected_timeout`. | The command gives no valid report on the node head, and reaches `time_limit_s` on the base head. Raise `time_limit_s`, or select fewer tests.                                    |
-| The execution stops with `environment_failed` and the code `command_absent`.   | The command gives no valid report on the node head, and exits with code 127 on the base head. Add the tool to the environment of the repository binding.                         |
-| The work prompt holds no `## Affected tests` section.                          | The base branch holds no declaration, or the declaration is invalid.                                                                                                             |
+| Symptom                                                                        | Cause and fix                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The execution stops with `environment_failed` and the code `affected_invalid`. | The declaration is invalid. Or the command gives no valid report on the node head, and writes no valid report on the base head. Fix the file or the selector on the base branch.                      |
+| The execution stops with `environment_failed` and the code `affected_timeout`. | The command reaches `time_limit_s` on the node head. Or the command gives no valid report on the node head, and reaches `time_limit_s` on the base head. Raise `time_limit_s`, or select fewer tests. |
+| The execution stops with `environment_failed` and the code `command_absent`.   | The command gives no valid report on the node head, and exits with code 127 on the base head. Add the tool to the environment of the repository binding.                                              |
+| The work prompt holds no `## Affected tests` section.                          | The base branch holds no declaration, or the declaration is invalid.                                                                                                                                  |
