@@ -182,13 +182,13 @@ The next release gate and the next evaluation of each `implement` node of the re
 
 When a test fails on the node head, KanthorD runs the command on the base head. When each failed test of the node head also fails on the base head, the verdict is `base_red`, and the node passes. Otherwise the node fails. A flaky test counts as failed only when its file is in the change set.
 
-When the change set of a node changes a gate file, a human merges the pull request of the node, also with the landing `kanthord`. The pull request text names each changed gate file. KanthorD refuses a `merge_push` action of that node. See [`strategy.action.landing`](../reference/project/binding.md).
+When the change set of a node changes a gate file, a human merges the pull request of the node, also with the landing `kanthord`. The pull request text names each changed gate file. KanthorD pushes nothing for a `merge_push` action of that node. The node waits in `External.Requested` until a human lands the node branch with a merge commit or a fast-forward. See [gate files](../reference/project/binding.md#gate-files).
 
 ## Examples
 
 The KanthorD repositories declare their own affected tests:
 
-- [kanthord-engine](https://github.com/kanthorlabs/kanthord-engine/blob/main/scripts/affected-tests.mjs) maps each changed file to its tests through the import graph and runs them with `pnpm --silent run test:files`. Its declaration runs `pnpm --silent run test:affected`.
+- [kanthord-engine](https://github.com/kanthorlabs/kanthord-engine/blob/main/scripts/affected-tests.mjs) maps each changed file to its tests through the import graph and runs them with `pnpm --silent run test:files`. Its declaration runs `pnpm --silent run test:affected`. It runs each reached test that does not import `startTestSshd`, the `src/apps/server/e2e-*.test.ts` files included. `excluded_e2e` lists the reached tests that import `startTestSshd`, or each such test when the selection is `all`.
 - [kanthord-apps](https://github.com/kanthorlabs/kanthord-apps/blob/main/scripts/affected-tests.mjs) selects the tests with `vitest related` and runs them with vitest.
 
 Each declaration lists its gate files in `gate_files`:

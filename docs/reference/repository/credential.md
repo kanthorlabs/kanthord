@@ -19,6 +19,20 @@ Each change adds a revision with an identity `credential_<ULID>` (see [identitie
 
 The server generates the key of an `ssh` credential. Only [`ssh-key-create`](ssh-key.md#ssh-key-create) creates an `ssh` credential, and only [`ssh-key-rotate`](ssh-key.md#ssh-key-rotate) adds its next revision. `create`, `rotate` and `update-metadata` of an `ssh` credential answer `400 credential.entry.unsupported`, and `check` of the platform `ssh` answers `400 credential.check.unsupported`. An `ssh` credential names no host; a repository binding pairs it with an address, and the [host key pin](host-key.md) of the address host decides which host it trusts.
 
+### GitHub token permissions
+
+A `github` credential holds a GitHub token. A repository binding names it in `credential` for a `pull_request` action. Give a fine-grained token these repository permissions on each bound repository:
+
+| Permission      | Access | Use                                                                                                              |
+| --------------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| Metadata        | Read   | Read the repository and the rules of the base branch.                                                            |
+| Pull requests   | Write  | Open the pull request. Read the pull request, its reviews and its review comments.                               |
+| Contents        | Write  | Merge the pull request with the landing `kanthord`. A binding with the landing `human` needs no Contents access. |
+| Checks          | Read   | Read the check runs of the head commit for the [required checks](../project/binding.md#required-checks).         |
+| Commit statuses | Read   | Read the commit statuses of the head commit for the required checks.                                             |
+
+A token without Checks or Commit statuses fails each check of an open pull request. The request then stays unresolved.
+
 No answer contains a secret.
 
 ### list

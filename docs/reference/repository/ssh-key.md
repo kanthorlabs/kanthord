@@ -77,12 +77,14 @@ Each network git operation runs its own SSH agent. Steps 2 to 8 run on the serve
 
 A failure of steps 3 to 6 fails the operation with `repository.connector.ssh_agent_failed`. Its `step` field names the step, and its cause holds the text of the tool, never the key. A worker execution fails with this diagnostic. A binding operation reports only a `failure_reason`; see below.
 
+The deadline of the operation also covers the agent. When the deadline ends before the agent starts, or before its socket appears, the operation fails with `system.context.deadline_exceeded` and starts no git process. A binding check and verify report it in the `address` entry with `failure_reason` `deadline_exceeded`.
+
 | `step`        | Cause                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------ |
 | `directory`   | The directory cannot be created, or its mode is not `0700`.                                |
 | `socket_path` | The socket path is longer than 100 bytes, or it holds a character outside `A-Za-z0-9/._-`. |
 | `files`       | `id.pub` or `known_hosts` cannot be written.                                               |
-| `agent`       | The agent socket does not appear before the deadline, or the agent exits first.            |
+| `agent`       | The agent exits before its socket appears.                                                 |
 | `load`        | `ssh-add` refuses the key.                                                                 |
 
 A binding apply reports this failure as `422 project.bindings.repository.ssh_unreachable` with `details.failure_reason` `identity_unavailable`. A binding check and verify report it in the `address` entry with the same value.
