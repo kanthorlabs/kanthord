@@ -31,7 +31,7 @@ A `github` credential holds a GitHub token. A repository binding names it in `cr
 | Checks          | Read   | Read the check runs of the head commit for the [required checks](../project/binding.md#required-checks).         |
 | Commit statuses | Read   | Read the commit statuses of the head commit for the required checks.                                             |
 
-A token without Checks or Commit statuses fails each check of an open pull request. The request then stays unresolved.
+When the base branch requires a check, a token without Checks or Commit statuses fails each check of an open pull request. The request then stays unresolved.
 
 No answer contains a secret.
 

@@ -186,7 +186,7 @@ Only a `pull_request` action holds `landing`. A `merge_push` action with `landin
 
 #### Required checks
 
-A required check is a status check that a ruleset of the base branch requires. KanthorD reads the rules of the base branch from the GitHub rulesets endpoint only. A required check of a classic branch protection rule is not read. KanthorD then reads the check runs and the commit statuses of the head commit of the pull request.
+A required check is a status check that a ruleset of the base branch requires. KanthorD reads the rules of the base branch from the GitHub rulesets endpoint only. KanthorD does not read a required check of a classic branch protection rule. KanthorD then reads the check runs and the commit statuses of the head commit of the pull request.
 
 | Result on the head commit                                                                | Outcome |
 | ---------------------------------------------------------------------------------------- | ------- |
@@ -210,7 +210,7 @@ The `github` credential of the binding needs read access to the checks and the c
 After a reviewer release to `External.Requested`, the Mission Service checks the unresolved requests of the node again in the background. It runs at most 60 rounds:
 
 - When a request answers `checks_pending`, or a check call of the round fails, the next round runs after 60 seconds.
-- When the request of a `pull_request` action with the landing `kanthord` answers `none`, the Mission Service requests a **service merge**. The request needs no execution claim. The Mission Service requests a service merge only when no live claim holds the node. When the Intake Service accepts the service merge, the next round runs at once and folds the merge. A failed service merge stops the loop.
+- When the request of a `pull_request` action with the landing `kanthord` answers `none`, the Mission Service requests a **service merge**. The request needs no execution claim. The Mission Service requests a service merge only when no live claim holds the node. When the Intake Service accepts the service merge, the next round runs at once and folds the merge. A failed service merge requests no next round.
 - The loop stops after a round with no `checks_pending` answer, no failed check call and no merge. It also stops after round 60, and when the node leaves `External.Requested`.
 - After the loop stops, a human merges the pull request. Then run [`mission node check`](../mission/node-control.md#check), or rely on an Intake inbound of the repository.
 
@@ -222,7 +222,7 @@ The Mission Service authorizes a service merge only in these conditions:
 - The commit is the tested commit of the binding.
 - The binding is not removed and not disabled, and the project is not paused.
 
-The Intake Service stores the service merge under the request key `service_merge/<request key>`. The prefix `service_merge/` is reserved. An `intake.action.perform` request with a key that starts with `service_merge/` fails with `400 gateway.request.validation_failed`. A failed service merge logs the warning `Deferred merge failed.` and stops the loop.
+The Intake Service stores the service merge under the request key `service_merge/<request key>`. KanthorD reserves the prefix `service_merge/`. An `intake.action.perform` request with a key that starts with `service_merge/` fails with `400 gateway.request.validation_failed`. A failed service merge logs the warning `Deferred merge failed.` and requests no next round.
 
 At each server start, the Mission Service starts the deferred check again for each `External.Requested` node whose open attempt holds an unresolved request. It starts at most 50 nodes, the newest attempts first. Past that limit, the server logs the warning `Deferred check start limit reached.`. A human checks each other node with `mission node check`.
 
