@@ -1565,7 +1565,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
     }
   ],
   "flaky": [],
-  "excluded_e2e": ["src/apps/server/e2e-native-methods.test.ts"]
+  "excluded_e2e": ["src/apps/server/e2e-worker-host.test.ts"]
 }
 ```
 
