@@ -20,7 +20,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - The schema of `configuration` per kind and platform beyond `resource` is open in the [Intake CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/intake.md).
 - Acceptance as a human act needs a linked human identity. The mapping from a platform account to a human identity is open.
 - A request for new WHAT receives no acceptance. The inbound request contract is POSTPONED in HANDOFF.
-- The outbound operations are `github.pull_request`, `git.merge_push` and `s3.delete_object`. A native push send and a CLI write wait for their designs.
+- The outbound operations are `github.pull_request`, `github.pull_request_merge`, `git.merge_push` and `s3.delete_object`. A native push send and a CLI write wait for their designs.
 - The Intake Service is extractable in principle: it declares one collaboration with custody, and no foreign key crosses its boundary. It still runs in the server process and in `kanthord.db`. Its peers reach it through the `client`, `human` and `service` operations that [intake-service.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#outbound-operations-and-checks) declares. Only the direct adapter serves these operations, and the cross-process identity contract is POSTPONED.
 
 ## Records without a table
@@ -141,6 +141,7 @@ A remote effect never commits with a SQLite transaction. An outbound request com
 - `operation` holds a value of the closed set of outbound operations in code, named `<platform>.<operation>`.
 - `credential` holds the name of the credential that custody released for the write. `git.merge_push` holds the name of the `ssh_credential` of the binding.
 - `intake_outbound_request` has a unique index on `(operation, request_key)`, so a repeat of a key finds the first request and calls the write no second time. The caller derives `request_key` from its durable intent, and the key holds every operand that can change under that intent.
+- A service merge of the Mission Service stores `request_key` with the prefix `service_merge/`. `intake.action.perform` refuses a `request_key` with that prefix, so a worker key never takes the row of a service merge. A stored answer that names another pull request answers `final_refusal`, and the Intake Service calls no merge.
 - The Intake Service authorizes the write and obtains its release before the insert. A refusal inserts no row.
 - `state` starts as `pending`, and the insert commits before the call. The call sets `succeeded` on a 2xx answer or a CLI exit code 0, and `failed` on every other result, with a write conditional on `pending`.
 - A read-back sets `succeeded` on `pending` or `failed`, and it runs only inside a repeat of the caller. A read-back that finds nothing changes no row.

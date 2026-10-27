@@ -183,10 +183,11 @@ The sections below explain each phase, and then every way that a run can differ 
 
 **Step 2** reads the **verdict**: the latest review of the node that asks for more work. The worker takes the first source that exists:
 
-1. The assessment that caused the latest rework of this attempt. `reviewer@1` wrote it with the result `criterion-not-met`. The verdict text is its rationale.
-2. The change requests of the reviewers on the pull request, when the earlier attempt ended with the closing event `external-failed`. The worker reads them with `worker.execution.change_request.get` of the Worker Service and writes one requested-changes text of at most 4 KiB.
+1. The failed [required checks](../reference/project/binding.md#required-checks) of each unresolved pull request of the attempt. The worker reads them with `worker.execution.failed_check.get` of the Worker Service. The text starts with `The pull request cannot merge:` and names each failed check, the binding and the head commit, at most 4 KiB. When a rework assessment also exists, its rationale follows after a blank line.
+2. The assessment that caused the latest rework of this attempt. `reviewer@1` wrote it with the result `criterion-not-met`. The verdict text is its rationale.
+3. The change requests of the reviewers on the pull request, when the earlier attempt ended with the closing event `external-failed`. The worker reads them with `worker.execution.change_request.get` of the Worker Service and writes one requested-changes text of at most 4 KiB.
 
-A verdict also holds one **judged commit** for each repository binding that the review saw. For an assessment, it is the commit of each `repository` address in `tested_input`. For change requests, it is the `commit_id` of the latest change request of each binding.
+A verdict also holds one **judged commit** for each repository binding that the review saw. For failed checks, it is the head commit of each pull request with a failed check. For an assessment, it is the commit of each `repository` address in `tested_input`. For change requests, it is the `commit_id` of the latest change request of each binding.
 
 When no verdict exists, the worker reads the **cleared assessment**: the assessment that closed the earlier attempt, before a human unblock. Attempt 1 has none. A cleared assessment with the result `success` gives no text. Any other result gives its rationale as a plain instruction. It is not a verdict, and it has no judged commit.
 
@@ -442,7 +443,7 @@ The base check uses the setup of the base-head clone. When that setup fails, the
 
 The verdict of the node is the first verdict of this list that one checkout holds: `failed`, `base_red`, `passed`, `absent`. `base_red` passes the release gate and goes to the reviewer. It routes no revision turn and gives no `criterion-not-met`.
 
-The declaration can list **gate files** in `gate_files`, for example the selector of the repository. The worker compares them with the change set, also with the previous path of a rename. The evaluation records each changed gate file in the assessment. A human then lands the node. KanthorD does not merge its pull request, also with the landing `kanthord`. The pull request text names each changed gate file. KanthorD refuses a `merge_push` action of that node.
+The declaration can list **gate files** in `gate_files`, for example the selector of the repository. The worker compares them with the change set, also with the previous path of a rename. The evaluation records each changed gate file in the assessment. A human then lands the node. KanthorD does not merge its pull request, also with the landing `kanthord`. The pull request text names each changed gate file. For a `merge_push` action, KanthorD pushes nothing and records a `branch_push` request. The node waits in `External.Requested` until a human lands the node branch. See [gate files](../reference/project/binding.md#gate-files).
 
 The revision text of a `failed` verdict names the repository, the command and the count of changed files. It also names the count of selected test files and each failed test, at most 20. For example:
 

@@ -12,15 +12,15 @@ An attempt is one try to complete a node. The attempt number starts at `0`, whic
 
 Every state control except `unblock` sends the expected state and attempt. `unblock` sends `blocked_attempt` and `expected_revision` instead. The service checks these values after it settles the Scheduler claims of the node. A control commits in one transaction, routes the mission, and wakes the Scheduler of the project. Controls do not change the mission version, except an `unblock` that changes content.
 
-| Command    | Admitted states                                                                                                           | Effect                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `pause`    | `Pending`, `Available`, `Executing`, `Waiting`, `Evaluating`, `External.Requested`, `External.Success`, `External.Failed` | Revokes a live execution or evaluation claim and sets `Paused`. The open attempt stays open.           |
-| `resume`   | `Paused`                                                                                                                  | Selects the next state, below.                                                                         |
-| `block`    | `Paused`                                                                                                                  | Closes the open attempt, records an `undetermined` human assessment and outcome, and sets `Blocked`.   |
-| `unblock`  | `Blocked`                                                                                                                 | Writes an optional content change, opens the next attempt, and sets `Available` or `Pending`.          |
-| `ready`    | `Available`                                                                                                               | Asserts that execution needs no further work, opens attempt `1` if none exists, and sets `Waiting`.    |
-| `override` | `Pending`, `Available`, `Executing`, `Waiting`, `Blocked`, `Paused`, `External.Success`, `External.Failed`                | Records a `success` human assessment and outcome, closes the open attempt, and sets `Completed`.       |
-| `discard`  | `Pending`, `Available`, `Executing`, `Waiting`, `Evaluating`, `Blocked`, `Paused`, `External.Success`, `External.Failed`  | Records an `undetermined` human assessment and outcome, closes the open attempt, and sets `Discarded`. |
+| Command    | Admitted states                                                                                                                                                           | Effect                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `pause`    | `Pending`, `Available`, `Executing`, `Waiting`, `Evaluating`, `External.Requested`, `External.Success`, `External.Failed`                                                 | Revokes a live execution or evaluation claim and sets `Paused`. The open attempt stays open.           |
+| `resume`   | `Paused`                                                                                                                                                                  | Selects the next state, below.                                                                         |
+| `block`    | `Paused`                                                                                                                                                                  | Closes the open attempt, records an `undetermined` human assessment and outcome, and sets `Blocked`.   |
+| `unblock`  | `Blocked`                                                                                                                                                                 | Writes an optional content change, opens the next attempt, and sets `Available` or `Pending`.          |
+| `ready`    | `Available`                                                                                                                                                               | Asserts that execution needs no further work, opens attempt `1` if none exists, and sets `Waiting`.    |
+| `override` | `Pending`, `Available`, `Executing`, `Waiting`, `Blocked`, `Paused`, `External.Success`, `External.Failed`                                                                | Records a `success` human assessment and outcome, closes the open attempt, and sets `Completed`.       |
+| `discard`  | `Pending`, `Available`, `Executing`, `Waiting`, `Evaluating`, `Blocked`, `Paused`, `External.Success`, `External.Failed`; `External.Requested` for a human landing, below | Records an `undetermined` human assessment and outcome, closes the open attempt, and sets `Discarded`. |
 
 ### resume
 
@@ -39,9 +39,10 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 ### block, discard and override
 
 - An attempt closes only when the node holds an open attempt that is not `Blocked`. With attempt `0`, the outcome records attempt `0`.
-- `override` and `discard` revoke a live claim. They fail while the open attempt has an unresolved external request.
+- `override` and `discard` revoke a live claim. They fail while the open attempt has an unresolved external request, except for the discard of a human landing.
 - `override` with `landed_commit` adds repository evidence attributed to the human. The node must be an `implement` node, and the binding must be a repository binding that the revision of the act pins. The service does not check the repository.
-- `discard` cancels no external request. A `Discarded` node satisfies no dependency.
+- `discard` cancels no external request, except for a human landing. A `Discarded` node satisfies no dependency.
+- A **human landing** is an `External.Requested` node with only `branch_push` requests unresolved in the open attempt. Each request belongs to a `merge_push` action with a changed gate file. `discard` admits such a node. It sets the end state `other` on those requests, then closes the attempt. See [gate files](../project/binding.md#gate-files) of a repository binding.
 
 ### unblock
 
@@ -61,6 +62,11 @@ To restart an open attempt from the base branch, pause the node, block it, and u
 ### check
 
 `node check` checks each unresolved external request of the open attempt through the Intake service. Each result commits in its own transaction. An expected end adds landed-commit evidence. A node in `External.Requested` can move to `External.Success` or `External.Failed`, and then close its attempt. A request whose node has a live claim is not changed.
+
+- A merge conflict or a failed [required check](../project/binding.md#required-checks) at the head commit returns the node from `External.Requested` to `Available` in the same attempt. The request stays `unresolved`.
+- An open pull request with a pending required check leaves the request `unresolved`.
+- `node check` requests no merge. The [deferred check](../project/binding.md#the-deferred-check) of the Mission Service merges a `kanthord` landing pull request.
+- A `branch_push` request of a human landing answers `unresolved` until the base branch contains the tested commit. When no Intake inbound of the repository exists, run `node check` after the landing.
 
 ### priority set
 

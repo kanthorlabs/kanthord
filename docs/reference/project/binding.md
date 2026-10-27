@@ -86,7 +86,7 @@ The `config` object of each kind accepts only the fields below.
 | `platform`             | `github`, `gitlab`, `bitbucket` | Required.                                                                                                                                                                                                             |
 | `address`              | string                          | Required. Form `git@<host>:<owner>/<repository>.git` with no port; `<host>` is a member of the [SSH host set](../repository/host-key.md#function-description) of `platform`.                                          |
 | `strategy.base_branch` | string                          | Required, nonblank.                                                                                                                                                                                                   |
-| `strategy.action`      | object                          | Optional. `name` is `pull_request` or `merge_push`; `follows` is `{ "type": "assessment_passed" }`; `landing` is optional.                                                                                            |
+| `strategy.action`      | object                          | Optional. `name` is `pull_request` or `merge_push`; `follows` is `{ "type": "assessment_passed" }`; `landing` is optional. See [Repository actions](#repository-actions).                                             |
 | `ssh_credential`       | string                          | Required. Name of a live `ssh` credential; see [SSH keys](../repository/ssh-key.md).                                                                                                                                  |
 | `credential`           | string                          | Optional. Name of a live credential of platform `github`. Required for `pull_request`; refused on `gitlab` and `bitbucket`.                                                                                           |
 | `prompts`              | object                          | Optional. One optional text for each agent name `swe@1`, `re@1` and `env@1`. A text holds at most 32768 UTF-8 bytes and no control character other than a tab and a newline. See [Binding prompts](#binding-prompts). |
@@ -101,17 +101,6 @@ The server joins the text of `prompts[<agent>]` into the system prompt of that a
 - Environment onboarding treats the new binding ID as a changed binding and clears `environment_from_agent`, the mark that a stored environment came from a session of `env@1`.
 - The prompts of the agents are separate texts. `re@1` does not read the prompt of `swe@1`. Write a rule that relaxes the default standard into the prompts of both `swe@1` and `re@1`.
 - The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
-
-The schema accepts `follows` type `action_end_state` with a `binding` name, but a refinement refuses it.
-
-`strategy.action.landing` chooses who merges the pull request of a `pull_request` action. The value is `human` or `kanthord`, with the default `human`.
-
-- `human`: a human merges the pull request.
-- `kanthord`: after the pull request is recorded, the action performer of the Worker Service requests the merge as a separate write. The Intake Service merges the pull request with the tested commit as the head guard. A refused merge leaves the pull request open for a human.
-
-A node whose change set changes a gate file lands with `human` for that attempt, whatever value `landing` holds. A gate file is a path of `gate_files` in the [affected test declaration](../../how-to-guides/declare-affected-tests.md#2-write-the-declaration) of the base branch. The pull request body names each changed gate file. The Mission Service refuses a `merge_push` action of that attempt with `mission.authorization.refused` and the reason `gate_file_changed`.
-
-Only a `pull_request` action holds `landing`. A `merge_push` action with `landing` fails with `400 gateway.request.validation_failed` at the `landing` path.
 
 **Worker**
 
@@ -181,6 +170,73 @@ An entry can name `fallback_configurations`: an array of at most 7 complete `{ a
 | `credential` | string  | Required. Name of a live credential of platform `s3`. |
 
 A node names zero or more storage bindings as an ordered list. Its uploads use the first binding of that list that accepts the grant. A node names every binding that it uses and takes no binding from the project. A node with no storage binding accepts only inline evidence content.
+
+### Repository actions
+
+`strategy.action` of a repository binding names the external action that a passing node requires.
+
+The schema accepts `follows` type `action_end_state` with a `binding` name, but a refinement refuses it.
+
+`strategy.action.landing` chooses who merges the pull request of a `pull_request` action. The value is `human` or `kanthord`, with the default `human`.
+
+- `human`: a human merges the pull request.
+- `kanthord`: after the pull request is recorded, the action performer of the Worker Service reads the required checks of the pull request. It requests the merge as a separate write only when the head commit is the tested commit and no required check is pending or failed. When the read of the required checks fails, the action performer requests the merge. The Intake Service merges the pull request with the tested commit as the head guard. A refused merge leaves the pull request open for a human.
+
+Only a `pull_request` action holds `landing`. A `merge_push` action with `landing` fails with `400 gateway.request.validation_failed` at the `landing` path.
+
+#### Required checks
+
+A required check is a status check that a ruleset of the base branch requires. KanthorD reads the rules of the base branch from the GitHub rulesets endpoint only. KanthorD does not read a required check of a classic branch protection rule. KanthorD then reads the check runs and the commit statuses of the head commit of the pull request.
+
+| Result on the head commit                                                                | Outcome |
+| ---------------------------------------------------------------------------------------- | ------- |
+| The newest check run of the name completed with `success`, `neutral` or `skipped`        | Passed  |
+| The newest check run of the name completed with another conclusion                       | Failed  |
+| The newest check run of the name did not complete                                        | Pending |
+| No check run of the name exists, and the newest commit status is `success`               | Passed  |
+| No check run of the name exists, and the newest commit status is `failure` or `error`    | Failed  |
+| No check run of the name exists, and the newest commit status is `pending`, or no status | Pending |
+
+The check of an open pull request applies the required checks to the request, for both landings:
+
+- A failed required check returns the node from `External.Requested` to `Available` in the same attempt. The request stays unresolved. The next `coder@1` execution reads the names of the failed checks as its verdict; see [the verdict](../../explanation/coder-worker.md#prepare-steps-1-to-4).
+- A pending required check leaves the request unresolved and the node in `External.Requested`.
+- When the head commit of the pull request changes between the reads of the check, the required checks count as pending.
+
+The `github` credential of the binding needs read access to the checks and the commit statuses; see [GitHub token permissions](../repository/credential.md#github-token-permissions).
+
+#### The deferred check
+
+After a reviewer release to `External.Requested`, the Mission Service checks the unresolved requests of the node again in the background. It runs at most 60 rounds:
+
+- When a request answers `checks_pending`, or a check call of the round fails, the next round runs after 60 seconds.
+- When the request of a `pull_request` action with the landing `kanthord` answers `none`, the Mission Service requests a **service merge**. The request needs no execution claim. The Mission Service requests a service merge only when no live claim holds the node. When the Intake Service accepts the service merge, the next round runs at once and folds the merge. A failed service merge requests no next round.
+- The loop stops after a round with no `checks_pending` answer, no failed check call and no merge. It also stops after round 60, and when the node leaves `External.Requested`.
+- After the loop stops, a human merges the pull request. Then run [`mission node check`](../mission/node-control.md#check), or rely on an Intake inbound of the repository.
+
+The Mission Service authorizes a service merge only in these conditions:
+
+- The node is `External.Requested`, and the request belongs to its open attempt.
+- The action is a `pull_request` with the landing `kanthord`.
+- The current assessment of the attempt is a `success` with no changed gate file.
+- The commit is the tested commit of the binding.
+- The binding is not removed and not disabled, and the project is not paused.
+
+The Intake Service stores the service merge under the request key `service_merge/<request key>`. KanthorD reserves the prefix `service_merge/`. An `intake.action.perform` request with a key that starts with `service_merge/` fails with `400 gateway.request.validation_failed`. A failed service merge logs the warning `Deferred merge failed.` and requests no next round.
+
+At each server start, the Mission Service starts the deferred check again for each `External.Requested` node whose open attempt holds an unresolved request. It starts at most 50 nodes, the newest attempts first. Past that limit, the server logs the warning `Deferred check start limit reached.`. A human checks each other node with `mission node check`.
+
+#### Gate files
+
+A node whose change set changes a gate file lands with `human` for that attempt, whatever value `landing` holds. A gate file is a path of `gate_files` in the [affected test declaration](../../how-to-guides/declare-affected-tests.md#2-write-the-declaration) of the base branch. The pull request body names each changed gate file.
+
+A `merge_push` action of that attempt pushes nothing. The action performer records a `branch_push` request on the base branch with the tested commit, and the node waits in `External.Requested` for a human landing:
+
+1. A human merges the node branch into the base branch and pushes. A merge commit and a fast-forward both keep the tested commit.
+2. The check of the request answers `expected` when the tested commit is an ancestor of the base branch head. It answers `none` before that.
+3. The deferred check stops at the first `none`. Without a poll or webhook inbound of the repository, no process checks the request again. After the landing, run [`mission node check`](../mission/node-control.md#check).
+
+A squash or a rebase of the node branch does not put the tested commit on the base branch. The request then never resolves, and the node stays `External.Requested`. Land the node branch with a merge commit or a fast-forward. After a squash or a rebase, discard the node: the discard sets the end state `other` on its `branch_push` requests. See [block, discard and override](../mission/node-control.md#block-discard-and-override).
 
 ## Expected response
 
