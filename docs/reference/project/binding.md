@@ -180,7 +180,7 @@ The schema accepts `follows` type `action_end_state` with a `binding` name, but 
 `strategy.action.landing` chooses who merges the pull request of a `pull_request` action. The value is `human` or `kanthord`, with the default `human`.
 
 - `human`: a human merges the pull request.
-- `kanthord`: after the pull request is recorded, the action performer of the Worker Service reads the required checks of the pull request. It requests the merge as a separate write only when the head commit is the tested commit and no required check is pending or failed. When the read of the required checks fails or answers an unexpected body, the action performer requests no merge. The deferred check then merges the pull request. The Intake Service merges the pull request with the tested commit as the head guard. A refused merge leaves the pull request open for a human.
+- `kanthord`: after the pull request is recorded, the action performer of the Worker Service reads the required checks of the pull request. It requests the merge as a separate write only when the head commit is the tested commit and no required check is pending or failed. When the read of the required checks fails or answers an unexpected body, the action performer requests no merge. The [deferred check](#the-deferred-check) can then request the merge. The Intake Service merges the pull request with the tested commit as the head guard. A refused merge leaves the pull request open for a human.
 
 Only a `pull_request` action holds `landing`. A `merge_push` action with `landing` fails with `400 gateway.request.validation_failed` at the `landing` path.
 
@@ -211,8 +211,8 @@ After a reviewer release to `External.Requested`, the Mission Service checks the
 
 - When a request answers `checks_pending`, or a check call of the round fails, the next round runs after 60 seconds.
 - When the request of a `pull_request` action with the landing `kanthord` answers `none`, the Mission Service requests a **service merge**. The request needs no execution claim. The Mission Service requests a service merge only when no live claim holds the node. When the Intake Service accepts the service merge, the next round runs at once and folds the merge.
-- A service merge that answers `confirmed_failure`, `retryable_refusal` or `unknown_outcome` counts as a failed call. The next round then runs after 60 seconds. A `final_refusal` answer requests no next round.
-- The loop stops after a round with no `checks_pending` answer, no failed check call and no merge. It also stops after round 60, and when the node leaves `External.Requested`.
+- A service merge that answers `confirmed_failure`, `retryable_refusal` or `unknown_outcome` counts as a failed call. The next round then runs after 60 seconds. A `final_refusal` answer or a merge call that throws counts as no failed call and no merge.
+- The loop stops after a round with no `checks_pending` answer, no failed call and no merge. It also stops after round 60, and when the node leaves `External.Requested`.
 - After the loop stops, a human merges the pull request. Then run [`mission node check`](../mission/node-control.md#check), or rely on an Intake inbound of the repository.
 
 The Mission Service authorizes a service merge only in these conditions:
