@@ -312,8 +312,8 @@ Each write follows the commit of the transaction that changes the execution row.
   - `rework_limit` when a `criterion-not-met` assessment at `mission.rework_limit` moves the node to `Blocked`;
   - `none` otherwise.
 - With a rule other than `none`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`.
-- A transition of a release with a stop and of a loss holds `kanthord.transition.failure_count`: the count of consecutive failures that the Scheduler hands to the Mission Service. A stop that does not count gives the count of the earlier failures.
-- When the stop backoff holds the job of the node, the transition span also holds `kanthord.node.available_at`: the value that the Scheduler writes to `scheduler_job.available_at`. A node with no job, for example a `Paused` node, gives no such attribute.
+- A transition of a loss and of a release with a stop other than `budget_end` holds `kanthord.transition.failure_count`. The value is the count of consecutive failures that the Scheduler hands to the Mission Service. A stop that does not count gives the count of the earlier failures.
+- When the stop backoff delays the job of the node, the transition span also holds `kanthord.node.available_at`: the value that the Scheduler writes to `scheduler_job.available_at`. A node with no job, for example a `Paused` node, gives no such attribute.
 - A transition span of a node that keeps its state holds the same state in both attributes.
 - No service reads these spans to decide, and a lost span changes no node state.
 
