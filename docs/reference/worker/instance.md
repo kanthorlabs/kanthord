@@ -10,7 +10,7 @@ A worker instance is the unit of capacity of a worker that kanthord hosts. It ru
 - At the `container` placement, the server runs the instance in one container on its own host.
 - At the `worker` placement, one `kanthord serve worker` process is one instance.
 
-The server runs each `server` and `container` instance from its create until its archive, also while no binding lists it. Such an instance holds no key. It uses the `server` copy of each credential through the slot channel. The live `server` and `container` instances are at most `worker.server_instance_limit`, 16 by default.
+The server runs each `server` and `container` instance from its create until its archive, also while no binding lists it. Such an instance holds no key. It uses the `server` copy of each credential through the slot channel. A create at `worker.server_instance_limit` (16 by default) refuses. The server runs at most that many `server` and `container` instances at once.
 
 The rest of this section applies to an instance at the `worker` placement. The X25519 key pair of the instance is its only machine credential. The server stores only the public key. The private key stays in the instance configuration on the host of the instance:
 

@@ -259,7 +259,7 @@ Each worker instance holds one placement: `server`, `container` or `worker`. The
 - At the `container` placement, the server runs the instance in its own container on the server host, with Podman or Docker. A human generates no token and starts no process. The container waits until the [environment](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment) of the repository binding of its listing binding is `ready`, then runs the image of that environment. That image takes `kanthord` and `tini` from `<worker.container_image>:<server version>`. With no listing binding, or in a project with no repository binding, the container runs `<worker.container_image>:<server version>`. One live worker binding at most lists a `container` instance, because one container runs one image.
 - At the `worker` placement, each instance is a separate `kanthord serve worker` process. The process can run on the server host or on another host.
 
-The server runs each `server` and `container` instance from its create until its archive, also while no binding lists it. The live `server` and `container` instances are at most `worker.server_instance_limit` (default 16). A removal of an instance from a binding drains it for that binding: its live execution finishes, and the binding gets no new claim from that instance.
+The server runs each `server` and `container` instance from its create until its archive, also while no binding lists it. A create at `worker.server_instance_limit` (default 16) refuses. The server runs at most that many `server` and `container` instances at once. A removal of an instance from a binding drains it for that binding: its live execution finishes, and the binding gets no new claim from that instance.
 
 Every placement runs the same worker unit. A `server` thread and a `container` instance reach the server through the same API operations, under a machine identity of the same project and binding scope. The container reaches the server through a channel that the server holds, and it holds no token.
 
@@ -282,7 +282,7 @@ To run 3 instances of `coder@1` for one project at the `server` placement:
 
 The server starts the 3 threads at their create. To run more work at once, add an instance and list it. To run less, remove an instance from the list: an idle instance stops taking work of the binding at once, and a busy instance finishes its execution first. The instance still runs until its archive. A server restart starts each thread again under the same client identity, and a live registration resumes its running execution.
 
-An archive refuses while a binding lists the instance. Remove the instance from each binding first. An archive with `--force` also stops the live execution of the instance. The node returns to `Available` or `Waiting`, and the stop counts as no loss and no failure.
+An archive refuses while a binding lists the instance. Remove the instance from each binding first. An archive with `--force` also stops the live execution of the instance. The node returns to `Available` or `Waiting`, and the revocation counts as no loss and no failure.
 
 To run 3 instances of `coder@1` at the `container` placement, create the instances with `--placement container`, and list them as above. The server starts the 3 containers, and a server restart starts each container again under the same client identity.
 

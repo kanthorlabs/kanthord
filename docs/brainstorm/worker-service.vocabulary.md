@@ -303,7 +303,7 @@ The set of frame kinds is closed and it holds five values.
 A binding entry holds the resource identity, the client identity, the `client_secret` and the state `serving` or `draining` of one listing binding.
 `box-1` receives the `init` frame with the entry of `coder-box`, then sends its registration as a `port` frame.
 The server answers it with a `port` frame.
-A binding write that adds `box-1` to `coder-review` sends `box-1` a `bindings` frame with two entries.
+A binding write that moves `box-1` from `coder-box` to `coder-review` sends `box-1` a `bindings` frame with two entries: `coder-box` in the state `draining` and `coder-review` in the state `serving`.
 
 ## slot volume
 
