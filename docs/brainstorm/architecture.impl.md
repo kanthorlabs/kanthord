@@ -1337,7 +1337,7 @@ The diagnosis block:
 - An `unattributed` cause shows "Unattributed. Suspects: ..." with the action `Label cause`.
 - A labeled cause shows "Labeled by <username>" and its `reason` text. The text comes from `tracking.text.get` with the text id `<root_span_id>.cause_label:reason`.
 - A `steps` trace with no cause can precede an evaluation that sets a rework cause. The block then looks for the next execution of the same attempt with the kind `evaluation`.
-- When that execution holds a cause, the block shows "Reworked by review", the cause line of that cause and a link to that trace.
+- When that execution holds a cause, the block shows "Reworked by review", the cause line of that cause and a link to that trace. For a cause of the category `plan`, the block shows "Blocked by review" in place of "Reworked by review".
 - A trace with no cause and no rework cause shows "No failure" and the count of recovered errors.
 - `Open causal span` selects the causal span. An evidence link selects its span.
 - The error stepper reads `<index>/<count> errors`. Its previous and next controls step through the causal span and the consequence spans.

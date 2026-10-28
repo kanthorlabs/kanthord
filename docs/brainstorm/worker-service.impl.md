@@ -1916,7 +1916,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 - Each unmet item of the judgement holds the required field `ground`: `stated`, `standard`, `unstated` or `conflict`. A reply with no `ground` goes through the repair turn.
 - A `conflict` item names two stated requirements or criteria that the work cannot meet together. Its reason quotes both as `"A" vs "B"`. A changed file that the requirement forbids and that no criterion needs stays a `stated` item.
 - A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the first unmet ground decides.
-- `judgementRationale` appends up to three blocks to the rationale, in this order: `Plan conflict:` for the `conflict` items, `Plan gap:` for the `unstated` items and `Unmet:` for the other items. It omits an empty block.
+- `judgementRationale` appends up to three blocks to the rationale and omits an empty block. The order is `Plan conflict:` for the `conflict` items, `Plan gap:` for the `unstated` items and `Unmet:` for the other items.
 - The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.
 - Tests assert one cause for each row, and the `timed_out` suspects of a `no_progress` stop and of a budget end.
 
