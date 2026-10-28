@@ -1677,7 +1677,7 @@ The results hold the affected command with its exit code. The output is the last
 
 The release gate renders `task-revision` with `release` true, for a failed listed command and for a failed affected run. The text then holds the sentence "The release clone holds only tracked files and the setup commands of the environment." A task revision in the node checkout renders `release` false.
 
-Every `task-revision` text holds the sentence "When a verification or an affected test needs a file that the requirement forbids, make the smallest change to that file." The release gate then passes, and the reviewer sees the forbidden file in `changed_files`. The reviewer gives the ground `conflict`, and the node moves to `Blocked` with the rule `plan_defect`. Only the reviewer assigns a plan cause. The coder writes no conflict note. A verification failure in the evaluation keeps the rework route with the suspects `model` and `plan`.
+Every `task-revision` text holds the sentence "When a verification or an affected test needs a change to a forbidden file, make the smallest such change." The release gate then passes, and the reviewer sees the forbidden file in `changed_files`. When correct work needs that change, the reviewer gives the ground `conflict`, and the node moves to `Blocked` with the rule `plan_defect`. A failure that a defect of the work causes stays a `stated` item. Only the reviewer assigns a plan cause. The coder writes no conflict note. A verification failure in the evaluation keeps the rework route with the suspects `model` and `plan`.
 
 The spans of the affected run follow [tracking-service.impl.md](tracking-service.impl.md#the-affected-run-spans).
 
