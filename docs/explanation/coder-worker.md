@@ -548,7 +548,7 @@ Each example starts from [the run with no problem](#example-a-run-with-no-proble
 `npm test -- healthz` exits with code 1 after the first turn. The worker sends this revision instruction:
 
 ````text
-Revise the task work to satisfy its criterion and verifications. Verification 1 `npm test -- healthz` failed with exit code 1.
+Revise the task work to satisfy its criterion and verifications. When a verification or an affected test needs a change to a forbidden file, make the smallest such change. Verification 1 `npm test -- healthz` failed with exit code 1.
 Verification results: [{"command":"npm test -- healthz","exit_code":1,"signal":null,"timed_out":false}]
 
 Output of the last verification that ran (the last 4 KiB):
@@ -560,6 +560,8 @@ FAIL test/healthz.test.ts
 ````
 
 `swe@1` fixes the route. Gate G commits `feat: add GET /healthz` again, and the worker verifies the new head.
+
+A verification or an affected test can need a change to a forbidden file. `swe@1` then makes the smallest such change. When correct work needs that change, the reviewer gives the ground `conflict`, as [the rework example](#a-rework) shows.
 
 ### The agent commits its own work
 
