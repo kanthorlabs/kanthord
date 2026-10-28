@@ -280,7 +280,9 @@ Each write follows the commit of the transaction that changes the execution row.
 
 - The root start holds `kanthord.execution.kind`: `steps` for a claim that moves the node to `Executing`, and `evaluation` for a claim that moves it to `Evaluating`.
 - The root start holds `kanthord.worker.name`, the worker name of the claiming worker binding. The trace row takes its `worker_name` from it.
-- The root start holds `kanthord.worker.instance`, the instance key of the claiming registration. Every claim writes it. The instance key is the instance name at every placement.
+- The root start holds `kanthord.worker.instance`, the instance key of the claiming registration. Every claim writes it.
+  - A claimant of kanthord gives its instance name at every placement.
+  - A claimant of an external harness gives `<binding name>/<name>`, with the `name` claim of its machine JWT. The binding name is the last `:` segment of the resource identity of the claimant.
 - The root start holds `kanthord.queue.wait_ms`: the claim time minus `queued_at` of the claimed job, and at least 0. The wait includes a backoff of `available_at`.
 - A job keeps the identity of the first job of its node. The time of that identity is not the time of the enqueue.
 - A new claim writes the root start. A work pull that answers an existing claim writes no root start.
