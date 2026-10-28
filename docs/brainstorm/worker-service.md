@@ -175,7 +175,7 @@ The instance presents its credential at the registration and on every later requ
 A work pull and every execution operation of a registered instance require its live registration.
 A registered instance sends a [heartbeat](worker-service.vocabulary.md#heartbeat), and a registration ends when no heartbeat arrives inside its window.
 A registration also ends when the program deregisters its own instance through the API. A server restart ends no registration.
-Removal or unavailability of its worker binding also ends the registration.
+A removal of its worker binding, or `instance_count: 0` of an external-harness binding, also ends the registration.
 A live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The end of a registration proves no stop of the program.
 The Worker Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a registered instance.

@@ -804,7 +804,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers a `master_key` that decodes to other than 32 bytes.
 - A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose binding group is not the binding group of the claim.
 - A test covers a repository binding whose network git read fails. It asserts that the Project Service refuses the write with its error code.
-- A test covers a worker binding that is absent, removed or unavailable, and it asserts that the verification of a machine JWT that names it fails.
+- A test covers a worker binding that is absent, removed or an external-harness binding with `instance_count: 0`, and it asserts that the verification of a machine JWT that names it fails. A second case asserts that a draining client identity of a native binding with `worker_instances: []` passes.
 - A test asserts that no log record and no error body holds secret material.
 
 ## Open decisions of an epic

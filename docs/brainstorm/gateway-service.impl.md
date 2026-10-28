@@ -111,7 +111,7 @@ The route answers with the runtime identity of the registration, the resource id
 - Each issuance generates a fresh ULID `jti`.
 - A restart or another issuance revokes no earlier JWT.
 - It remains valid until expiry, an increment of `gateway.auth.version` or replacement of `master_key`.
-- For a `client` JWT, removal or unavailability of its worker binding also ends that validity.
+- For a `client` JWT, a removal of its worker binding, or `instance_count: 0` of an external-harness binding also ends that validity.
 - For a worker token and a `client` JWT that names an instance, the end of that instance revision also ends that validity.
 - An expired token returns 401.
 - A human obtains a fresh token from `kanthord auth jwt generate`.

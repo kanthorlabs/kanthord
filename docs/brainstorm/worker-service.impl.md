@@ -454,7 +454,7 @@ The Docker form of `Container on this host`:
 - The derivation stores nothing. No database holds the client identity of an instance, as [machine identities](gateway-service.md#machine-identities) require.
 - The client identity of a server instance is stable across server restarts. A server instance has no Reset key, so its `instance_id` never changes. An increment of `gateway.auth.version` keeps the identity.
 - The pool host computes the client identity and the `client_secret` of each binding that lists a server instance. The `client_secret` is `deriveClientSecret(master_key, auth_version, client_id)`, the derivation of `kanthord auth jwt generate`.
-- `src/gateway/auth/jwt.ts` offers `generateSlotJWT`, which takes the `sub` of the binding entry. Only `src/apps/server/**` imports it.
+- `src/gateway/auth/jwt.ts` offers `generateSlotJWT`, which takes the `sub` of the binding entry, the project, the binding name, the instance id and the instance name. Only `src/apps/server/**` imports it.
 - The pool host serves one `MessageChannel` for each binding entry of a server instance. It passes `servePort` a credential that mints a machine JWT in memory with `generateSlotJWT` for each call.
 - The JWT holds the client identity of the entry, the project, the binding name and `instance_id`, the live revision id of the instance.
 - It holds the instance name as `name` and a lifetime of 60 s (`SLOT_TOKEN_LIFETIME`). It reaches no file and no thread.
