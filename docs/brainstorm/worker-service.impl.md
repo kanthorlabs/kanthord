@@ -1431,7 +1431,7 @@ When a rerun passes, the rationale states that the test is flaky. The rationale 
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
-The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids and that no criterion or verification needs is an unmet stated item.
+The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item. The exception is a change that correct work needs for a criterion, a verification or an affected test.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
@@ -1677,7 +1677,7 @@ The results hold the affected command with its exit code. The output is the last
 
 The release gate renders `task-revision` with `release` true, for a failed listed command and for a failed affected run. The text then holds the sentence "The release clone holds only tracked files and the setup commands of the environment." A task revision in the node checkout renders `release` false.
 
-Every `task-revision` text holds the sentence "When a verification passes only with a change to a file that the requirement forbids, make the smallest such change." The release gate then passes, and the reviewer sees the forbidden file in `changed_files`. The reviewer gives the ground `conflict`, and the node moves to `Blocked` with the rule `plan_defect`. Only the reviewer assigns a plan cause. The coder writes no conflict note. A verification failure in the evaluation keeps the rework route with the suspects `model` and `plan`.
+Every `task-revision` text holds the sentence "When a verification or an affected test needs a file that the requirement forbids, make the smallest change to that file." The release gate then passes, and the reviewer sees the forbidden file in `changed_files`. The reviewer gives the ground `conflict`, and the node moves to `Blocked` with the rule `plan_defect`. Only the reviewer assigns a plan cause. The coder writes no conflict note. A verification failure in the evaluation keeps the rework route with the suspects `model` and `plan`.
 
 The spans of the affected run follow [tracking-service.impl.md](tracking-service.impl.md#the-affected-run-spans).
 
@@ -1916,7 +1916,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
 - Each unmet item of the judgement holds the required field `ground`: `stated`, `standard`, `unstated` or `conflict`. A reply with no `ground` goes through the repair turn.
-- A `conflict` item names two stated requirements or criteria that the work cannot meet together. Its reason quotes both as `"A" vs "B"`. A criterion or a verification that needs a change to a file that the requirement forbids is an example. A changed file that the requirement forbids and that no criterion or verification needs stays a `stated` item.
+- A `conflict` item names two stated requirements or criteria that the work cannot meet together. Its reason quotes both as `"A" vs "B"`. For example, correct work fails a criterion, a verification or an affected test unless it changes a file that the requirement forbids. A failure that a defect of the work causes is no conflict and stays a `stated` item.
 - A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the first unmet ground decides.
 - `judgementRationale` appends up to three blocks to the rationale and omits an empty block. The order is `Plan conflict:` for the `conflict` items, `Plan gap:` for the `unstated` items and `Unmet:` for the other items.
 - The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.

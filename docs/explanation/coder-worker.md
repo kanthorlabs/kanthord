@@ -548,7 +548,7 @@ Each example starts from [the run with no problem](#example-a-run-with-no-proble
 `npm test -- healthz` exits with code 1 after the first turn. The worker sends this revision instruction:
 
 ````text
-Revise the task work to satisfy its criterion and verifications. When a verification passes only with a change to a file that the requirement forbids, make the smallest such change. Verification 1 `npm test -- healthz` failed with exit code 1.
+Revise the task work to satisfy its criterion and verifications. When a verification or an affected test needs a file that the requirement forbids, make the smallest change to that file. Verification 1 `npm test -- healthz` failed with exit code 1.
 Verification results: [{"command":"npm test -- healthz","exit_code":1,"signal":null,"timed_out":false}]
 
 Output of the last verification that ran (the last 4 KiB):
@@ -561,7 +561,7 @@ FAIL test/healthz.test.ts
 
 `swe@1` fixes the route. Gate G commits `feat: add GET /healthz` again, and the worker verifies the new head.
 
-A verification can pass only with a change to a file that the requirement forbids. `swe@1` then makes the smallest such change. The reviewer sees the forbidden file and gives the ground `conflict`, as [the rework example](#a-rework) shows.
+A verification or an affected test can need a file that the requirement forbids. `swe@1` then makes the smallest change to that file. The reviewer sees the forbidden file and gives the ground `conflict`, as [the rework example](#a-rework) shows.
 
 ### The agent commits its own work
 
