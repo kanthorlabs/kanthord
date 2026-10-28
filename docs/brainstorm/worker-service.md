@@ -192,7 +192,7 @@ The instance ends its execution of the binding, deregisters that registration an
 The binding gets no new claim from that instance.
 A replacement instance starts on the binding after the removed instance ends its execution, because the instance count already holds the new length.
 A server instance keeps its thread or its container after the drain, and it keeps its other registrations.
-A removal or an unavailability of the binding ends its registrations. Every server instance keeps its thread or its container.
+A removal of the binding, or `instance_count: 0` of an external-harness binding, ends its registrations. Every server instance keeps its thread or its container.
 An instance keeps its client identity for a binding across a restart of its program or of the server.
 A binding that a project adds again after its removal gets new client identities.
 The archive of a server instance stops it and removes its logs, its agent sessions and its workspaces.

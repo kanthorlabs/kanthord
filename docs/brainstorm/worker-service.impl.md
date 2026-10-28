@@ -121,10 +121,10 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - Every target that is no live registration of the caller answers 404 `worker.registration.not_found`. This includes an unknown or ended identity, the registration of another client and a newer registration of the same client identity, which stays intact. A delayed request for an ended runtime identity never ends a newer registration.
 - The answer is 200 `{ runtime_identity, registered: false }`.
 - A retry with the same `Idempotency-Key`, caller and target replays the recorded answer after the end, inside one process and the TTL. The operation declares no `replayGuard`. Authentication grants no bypass for a revoked credential. An ended group gets no handler run, under the ended group answer below.
-- For an ended group, `worker.registration.deregister` answers 404 `worker.registration.ended`. A group ends when its binding is removed, its instance count is 0, or a tombstone newer than the token exists. That answer runs no handler and changes no state. Every other authentication failure keeps its 401. Authentication gives this answer before the handler, so it replaces 404 `worker.registration.not_found` for each target.
+- For an ended group, `worker.registration.deregister` answers 404 `worker.registration.ended`. A group ends when its binding is removed, its external-harness row holds `instance_count: 0`, or a tombstone newer than the token exists. A native binding with `worker_instances: []` ends no group. That answer runs no handler and changes no state. Every other authentication failure keeps its 401. Authentication gives this answer before the handler, so it replaces 404 `worker.registration.not_found` for each target.
 - A retry after a restart runs the handler again. It ends the registration when the registration is still live, and it answers 404 when the registration already ended. The worker application and harness extension read that 404 after their own call as the end of their registration.
 - The operation proves no process stop, releases no execution and authorizes no workspace reuse. A live execution follows the [Scheduler liveness rules](scheduler-service.md#liveness). Physical stop and capacity reuse stay B9 SC5 and W5.
-- Tests assert end and place release in one transaction, same-key replay after the end, a post-restart retry that ends a live registration or answers 404 for an ended one, and 404 for each non-owned target. They assert that a newer registration stays intact and the worker unit calls it at graceful stop. They assert 404 `worker.registration.ended` with no handler run for a removed binding, a count of 0 and a tombstone newer than the token, and 401 for each other authentication failure.
+- Tests assert end and place release in one transaction, same-key replay after the end, a post-restart retry that ends a live registration or answers 404 for an ended one, and 404 for each non-owned target. They assert that a newer registration stays intact and the worker unit calls it at graceful stop. They assert 404 `worker.registration.ended` with no handler run for a removed binding, an external-harness `instance_count: 0` and a tombstone newer than the token, and 401 for each other authentication failure.
 
 ## Resume of a registration
 
@@ -456,8 +456,8 @@ The Docker form of `Container on this host`:
 - The pool host computes the client identity and the `client_secret` of each binding that lists a server instance. The `client_secret` is `deriveClientSecret(master_key, auth_version, client_id)`, the derivation of `kanthord auth jwt generate`.
 - `src/gateway/auth/jwt.ts` offers `generateSlotJWT`, which takes the `sub` of the binding entry. Only `src/apps/server/**` imports it.
 - The pool host serves one `MessageChannel` for each binding entry of a server instance. It passes `servePort` a credential that mints a machine JWT in memory with `generateSlotJWT` for each call.
-- The JWT holds the client identity of the entry, the project and the binding name.
-- It holds the name `server instance <name>` and a lifetime of 60 s (`SLOT_TOKEN_LIFETIME`). It reaches no file and no thread.
+- The JWT holds the client identity of the entry, the project, the binding name and `instance_id`, the live revision id of the instance.
+- It holds the instance name as `name` and a lifetime of 60 s (`SLOT_TOKEN_LIFETIME`). It reaches no file and no thread.
 - The Gateway authenticates that JWT through `Authentication.authenticate` and `resolveMachine`, as an HTTP bearer token.
 - The binding resolution, the tombstone check of `iat`, the registration match, the access policy, the registration requirement and the execution proof apply unchanged.
 - `worker.register` checks at every placement of kanthord that the client identity of the caller is the derived identity of an instance that the binding lists. [The instance exchange](#the-instance-exchange) states the check.
@@ -656,7 +656,7 @@ Tests:
 - A create starts the new server instance. An archive stops it.
 - A binding-set write changes only the binding entries. The pool host sends the full entry list of each changed server instance through its slot channel.
 - A server instance that no binding lists runs with an empty entry list and holds no registration.
-- A target of 0 ends every registration of the binding in the transaction of the binding-set write, under [Registration heartbeat](#registration-heartbeat). The entries of the binding leave each server instance. A live execution learns of the end at its next call.
+- A binding removal ends every registration of the binding in the transaction of the binding-set write, under [Registration heartbeat](#registration-heartbeat). The entries of the binding leave each server instance. A live execution learns of the end at its next call.
 - `worker.server_instance_limit` caps the live server instances of the server over both placements, as a positive safe integer with the default `16`. A create at the cap refuses, under [The instance record](#the-instance-record).
 - A server start with more live server instances than the cap starts the oldest ones by `created_at` up to the cap. Each other one stays pending.
 - The pool host writes `worker.pool.instance_limit` with `instance` to the server log for each pending instance. It starts the oldest pending instance when a started one ends.

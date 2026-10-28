@@ -54,7 +54,7 @@ The action rules apply to every submitted repository binding. The network check 
 
 A failed read refuses the apply with `422 project.bindings.repository.ssh_unreachable`. Its `details.failure_reason` names the cause with a value of the [failure reason list](#failure-reasons-of-the-address-entry), other than `address_invalid`. The route timeout is also 30 seconds. A read that reaches its deadline therefore gives `504 gateway.invocation.timeout`, and the apply commits nothing.
 
-These checks run before the version check. Inside the commit transaction, the service validates each binding, checks the version, and stores the revisions. A worker binding that the apply removes, or sets to an instance count of `0`, ends the live worker registrations of its group. The instance count of a native worker binding is the length of `worker_instances`. After the commit, the service wakes the scheduler for the project.
+These checks run before the version check. Inside the commit transaction, the service validates each binding, checks the version, and stores the revisions. A worker binding that the apply removes, or an external-harness binding set to `instance_count` `0`, ends the live worker registrations of its group. A revision to `worker_instances: []` drains each removed instance. The instance count of a native worker binding is the length of `worker_instances`. After the commit, the service wakes the scheduler for the project.
 
 ### project binding revision list
 
