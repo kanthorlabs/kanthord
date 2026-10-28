@@ -514,7 +514,7 @@ The component computes the status of a group in this order. The first rule that 
 ### The failure of an execution
 
 - The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node, the stop and `digests`: the digest of each environment that the execution set up, from the stop detail.
-- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old slot says nothing about a newer environment. A group with no entry counts as the current digest, so a failure always closes the gate of some group and never loops the node.
+- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old slot says nothing about a newer environment. A group with no entry in `digests` keeps its status. An `environment_failed` stop without `digests` marks no group, so the Scheduler counts it as a failure under [the environment gate](scheduler-service.impl.md#the-environment-gate).
 - For each other group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
 - The status of the group is then `failed`, and its nodes wait.
 
