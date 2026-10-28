@@ -1675,6 +1675,8 @@ The affected test run of repository engine failed. KanthorD ran `pnpm --silent r
 
 The results hold the affected command with its exit code. The output is the last 4 KiB of the run.
 
+The release gate renders `task-revision` with `release` true, for a failed listed command and for a failed affected run. The text then holds the sentence "The release clone holds only tracked files and the setup commands of the environment." A task revision in the node checkout renders `release` false.
+
 The spans of the affected run follow [tracking-service.impl.md](tracking-service.impl.md#the-affected-run-spans).
 
 ## Workspace

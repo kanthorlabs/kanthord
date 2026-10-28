@@ -178,7 +178,7 @@ Check that `/tmp/report.json` exists, that it follows the rules of [the report](
 
 ## Result
 
-The next release gate and the next evaluation of each `implement` node of the repository run the command after every verification of the node passes. The work prompt of `coder@1` names the command under `## Affected tests`, and tells `swe@1` not to run it.
+The next release gate and the next evaluation of each `implement` node of the repository run the command after every verification of the node passes. The work prompt of `coder@1` names the command under `## Affected tests`, and tells `swe@1` not to run it. When the declaration lists gate files, the prompt names them and tells `swe@1` to change a gate file only when the requirement names it.
 
 When a test fails on the node head, KanthorD runs the command on the base head. When each failed test of the node head also fails on the base head, the verdict is `base_red`, and the node passes. Otherwise the node fails. A flaky test counts as failed only when its file is in the change set.
 
