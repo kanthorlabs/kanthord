@@ -136,7 +136,7 @@ Two worker bindings of one worker do not share an instance count.
 A worker binding groups the instances that register under it for its instance count.
 Each such instance presents the credential of its own [client identity](project-service.vocabulary.md#client-identity) for that binding. That credential names the worker binding by its project and its resource identity.
 The [Gateway Service](gateway-service.md#machine-identities) authenticates that credential, and the Project Service holds no secret of a client identity and no list of the client identities of a binding.
-A client identity authenticates nothing while its worker binding is removed or unavailable.
+A client identity authenticates nothing while its worker binding is removed or is an external-harness binding with `instance_count: 0`. A client identity with a live registration of a native binding with `worker_instances: []` still authenticates.
 A worker binding of an externally hosted worker holds no agent configuration.
 The external harness selects and authenticates its own inference.
 The credential of a client identity authenticates the instance and authorizes no operation, so it is no credential of a resource.

@@ -1146,7 +1146,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - The store holds the credential of one execution, so no credential crosses executions.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
-- A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
+- A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`. A native binding with `worker_instances: []` answers no `binding_disabled` for the live claim of a draining registration. A test covers a handover and an inference call of a draining execution after a revision to `worker_instances: []`.
 - The authorization reads the credential, the provider and the model of each native agent from the pinned selection of the execution. It validates the model against the metadata of the pinned credential revision. Before the first handover pins a revision, it validates against the newest live revision.
 - A disabled or removed current enablement answers 400 `agent.enablement.unavailable`, and a selection that fails validation answers the code of its first issue.
 

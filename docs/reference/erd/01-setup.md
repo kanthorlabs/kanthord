@@ -258,7 +258,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The write refuses a name that another current binding of the project holds. A partial index cannot select the latest row of a group, so the write checks this rule.
 - A row is immutable. A configuration change inserts the next revision of its group.
 - A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `worker_instances: []` for a native worker binding, or `instance_count: 0` for an external-harness binding.
-- A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, and a tombstone after the pinned row refuses the use.
+- A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, except that a native worker binding with `worker_instances: []` admits the live claim of a draining registration. A tombstone after the pinned row refuses the use.
 - Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store) rules.
 - The binding-set version is 1 plus the number of `project_binding` rows of the project. A write that names another version is refused. A write equal to the stored set inserts no row and keeps the version.
 - No sweep deletes a removed binding or a revision.

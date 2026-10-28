@@ -692,9 +692,9 @@ The first layer of the build builds the image at the start of a `container` inst
 ## The client identity
 
 The Project Service holds no table of client identities and no secret of a client identity.
-[gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and is available.
+[gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and admits the caller.
 The JWT names one binding group by `project_id` and `resource_identity`, and no revision.
-The answer reads the latest row of that group. It refuses a disabled or removed binding, and a token whose `iat` is before the latest tombstone of the group.
+The answer reads the latest row of that group. It refuses a removed binding, an external-harness binding with `instance_count: 0`, and a token whose `iat` is before the latest tombstone of the group. A native binding with `worker_instances: []` admits only a client identity that holds a live registration of the group.
 At every placement, the server derives the client identity of an instance for a binding from `master_key`. The label is `worker/instance-client/<instance_id>/<project_id>/<resource_identity>/<generation>`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). No database holds it. A new binding generation or a new instance revision changes it.
 
 ## The binding screen of the dashboard

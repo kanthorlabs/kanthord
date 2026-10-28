@@ -138,7 +138,7 @@ A binding of a worker that declares an agent lists its [worker instances](../wor
 4. For each name in list order, the name is a live instance of the `worker` of the binding. An unknown or archived name fails with `project.bindings.worker.instance_unknown`. An instance of another worker fails with `project.bindings.worker.instance_worker_mismatch`. The first name that fails stops the check.
 5. A `container` instance is listed by no other live worker binding. A second listing fails with `project.bindings.worker.instance_shared`. One container runs one image, and the image belongs to the environment of one binding.
 
-An empty list is valid and disables the group, as `instance_count` `0` of an external harness does. A `server` or a `worker` instance can serve bindings of several projects. Each binding-set write changes the bindings of each listed instance. An instance that leaves the list keeps the binding as `draining` while it holds a live registration in it: its live execution finishes, and the binding gets no new claim from that instance. A `server` or `container` instance keeps running with no binding.
+An empty list is valid and disables the group: the binding gets no new claim, and each removed instance drains. `instance_count` `0` of an external harness also disables the group, and it ends every live registration at once. A `server` or a `worker` instance can serve bindings of several projects. Each binding-set write changes the bindings of each listed instance. An instance that leaves the list keeps the binding as `draining` while it holds a live registration in it: its live execution finishes, and the binding gets no new claim from that instance. A `server` or `container` instance keeps running with no binding.
 
 ```json
 {
