@@ -1431,7 +1431,7 @@ When a rerun passes, the rationale states that the test is flaky. The rationale 
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
-The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item.
+The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids and that no criterion needs is an unmet stated item.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
@@ -1903,16 +1903,20 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `criterion-not-met`, stage `setup`        | none                                                                     | `unattributed`, suspects `environment`, `model`                    |
 | `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                               | `unattributed`, suspects `model`, `plan`                           |
 | `criterion-not-met`, stage `affected`     | any                                                                      | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `judgement`    | an unmet ground `conflict`                                               | `plan.requirement_conflict`                                        |
+| `criterion-not-met`, stage `judgement`    | an unmet ground `unstated`                                               | `plan.criterion_unstated`                                          |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                              | `model.work_defect`                                                |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                            | `model.standard_violation`                                         |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                            | `plan.criterion_unstated`                                          |
 | none of the above                         | none                                                                     | `unattributed`                                                     |
 
 - The stop classes `affected_invalid` and `affected_timeout` take the cause `environment.<code>`, as `setup_failed` and `command_absent` do.
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
-- Each unmet item of the judgement holds the required field `ground`: `stated`, `standard` or `unstated`. A reply with no `ground` goes through the repair turn.
+- Each unmet item of the judgement holds the required field `ground`: `stated`, `standard`, `unstated` or `conflict`. A reply with no `ground` goes through the repair turn.
+- A `conflict` item names two stated requirements or criteria that the work cannot meet together. Its reason quotes both as `"A" vs "B"`. A changed file that the requirement forbids and that no criterion needs stays a `stated` item.
+- A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the first unmet ground decides.
+- `judgementRationale` appends up to three blocks to the rationale, in this order: `Plan conflict:` for the `conflict` items, `Plan gap:` for the `unstated` items and `Unmet:` for the other items. It omits an empty block.
 - The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.
 - Tests assert one cause for each row, and the `timed_out` suspects of a `no_progress` stop and of a budget end.
 

@@ -680,6 +680,18 @@ The worker sends the whole text, the task id included, to the verdict unit. It r
 
 `swe@1` fixes the body. Gate G commits `feat: add a health endpoint`, and the verdict rule now holds. The worker runs `npm run build`, which passes, writes the done record of the node unit and runs the release gate. When `swe@1` brings no new work in two verdict turns in a row, the worker stops with `no_progress` instead, and the unchanged head never goes back to review.
 
+The rationale holds up to three blocks after its text, in this order. `Plan conflict:` lists the items with the ground `conflict`. `Plan gap:` lists the items with the ground `unstated`. `Unmet:` lists the other items. The rationale omits an empty block.
+
+A `Plan conflict:` or a `Plan gap:` item gives the assessment a cause of the category `plan`. Such an assessment causes no rework. The node moves to `Blocked` with the transition rule `plan_defect`, and no execution gets a verdict turn. For example, the task criterion needs a test file that the requirement forbids:
+
+```text
+The route answers {"status":"ok"}, but the criterion and the requirement disagree on the test file.
+Plan conflict:
+- task_01JZ8Q1A…: "Add test/healthz.test.js" vs "Change no file under test/"
+```
+
+The human corrects the content and the tasks, and unblocks the node with that `change`. The next attempt pins the edited revision.
+
 ### The provider refuses a call
 
 The provider answers 429 to a model call. The turn ends with `stopReason: "error"`. Gate G in checkpoint mode commits the work in progress, and the worker pushes and releases:

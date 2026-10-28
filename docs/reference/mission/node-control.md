@@ -53,6 +53,7 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 - With attempt `0`, `unblock` opens no attempt. Otherwise it opens the next attempt, pinned to the current revision, with the human as `opened_by`.
 - `start_point` names where the next attempt starts. `node_branch`, the default, continues the node branch of the cleared attempt. `base_branch` starts a new node branch `kanthord/<node id>-a<attempt>` from the base branch. Another value answers 400 `gateway.request.validation_failed`, and nothing is written.
 - A start from the base branch deletes, renames and force-pushes no branch. An open pull request of the earlier node branch stays open, and a human closes it. The start point of an `examine` attempt has no effect.
+- A node that an [assessment](assessment.md#function-description) blocked with the transition rule `plan_defect` holds a defect of the plan. Unblock it with a `change` that holds the corrected `content` and `tasks`. The next attempt pins the edited revision.
 
 A [node update](node.md#node-update) does not change the pinned revision of an open attempt. The update applies from the next attempt. The node record shows the pinned revision in `pinned_revision`.
 
