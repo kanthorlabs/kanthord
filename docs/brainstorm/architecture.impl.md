@@ -748,6 +748,7 @@ The public interfaces have three kinds.
 - The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement through the Agent component.
 - The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. A removal of a worker binding, or `instance_count: 0` of an external-harness binding, and the end of its live registrations commit in the transaction of the binding-set write. `worker_instances: []` drains each removed instance and ends no registration.
 - The Project Service offers `bindingsNaming(tx, credentialName)` and `bindingsListingInstance(tx, instanceName, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential archive and its dependency check are atomic, so both run in the transaction of the archive.
+- The Mission Service offers `currentNodePins(tx, projectId, bindingIds)` to the Project Service. A binding-set write reads it in its transaction and answers the [stale pins](project-service.impl.md#stale-pins).
 - The Scheduler Service offers `unmatchedClaims(tx, projectId)` to the Mission Service and the Project Service. A node write and a binding-set write read it before and after the change in one `BEGIN IMMEDIATE` transaction, so the write never adds an unmatched pair of a node and a claimable state.
 - The Mission Service offers `claimFacts(tx, nodeId)` and `claimFactsOf(tx, projectId)`, and the Project Service offers `workerBindingsOf(tx, projectId)`, to the Scheduler Service. [The match](scheduler-service.impl.md#the-match) of the Scheduler Service lists their invariants.
 - These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
@@ -1475,7 +1476,7 @@ The prompt block:
   - An `agent.turn` shows the provider error, else the model reply. Then it shows the tool calls with a link to each tool span, and the thinking in a `Reveal`.
   - The causal turn of a `provider_failed` stop shows `kanthord.stop.detail` of the root span as its error.
   - An `agent.tool` shows its result text with the outcome, then the arguments of its call from the model reply entry of its turn.
-  - A `worker.verification` shows the `output` text, `process.exit.code` and `kanthord.verification.timed_out`, then the `command` text.
+  - A `worker.verification` shows the `output` text, `process.exit.code`, `kanthord.verification.timed_out` and `kanthord.verification.kind`, then the `command` text. An affected span also shows the selection, the counts, the reason and the failed test ids of [the affected run spans](tracking-service.impl.md#the-affected-run-spans).
   - A `worker.git` and a `worker.gate` show the `error` text and `kanthord.gate.violation`, then `kanthord.git.step`, `kanthord.gate.mode` and `kanthord.gate.changed`.
   - A `worker.task` shows the stop facts `kanthord.stop.*`, then `kanthord.task.revision_count`.
   - A `worker.evaluation` shows `kanthord.evaluation.result`, `kanthord.evaluation.stage`, `kanthord.evaluation.unmet_grounds` and the `rationale` text.

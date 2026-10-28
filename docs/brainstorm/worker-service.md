@@ -427,6 +427,7 @@ After a human unblock with no verdict, a cleared assessment that does not pass g
 Before a release with evidence, the execution runs the release gate.
 The release gate merges `origin/<base_branch>` again in every checkout and runs every verification of the node and of each task in a clean local clone of each checkout.
 A failed verification of the release gate sends a revision turn to the unit that owns the command, and the release gate runs again after that unit passes.
+After every verification passes, the release gate of an `implement` node runs the affected test command of each repository that declares one. The verdict `failed` of that run sends a revision turn to the node unit.
 The release gate is the only path to a release with no further work.
 The execution pushes the node branch of every checkout before every release, and it submits the evidence only after every push succeeds.
 Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding.
@@ -631,6 +632,7 @@ The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
+On an `implement` node, the evaluation runs the affected test command of each repository that declares one before the judgement. The verdict `failed` of that run gives `criterion-not-met` with no judgement. [worker-service.impl.md](worker-service.impl.md#the-affected-test-run) holds the rules.
 For an `examine` node, the judgement can hold one fix-node proposal for each defect inside a direct `implement` dependency.
 A judgement with proposals writes an `undetermined` assessment that holds them.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
@@ -670,13 +672,14 @@ kanthord leaves the earlier pull request open, and a human closes it.
 A revision that removes a repository binding from a node leaves the node branch and the open pull request of that binding in place, and a human closes them.
 The requested-changes text of the unblock reads names the repository binding of each change request.
 
-After the action performer submits the request evidence of a `kanthord` landing pull request, it calls `intake.action.perform` once more.
+After the action performer submits the request evidence of a `kanthord` landing pull request, it calls `intake.action.perform` once more, unless the binding holds a changed gate file in the current assessment.
 It passes the evidence identity of that submission.
 The Intake Service records this call as `github.pull_request_merge` and merges the pull request.
 When the base branch already contains the snapshot commit, the request evidence holds a `branch_push` address, and the action performer makes no merge call.
-After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence.
+After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence and no changed gate file.
 This request uses the current tested commit, so a rework or a restart gets its merge.
 A failed merge changes no return item of the action performer and logs a warning with the evidence identity.
+With a changed gate file, the action performer requests no merge, and a human merges the pull request.
 
 For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.

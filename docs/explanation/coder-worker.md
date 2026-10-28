@@ -23,7 +23,7 @@ Read [How a worker works](worker.md) first. That page defines the terms of this 
 - `swe@1` runs only coding **turns**: a work turn, a revision turn and a merge conflict turn. A turn is one prompt of the worker and every reply of the agent until the agent is idle. The agent answers no question of the worker.
 - After every turn, the worker runs **gate G**. The gate checks the git state of each checkout and commits every change of the turn.
 - The worker runs the verifications of a unit itself. A pass writes a **done record** on the commit of the unit, so no later execution redoes the unit. A pass with no new commit writes no record.
-- After the last unit, the **release gate** merges the base branch and runs every verification of the node in a clean clone. Only a pass of the release gate releases the node with `further_work: false`.
+- After the last unit, the **release gate** merges the base branch and runs every verification of the node in a clean clone. It then runs the **affected test command** of each repository that declares one. Only a pass of the release gate releases the node with `further_work: false`.
 - A budget end always releases with `further_work: true`. The next execution continues from the pushed node branch.
 
 ## Who does what inside one execution
@@ -183,10 +183,11 @@ The sections below explain each phase, and then every way that a run can differ 
 
 **Step 2** reads the **verdict**: the latest review of the node that asks for more work. The worker takes the first source that exists:
 
-1. The assessment that caused the latest rework of this attempt. `reviewer@1` wrote it with the result `criterion-not-met`. The verdict text is its rationale.
-2. The change requests of the reviewers on the pull request, when the earlier attempt ended with the closing event `external-failed`. The worker reads them with `worker.execution.change_request.get` of the Worker Service and writes one requested-changes text of at most 4 KiB.
+1. The failed [required checks](../reference/project/binding.md#required-checks) of each unresolved pull request of the attempt. The worker reads them with `worker.execution.failed_check.get` of the Worker Service. The text starts with `The pull request cannot merge:` and names each failed check, the binding and the head commit, at most 4 KiB. When a rework assessment also exists, its rationale follows after a blank line.
+2. The assessment that caused the latest rework of this attempt. `reviewer@1` wrote it with the result `criterion-not-met`. The verdict text is its rationale.
+3. The change requests of the reviewers on the pull request, when the earlier attempt ended with the closing event `external-failed`. The worker reads them with `worker.execution.change_request.get` of the Worker Service and writes one requested-changes text of at most 4 KiB.
 
-A verdict also holds one **judged commit** for each repository binding that the review saw. For an assessment, it is the commit of each `repository` address in `tested_input`. For change requests, it is the `commit_id` of the latest change request of each binding.
+A verdict also holds one **judged commit** for each repository binding that the review saw. For failed checks, it is the head commit of each pull request with a failed check. For an assessment, it is the commit of each `repository` address in `tested_input`. For change requests, it is the `commit_id` of the latest change request of each binding.
 
 When no verdict exists, the worker reads the **cleared assessment**: the assessment that closed the earlier attempt, before a human unblock. Attempt 1 has none. A cleared assessment with the result `success` gives no text. Any other result gives its rationale as a plain instruction. It is not a verdict, and it has no judged commit.
 
@@ -201,6 +202,7 @@ When no verdict exists, the worker reads the **cleared assessment**: the assessm
 - The remote can lose a node branch that existed, for example after a manual delete. The worker detects this when the attempt holds repository evidence, or when the workspace saw the remote branch before. It then stops with `operation_failed` and the code `repository.node_branch.missing`. It never starts the branch again from the base branch, because a record names a commit of the lost branch. The stop releases with `further_work: true`, so the node returns to `Available`, and each next execution stops the same way. After `mission.consecutive_failure_limit` stops, the node moves to `Paused`. A human restores the branch on the git host and resumes the node. Or the human pauses and blocks the node, then unblocks it with the start point `base_branch`, which opens the next attempt on a new branch.
 - The worker adds `.kanthord-scratch/` to the git exclude file. The agent writes its probe and debug files there, and no commit takes them.
 - The worker also removes `workspaces/<node_id>/release/`, the clones of an earlier release gate.
+- The worker reads the [affected test declaration](#the-affected-test-run) of each checkout at `origin/<base_branch>`. The work prompt of each unit lists the command of each valid declaration under `## Affected tests`, and tells the agent not to run it. An absent or invalid declaration adds no line.
 
 **Step 4** opens the agent `swe@1` at the agent root. [How the native agent works](native-agent.md) explains what the agent receives: the model, the prompt and the tools. The execution opens one session, and every turn of steps 5 to 9 runs in it.
 
@@ -385,10 +387,71 @@ The units can pass one by one while the node as a whole fails. Task 2 can break 
 1. For each checkout, the worker clones the live checkout into `workspaces/<node_id>/release/`, in the layout of the agent root. It runs `git clone --local --no-checkout`, copies the `origin` remote-tracking refs of the live checkout, sets the `origin` URL to the repository address, and checks out the head, detached. The clone holds no ignored file and no untracked file of the live checkout.
 2. It runs the verifications of the node, then the verifications of each task in the order of the plan, at the agent root of the clones. It classifies each result as at step 7. It runs no rerun of a code failure.
 3. It removes the clones after the run, also at a budget end or a stop.
-4. When every command passes, the execution goes to step 10.
-5. Otherwise the worker finds the **owner** of the first failed command: the node unit for a node command, the task for a task command. It sends that unit one revision turn with the failed result and its output, and the loop of step 7 runs that unit. After the unit passes, the execution comes back to step 8.
+4. When a command fails, the worker finds the **owner** of the first failed command. The owner is the node unit for a node command, and the task for a task command. It sends that unit one revision turn with the failed result and its output, and the loop of step 7 runs that unit. After the unit passes, the execution comes back to step 8.
+5. When every command passes, the worker runs [the affected test run](#the-affected-test-run) of each checkout in its clone, in checkout order.
+6. The verdict `failed` sends the node unit one revision turn with the text of the affected failure. After the node unit passes, the execution comes back to step 8.
+7. When the verdict of each checkout is `passed`, `base_red` or `absent`, the worker logs `release verified` with the affected verdict. The execution then goes to step 10.
 
 A failure of the release gate never resets the head. The live checkout stays the place of the unit loop, so installed dependencies persist between turns. The unchanged-turn counter also covers the routed revision turns. Two routed revision turns in a row that change no file therefore stop with `no_progress`.
+
+### The affected test run
+
+A node lists its own verifications. A change can still break a test that no verification lists. The **affected test run** runs the tests that the change reaches. The repository declares the command in `.kanthord/affected-tests.json`. [Declare the affected tests of a repository](../how-to-guides/declare-affected-tests.md) shows the declaration, the changes file and the report.
+
+The worker runs the affected test command at two points, and only for an `implement` node with a repository checkout:
+
+| Point                      | When                                        | Verdict `failed`                                                        |
+| -------------------------- | ------------------------------------------- | ----------------------------------------------------------------------- |
+| Release gate of `coder@1`  | After every verification of step 9 passes   | One revision turn of the node unit                                      |
+| Evaluation of `reviewer@1` | After the setup and every verification pass | `criterion-not-met` with the stage `affected`. No agent judges the node |
+
+The verification of a unit at step 7 runs no affected test command. An `examine` node runs none.
+
+For each checkout, the worker does these steps:
+
+1. It reads the declaration at `origin/<base_branch>`. A checkout with no declaration has the verdict `absent`. An invalid declaration stops the execution with `environment_failed` and the code `affected_invalid`.
+2. It computes the merge base of `origin/<base_branch>` and the node head, and the change set from the merge base to the node head.
+3. It writes the changes file in `affected/<binding name>/` of the workspace, outside every checkout.
+4. It runs `command` with `bash -c` in the checkout, at the node head. The command runs under `time_limit_s` of the declaration and under the wall deadline of the execution. The worker sets `KANTHORD_CHANGES`, `KANTHORD_AFFECTED_REPORT` and `KANTHORD_BASE_COMMIT`.
+5. It reads the report and decides the verdict of the checkout.
+6. It removes `affected/<binding name>/`.
+
+A flaky test of the report counts as failed when its file is in the change set. A flaky test in another file passes. The worker classifies the result of the command at the node head. The first row that matches decides:
+
+| #   | Result at the node head                                                    | Class           | What the worker does                                                                |
+| --- | -------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------- |
+| 1   | `time_limit_s` ended the command                                           | Timeout         | Stops with `environment_failed` and the code `affected_timeout`, with no base check |
+| 2   | The command exited with code 127                                           | No valid report | Runs the base check                                                                 |
+| 3   | No report, an invalid report, or an exit code that does not match `failed` | No valid report | Runs the base check                                                                 |
+| 4   | A valid report with one or more failed tests after the flaky rule          | Failed tests    | Runs the base check                                                                 |
+| 5   | A valid report with no failed test after the flaky rule                    | Passed          | Verdict `passed`                                                                    |
+
+The wall deadline, a signal and an exit code from 129 to 192 follow the classes of [step 7](#step-7-the-unit-loop). The wall deadline gives a budget end. The other results give one rerun, and then `worker.verification.infrastructure_failed`.
+
+The **base check** runs the same command with the same changes file in the clone of the base-branch head. The base check then decides:
+
+| Node head       | Base head                                                   | Result                                                         |
+| --------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| Failed tests    | A valid report, and each failed test of the node head fails | Verdict `base_red`                                             |
+| Failed tests    | Any other result                                            | Verdict `failed`                                               |
+| No valid report | A valid report                                              | Verdict `failed`                                               |
+| No valid report | `time_limit_s` ended the command                            | Stop with `environment_failed` and the code `affected_timeout` |
+| No valid report | Exit code 127                                               | Stop with `environment_failed` and the code `command_absent`   |
+| No valid report | Any other result                                            | Stop with `environment_failed` and the code `affected_invalid` |
+
+The base check uses the setup of the base-head clone. When that setup fails, the execution stops with `environment_failed` and the code `setup_failed`.
+
+The verdict of the node is the first verdict of this list that one checkout holds: `failed`, `base_red`, `passed`, `absent`. `base_red` passes the release gate and goes to the reviewer. It routes no revision turn and gives no `criterion-not-met`.
+
+The declaration can list **gate files** in `gate_files`, for example the selector of the repository. The worker compares them with the change set, also with the previous path of a rename. The evaluation records each changed gate file in the assessment. A human then lands the node. KanthorD does not merge its pull request, also with the landing `kanthord`. The pull request text names each changed gate file. For a `merge_push` action, KanthorD pushes nothing and records a `branch_push` request. The node waits in `External.Requested` until a human lands the node branch. See [gate files](../reference/project/binding.md#gate-files).
+
+The revision text of a `failed` verdict names the repository, the command and the count of changed files. It also names the count of selected test files and each failed test, at most 20. For example:
+
+```text
+The affected test run of repository api failed. KanthorD ran `npm run --silent test:affected` for 2 changed files. The run selected 2 test files, and 1 test failed: src/server.test.ts > server > answers 200 on GET /healthz. Each selected test imports a changed file directly or through other files. Change the code or the test so that every selected test passes.
+```
+
+The instruction also holds the result of the command and the last 4 KiB of its output.
 
 ## Finish: steps 10 to 12
 
@@ -458,6 +521,9 @@ All cleanup after a budget end or a stop runs under `expired_at`, not under the 
 | The agent leaves a merge, cherry-pick or revert open      | Gate G restores `before` and stops with `worker.turn.git_in_progress`. An open rebase detaches `HEAD`, so it stops with `worker.turn.branch_changed`. The next prepare restores the checkout.       |
 | Two revision turns in a row change no file                | The worker stops with `no_progress` before it verifies the unchanged head a third time.                                                                                                             |
 | A task breaks the verification of an earlier task         | The release gate fails. The earlier task gets a revision turn, then the release gate runs again.                                                                                                    |
+| A change breaks a test that no verification lists         | The affected test run of the release gate fails. The node unit gets a revision turn with the failed tests, then the release gate runs again.                                                        |
+| A test fails on the node head and on the base head        | The verdict is `base_red`. The release gate passes, and `reviewer@1` weighs the verdict.                                                                                                            |
+| The affected test declaration is invalid                  | The worker stops with `environment_failed` and the code `affected_invalid`.                                                                                                                         |
 | A verification needs an ignored file of the live checkout | The release gate fails in the clean clone. The owner gets a revision turn. Two unchanged turns stop with `no_progress`.                                                                             |
 | Conflict at the step 5 or step 8 merge                    | `swe@1` resolves the files in a conflict turn. A file that still holds a marker stops with `worker.merge.markers_left`.                                                                             |
 | The base moves during the run                             | Step 8 merges it. The release gate verifies the merged head.                                                                                                                                        |
@@ -708,7 +774,8 @@ The target is `before` after a violation, and the head of the checkout after a v
 
 - A `worker.phase` span for each phase: `prepare` covers step 3, `start` covers steps 5 and 6, `tasks` covers steps 7 to 9, and `finish` covers steps 10 and 11 and the checkpoint of a budget end.
 - A `worker.task` span for each run of a unit. `kanthord.task.id` is the task id, or the node id for the node unit. `kanthord.task.result` is `complete` or `budget_end`. A `no_progress` stop adds `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
-- A `worker.verification` span for each command run. The spans of the release gate have the `tasks` phase span as their parent.
+- A `worker.verification` span for each command run, and for each run of the affected test command at the node head and at the base head. `kanthord.verification.kind` is `listed`, `affected` or `affected_base`.
+- A `worker.release_gate` span for each run of the release gate, below the `tasks` phase span. The verification spans of the release gate have it as their parent. Its end holds `kanthord.release_gate.result`, and `kanthord.release_gate.affected` after an affected test run.
 - A `worker.git` span for the merge of step M (`merge_base`), the fetch of step 8 (`fetch_base`) and the push of step 10 or of a budget end (`push`). The push of a stop has no `worker.git` span. Each run of gate G writes one `worker.gate` span, also the checkpoint of a budget end, and its commit writes no `worker.git` span.
 - `agent.turn` and `agent.tool` spans below the span that encloses the turn. An external harness writes the same `agent.turn` and `agent.tool` spans.
 

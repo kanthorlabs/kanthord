@@ -62,26 +62,29 @@ The import condition is state `Pending` or `Available` with attempt `0`. The imp
 
 These additional rules apply:
 
-- No terminal node (`Completed` or `Discarded`) changes. An entry that keeps a terminal node unchanged is a no-op and is allowed.
+- An import compares no content of a terminal node (`Completed` or `Discarded`). A terminal node with an unchanged `filename` is a no-op. The import resolves no binding name and no `depends_on` name of that node.
+- The import fails with `mission.import.terminal_change` for a new `filename` of a terminal node. It also fails for a task that enters, leaves or changes its `filename` in that node, and for a retirement of that node. The message of a retirement is "Import cannot retire a terminal node. Keep its unchanged file in the plan.".
+- A retirement of a node that holds an attempt fails with `mission.import.condition_failed`. The message is "Import cannot retire a node that holds an attempt. Discard the node, then keep its unchanged file in the plan.".
+- To remove a node that holds an attempt, discard it, then keep its unchanged file in the plan. An import that omits the file of a discarded node fails with `mission.import.terminal_change`.
 - A change of only `depends_on` requires a nonterminal node, not the import condition. The dependency rules of [dependency](dependency.md#function-description) apply.
 - A new dependency of a kept node requires no live claim on that node. Only apply checks this rule.
 - An import that adds an unmatched pair of a node and a claimable state fails with `mission.node.tags_unmatched`. The preview lists one violation for each node file with an added pair.
 
 One failed check fails the whole import. A changed `depends_on` list counts as an update even if the content is unchanged. An apply that changes nothing keeps the mission version. An apply that changes the plan increases the mission version by one.
 
-The preview digest covers the mission ID, the mission version, the normalized entries and the retirement set. A stale mission version fails the preview and the apply. A preview reserves no node.
+The preview digest covers the mission ID, the mission version, the normalized entries and the `creates`, `updates` and `retirements` sets. A change of these sets between the preview and the apply fails the apply with `mission.import.retirement_mismatch`. A stale mission version fails the preview and the apply. A preview reserves no node.
 
 The import does not unblock a node, reopen an attempt or change priority. It records the human that submits the import as the actor of each revision.
 
 ### Re-import an applied plan
 
-The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`.
+The import matches a plan file to a current node or task by its `id` alone. A file name never matches a current node. A plan file without `id` creates a node or a task. The import retires every current node that no plan file names by `id`. An edited copy of plan files without `id` lines, for example the files of the first import, thus replaces the whole plan. Its preview lists every current node in `retirements` and every file in `creates`. A retired node that holds an attempt adds `mission.import.condition_failed`, and a retired terminal node adds `mission.import.terminal_change`. To remove a node that holds an attempt, follow the [retirement exit](#import-condition).
 
 To edit an applied plan:
 
 1. Export the plan as Markdown. Each exported file holds the `id` of its node or task.
 2. Edit the exported files. Keep each `id` line.
-3. Preview the edited files. Make sure that `retirements` and `creates` hold only the intended entries.
+3. Preview the edited files. Make sure that `retirements` and `creates` hold only the intended entries. Make sure that `updates` holds every node that you edited.
 4. Apply the same files. Set `preview_digest` to the digest of the preview, and set `confirmed_retirements` to its `retirements`.
 
 ```sh
@@ -114,7 +117,7 @@ The `apply.json` of the apply:
 }
 ```
 
-The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path.
+The [import condition](#import-condition) also applies to a re-import. A node with changed content must be `Pending` or `Available` with attempt `0`. To change a node that holds an attempt, use [node update](node.md#node-update). The update applies from the next attempt. To redirect the open attempt, use the [unblock](node-control.md#unblock) path. To remove a node that holds an attempt, follow the [retirement exit](#import-condition).
 
 ## Expected response
 
@@ -141,17 +144,17 @@ The API returns HTTP `200` with the preview. A plan violation does not fail the 
 }
 ```
 
-| Property                   | Type                    | Purpose                                                                                                |
-| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `mission_id`               | `mission_<ulid>`        | Mission of the route.                                                                                  |
-| `expected_mission_version` | positive integer        | The `mission_version` of the request.                                                                  |
-| `preview_digest`           | 64 lower-case hex chars | Send this value as `preview_digest` to apply.                                                          |
-| `creates`                  | array of file names     | Entries without `id`.                                                                                  |
-| `updates`                  | array of node IDs       | Kept nodes with changed content or changed dependencies.                                               |
-| `retirements`              | array of node IDs       | Current nodes that the import set omits. Send this set as `confirmed_retirements`.                     |
-| `removed_edges`            | array of edges          | Current dependency edges that the import removes.                                                      |
-| `no_ops`                   | array of node IDs       | Kept nodes without a change.                                                                           |
-| `violations`               | array                   | `{ code, message, filename, node_id, details }` for each failed check. Empty when the import is valid. |
+| Property                   | Type                    | Purpose                                                                                                                                         |
+| -------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mission_id`               | `mission_<ulid>`        | Mission of the route.                                                                                                                           |
+| `expected_mission_version` | positive integer        | The `mission_version` of the request.                                                                                                           |
+| `preview_digest`           | 64 lower-case hex chars | Send this value as `preview_digest` to apply.                                                                                                   |
+| `creates`                  | array of file names     | Entries without `id`.                                                                                                                           |
+| `updates`                  | array of node IDs       | Kept nodes with changed content or changed dependencies.                                                                                        |
+| `retirements`              | array of node IDs       | Current nodes that the import set omits. Send this set as `confirmed_retirements`.                                                              |
+| `removed_edges`            | array of edges          | Current dependency edges that the import removes.                                                                                               |
+| `no_ops`                   | array of node IDs       | Kept nodes without a change. A terminal node is always a no-op unless its `filename` changes. The import ignores the other content of its file. |
+| `violations`               | array                   | `{ code, message, filename, node_id, details }` for each failed check. Empty when the import is valid.                                          |
 
 The violation codes are `mission.import.mission_mismatch`, `mission.import.duplicate_file`, `mission.import.plan_invalid`, `mission.import.duplicate_id`, `mission.import.unknown_id`, `mission.import.foreign_id`, `mission.import.retired_id`, `mission.import.unresolved_reference`, `mission.import.reference_kind_invalid`, `mission.import.cycle`, `mission.import.verification_uncovered`, `mission.import.terminal_change`, `mission.import.condition_failed`, `mission.node.content_invalid`, `mission.node.verifications_missing`, `mission.node.bindings_invalid`, `mission.node.state_conflict` and `mission.node.tags_unmatched`.
 

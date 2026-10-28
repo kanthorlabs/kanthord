@@ -154,6 +154,7 @@ Verification runs in this order.
 - The per-kind rules.
 - For `worker`, the Worker Service answers whether `sub` names a live instance revision. An ended or archived revision answers 401 `gateway.jwt.instance_ended`.
 - For `client`, the Project Service answers three checks. The group `(project_id, resource_identity)` exists. Its latest row is no tombstone and holds an instance count of 1 or more. `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
+- A group whose latest row is a tombstone, whose instance count is 0, or that has a tombstone newer than `iat` is an ended group. An operation that declares an ended group answer replaces the 401 with that answer. Only `worker.registration.deregister` declares one.
 - For a `client` JWT of a binding of a hosted worker, the Worker Service then checks in this order:
   1. `instance_id` is present, else 401 `gateway.jwt.instance_required`.
   2. `instance_id` names a live instance revision, else 401 `gateway.jwt.instance_ended`.

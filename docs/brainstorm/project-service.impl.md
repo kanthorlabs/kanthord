@@ -21,6 +21,7 @@ The GitHub action catalog holds exactly two actions.
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
 - `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
 - Each action implies its expected end state. Only `pull_request` takes a parameter: the optional `landing`, `human` or `kanthord`, default `human`. With `kanthord`, the action performer requests the merge as a separate outbound write after the request evidence of the attempt exists. With `human`, a human merges. The frozen action copies `landing` with `base_branch`.
+- A change set that changes a gate file of the base declaration lands with `human` for that attempt, whatever `landing` the binding declares. The current assessment of the attempt records the changed gate files under [the affected test run](worker-service.impl.md#the-affected-test-run). The Mission Service refuses a `merge_push` action of that binding for that attempt with `gate_file_changed`.
 - A repository strategy holds at most one action, because a policy configures one external action.
 - The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
 
@@ -143,9 +144,28 @@ The binding set has one read route and one write route, and both serve the whole
 - The read answers the current binding set as `BindingSet`. It holds no secret material.
 - The write takes `BindingSet` as its body, and `version` names the version that the client read. A stale `version` answers 409 `project.binding_set.version_conflict` with the current version in `error.details`.
 - The write answers the committed binding set as `BindingSet` at its new version.
+- The answer of the write also holds `stale_pins`, under [Stale pins](#stale-pins).
 - No route writes one field or one binding. An effective instance count of 0 disables a worker binding, and `available: false` disables a repository binding or a storage binding.
 
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
+
+## Stale pins
+
+The answer of a binding-set write holds `stale_pins`. The list shows the nodes that pin an older revision of a revised binding.
+
+- `stale_pins` holds one item `{ node_id, binding_name, pinned_revision, current_revision }` for each pin of an older revision of a binding that the write revised.
+- A revised binding keeps its name and its resource identity and gets the next revision of its group.
+- An older revision is each revision of the same group below the new revision and above the latest tombstone of the group.
+- A removed binding and a name with a new resource identity add no item.
+- `binding_name` and `current_revision` name the new revision. `pinned_revision` is the revision that the node pins.
+- The Project Service reads the pins through the Mission collaboration `currentNodePins(tx, projectId, bindingIds)` in the write transaction. It reads no Mission table.
+- `currentNodePins` answers `{ node_id, binding_id }` for each node that is not terminal and not retired, when its current node revision pins one of the revisions.
+- The node revision of an open attempt does not count. A node that a rebind moved to the new revision is not in the list.
+- The list is in the order of `node_id`, then `binding_name`. A write with no revised binding answers `[]`.
+- The list is read only, and the write moves no pin. [The rebind](mission-service.impl.md#the-rebind) is the only path that moves a pin.
+- `project.binding.environment.set` writes the binding set, so its answer holds the same list.
+- The CLI prints the list as a field of the answer of `project binding apply`.
+- Tests list a pending node that pins an older revision. Tests list no terminal node, no retired node, no unchanged binding, no removed binding and no node on the new revision. Tests list no pin before a removal and no name with a new resource identity.
 
 ## Revision, disablement and rotation
 
@@ -359,6 +379,27 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a `container` instance reads the same revision. A node that pins an earlier revision therefore runs the current environment.
 - At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there. The docs of `environment show` name them as ignored, and the answer holds no field for them. The repository devcontainer applies only at the `container` placement.
 
+## The affected test declaration
+
+A repository declares its affected test command in the file `.kanthord/affected-tests.json` at the root of the repository. The worker runs it under [the affected test run](worker-service.impl.md#the-affected-test-run).
+
+```json
+{
+  "version": 1,
+  "command": "pnpm --silent run test:affected",
+  "time_limit_s": 600
+}
+```
+
+- The worker reads the file with `fileAtRevision` at `origin/<base branch>`, as `environmentOf` reads `.devcontainer/devcontainer.json`.
+- The read applies at the `server`, `worker` and `container` placements. It does not depend on the stored environment or on the target of the environment.
+- An absent file means no command.
+- `version` is 1. `command` is one nonblank string.
+- `time_limit_s` is optional, an integer from 60 to 3600. The default is 600, the value of `COMMAND_LIMIT_MS`.
+- `gate_files` is optional, a list of at most 10000 nonblank repository paths with `/`. The default is `[]`. KanthorD compares each path with the paths of the change set as an exact string, with no glob.
+- A file that is no JSON object, that holds another key, or that holds a wrong type stops the execution with `environment_failed` and the class `affected_invalid`. The detail names the file and the parse error.
+- No proof of the Onboarding component runs the command. The first release gate of a node runs it first.
+
 ## The Onboarding component
 
 The Onboarding component of the Project Service lives in `src/project/onboarding.ts`. It resolves, builds and proves the environment of each repository binding in the server process. It holds no table, no column, no worker and no claim.
@@ -416,7 +457,7 @@ The component computes the status of a group in this order. The first rule that 
 - The proof file of a digest is `environments/<identity path>/<digest>.json` of the state directory. The component writes it to a temporary file of the same directory with mode `0600` and renames it.
 - It holds `digest`, `outcome` (`passed` or `failed`), `class`, `origin` (`onboarding` or `execution`), `execution_id`, `command`, `exit_code`, `tail`, `reproduce`, `checks`, `repairs`, `ended_at` and `commit`.
 - `commit` is the base-branch commit of the read that started the run. For the origin `execution`, it is the commit of the last read of the group.
-- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed` or `command_absent`.
+- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed`, `command_absent`, `affected_invalid` or `affected_timeout`. Only the origin `execution` writes `affected_invalid` and `affected_timeout`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
 - `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.
@@ -467,7 +508,7 @@ The component computes the status of a group in this order. The first rule that 
 ### The failure of an execution
 
 - The [release of an `environment_failed` stop](scheduler-service.impl.md#the-environment-gate) calls `environmentFailed(input)` of the component after its commit. `input` holds `project_id`, `execution_id`, the resource identities of the repository bindings of the node, the stop and `digests`: the digest of each environment that the execution set up, from the stop detail.
-- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old instance says nothing about a newer environment. A group with no entry counts as the current digest, so a failure always closes the gate of some group and never loops the node.
+- A group whose current digest differs from its entry in `digests` keeps its status, because a late stop of an old instance says nothing about a newer environment. A group with no entry in `digests` keeps its status. An `environment_failed` stop without `digests` marks no group, so the Scheduler counts it as a failure under [the environment gate](scheduler-service.impl.md#the-environment-gate).
 - For each other group, the component writes the proof file of its current digest with the outcome `failed`, the origin `execution`, the class of the stop code and the detail of the stop as `tail`. It reads `command` and `exit_code` from the detail when the detail is a JSON object that holds them.
 - The status of the group is then `failed`, and its nodes wait.
 

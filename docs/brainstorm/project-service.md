@@ -91,7 +91,7 @@ The human act that adds the repository binding is the consent to build and to pr
 Onboarding is one-time work, so it depends on no worker. It is a server operation of the Project Service. It is no mission node, no claim and no Scheduler job.
 Onboarding resolves the environment, builds its image when a `container` instance runs its nodes, and runs the [proof](project-service.vocabulary.md#proof) on the base-branch head before any node of the binding spends budget.
 A node whose repository binding holds an environment that is not ready waits. It changes no state while it waits, and it continues when the environment is ready.
-An environment failure of an execution stops that execution with its own reason, `environment_failed`. It never becomes a revision turn of the coder agent, and it never counts toward the failure limit of the node.
+An environment failure of an execution stops that execution with its own reason, `environment_failed`. It never becomes a revision turn of the coder agent. A failure whose detail holds `digests` never counts toward the failure limit of the node. A failure without `digests` counts toward that limit.
 The human acts only when the proof or an execution fails. The human then stores a fixed environment or runs the onboarding again.
 Only a human with the project scope and the agent `env@1` change the stored environment. `env@1` changes only an environment that it wrote or that no one stored. A push to the repository changes the environment only through the repository files that the sources read.
 

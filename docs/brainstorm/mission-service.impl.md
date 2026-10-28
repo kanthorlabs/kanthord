@@ -49,7 +49,7 @@ An execution assessment is the exception: it stores the execution identity, and 
 - `bindings` is a list of binding identities of the project. A read answers the pinned identities, and a node write and an unblock content change take identities. A plan file names each binding by its name.
 
 A node write, and an import that creates a node, resolve each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding. The write pins that revision and checks the rule table.
-An import of an existing node keeps a pinned revision with the same name and the same `resource_identity`, unless a removal of that binding follows the pin.
+An import of an existing nonterminal node keeps a pinned revision with the same name and the same `resource_identity`, unless a removal of that binding follows the pin. An import resolves no binding of a terminal node under [Export and the two formats](#export-and-the-two-formats).
 The write accepts the identity of a revision of the current binding of that resource. An identity from before a removal of that binding answers `mission.node.bindings_invalid`, also when a binding of the same resource exists again.
 The intent of the node determines the column.
 A node names every binding that it uses, and the write takes no binding from the project.
@@ -195,8 +195,13 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - An import covers the whole mission and carries no scope.
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
-- The import compares the bindings of a node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
+- The import compares the bindings of a nonterminal node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
+- An import compares no content of a terminal node. A terminal node with an unchanged `filename` is a no-op.
+- The import resolves no binding name and no `depends_on` name of a terminal node, and it writes no revision for it. The node keeps its pinned bindings and its dependencies. The import compares a task of a terminal node by its `filename` and its node alone.
+- A new `filename` of a terminal node answers 409 `mission.import.terminal_change`. A task that enters, leaves or changes its `filename` in a terminal node answers the same code. An omitted terminal node also answers it. To remove a node that holds an attempt, a human discards it, then keeps its unchanged file in the plan.
+- A nonterminal node can name a terminal node in `depends_on`. An import that retires a node keeps the dependency of a terminal dependent on that node.
 - The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
+- The preview digest covers the mission identity, the mission version, the normalized entries and the sorted `creates`, `updates` and `retirements` sets. A classification change between the preview and the apply, for example after a discard, answers 409 `mission.import.retirement_mismatch`.
 - The import result maps each node file name to its node identity and each task file name to its task identity.
 - A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
@@ -277,6 +282,8 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - The read derives `dependency_node_ids` from the nodes of `dependency_outcome_ids`.
 - An `undetermined` execution assessment of an `examine` node can hold `proposals`, at most 10. Each proposal holds `dependency_id`, `name`, `requirement`, `criterion` and one `task`, and it names one defect inside a completed dependency. `dependency_id` names a current direct dependency with `intent: implement`. Proposals on an `implement` node or with another result answer HTTP 400 at `proposals`.
 - `mission.assessment.submit` takes `cause` with `criterion-not-met` and refuses it with another result. The assessment stores no cause.
+- `mission.assessment.submit` takes the optional `gate_files`, a list of `{ binding_id, paths }` with a nonempty `paths`. Each `binding_id` names a repository address of `tested_input`. No `binding_id` repeats, and no path of one entry repeats. Another list answers HTTP 400 with an issue at `gate_files`.
+- The service stores the list as canonical JSON in `mission_assessment.gate_files`. A submit without the key and a human assessment store null. The read of an assessment does not show the column.
 - The service writes one `mission_proposal` row for each proposal in the transaction that closes the attempt and writes the outcome. A non-current assessment records no proposal.
 - `node_revision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
@@ -361,6 +368,7 @@ Repository evidence remains an address, not an upload of repository content.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
 - An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
 - `requirement_key` holds only the key of a `FrozenAction`; every other evidence holds no requirement key.
+- The [affected test run](worker-service.impl.md#the-affected-test-run) submits a separate evidence with the subject `Affected test results`: one `produced` asset of `application/json`, no `verification` field and no requirement key. Its identity joins `evidence_ids` of the assessment. It covers no verification, so the coverage rule of [the verifications](#the-verifications) does not change.
 - An evidence has no natural key. A repeat after a server restart or after the replay window of the Gateway creates a new evidence, and the service accepts that duplicate.
 
 - A repository address holds `binding_id` and `commit`.
@@ -595,19 +603,34 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - At the rework limit, it also hands the rework count and `mission.rework_limit`.
 - A refused act writes no act trace. A lost act trace changes no state, and no service reads it.
 
+## The import trace
+
+Each import apply writes one trace through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project and no node, and it holds a null attempt.
+
+- The operation of the root span is `mission.import`. The root span starts and ends at the time of the apply.
+- The root span holds `kanthord.project.id`, `kanthord.mission.id`, `kanthord.mission.version.from`, `kanthord.mission.version.to`, `kanthord.import.creates`, `kanthord.import.updates`, `kanthord.import.retirements`, `kanthord.import.removed_edges` and `kanthord.human.username`, the account of the actor.
+- The four `kanthord.import.*` counts are the counts of the `creates`, `updates`, `retirements` and `removed_edges` sets of the plan check.
+- An applied import has the status `Ok`. `kanthord.mission.version.to` is the mission version after the commit.
+- A refused apply has the status `Error`. `error.type` holds the error code. `kanthord.import.violation_codes` holds the distinct violation codes, sorted, at most 128. `kanthord.mission.version.to` equals `kanthord.mission.version.from`.
+- A refused apply is an apply that answers an error code after the plan check, for example a violation code or `mission.import.retirement_mismatch`. Any other failure writes no trace.
+- The reason of the apply is the telemetry text `reason` of the root span.
+- A preview writes no trace. An apply that fails before the plan check, for example with a stale mission version, writes no trace.
+- A failed trace write never fails the import. A lost import trace changes no state, and no service reads it.
+
 ## The rebind
 
 - `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission version and an optional node identity. Without a node identity the act covers every node of the mission.
 - The target revision belongs to the same binding as the revision that the node pins, and it is no tombstone and no disabled revision.
 - An absent target revision, or a target revision of another project, answers 404 `mission.binding.not_found`. A tombstone answers 409 `mission.binding.removed`, and a disabled revision answers 409 `mission.binding.disabled`.
-- The target is a later revision of the same binding. A named node that pins neither an earlier revision of that binding nor the target answers 409 `mission.binding.mismatch` with `details: { node_id, binding_id }`. A node that already pins the target is a no-op, and an act with no rebound node leaves the mission version unchanged.
+- The target is a later revision of the same binding. A named node that pins neither an earlier revision of that binding nor the target answers 409 `mission.binding.mismatch` with `details: { node_id, binding_id }`. A pin from before a removal of that binding is not an earlier revision of it. A mission rebind leaves a node with such a pin unchanged and does not list it in `skipped`. A node that already pins the target is a no-op, and an act with no rebound node leaves the mission version unchanged.
 - A named retired node answers 409 `mission.node.retired`, and a named terminal node answers 409 `mission.node.terminal`.
 - The act inserts a node revision for each rebound node, and increments `mission_mission.version` once.
 - The answer is the `NodeChange` of the act and `skipped`, a list of `{ node, condition }` where `condition` is `terminal` or `retired`, for a mission rebind.
 - A rebind revision holds `change.write: node.rebind`, `changed_fields: ["bindings"]`, the unchanged task snapshot of an `implement` node and `change.tasks: []`.
-- Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
+- Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a pin from before a removal, a tombstone and a disabled revision.
 
 - The Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service through its `contract.ts`. It answers every node that is not terminal and not retired when its current revision or the node revision of its open attempt pins the binding revision. A rebind keeps the node revision of an open attempt, so the node keeps the old pin until that attempt ends.
+- The Mission Service offers `currentNodePins(tx, projectId, bindingIds)` to the Project Service through its `contract.ts`. It answers `{ node_id, binding_id }` for each node of the project that is not terminal and not retired, when its current revision pins one of the binding revisions. The node revision of an open attempt does not count. The Project Service lists [stale pins](project-service.impl.md#stale-pins) from it.
 - The Mission Service offers `claimFacts(tx, nodeId)` and `claimFactsOf(tx, projectId)` to the Scheduler Service through its `contract.ts`. `claimFacts` answers `intent` and `tags` at the revision that the open attempt pins, else at the current revision. `claimFactsOf` answers each node that is not terminal and not retired, at its current revision and at the revision that its open attempt pins. Neither writes a record.
 
 ## Node retire
@@ -695,9 +718,11 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence, an evidence asset and the presigned PUT of a new asset. The Mission Service authorizes the presigned PUT inside `mission.evidence.submit`, before the asset row exists: it checks the live claim and the storage binding of the pinned revision, refuses an asset identity that an asset row holds, and derives the object key from the claim and the asset identity that the submission allocates.
 - For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
 - For `github.pull_request_merge`, the authorization checks the request evidence of `merge_evidence_id`. That evidence belongs to the same attempt, names the same action key as the `FrozenAction`, holds a `pull_request` address kind, and has no end state. The action is a `pull_request` with `landing: kanthord`. The `merge_address` field of the action facts carries that address.
+- `gateFilesOf` reads the paths of one binding from `gate_files` of the current assessment of the attempt. Each entry of `actions` of `ActionContext` and the `ActionFacts` hold these paths in `gate_files`.
+- A merge of a `pull_request` action, or a `merge_push` action, answers `gate_file_changed` when its binding holds a changed gate file in the current assessment.
 - For a human identity, it follows the evidence asset to its storage binding revision.
 - It takes no association from the caller.
-- A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled`, `binding_removed` or `service_mismatch`.
+- A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled`, `binding_removed`, `service_mismatch` or `gate_file_changed`.
 - A `service` operation of the Mission Service authorizes its caller by name. `mission.delivery.admit` admits only the Intake Service, and the authorization of a request evidence for `intake.action.check` admits only the Mission Service. Another service identity answers `service_mismatch`.
 - The authorization of an evidence asset maps the caller to a reason. A `check` or an `execution_get` from a human or a service identity, or from a client with no live claim, answers `claim_not_live`.
 - A `get` or a `delete` admits only a human. A service identity answers `service_mismatch`, and a client identity answers `node_mismatch`.
@@ -830,7 +855,9 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
 - Tests include terminal nodes in unchanged export-import cycles and assert a no-op.
-- Tests re-import the export of a mission with a `Completed` node after a new revision of its binding. They assert a no-op for that node and keep its pinned binding revision. They assert a change for a pin from before a removal of its binding.
+- Tests re-import the export of a mission with a `Completed` node and one new plan file. The binding of that node has a new revision, a new name or a removal. They assert a no-op for that node, keep its pinned binding revision and create the new node. They assert a change for a nonterminal node with a pin from before a removal of its binding.
+- Tests import an edited plan file and an edited task file of a `Completed` node. They assert a no-op and no new revision.
+- Tests refuse a new `filename`, a task change and a retirement of a `Completed` node with `mission.import.terminal_change`.
 - Tests assert human-only access and both exact export answer shapes.
 - Tests accept an export at 10 MiB and assert 413 `mission.export.too_large` above that bound.
 - Tests import raw Markdown through the Mission Service parser and JSON through the same node validation rules.
@@ -845,6 +872,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - Tests assert that a terminal dependent keeps its dependency.
 - Tests assert that preview changes no state and answers the same refusals.
 - Tests assert that a stale mission version and a changed digest refuse the apply with no effect.
+- Tests preview an edit of a `Pending` node, discard the node, and refuse the apply with `mission.import.retirement_mismatch`.
 - Tests assert that one retirement increments the mission version once.
 - Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
 - Tests refuse an `implement` node verification that no task of the node holds with the exact text with `mission.import.verification_uncovered`, and the apply writes nothing. Tests accept an `implement` node with no task on every write path.

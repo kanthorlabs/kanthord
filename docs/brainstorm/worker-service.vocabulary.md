@@ -391,6 +391,27 @@ A checkpoint commit is the commit of the work in progress that the execution mak
 The resource budget of Execution 1 ends while task "Add reset token expiry" is half done, so the execution commits the changed files as a checkpoint commit, pushes the node branch and releases with further work.
 The checkpoint commit has no done record, so Execution 2 continues the task from that commit.
 
+## affected test command
+
+The affected test command is the repository command that selects and runs the tests that a change set reaches. The repository declares it in `.kanthord/affected-tests.json`.
+The engine declares `pnpm --silent run test:affected`, so the release gate of "Add password reset" runs that command after the verifications of the node pass.
+[The affected test run](worker-service.impl.md#the-affected-test-run) defines the contract.
+
+## change set
+
+The change set is the list of files that a node head changes against the merge base of the base branch and that head. Each entry holds a path and a status: `added`, `modified`, `deleted` or `renamed`.
+The node head of "Add password reset" modifies `src/auth/reset.ts` and renames `src/auth/token.ts`, so the change set holds two entries, and the renamed entry holds its previous path.
+
+## affected report
+
+The affected report is the JSON file that the affected test command writes. It names the selection, each selected test file, each failed test, each flaky test and each excluded e2e test file.
+The report of "Add password reset" holds `selection: "related"` and one failed test id, so the verdict of the run is `failed`.
+
+## test id
+
+A test id is `{ file, name }`: the test file and the full name of the test, with the names of its suites and its own name joined with a space, `>` and a space.
+`{ "file": "src/auth/reset.test.ts", "name": "reset > rejects an expired token" }` is a test id.
+
 ## resource budget
 
 The resource budget bounds the agent work of one execution by wall time and, when declared, turn count.
