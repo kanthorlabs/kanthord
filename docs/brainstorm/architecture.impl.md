@@ -1512,10 +1512,11 @@ The prompt block:
 - An execution row shows the worker from `worker_name` of the item, the start, the duration, the state badge and the stop reason badge.
 - A revoked execution row shows "Revoked by a human" or "Revoked by a review" in place of the stop reason badge.
 - An execution row offers `Open trace`, which opens `/traces/<trace_id>`.
-- A transition row shows `Transition <from state> -> <to state>`. A transition with a rule shows one of three texts:
+- A transition row shows `Transition <from state> -> <to state>`. A transition with a rule shows one of four texts:
   - "Paused at the failure limit: <count> of <limit>";
   - "Paused at the further work limit: <count> of <limit>";
-  - "Blocked at the rework limit: <count> of <limit>".
+  - "Blocked at the rework limit: <count> of <limit>";
+  - "Blocked by a plan defect", with no count and no limit.
 - An act row shows the act label, `by a human`, and the time. `Show reason` reads its `reason` text through `tracking.text.get`.
 - An act with a link to an execution offers `Open trace` of that execution.
 - A depth-2 row of another span shows the label of [the span tree](#the-span-tree) of the trace page and its duration.
