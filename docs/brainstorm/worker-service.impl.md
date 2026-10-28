@@ -1448,7 +1448,7 @@ When a rerun passes, the rationale states that the test is flaky. The rationale 
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
-The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item.
+The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item. The exception is a change that correct work needs for a criterion, a verification or an affected test.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
@@ -1694,6 +1694,8 @@ The results hold the affected command with its exit code. The output is the last
 
 The release gate renders `task-revision` with `release` true, for a failed listed command and for a failed affected run. The text then holds the sentence "The release clone holds only tracked files and the setup commands of the environment." A task revision in the node checkout renders `release` false.
 
+Every `task-revision` text holds the sentence "When a verification or an affected test needs a change to a forbidden file, make the smallest such change." The release gate then passes, and the reviewer sees the forbidden file in `changed_files`. When correct work needs that change, the reviewer gives the ground `conflict`, and the node moves to `Blocked` with the rule `plan_defect`. A failure that a defect of the work causes stays a `stated` item. Only the reviewer assigns a plan cause. The coder writes no conflict note. A verification failure in the evaluation keeps the rework route with the suspects `model` and `plan`.
+
 The spans of the affected run follow [tracking-service.impl.md](tracking-service.impl.md#the-affected-run-spans).
 
 ## Workspace
@@ -1920,16 +1922,20 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `criterion-not-met`, stage `setup`        | none                                                                     | `unattributed`, suspects `environment`, `model`                    |
 | `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                               | `unattributed`, suspects `model`, `plan`                           |
 | `criterion-not-met`, stage `affected`     | any                                                                      | `unattributed`, suspects `model`, `plan`                           |
+| `criterion-not-met`, stage `judgement`    | an unmet ground `conflict`                                               | `plan.requirement_conflict`                                        |
+| `criterion-not-met`, stage `judgement`    | an unmet ground `unstated`                                               | `plan.criterion_unstated`                                          |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                              | `model.work_defect`                                                |
 | `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                            | `model.standard_violation`                                         |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `unstated`                                            | `plan.criterion_unstated`                                          |
 | none of the above                         | none                                                                     | `unattributed`                                                     |
 
 - The stop classes `affected_invalid` and `affected_timeout` take the cause `environment.<code>`, as `setup_failed` and `command_absent` do.
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
-- Each unmet item of the judgement holds the required field `ground`: `stated`, `standard` or `unstated`. A reply with no `ground` goes through the repair turn.
+- Each unmet item of the judgement holds the required field `ground`: `stated`, `standard`, `unstated` or `conflict`. A reply with no `ground` goes through the repair turn.
+- A `conflict` item names two stated requirements or criteria that the work cannot meet together. Its reason quotes both as `"A" vs "B"`. For example, correct work fails a criterion, a verification or an affected test unless it changes a file that the requirement forbids. A failure that a defect of the work causes is no conflict and stays a `stated` item.
+- A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the first unmet ground decides.
+- `judgementRationale` appends up to three blocks to the rationale and omits an empty block. The order is `Plan conflict:` for the `conflict` items, `Plan gap:` for the `unstated` items and `Unmet:` for the other items.
 - The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.
 - Tests assert one cause for each row, and the `timed_out` suspects of a `no_progress` stop and of a budget end.
 

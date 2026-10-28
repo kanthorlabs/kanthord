@@ -548,7 +548,7 @@ Each example starts from [the run with no problem](#example-a-run-with-no-proble
 `npm test -- healthz` exits with code 1 after the first turn. The worker sends this revision instruction:
 
 ````text
-Revise the task work to satisfy its criterion and verifications. Verification 1 `npm test -- healthz` failed with exit code 1.
+Revise the task work to satisfy its criterion and verifications. When a verification or an affected test needs a change to a forbidden file, make the smallest such change. Verification 1 `npm test -- healthz` failed with exit code 1.
 Verification results: [{"command":"npm test -- healthz","exit_code":1,"signal":null,"timed_out":false}]
 
 Output of the last verification that ran (the last 4 KiB):
@@ -560,6 +560,8 @@ FAIL test/healthz.test.ts
 ````
 
 `swe@1` fixes the route. Gate G commits `feat: add GET /healthz` again, and the worker verifies the new head.
+
+A verification or an affected test can need a change to a forbidden file. `swe@1` then makes the smallest such change. When correct work needs that change, the reviewer gives the ground `conflict`, as [the rework example](#a-rework) shows.
 
 ### The agent commits its own work
 
@@ -679,6 +681,18 @@ Unmet:
 The worker sends the whole text, the task id included, to the verdict unit. It routes no work to the task by that id.
 
 `swe@1` fixes the body. Gate G commits `feat: add a health endpoint`, and the verdict rule now holds. The worker runs `npm run build`, which passes, writes the done record of the node unit and runs the release gate. When `swe@1` brings no new work in two verdict turns in a row, the worker stops with `no_progress` instead, and the unchanged head never goes back to review.
+
+The rationale holds up to three blocks after its text, in this order. `Plan conflict:` lists the items with the ground `conflict`. `Plan gap:` lists the items with the ground `unstated`. `Unmet:` lists the other items. The rationale omits an empty block.
+
+A `Plan conflict:` or a `Plan gap:` item gives the assessment a cause of the category `plan`. Such an assessment causes no rework. The node moves to `Blocked` with the transition rule `plan_defect`, and no execution gets a verdict turn. For example, the task criterion needs a test file that the requirement forbids:
+
+```text
+The route answers {"status":"ok"}, but the criterion and the requirement disagree on the test file.
+Plan conflict:
+- task_01JZ8Q1A…: "Add test/healthz.test.js" vs "Change no file under test/"
+```
+
+The human corrects the content and the tasks, and unblocks the node with that `change`. The next attempt pins the edited revision.
 
 ### The provider refuses a call
 

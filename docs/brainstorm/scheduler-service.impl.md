@@ -304,12 +304,13 @@ Each write follows the commit of the transaction that changes the execution row.
 - The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
 - A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the first `Available` of the node to the transition. The Mission Service hands the time of the first `Available` with the states of a transition to `Completed`. An analytics read adds up and divides it, and no service decides from it.
 - The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
-- The transition span holds `kanthord.transition.rule`, with one of four values:
+- The transition span holds `kanthord.transition.rule`, with one of five values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;
   - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
   - `rework_limit` when a `criterion-not-met` assessment at `mission.rework_limit` moves the node to `Blocked`;
+  - `plan_defect` when a current `criterion-not-met` assessment with a cause of the category `plan` moves the node to `Blocked`;
   - `none` otherwise.
-- With a rule other than `none`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`.
+- With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none` and `plan_defect` hold neither.
 - A transition of a loss and of a release with a stop other than `budget_end` holds `kanthord.transition.failure_count`. The value is the count of consecutive failures that the Scheduler hands to the Mission Service. A stop that does not count gives the count of the earlier failures.
 - When the stop backoff delays the job of the node, the transition span also holds `kanthord.node.available_at`: the value that the Scheduler writes to `scheduler_job.available_at`. A node with no job, for example a `Paused` node, gives no such attribute.
 - A transition span of a node that keeps its state holds the same state in both attributes.
