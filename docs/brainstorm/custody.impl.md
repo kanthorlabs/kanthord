@@ -15,9 +15,9 @@ A mechanism here never overrides a rule there.
 - The encrypted columns represent `secret`; no plaintext secret persists.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
-- `holder` is `server` or the name of a worker instance, and it is never null. `sealed_to` is the fingerprint of the instance revision that the copy is sealed to, and it is null for `server`.
+- `holder` is `server` or the name of a worker instance at the `worker` placement, and it is never null. `sealed_to` is the fingerprint of the instance revision that the copy is sealed to, and it is null for `server`.
 - The group key of a credential is `(name, holder)`, and neither part changes. A unique index holds `name`, `holder` and `revision`, and a new group starts at revision 1.
-- Custody validates the fingerprint form of `sealed_to`. The [LLM component](llm.impl.md#instance-copies) validates that `holder` names a live instance.
+- Custody validates the fingerprint form of `sealed_to`. The [LLM component](llm.impl.md#instance-copies) validates that `holder` names a live instance at the `worker` placement.
 - Custody refuses a `holder` other than `server` for a platform outside the LLM platforms with 400 `credential.sealed.invalid`.
 - The names `login`, `platform`, `check` and `ssh` are refused, because the static segments of the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) hold them.
 - Creation and login refuse a `(name, holder)` group that a row holds with 409 `credential.name.conflict` and the identity of its newest revision in `error.details`.
@@ -190,7 +190,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
 - The payload is canonical JSON. It holds the credential of the pinned agent selection of the execution and the SSH identities of the execution.
-- `custody.handover` takes the placement of the pinned worker binding and the instance of the identity, and it chooses each item from those values.
+- `custody.handover` takes the instance of the identity and the placement of that instance, and it chooses each item from those values.
 - At the `server` and the `container` placements, its sole item is `{ credential_id, provider_id, credential }`. These are the record identity, the pi adapter id and the pi-ai credential of a row of the holder `server`.
 - At the `worker` placement, its sole item is `{ credential_id, provider_id, name, platform, sealed }`: the sealed object of the copy of the instance of the identity. The server never opens it. The worker unit builds the additional authenticated data from `name`, `platform`, its instance name and its current fingerprint.
 - At the `worker` placement, an item of the holder `server` answers 403 `custody.handover.holder_refused` with `details.reason` `server_held`. An item of another holder, or a copy sealed to a fingerprint that is not current, answers the same code with `reason` `held_elsewhere`.
@@ -206,7 +206,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
 - The worker application holds the client secret of its machine JWT and derives the same two keys. Custody derives the client secret again from the verified `sub`.
-- At the `server` and the `container` placements, the envelope crosses only the slot channel on the server host. A `container` slot receives its client secret in the `init` frame of [the slot channel](worker-service.impl.md#the-slot-channel-of-a-container).
+- At the `server` and the `container` placements, the envelope crosses only the slot channel on the server host. A `container` instance receives the client secret of each listing binding in the `init` frame and in each `bindings` frame of [the slot channel](worker-service.impl.md#the-slot-channel-of-a-container).
 - At the `worker` placement, a worker instance receives the client secret of each registration in the sealed connection answer of [the instance exchange](worker-service.impl.md#the-instance-exchange). The envelope crosses the network, and its item stays sealed to the instance key inside it.
 - A valid tag proves the sender and the direction, because only the server and that one worker application hold the client secret.
 - A refresh report carries the digest of the credential value that it replaces. Custody writes the new value in place only when the stored value has that digest, in the same transaction, so a replayed earlier report writes nothing.

@@ -52,9 +52,10 @@ erDiagram
         text id PK "worker_instance_ + ULID, one revision"
         text name "binding-name form, group key, never changes"
         text worker "catalog worker that kanthord hosts, never changes"
+        text placement "server, container or worker, never changes"
         integer revision "unique with name, starts at 1"
-        text public_key "base64url, 32-byte X25519 public key"
-        text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key"
+        text public_key "base64url, 32-byte X25519 public key, null at server and container"
+        text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key, null at server and container"
         integer created_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -256,25 +257,28 @@ The owning service enforces every rule below in the transaction of its write. A 
 - Every kind holds a `resource_identity`: `repository:github:<owner>/<name>`, `worker:kanthord:<binding name>` and `storage:s3:<endpoint host>/<bucket>`. Its first part is the binding kind, and no column holds the kind. A read derives the kind from that part.
 - The write refuses a name that another current binding of the project holds. A partial index cannot select the latest row of a group, so the write checks this rule.
 - A row is immutable. A configuration change inserts the next revision of its group.
-- A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or for a worker binding `instance_count: 0`, or `worker_instances: []` at `placement: worker`.
-- A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, and a tombstone after the pinned row refuses the use.
+- A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `worker_instances: []` for a native worker binding, or `instance_count: 0` for an external-harness binding.
+- A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, except that a native worker binding with `worker_instances: []` admits the live claim of a draining registration. A tombstone after the pinned row refuses the use.
 - Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store) rules.
 - The binding-set version is 1 plus the number of `project_binding` rows of the project. A write that names another version is refused. A write equal to the stored set inserts no row and keeps the version.
 - No sweep deletes a removed binding or a revision.
 - A write derives `resource_identity` from the configuration of the binding. A human never enters it.
 - A write compares each submitted binding with the current binding of the same name. An unchanged configuration inserts no row. A changed configuration of the same resource inserts the next revision of the group. A changed resource inserts a tombstone in the old group and revision 1 of the new group. A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again. A name that the submission omits takes a tombstone, and its rows stay.
 - A write refuses a change of the worker of an existing worker binding under the same name.
-- The `config` of a worker binding at `placement: worker` holds `worker_instances` and no `instance_count`. `worker_instances` is a list of 0 to 64 unique names of live instances of its worker. At another placement it holds `instance_count` and no `worker_instances`. The length of `worker_instances` is the instance count of the binding.
+- The `config` of a native worker binding holds `worker_instances`, and no `placement` and no `instance_count`. `worker_instances` is a list of 0 to 64 unique names of live instances of its worker, at any placement. The length of `worker_instances` is the instance count of the binding. The `config` of an external-harness binding holds `instance_count` and no `worker_instances`.
+- A `container` instance is listed by at most one live worker binding. A second listing is refused with 409 `project.bindings.worker.instance_shared`.
 - `config` holds the configuration of its kind: [repository](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#repository-configuration--proposed-fields), [worker](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
 
 ### Worker Service
 
-- `worker_instance` holds one row for each revision. `id` is the primary key, `(name, revision)` has a unique index, and `fingerprint` has a unique index over every row.
+- `worker_instance` holds one row for each revision. `id` is the primary key, `(name, revision)` has a unique index, and `fingerprint` has a unique index over every row. SQLite admits many null values in that unique index.
+- `placement` is `server`, `container` or `worker`. No `CHECK` holds the set. The Worker Service validates the value before the write. It never changes.
+- `public_key` and `fingerprint` are required at the `worker` placement and null at the `server` and the `container` placements.
 - `name` takes the binding-name form. A taken name answers 409 `worker.instance.name_conflict`, an archived name included. The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`.
-- `worker` names a catalog worker that kanthord hosts. The Worker Service validates the name form, the worker and the key form before the write. `name` and `worker` never change.
+- `worker` names a catalog worker that kanthord hosts. The Worker Service validates the name form, the worker and the key form before the write. `name`, `worker` and `placement` never change.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived, and an archive is final.
-- Only a Reset key inserts a revision. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
-- An archive ends the live revision and every live registration of the instance. It is refused with 409 `worker.instance.in_use` while a worker binding that is no tombstone lists the instance. It is also refused while a registration of the instance holds a live execution.
+- Only a Reset key inserts a revision, and only at the `worker` placement. It inserts the next revision with a new public key and ends the old revision in one transaction. It names `expected_revision`, and a stale value answers 409 `worker.instance.revision_conflict`.
+- An archive ends the live revision and every live registration of the instance. It is refused with 409 `worker.instance.in_use` while a worker binding that is no tombstone lists the instance. Without `force`, it is also refused while a registration of the instance holds a live execution. With `force: true`, it revokes that execution in its transaction.
 
 ### Agent component
 
@@ -361,7 +365,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `project_binding.config`           | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK.                                                                                           |
 | `agent_enablement.agent_providers` | `credential.name`                  | Reference in JSON by name, no FK.                                                                                                               |
 | `project_binding.config`           | `worker_instance.name`             | Reference in `worker_instances` JSON by name, no FK.                                                                                            |
-| `credential.holder`                | `worker_instance.name`             | Reference by name, no FK. `server` names no row.                                                                                                |
+| `credential.holder`                | `worker_instance.name`             | Reference by name, no FK. `server` names no row. A holder names only an instance at the `worker` placement.                                     |
 | `scheduler_job.node_id`            | `mission_node.id`                  | Reference, no FK.                                                                                                                               |
 | `scheduler_job.project_id`         | `project_project.id`               | Reference, no FK.                                                                                                                               |
 | `scheduler_queue_place.node_id`    | `mission_node.id`                  | Reference, no FK.                                                                                                                               |

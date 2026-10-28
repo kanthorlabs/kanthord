@@ -61,8 +61,8 @@ The harness mostly uses deterministic methods and predefined processes.
 A specific agent or a human participant supplies the WHO and takes responsibility for carrying out the necessary steps.
 
 A project binds each worker that it permits.
-A project configures how many instances of each worker binding are available.
-At the `worker` placement, the worker binding lists the registered worker instances that serve it.
+A worker binding lists the worker instances that serve it, and the length of that list is its instance count.
+A human adds capacity with a new instance.
 A worker instance claims a node in a node state that its worker declares, and it executes that node.
 The claim also needs a worker that declares the intent of the node and a worker binding whose tags include every tag of the node.
 The instance produces an execution object each time it takes a node.

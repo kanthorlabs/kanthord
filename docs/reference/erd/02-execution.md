@@ -24,7 +24,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Records without a table
 
-- The pool of a worker binding and the runtime fields of a registration record are runtime-only. A pool slot of a binding at the `server` or the `container` placement registers like any worker instance and holds a `worker_registration` row.
+- The set of running server instances and the runtime fields of a registration record are runtime-only. A server instance is a worker instance at the `server` or the `container` placement. It registers like any worker instance and holds a `worker_registration` row for each binding that lists it.
 - The current connection of a worker instance at the `worker` placement and its last heartbeat live in memory. A server start keeps no connection.
 - The time of the last heartbeat is a monotonic-clock value in memory.
 - The MCP session `mcp_session_<ulid>` lives in memory and ends at the server stop.
@@ -56,7 +56,7 @@ erDiagram
         text resource_identity "binding group key, from the machine JWT"
         text client_id "client_identity_ + ULID"
         text client_name "display name, 1-64 chars"
-        text instance_id "worker instance revision, null at server and container"
+        text instance_id "worker instance revision, null for an external harness"
         integer registered_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -216,18 +216,18 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 ### Worker Service
 
 - `worker_registration` holds one row for each registration of a worker instance under one worker binding. `worker.register` inserts the row, and `id` is the runtime identity.
-- A worker instance at the `server` or the `container` placement, and an external harness program, hold one registration. A worker instance at the `worker` placement holds one registration for each worker binding that lists it, and `instance_id` holds its live revision. `instance_id` is null at every other placement.
+- An external harness program holds one registration, and its `instance_id` is null. A worker instance at every placement holds one registration for each worker binding that lists it, and `instance_id` holds its live revision.
 - `worker_registration` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
 - The live registrations of a worker binding are the rows of that group where `ended_at` is null.
-- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. At the `worker` placement, the instance count is the length of `worker_instances`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
-- A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
+- A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. The instance count of a native binding is the length of `worker_instances`. The instance count of an external-harness binding is `instance_count`. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees its place under the instance count in its transaction.
+- A lower instance count of 1 or more ends no live registration. A removal of an instance from `worker_instances` drains the registration of that instance for that binding: its live execution finishes, and the binding gets no new claim from that instance. An external-harness count refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable. `instance_count: 0` of an external-harness binding ends every live registration of the binding. `worker_instances: []` drains each removed instance.
 - `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
-- A registration ends at a deregistration, at a heartbeat expiry, and at a removal or unavailability of its worker binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
+- A registration ends at a deregistration, at a heartbeat expiry, and at a removal of its worker binding, or `instance_count: 0` of an external-harness binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
 - A registration of a client identity that holds a live row answers that row and inserts nothing.
 - `worker.registration.resume` first settles an expired unsettled execution in the same transaction. It clears `ended_at` of an ended registration only while that row is the claimant of a `running` execution, and it takes the slot again. No other act clears `ended_at`.
-- At the `server` and the `container` placements, a registration is admitted only from the client identity of a pool slot of its binding. A registration at a binding at the `worker` placement is admitted only from a derived client identity. The server derives it for a listed worker instance and that binding. Another client identity answers 409 `worker.registration.placement_mismatch`.
-- A Reset key of a worker instance ends every live registration of its old revision in its transaction. An archive of a worker instance ends every live registration of the instance in its transaction.
+- A registration of a native worker binding is admitted only from a derived client identity. The server derives it for a worker instance that the binding lists and that binding, at every placement. A client identity that holds a live registration resumes it, also after a removal of its instance from the list. Another client identity answers 409 `worker.registration.placement_mismatch`.
+- A Reset key of a worker instance ends every live registration of its old revision in its transaction. An archive of a worker instance ends every live registration of the instance in its transaction. A forced archive first revokes the live execution of the instance, under the [Scheduler Service](#scheduler-service) rules.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
 
 ### Scheduler Service
@@ -236,7 +236,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so a registration holds at most one execution without a terminal write.
 - The live executions of a worker binding are the `running` rows of that group, whatever revision each row pins.
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
-- A worker instance runs one execution at a time over all its registrations. The claim transaction reads the registrations of the instance of the runtime identity of the work pull through the Worker Service. It admits no claim while one of them is the claimant of an execution with a null `ended_at` and a clock before `expired_at`.
+- A worker instance runs one execution at a time over all its registrations, at every placement. The claim transaction reads the registrations of the instance of the runtime identity of the work pull through the Worker Service. It admits no claim while one of them is the claimant of an execution with a null `ended_at` and a clock before `expired_at`.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names a registration of that worker binding. For a registered program, it equals `worker_registration.id`.
 - The claim admits a node only in a state that the worker of the binding declares, through the [match](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match). The match has two conditions. The worker declares the intent of the node. The tags of the worker binding include every tag of the node. The intent and the tags of the node come from the revision that the claim pins. A worker name with no worker declaration gives no claimant. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
@@ -256,7 +256,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A release with a `budget_end` stop counts the `budget_end` rows of the attempt after its latest finished row without a `budget_end` stop, itself included, and hands the count to the Mission Service in the release transaction. At `mission.further_work_limit`, the node moves to `Paused` instead of `Available`, the attempt stays open and no job exists. The value 0 turns the limit off.
 - No index serves the loss count. The loss declaration scans `scheduler_execution` for the rows of the attempt.
 - A claim and every Mission transition first settle each expired unsettled execution that they meet in the same transaction. A human act then checks its own precondition against the settled state. The work-pull lookup and the registration resume follow the same rule and read a `running` execution, never merely a null `ended_at`.
-- A revocation at a Mission transition before expiry sets `ended_at` in that transaction. It counts as no loss. Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
+- A revocation at a Mission transition before expiry sets `ended_at` in that transaction. It counts as no loss. A forced archive of a worker instance revokes the live claim of the instance in this way: the Mission Service moves the node `Executing -> Available` or `Evaluating -> Waiting`, inserts its job with no hold and keeps the attempt open. It counts no failure. Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
 - The end of a registration ends no execution row by itself. Its live execution follows its deadline and the loss declaration.
 - No sweep deletes an execution row.
 - The Scheduler derives `claim_state`: `running` means `ended_at` is null and time is before `expired_at`; `lost` means `ended_at` is at or after `expired_at`, or `ended_at` is null and time is at or after `expired_at`; `finished` means `ended_at` is before `expired_at`. So the table holds no claim state column.
@@ -338,7 +338,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | From                                                                  | To                                                | Kind                                                                                                                                         |
 | --------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `worker_registration.project_id`, `resource_identity`                 | `project_binding.project_id`, `resource_identity` | Reference to a binding group, from the machine JWT, no FK. It pins no revision.                                                              |
-| `worker_registration.instance_id`                                     | `worker_instance.id`                              | Reference, no FK. A worker instance revision of [ERD 1](01-setup.md). Null at the `server` and the `container` placements.                   |
+| `worker_registration.instance_id`                                     | `worker_instance.id`                              | Reference, no FK. A worker instance revision of [ERD 1](01-setup.md). Null for an external harness.                                          |
 | `scheduler_execution.worker_binding_id`                               | `project_binding.id`                              | Reference, no FK. The latest row of the group at the claim.                                                                                  |
 | `scheduler_execution.worker_binding_id`                               | `agent_enablement.agent_name`                     | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
 | `scheduler_execution.resource_identity`                               | `project_binding.resource_identity`               | Copy of the pinned row, no FK. It groups the rows of one binding across revisions.                                                           |

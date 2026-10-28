@@ -201,7 +201,7 @@ Every service that versions a resource follows these rules.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
 - The Mission Service notifies the Scheduler Service of an accepted change that can affect scheduling.
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
-- The Scheduler Service reads the worker bindings and their instance counts from the Project Service.
+- The Scheduler Service reads the worker bindings and their listed instances from the Project Service.
 - The Scheduler Service reads the claim facts of the nodes from the Mission Service.
 - The Mission Service and the Project Service read the unmatched pairs of a project from the Scheduler Service in the transaction of their write.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
@@ -218,7 +218,7 @@ Every service that versions a resource follows these rules.
 - The action performer reads the required external actions of the attempt and the request evidence of the node from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
-- The Worker Service reads the permitted workers and the instance counts from the Project Service.
+- The Worker Service reads the permitted workers and the listed instances from the Project Service.
 - The Worker Service resolves agent configuration through the Agent component and uses the selected credential through custody. At the `worker` placement, the selected credential is the copy that the worker instance holds, sealed to its key.
 - The Worker Service reaches a large language model provider. A worker instance calls its provider directly, and the server holds no proxy for it.
 - Every service writes telemetry to the Tracking Service.

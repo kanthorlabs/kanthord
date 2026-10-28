@@ -66,7 +66,7 @@ It describes no mechanism of another service.
 - A [worker instance](overview.vocabulary.md#worker-instance) at the `worker` placement holds one private key. That key is its only machine credential.
 - The instance exchanges proof of the key for a [worker token](gateway-service.vocabulary.md#worker-token), and then for one credential for each worker binding that lists the instance. The [instance exchange](worker-service.impl.md#the-instance-exchange) owns the steps.
 - For an instance at the `server` or the `container` [placement](worker-service.vocabulary.md#placement), the `server` application mints a machine credential in memory for each call.
-- That credential names the client identity of the [pool slot](worker-service.vocabulary.md#pool-slot). It reaches no file, no container and no worker unit.
+- That credential names the client identity of the [server instance](worker-service.vocabulary.md#server-instance) for one listing binding. It reaches no file, no container and no worker unit.
 - The Gateway Service authenticates that credential like every other machine credential. The `server` and the `container` placements grant no other path into the Gateway Service.
 - The credential names one [client identity](project-service.vocabulary.md#client-identity) and the worker binding that groups its instances. A client identity is never reused, and it never moves to another worker binding.
 - No database of the server holds a credential of a machine, a secret of a client identity or a list of the client identities of a worker binding.

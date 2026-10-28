@@ -247,7 +247,7 @@ With `No external action`, a passing review completes the node. The change stays
 
 ## 8. Bind the workers
 
-A worker binding turns on one worker for the project. The project needs two: `coder@1` does the work, and `reviewer@1` judges it.
+A worker binding turns on one worker for the project. The project needs two: `coder@1` does the work, and `reviewer@1` judges it. Each binding lists its worker instances. A worker instance runs one execution at a time, so one instance of each worker is enough for this tutorial.
 
 Add the `coder` binding from Onboarding:
 
@@ -255,9 +255,10 @@ Add the `coder` binding from Onboarding:
 2. Select **Add** in the **Workers** section.
 3. Enter a **Name**: `coder`.
 4. Choose the **Worker** `coder@1`.
-5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Placement** then shows `Server` selected. **Save binding** stays off until the agents load.
-6. Keep **Placement** `Server` and **Instance count** `1`. Leave **Advanced settings** closed. The **Container** card is on when rootless Podman or Docker runs on your machine. Otherwise it shows the cause. Keep `Server` in both cases.
-7. Select **Save binding**.
+5. Wait until the **Agents** section shows `swe@1` with the badge `Enabled`. **Save binding** stays off until the agents load.
+6. Beside **Instances**, select **Add instance**. Enter the name `coder-1`, keep **Placement** `Server`, and select **Create instance**. The **Container** option is on when rootless Podman or Docker runs on your machine. Otherwise it shows the cause. Keep `Server` in both cases.
+7. Check that **Instances** shows `coder-1 · server` selected.
+8. Select **Save binding**.
 
 Every Onboarding step is now `Done`, so the dashboard returns to `/` and shows **Overview**. Onboarding counts one worker binding as enough, but the first task needs both. Add the `reviewer` binding now.
 
@@ -266,17 +267,17 @@ Add the `reviewer` binding on the project page:
 1. Open **Projects**, then the project `first`, then the **Bindings** tab.
 2. Select **Add** in the **Workers** section.
 3. Enter the **Name** `reviewer`, and choose the **Worker** `reviewer@1`.
-4. Wait until **Placement** shows `Server` selected. Keep **Instance count** `1`.
+4. Beside **Instances**, select **Add instance**. Enter the name `reviewer-1`, keep **Placement** `Server`, and select **Create instance**.
 5. Select **Save binding**. The sheet closes, and the project page stays open.
 
-At the `server` placement, the server runs each instance as a thread. You start no process and generate no token. The agent commands and the verifications run as your OS user, with the tools on the `PATH` of the server.
+At the `server` placement, the server runs each instance as a thread from its create until its archive. You start no process and generate no token. To run more work at once later, add another instance, for example `coder-2`, and list it in the binding. The agent commands and the verifications run as your OS user, with the tools on the `PATH` of the server.
 
 At the `server` placement, an agent command can read every file that your OS user can read. That includes the database and the configuration of the server, and the keys under `~/.ssh`. The configuration holds the `master_key`, so a command can read every credential of the server. A command can also stop the server process. KanthorD removes `SSH_AUTH_SOCK` and `SSH_AGENT_PID` from each command, so a command does not find the SSH agent of your user through its environment. A command can still open the agent socket by its path. Use a test repository, and bind only a repository that you trust. See [Where a worker runs](../explanation/worker.md#where-a-worker-runs).
 
-The other placements:
+The placement belongs to the instance, and it never changes. The other placements:
 
-- `container`: each instance runs in its own container on this machine, with Podman or Docker. The container holds no file of your machine, and its image holds only the tools of the image. Use it when an agent command must not read the files of your user. See [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md).
-- `worker`: each instance is a `kanthord serve worker` process on this or another host. Use it to run the instance on another machine, for example one with the toolchain of the project. See [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a server binding to the worker placement](../how-to-guides/run-in-a-container.md#move-a-server-binding-to-the-worker-placement).
+- `container`: the instance runs in its own container on this machine, with Podman or Docker. The container holds no file of your machine, and its image holds only the tools of the image. Use it when an agent command must not read the files of your user. See [Isolate worker instances in containers](../how-to-guides/isolate-worker-instances-in-containers.md).
+- `worker`: the instance is a `kanthord serve worker` process on this or another host. Use it to run the instance on another machine, for example one with the toolchain of the project. See [Run a worker on another host](../how-to-guides/run-in-a-container.md#8-run-a-worker-on-another-host). To move `coder` or `reviewer` to that placement later, see [Move a binding to a worker instance](../how-to-guides/run-in-a-container.md#move-a-binding-to-a-worker-instance).
 
 That guide starts from a server in a container. With the binary, two steps differ:
 
@@ -289,14 +290,14 @@ Add both bindings before the import. The import refuses a node when no worker bi
 
 The project page shows the **Readiness** panel above the tabs. The panel lists each `Open` item with a link to its fix. The badge beside the heading shows the count of open items, or `Ready` when no item is open. Select **<n> done steps** to show the `Done` items.
 
-| Item               | `Done` when                                                                 |
-| ------------------ | --------------------------------------------------------------------------- |
-| Repository binding | The project holds a repository binding.                                     |
-| Worker bindings    | The project holds a worker binding.                                         |
-| Live registrations | Each worker binding with an instance count above 0 has a live registration. |
-| Enabled agents     | Every agent of the worker bindings is enabled.                              |
-| Plan import        | The mission holds a node.                                                   |
-| Project active     | The project is not paused.                                                  |
+| Item               | `Done` when                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Repository binding | The project holds a repository binding.                                                                                          |
+| Worker bindings    | The project holds a worker binding.                                                                                              |
+| Live registrations | Each worker binding with an instance count above 0 has a live registration. The instance count is the count of listed instances. |
+| Enabled agents     | Every agent of the worker bindings is enabled.                                                                                   |
+| Plan import        | The mission holds a node.                                                                                                        |
+| Project active     | The project is not paused.                                                                                                       |
 
 Every item is now `Done`, except **Plan import**. The server starts the instances after the save of each binding. When **Live registrations** shows `Open`, reload the page after a few seconds.
 

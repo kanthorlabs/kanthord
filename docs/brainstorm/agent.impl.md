@@ -83,7 +83,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 ### The holder rule
 
-- The holders of a consumer are the names in `worker_instances` of a `worker` placement binding, which the Project Service answers through `workerBindingOf`. The holder is `server` for a `server` or a `container` binding and for a workbench session.
+- The holders of a worker binding are the names in `worker_instances` of its instances at the `worker` placement, which the Project Service answers through `workerBindingOf`. The holder `server` joins them when the binding lists an instance at the `server` or the `container` placement. The holder is `server` for a workbench session.
 - For each holder and each agent provider of the chain, head and every fallback, custody holds a live copy of the `(credential, holder)` group. Its `sealed_current` is true.
 - A failure answers 400 `agent.configuration.credential_holder_mismatch` with `details: { agent, agent_provider, credential, holder }`.
 - The rule runs at enablement write for every dependent worker binding, at worker binding write and at resolution. It refuses, and it never filters a chain entry.
@@ -193,7 +193,7 @@ The Agent component owns these keys of the section `agent`.
 
 - The claim transaction calls the Agent component with the pinned worker binding row and the native agents of the worker.
 - The component builds the chain of each agent and reads the hold of the credential copy of the claimant holder for each chain entry.
-- The claimant holder is the instance of the registration at the `worker` placement, and `server` at every other placement. Custody pins the row of that `(name, holder)` group at first use.
+- The claimant holder is the instance of the registration when that instance is at the `worker` placement, and `server` at the `server` and the `container` placements. Custody pins the row of that `(name, holder)` group at first use.
 - It returns the first chain entry whose credential is not cooling.
 - A credential is cooling when its `available_at` is later than the clock reading. Every model of a cooling credential is skipped.
 - When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold. No reader uses it today. A parked work pull waits for its wake or for the earliest job `available_at`, and not for the end of a hold.

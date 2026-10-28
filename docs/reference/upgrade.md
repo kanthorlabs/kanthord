@@ -22,7 +22,6 @@ The server refuses to start when one of them differs from the binary:
 | The database records a service that the binary does not know, a gap or a duplicate in its versions, or a version newer than the binary.                                 | `system.database.migration.incompatible_history` | Install the matching binary, or restore the backups.      |
 | The schema of a recorded service differs from its migration text. The `object` row names the first differing schema object, in the order of the type and then the name. | `system.database.migration.schema_mismatch`      | Run the [reset procedure](#reset-a-pre-release-database). |
 | `master_key` does not match the database.                                                                                                                               | `system.config.master_key_mismatch`              | Restore the matching configuration file or backup.        |
-| A worker binding of a worker that kanthord hosts holds no `placement`. The rows `project_id` and `binding` name it.                                                     | `system.database.binding_placement_missing`      | Run the [reset procedure](#reset-a-pre-release-database). |
 
 `config validate`, `config show` and `auth jwt generate` refuse a configuration version other than the version of the binary with the same diagnostics. A new installation needs no upgrade: the first start creates both databases and applies every migration.
 
@@ -68,6 +67,8 @@ Before the first tag, a schema change edits the one migration of a service. The 
 3. Start the server. The first start creates both files.
 
 The reset deletes every project, credential, binding, mission, execution and trace. The configuration file stays. The first start records the verifier of its `master_key` in the new database, so the same `master_key` stays valid.
+
+The worker instance model needs this reset. A worker binding of an older build holds `instance_count` and `placement`, and the new build stores each `server` and `container` instance as a named [worker instance](worker/instance.md). After the reset, create one instance for each unit of each old count, and list the instances in the binding. For example, a `coder` binding with `instance_count: 2` at the `server` placement becomes the instances `coder-1` and `coder-2` at the `server` placement and `"worker_instances": ["coder-1", "coder-2"]`. Run `kanthord upgrade` before the start: a configuration step renames `worker.server_slot_limit` to `worker.server_instance_limit`.
 
 ### Restore the backups
 

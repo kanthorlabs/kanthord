@@ -58,7 +58,7 @@ A second creation with name `atlas-github` for the same holder returns the ident
 
 ## holder
 
-The party that can open a copy of a credential: `server`, or the name of one worker instance.
+The party that can open a copy of a credential: `server`, or the name of one worker instance at the `worker` placement. An instance at the `server` or the `container` placement is no holder, and it uses the copy of `server`.
 The term names no closed set, because an instance name is a value.
 `anthropic` holds a copy for `server` and a copy for `box-coder`. Only `box-coder` opens its copy, and a binding of `box-coder` resolves that copy.
 
@@ -95,7 +95,7 @@ An execution requests a GitHub read for another node, so the facility refuses it
 ## credential handover
 
 The encrypted transfer of execution credentials to the kanthord worker application that hosts the execution.
-An execution on a pool slot receives the credential of its effective agent provider.
+An execution on an instance at the `server` or the `container` placement receives the credential of its effective agent provider from the copy of `server`.
 The application reports refreshed OAuth material and discards the credentials at execution end.
-An execution on a pool slot with the repository binding `kanthord-repo` also receives the SSH key of `kanthord-deploy`, so the slot holds no key file.
+An execution on such an instance with the repository binding `kanthord-repo` also receives the SSH key of `kanthord-deploy`, so the instance holds no key file.
 An execution on the worker instance `box-coder` receives only the copy of `anthropic` sealed to `box-coder`, and no SSH key.

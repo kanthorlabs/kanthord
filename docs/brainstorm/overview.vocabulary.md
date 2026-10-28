@@ -127,7 +127,7 @@ For each task of an `implement` node, an execution of `tdd@1` repeats a RED-GREE
 A worker instance is a background instance of one worker that claims a node in a node state that its worker declares.
 The term names no closed set.
 A `tdd@1` instance claims the node "Add password reset". Execution 1 starts.
-At the `worker` placement, a worker instance is a `kanthord serve worker` process that a human adds once on the server, under [worker-service.md](worker-service.md#worker-instances).
+A human adds a worker instance once on the server, with one worker and one placement: `server`, `container` or `worker`. It runs one execution at a time. At the `worker` placement, it is a `kanthord serve worker` process, under [worker-service.md](worker-service.md#worker-instances).
 
 ## execute
 

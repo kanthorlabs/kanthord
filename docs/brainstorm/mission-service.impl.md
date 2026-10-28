@@ -66,7 +66,7 @@ A new binding kind adds a row.
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or unknown `intent`, a nonlist `tags`, a repeated or malformed tag, a `commit_type` outside its closed set, and a task on an `examine` node answer `mission.node.content_invalid`.
 A write that changes `intent` of a node whose attempt reads 1 or more answers 409 `mission.node.intent_locked` with `details: { node_id, attempt }`.
-A node write whose node names two repository bindings or more answers 400 `mission.node.environment_mixed` with `details: { bindings }` when the worker bindings of the project run at the `container` placement and two of the repository bindings hold different stored `environment` documents, because one slot runs one image. `environmentsMixed(projectId, resourceIdentities)` of the [Project Service](project-service.impl.md#the-gate-collaborations) reads the stored documents of the binding set inside the write transaction, never the records in memory, so the answer does not depend on timing. A binding with no stored environment counts as no environment. Two bindings with one equal document pass. The guard thus misses two bindings whose repository, detected or universal sources differ. Such a node runs the image of the binding that the worker binding names, and the docs of the node content state this limit. The node writes are the node writes of the next paragraph, and the import preview lists the violation for each node file.
+A node write whose node names two repository bindings or more answers 400 `mission.node.environment_mixed` with `details: { bindings }` when a worker binding of the project lists a `container` instance and two of the repository bindings hold different stored `environment` documents, because one `container` instance runs one image. `environmentsMixed(projectId, resourceIdentities)` of the [Project Service](project-service.impl.md#the-gate-collaborations) reads the stored documents of the binding set inside the write transaction, never the records in memory, so the answer does not depend on timing. A binding with no stored environment counts as no environment. Two bindings with one equal document pass. The guard thus misses two bindings whose repository, detected or universal sources differ. Such a node runs the image of the binding that the worker binding names, and the docs of the node content state this limit. The node writes are the node writes of the next paragraph, and the import preview lists the violation for each node file.
 A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.tags_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, a rebind, an unblock with a change and a proposal approval.
 Each of these writes reads `unmatchedClaims` of the Scheduler Service before and after its change, in its own `BEGIN IMMEDIATE` transaction.
 A node write that keeps an existing unmatched pair succeeds.
@@ -574,6 +574,19 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `landed_commit` is admitted only with `result: success`.
 - The server writes the actor, the time, the human assessment and the outcome record.
 
+## The forced archive revocation
+
+- The Mission Service offers `revokeForInstanceArchive(tx, executionId)` to the Worker Service through its `contract.ts`. `worker.instance.archive` with `force: true` calls it inside its transaction for the live execution of the instance, under [worker-service.impl.md](worker-service.impl.md#the-instance-record).
+- The method reads the node of the execution. A steps claim moves the node `Executing -> Available`, and an evaluation claim moves it `Evaluating -> Waiting`.
+- The attempt stays open. The transition writes no outcome, no assessment and no stop.
+- The method calls the revocation of the Scheduler in the same transaction with the revoke cause `human`. The revocation sets `ended_at`, counts no loss and no failure, and sets no hold.
+- The revocation neither counts nor ends the consecutive failure count of the node.
+- The transaction inserts the job when the node is claimable, with no `available_at`.
+- An execution that is no longer live answers null with no change, so a release that commits first wins.
+- The method records the revoked claim in an `ExecutionEnds` through `endLiveClaim`, as every human act that revokes a live execution does. It answers that `ExecutionEnds` to the Worker transaction.
+- After the commit, the Worker Service hands that `ExecutionEnds` to the Mission collaboration `reportExecutionEnds(ends)`. The method runs `reportEnds`, so the Scheduler reports `executionRevoked` after the commit on the path of every other revocation.
+- The archive is a Worker act, so the Mission Service writes no act trace for it. The execution trace records `revoked` with the cause `human.intervention`.
+
 ## The act trace
 
 Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act. A node with no attempt gives the trace a null attempt.
@@ -735,6 +748,8 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 ## Tests
 
 - Tests accept a `Text` value of `mission.text_max_bytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
+
+- Tests call `revokeForInstanceArchive` for a live steps claim and a live evaluation claim. They assert `Executing -> Available` and `Evaluating -> Waiting`, an open attempt, an unchanged consecutive failure count, a job with no `available_at`, and no change for an execution that ended first. A test hands the answered `ExecutionEnds` to `reportExecutionEnds` and asserts the execution trace `revoked` with the revoke cause `human` and no act trace.
 
 - Tests list every open attempt of a changed content owner in `open_attempts_unchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
 

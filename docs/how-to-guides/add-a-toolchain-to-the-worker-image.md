@@ -6,7 +6,7 @@ Build an image that adds a toolchain, for example Node.js, to the kanthord image
 
 The kanthord image holds `bash`, `git`, the OpenSSH client and `kanthord`. It holds no language toolchain. A verification such as `npm test` fails in it.
 
-Use the new image as the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker bindings at the `server` placement then run their commands with the toolchain.
+Use the new image as the image of the server container of [Run kanthord in a container](run-in-a-container.md). Worker instances at the `server` placement then run their commands with the toolchain.
 
 At the `container` placement, this image does not apply. Follow [step 4](#4-add-a-toolchain-at-the-container-placement) instead.
 

@@ -107,7 +107,8 @@ A non-secret decoded machine payload:
 }
 ```
 
-A `client` JWT of a binding at `placement: worker` adds `instance_id` = `worker_instance_01J8Z3N5K7Q2W4E6R8T0Y2V4XA` and `connection_id` = `connection_01J8Z3N5K7Q2W4E6R8T0Y2V4XC`.
+A `client` JWT of an instance at the `worker` placement adds `instance_id` = `worker_instance_01J8Z3N5K7Q2W4E6R8T0Y2V4XA` and `connection_id` = `connection_01J8Z3N5K7Q2W4E6R8T0Y2V4XC`.
+A `client` JWT of an instance at the `server` or the `container` placement adds only `instance_id`.
 
 A token with an `aud` claim or without `jti` fails verification.
 

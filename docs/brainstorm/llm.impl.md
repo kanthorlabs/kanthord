@@ -126,11 +126,11 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## Instance copies
 
 - `llm.credential.create` and `llm.credential.rotate` declare the access policy `human_or_worker` of [the Gateway](gateway-service.impl.md#access-policy). Every other credential operation keeps `human`, except where this section names another policy.
-- Under a human identity, `create` takes `{ name, platform, metadata, secret, holders }`. `holders` is a list of `server` and live instance names, and it defaults to `["server"]`. [Custody seals](custody.impl.md#the-seal-of-a-human-entry) each instance copy and writes one row for each holder in one transaction.
+- Under a human identity, `create` takes `{ name, platform, metadata, secret, holders }`. `holders` is a list of `server` and names of live instances at the `worker` placement, and it defaults to `["server"]`. [Custody seals](custody.impl.md#the-seal-of-a-human-entry) each instance copy and writes one row for each holder in one transaction.
 - Under a human identity, `rotate` takes `{ expected_revision, secret }` and the query `holder`, which defaults to `server`.
 - Under a [worker token](gateway-service.vocabulary.md#worker-token), `create` takes `{ name, platform, metadata, holder, sealed, sealed_to }`, and `rotate` takes `{ expected_revision, holder, sealed, sealed_to }`. `holder` equals the instance of the token.
 - A body holds exactly one of `secret` and `sealed` with `sealed_to`. A human body with `sealed`, a worker body with `secret`, or a body with both answers 400 `credential.input.invalid`.
-- A `holder` that names no live instance answers 400 `llm.credential.instance_unknown`.
+- A `holder` that names no live instance at the `worker` placement answers 400 `llm.credential.instance_unknown`. An instance at the `server` or the `container` placement is no holder: it holds no key, and its executions use the copy of the holder `server` through the slot channel.
 - A worker caller acts only on the copies of its own instance. Another holder answers 403 `llm.credential.instance_forbidden`.
 - A metadata edit, a revoke, an archive and a login declare `human`. The Gateway answers a worker token on them with 401 `gateway.authentication.unauthorized`.
 - A human create or rotate that seals for an instance reads the keys in one transaction, seals outside it, and commits in a second transaction. The commit checks `sealed_to` against the current fingerprint again, and a key rotation in between answers 400 `credential.sealed.invalid`.
@@ -142,7 +142,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - An instance copy skips the [pre-save check](architecture.impl.md#the-pre-save-check) and the [provider check](#the-provider-check).
 - The CLI on the host of an instance seals locally. With `--holder <name>` and an instance file `$XDG_CONFIG_HOME/kanthord/workers/<name>.yaml`, it derives the public key from the private key of that file. It authenticates with a worker token, and it trusts no key that the server supplies. The token call creates no connection.
 - Without that file, the CLI sends the plaintext and the holder under the human token, and the server seals.
-- The credential sheet of an instance page sends the plaintext and the holders. Its `Also seal to` field lists every live instance, grouped by worker.
+- The credential sheet of an instance page sends the plaintext and the holders. Its `Also seal to` field lists every live instance at the `worker` placement, grouped by worker.
 - The `Rotate` sheet offers `Also rotate on` with every other holder of the name. It sends one request for each holder, each with its own `expected_revision`.
 - `/llm` lists the copies of the holder `server` only and states "Instance credentials live on the worker pages."
 
@@ -205,9 +205,9 @@ Each platform validator declares its secret shape, metadata schema and validatio
 
 ### The login of an instance
 
-- `llm.credential.login` takes the optional `holder`. A login of an instance holder runs on that instance, and the server holds only the session record.
+- `llm.credential.login` takes the optional `holder`. A login of an instance holder runs on that instance, and the server holds only the session record. Only an instance at the `worker` placement takes a login. A login for a server instance runs on the server under the holder `server`.
 - An instance with no current connection answers 409 `credential.login.instance_unavailable`. A connection whose last heartbeat is older than `INSTANCE_CONNECTED_WINDOW` (60 s) counts as no current connection.
-- A holder that names no live instance answers 400 `llm.credential.instance_unknown`.
+- A holder that names no live instance at the `worker` placement answers 400 `llm.credential.instance_unknown`.
 - A login of an instance holder refuses with 409 `credential.name.conflict` only when the `(name, holder)` group holds a live revision sealed to the current fingerprint. `details.id` holds the identity of that revision.
 - A login of an archived copy answers 409 `credential.credential.archived`. The archive stays final.
 - A copy whose newest live revision is sealed to an ended key takes a new login. A key rotation or a Reset key of the instance makes a copy stale in this way.

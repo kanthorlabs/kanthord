@@ -61,6 +61,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 
 - The component runs in the process of its caller.
 - The model connector runs in the worker unit for an execution at every placement, with the material of a [credential handover](custody.vocabulary.md#credential-handover).
+- At the `server` and the `container` placements, the handover carries the copy of the holder `server`.
 - At the `worker` placement, the worker unit opens the copy of its instance with the instance key. A worker instance calls its provider directly, and no server-side LLM proxy exists.
 - The caller keeps its runtime duties.
 
