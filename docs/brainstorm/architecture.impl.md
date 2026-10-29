@@ -1548,7 +1548,7 @@ The prompt block:
 - The `Cost` section shows the totals of the range from a read with `group_by=none&bucket=none`.
 - The `Cost` section shows one row for each group and one row for each bucket.
 - A cost row shows the turns, the input, output and cached tokens, `Est. cost` and a bar of its cost against the largest row.
-- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait` and `Revision turns`.
+- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait`, `Revision turns` and `Test floor share`.
 - The `Time` section holds the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`.
 - A time row shows the count, p50, p90, p99 and max.
 - A time row shows one bar from 0 to the largest max, with marks at p50, p90 and p99.

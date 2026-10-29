@@ -1590,6 +1590,10 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - `excluded_e2e` lists each e2e test file that the selection reached and left out.
 - The report is at most 1 MiB. Each list holds at most 10000 entries, and each text is at most 1024 bytes.
 - KanthorD parses the report with a strict schema. A missing report, an invalid report, or an exit code that does not match `failed`, is an invalid report.
+- `version` is 1 or 2. Version 2 adds the optional object `floor`. Every other key keeps its version 1 rule, and a version 1 report stays valid.
+- The floor is the set of test files whose import closure holds every production file of the repository. The selector computes it from its import graph.
+- `floor` holds `tests`, `seconds` and `total_seconds`. `tests` is the count of floor test files. `seconds` is the test time of the floor test files that ran. `total_seconds` is the test time of every test file, or null unless `selection` is `all`.
+- A `floor` key in a version 1 report gives an invalid report.
 
 ```json
 {

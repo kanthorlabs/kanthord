@@ -83,6 +83,9 @@ The Worker Service writes these facts for [the affected test run](worker-service
 | `kanthord.affected.excluded_e2e_count` | int      | Entries of `excluded_e2e`                                                    |
 | `kanthord.affected.tests`              | string[] | The first 128 entries of `tests` (`COLLECTION_MAX`), and at most 16384 bytes |
 | `kanthord.affected.failed`             | string[] | The first 128 failed test ids as `<file> > <name>`, and at most 16384 bytes  |
+| `kanthord.affected.floor_count`        | int      | `floor.tests` of a version 2 report. Absent otherwise                        |
+| `kanthord.affected.floor_seconds`      | double   | `floor.seconds` of a version 2 report. Absent otherwise                      |
+| `kanthord.affected.total_seconds`      | double   | `floor.total_seconds` when it is not null. Absent otherwise                  |
 
 - The texts of the span stay `command` and `output`.
 - `worker.release_gate` ends with `kanthord.release_gate.affected`, the verdict of the node, `absent` included.
@@ -341,6 +344,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
   - `review_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `evaluation`.
   - `revision_turns`: one value for each node attempt with a `scheduler.execution` root span in the range.
+  - `test_floor_share`: `kanthord.affected.floor_seconds` divided by `kanthord.affected.total_seconds` of each `worker.verification` span with `kanthord.verification.kind` `affected` that holds both.
   - `instance_busy_ratio`: the sum of `duration_ms` of the root spans in the range for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
 - Every measure other than `span_duration` ignores `operation`.
 - `instance_busy_ratio` takes the `group_by` value `worker_instance` only. Another `group_by` with `instance_busy_ratio` answers 400 `gateway.request.validation_failed`.
@@ -350,7 +354,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - The range cuts an attempt: a transition outside the range does not count.
 - The start of the first root span of the attempt in the range sets its bucket. The trace row of that root span sets its group fields.
 - `group_by` takes `none`, `operation`, `tool_name`, `agent_name`, `model`, `worker_name`, `node_id` or `project_id`, and it defaults to `none`. `worker_instance` is a value for `instance_busy_ratio` only.
-- Every measure other than `instance_busy_ratio` answers an item with `key`, `bucket_start`, `count`, `p50`, `p90`, `p99`, `mean` and `max`. The unit is milliseconds, and a count for `revision_turns`. The order measure is `count`.
+- Every measure other than `instance_busy_ratio` answers an item with `key`, `bucket_start`, `count`, `p50`, `p90`, `p99`, `mean` and `max`. The unit is milliseconds, a count for `revision_turns` and a ratio from 0 to 1 for `test_floor_share`. The order measure is `count`.
 - A percentile `p` of `n` sorted values `x[0]` to `x[n - 1]` is `x[k] + (h - k) * (x[k + 1] - x[k])`.
 - In that formula, `h = (n - 1) * p` and `k` is the integer part of `h`. The percentile is `x[n - 1]` when `k` is `n - 1`.
 - The CLI commands are `kanthord tracking analytics cost` and `kanthord tracking analytics duration`.
