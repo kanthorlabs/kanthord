@@ -407,11 +407,11 @@ The suite pass record is a repository setup that works without KanthorD. A devel
 - A suite pass record holds one key for each test file that passed. CI skips a test file whose current key matches a record.
 - The key of a test file is a SHA-256. It covers the toolchain, the blob ids of the global inputs and of the `gate_files`, and the blob ids of the import closure of the test file.
 - The toolchain is the runtime version and the package manager version.
-- The global inputs are the lockfile, the test configuration and each path of the global input list of the selector. In `engine`, they also hold `static/pi-tools.json`.
+- The global inputs are the lockfile, the test configuration and each path that the selector treats as a global input, for example `package.json`. In `engine`, they also hold `static/pi-tools.json`.
 - The import closure comes from the import graph of the selector of [the affected test declaration](#the-affected-test-declaration). No second map exists.
 - Only a run in a clean clone with a frozen install writes a record. A dirty or untracked work tree writes no record.
 - CI writes the records through `actions/cache` first. A record that a developer or KanthorD writes comes later.
-- A repository whose selector gives no import graph uses one record for the whole tree. Its key is the tree id and the toolchain.
+- A repository with no selector, or whose selector gives no import graph, uses one record for the whole tree. Its key is the tree id and the toolchain.
 - CI runs every test file with no matching record and every test file of the always-run list. A nightly full run on the base branch runs every test file.
 - The CI job summary prints the floor of the affected report and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
 - The test files that load every production file run for every production change.
@@ -637,7 +637,7 @@ The component computes the status of a group in this order. The first rule that 
 - The value `suite_pass` is a [suite pass state](project-service.vocabulary.md#suite-pass-state): `present` when the file exists, else `absent`.
 - Only a binding with the action `pull_request` with `landing: human` gets the proposal. Any other binding gets no proposal.
 - A human accepts the proposal with an import of the shipped plan `suite-pass-setup`. The import records the human as the actor.
-- The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the repository and the CI change. It adds `.kanthord/suite-pass.json` and the CI workflow file to `gate_files`. Its verification checks the written files.
+- The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the repository and the CI change. With an affected test declaration, it adds `.kanthord/suite-pass.json` and the CI workflow file to `gate_files`. Its verification checks the written files.
 - The setup node lands with `human`, the `landing` of the binding.
 
 ### The universal environment

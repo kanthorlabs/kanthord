@@ -1552,6 +1552,7 @@ The prompt block:
 - The `Time` section holds the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`.
 - A time row shows the count, p50, p90, p99 and max.
 - A time row shows one bar from 0 to the largest max, with marks at p50, p90 and p99.
+- A `Test floor share` row shows the count and the share as a percent, with one bar from 0 to 1.
 - A group row of a node shows the node name, and a group row of a project shows the project name.
 - A section reads at the page load and at each change of a filter. `Refresh` reads again. The page reads nothing on a timer.
 - A read with `truncated: true` shows "The range holds more groups. Narrow the range or the filter."
