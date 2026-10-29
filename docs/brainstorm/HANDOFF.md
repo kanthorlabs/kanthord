@@ -41,15 +41,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Project Service
 
-- [ ] Added 2026-10-29. RULED 2026-10-29 by Ulrich: add the suite pass record as a repository setup that works without KanthorD. Each test file has a record with a sha256 key over the toolchain, the blob ids of the global inputs and the `gate_files`, and the blob ids of its import closure. In `engine`, the global inputs also hold `static/pi-tools.json`. The repository selector builds the closure. CI skips a test file with a matching record. Rules:
-  - Only a run in a clean clone with a frozen install writes a record.
-  - CI writes the records through `actions/cache` first. Records from KanthorD or a developer come later.
-  - `.kanthord/suite-pass.json` holds the configuration and the always-run list: tests that bundle code, reach `bin/` or use a root URL. The setup adds a gitignore exception for it. `affected-tests.json` takes no new key.
-  - A repository without a selector uses one record for the whole tree.
-  - The CI job summary prints the floor of the affected report and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
-  - Accepted limits: the test files that load the composed server run for every production change. The push to `main` re-runs the selected tests until records that `main` can read land.
-  - The Onboarding component detects a missing setup and proposes it. After the approval, a setup node writes the files and opens the pull request with `landing: human`.
-
 - [ ] Added 2026-10-19 from SD1 of the SSH identity epic. Log the step and the cause of `repository.connector.ssh_agent_failed` in the binding check, verify and apply, without key material. Today `checkBindingAddress`, `checkRepository` and `refuseUnreadable` of `engine/src/project/service.ts` keep only the `failure_reason` `identity_unavailable`, so a legacy key and an agent fault (for example a long `TMPDIR`) look the same. [Project bindings](../reference/project/binding.md#failure-reasons-of-the-address-entry) states the gap.
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that a node names a channel binding and requires its notification.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.

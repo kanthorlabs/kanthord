@@ -400,6 +400,37 @@ A repository declares its affected test command in the file `.kanthord/affected-
 - A file that is no JSON object, that holds another key, or that holds a wrong type stops the execution with `environment_failed` and the class `affected_invalid`. The detail names the file and the parse error.
 - No proof of the Onboarding component runs the command. The first release gate of a node runs it first.
 
+## The suite pass record
+
+The suite pass record is a repository setup that works without KanthorD. A developer, another harness and CI use it. KanthorD runs no part of it in the release gate or in the evaluation.
+
+- A suite pass record holds one key for each test file that passed. CI skips a test file whose current key matches a record.
+- The key of a test file is the SHA-256 of the toolchain, the blob ids of the global inputs and of the `gate_files`, and the blob ids of the import closure of that test file. In `engine`, the global inputs also hold `static/pi-tools.json`.
+- The selector of [the affected test declaration](#the-affected-test-declaration) builds the import closure. No second map exists.
+- Only a run in a clean clone with a frozen install writes a record. A dirty or untracked work tree writes no record.
+- CI writes the records through `actions/cache` first. A record that a developer or KanthorD writes comes later.
+- A repository without a selector uses one record for the whole tree. Its key is the tree id and the toolchain.
+- CI runs every test file with no matching record and every test file of the always-run list. A nightly full run on the base branch runs every test file.
+- The CI job summary prints the floor of the affected report and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
+- The test files that load the composed server run for every production change. The push to `main` runs the selected test files again until records that `main` reads exist.
+
+The suite pass configuration lives in `.kanthord/suite-pass.json` at the root of the repository. The `.gitignore` of the repository holds the exception `!/.kanthord/suite-pass.json`.
+
+```json
+{
+  "version": 1,
+  "always_run": [
+    "src/apps/worker/worker-oauth-flows.test.ts",
+    "src/apps/cli/index.test.ts"
+  ]
+}
+```
+
+- `version` is 1.
+- `always_run` lists the test files that CI runs with no record lookup: a test file that bundles code, reaches `bin/` or reads a path that it builds at run time.
+- `.kanthord/affected-tests.json` takes no key of the suite pass record.
+- `.kanthord/suite-pass.json` and `.github/workflows/ci.yml` are gate files of [the affected test declaration](#the-affected-test-declaration).
+
 ## The Onboarding component
 
 The Onboarding component of the Project Service lives in `src/project/onboarding.ts`. It resolves, builds and proves the environment of each repository binding in the server process. It holds no table, no column, no worker and no claim.
@@ -595,6 +626,15 @@ The component computes the status of a group in this order. The first rule that 
 - `flake.nix` takes precedence over every stack. A repository with only `flake.nix` counts as detected. It drafts `mcr.microsoft.com/devcontainers/base:bookworm` with the feature `ghcr.io/devcontainers/features/nix:1` and the option `multiUser: false`, the `onCreateCommand` `nix --extra-experimental-features 'nix-command flakes' print-dev-env /etc/kanthord-flake > /etc/kanthord-nix-env.sh` and `containerEnv` `BASH_ENV=/etc/kanthord-nix-env.sh`, so each `bash -c` of a slot loads the development shell. It checks `nix --version`.
 - When the workspace holds `flake.nix`, the KanthorD layer copies the whole workspace to `/etc/kanthord-flake/` before the first `onCreateCommand`, so a flake that imports a local file finds it. The copy skips `.git`. The build of a document without `flake.nix` copies nothing.
 - A repository with no manifest has no detected source.
+- Detection also reads `.kanthord/affected-tests.json` and `.kanthord/suite-pass.json` at the base-branch head. A repository with a selector and no suite pass configuration gets [the suite pass proposal](#the-suite-pass-proposal).
+
+### The suite pass proposal
+
+- The Onboarding component proposes [the suite pass record](#the-suite-pass-record). It writes nothing to the repository.
+- The answer of `kanthord project environment show` holds `suite_pass`: `present` or `absent`. The binding screen of the dashboard shows the proposal for `absent`.
+- A human accepts the proposal with an import of the shipped plan `suite-pass-setup`. The import records the human as the actor.
+- The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the selector and the CI change. Its verification checks the written files.
+- The setup node lands under the `landing` of the `pull_request` action of the binding. The import is the approval of the human, so the setup needs no second approval.
 
 ### The universal environment
 
