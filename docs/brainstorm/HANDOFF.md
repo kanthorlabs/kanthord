@@ -179,7 +179,6 @@ Each item names its owner. Read the owning design document before taking an item
 
 - [ ] Added 2026-10-12. Worker and Project Services (S25 gap). A fresh workspace that continues an attempt with no repository evidence starts from the base branch with no signal, although the remote node branch is gone.
 - [ ] Added 2026-10-12. Project Service (S21). `POST .../binding/<worker binding>/verify` answers `project.binding.not_found`. Return a code that names the worker binding.
-- [ ] Added 2026-10-12. `apps` (S19). After an unblock, the proposal of the earlier attempt keeps the badge "proposed". Show a "superseded" badge when `proposal.attempt` is below the attempt of the `examine` node.
 
 ### B9, failure and recovery
 

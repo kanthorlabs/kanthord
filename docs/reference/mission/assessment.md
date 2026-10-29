@@ -34,13 +34,14 @@ A closure ends the live claim, closes the attempt and writes an outcome. The out
 The submit of an `undetermined` execution assessment of an `examine` node takes at most 10 fix-node proposals in `proposals`. Each proposal names one defect inside a completed direct dependency with `intent: implement`. The submit closes the attempt, moves the `examine` node to `Blocked` and records each proposal in the same transaction.
 
 - `proposal list` returns one page of the proposals of a proposer. `--attempt` selects the proposals of one attempt.
-- `proposal approve` creates an `implement` node with the one task of the proposal and adds the dependency of the proposer on the new node. The same transaction unblocks the proposer into a new attempt and sets `created_node_id` and `approved_at` of the proposal.
-- The new node takes `bindings` and `tags` from the current revision of `dependency_id`. The proposer routes to `Pending` until the new node reaches `Completed`.
-- `proposal approve` answers `{ created, proposer }`. `created` is the [node change result](node.md#node-change-result) of the new node, and `proposer` is the [control result](node-control.md) of the unblock.
-- A proposer that is not `Blocked` in the attempt of the proposal fails with `409 mission.node.state_conflict`. An approved proposal fails with `409 mission.proposal.already_approved`. A new unmatched pair fails with `409 mission.node.tags_unmatched`.
-- A human rejects a proposal with `node unblock` or `node discard` of the proposer.
+- `proposal decide <assessment-id>` takes one decision for every proposal of one assessment. Its body holds `expected_mission_version`, `approved_proposal_ids` (1 to 10 distinct proposal identities of the assessment) and an optional `reason`.
+- In one transaction, the decision creates one `implement` node with the one task of each approved proposal and adds the dependency of the proposer on each new node. It sets `created_node_id` and `approved_at` of each approved proposal and `rejected_at` of every other open proposal of the assessment. It then unblocks the proposer once into a new attempt.
+- Each new node takes `bindings` and `tags` from the current revision of its `dependency_id`. The proposer routes to `Pending` until every new node reaches `Completed`.
+- `proposal decide` answers `{ created, rejected_proposal_ids, proposer }`. `created` lists one [node change result](node.md#node-change-result) for each approved proposal, in the order of `approved_proposal_ids`. `proposer` is the [control result](node-control.md) of the unblock.
+- An assessment with no open proposal fails with `409 mission.proposal.decided`, so a repeated decision fails. A proposer that is not `Blocked` in the attempt of the assessment fails with `409 mission.node.state_conflict`. An identity that names no proposal of the assessment fails with `400 mission.proposal.assessment_mismatch`. A new unmatched pair fails with `409 mission.node.tags_unmatched`. A refused decision writes nothing.
+- `node unblock` or `node discard` of a `Blocked` proposer rejects every open proposal of the assessment that blocked it.
 
-A proposal record holds `id`, `node_id` of the proposer, `attempt`, `assessment_id`, `content`, `created_node_id`, `approved_at` and `created_at`. `content` holds `dependency_id`, `name`, `requirement`, `criterion` and `task`. `task` holds `name`, `requirement`, `criterion` and a nonempty `verifications` list. `created_node_id` and `approved_at` are `null` until the approval.
+A proposal record holds `id`, `node_id` of the proposer, `attempt`, `assessment_id`, `content`, `created_node_id`, `approved_at`, `rejected_at` and `created_at`. `content` holds `dependency_id`, `name`, `requirement`, `criterion` and `task`. `task` holds `name`, `requirement`, `criterion` and a nonempty `verifications` list. `created_node_id` and `approved_at` are `null` until the approval. `rejected_at` is `null` until the rejection. A proposal with both `approved_at` and `rejected_at` `null` is open.
 
 The read operations change nothing. Each list call reads one page. The CLI does not follow `next_cursor`.
 

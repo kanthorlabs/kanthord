@@ -1458,7 +1458,7 @@ The prompt block:
 - The labels are `Execution`, `Phase <phase>`, `Task <task name>`, `Verification <index>`, `Judgement`, `Evaluation`, `Git <step>`, `Gate <gate mode>`, `Prompt <agent name>` and `Cause label`. A task with no name in the node revision shows `Task <task id>`. The group `Git` holds `worker.git` and `worker.gate`.
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
   `scheduler.transition` shows `Transition <from state> -> <to state>`.
-  The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposal approved` or `Evidence deleted`.
+  The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposals decided` or `Evidence deleted`.
 - The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`.
 - The tree takes the keyboard: up and down move the selection, right expands, left collapses, and Enter opens the span detail.
 - The waterfall bar uses the theme tokens only. Its text repeats the duration, so the bar holds no information alone.

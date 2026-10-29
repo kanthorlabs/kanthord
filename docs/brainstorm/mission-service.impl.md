@@ -67,7 +67,7 @@ A missing, blank or nontext `name`, `requirement` or `criterion` answers `missio
 An absent or unknown `intent`, a nonlist `tags`, a repeated or malformed tag, a `commit_type` outside its closed set, and a task on an `examine` node answer `mission.node.content_invalid`.
 A write that changes `intent` of a node whose attempt reads 1 or more answers 409 `mission.node.intent_locked` with `details: { node_id, attempt }`.
 A node write whose node names two repository bindings or more answers 400 `mission.node.environment_mixed` with `details: { bindings }` when a worker binding of the project lists a `container` instance and two of the repository bindings hold different stored `environment` documents, because one `container` instance runs one image. `environmentsMixed(projectId, resourceIdentities)` of the [Project Service](project-service.impl.md#the-gate-collaborations) reads the stored documents of the binding set inside the write transaction, never the records in memory, so the answer does not depend on timing. A binding with no stored environment counts as no environment. Two bindings with one equal document pass. The guard thus misses two bindings whose repository, detected or universal sources differ. Such a node runs the image of the binding that the worker binding names, and the docs of the node content state this limit. The node writes are the node writes of the next paragraph, and the import preview lists the violation for each node file.
-A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.tags_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, a rebind, an unblock with a change and a proposal approval.
+A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.tags_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, a rebind, an unblock with a change and a proposal decision.
 Each of these writes reads `unmatchedClaims` of the Scheduler Service before and after its change, in its own `BEGIN IMMEDIATE` transaction.
 A node write that keeps an existing unmatched pair succeeds.
 A node update that names the identity of a task of another node answers `mission.node.content_invalid`.
@@ -166,7 +166,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 - A node update that changes `filename` changes content and creates a node revision.
 - A task change creates a node revision of its node.
 - A task holds `filename` in the content of its node. A task plan file name is unique among the node and task plan file names of the current nodes of its mission that are not retired.
-- A node write that takes a used node or task plan file name answers 409 `mission.node.filename_conflict`. A proposal approval follows the same rule.
+- A node write that takes a used node or task plan file name answers 409 `mission.node.filename_conflict`. A proposal decision follows the same rule.
 - A taken name answers 409 `mission.node.filename_conflict`.
 
 ## The lookup indexes
@@ -325,14 +325,19 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 ## The fix-node proposal
 
 - `mission.proposal.list` uses `GET /api/mission/node/:node_id/proposal` with `human` access, and it answers a page of proposals with an optional `attempt` filter.
-- `mission.proposal.approve` uses `POST /api/mission/proposal/:proposal_id/approve` with `human` access. Its body holds `expected_mission_version` and an optional nonblank `reason`.
-- In one transaction, the approval creates an `implement` node with the one task of the proposal and copies `bindings` and `tags` from the node of `dependency_id`.
-- The approval answers `{ created: NodeChange; proposer: ControlResult }`.
-- The same transaction adds the dependency of the proposer `examine` node on the new node and reads the unmatched pairs of the Scheduler Service.
-- It then unblocks the proposer into a new attempt with the default start point `node_branch` and sets `created_node_id` and `approved_at` of the proposal.
-- The proposer routes to `Pending` and stays unclaimable until the new node reaches `Completed`, under the dependency rule.
-- An approved proposal answers 409 `mission.proposal.already_approved`. A proposer that is not `Blocked` in the attempt of the proposal answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.tags_unmatched`.
-- A human rejects a proposal with the existing unblock or discard.
+- A proposal record holds `approved_at` and `rejected_at`. A proposal is `open` while both are null, `approved` after the approval and `rejected` after the rejection. A decided proposal never changes again.
+- RULED 2026-10-29 by Ulrich: a human takes one decision for each assessment. `mission.proposal.decide` uses `POST /api/mission/assessment/:assessment_id/decide` with `human` access. Its body holds `expected_mission_version`, `approved_proposal_ids` and an optional nonblank `reason`.
+- `approved_proposal_ids` is a duplicate-free list of 1 to 10 proposal identities. Another list answers 400 `gateway.request.validation_failed` with an issue at `approved_proposal_ids`.
+- An identity that names no proposal of the assessment answers 400 `mission.proposal.assessment_mismatch` with `details: { proposal_ids }`.
+- In one transaction, the decision creates one `implement` node for each approved proposal, in the order of `approved_proposal_ids`. Each node holds the one task of its proposal and copies `bindings` and `tags` from the node of `dependency_id`.
+- The same transaction adds the dependency of the proposer `examine` node on each new node and reads the unmatched pairs of the Scheduler Service.
+- It sets `created_node_id` and `approved_at` of each approved proposal and `rejected_at` of every other open proposal of the assessment.
+- It then unblocks the proposer once into a new attempt with the default start point `node_branch`.
+- The decision answers `{ created: NodeChange[]; rejected_proposal_ids: string[]; proposer: ControlResult }`. `created` holds one `NodeChange` for each approved proposal, in the order of `approved_proposal_ids`.
+- The proposer routes to `Pending` and stays unclaimable until every new node reaches `Completed`, under the dependency rule.
+- An assessment with no open proposal answers 409 `mission.proposal.decided` with `details: { assessment_id }`. A repeated decision answers this code.
+- A proposer that is not `Blocked` in the attempt of the assessment answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.tags_unmatched`. A refused decision writes nothing.
+- A node unblock or a node discard of a `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked the proposer, in the same transaction. That is the rejection of every proposal.
 
 ## The release admission
 
@@ -591,10 +596,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act. A node with no attempt gives the trace a null attempt.
 
-- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.approve` and `mission.evidence.delete`. The operation of the root span is the operation identity of the act.
+- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.decide` and `mission.evidence.delete`. The operation of the root span is the operation identity of the act.
 - The act trace of `mission.evidence.delete` names the node of the evidence and holds `kanthord.evidence.id`. Its two node states are equal when the delete changes no state. It is the Tracking span of the delete that [evidence retention](#evidence-retention) names.
 - The root span starts and ends at the time of the act, with the status `Ok`.
-- It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. A null attempt omits `kanthord.attempt`. `mission.proposal.approve` names the created node and holds no `kanthord.node.state.from`.
+- It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. A null attempt omits `kanthord.attempt`. `mission.proposal.decide` names the proposer, and `kanthord.node.state.from` is `Blocked`.
 - The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
 - An act that revokes a live execution links its root span to the root span of that execution.
 - An override to `Completed` writes `kanthord.node.lead_time_ms` on its act trace: the time from the first `Available` of the node to the override.
@@ -713,6 +718,10 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - A successful apply closes the import sheet. A toast confirms the import with the new mission version and the count of new nodes.
 - An `implement` node card ends with a `Tasks (<count>)` section. Each task is a row that opens the node sheet of its node. A card without a task shows no section.
 - The Mission tab offers `Export JSON` and `Export Markdown`. `Export Markdown` downloads one zip archive `<project name>-mission-v<mission version>.zip` that holds each plan file under its `filename`.
+- The node sheet of an `examine` node shows the section `Fix proposals`. Each proposal shows the badge `open`, `approved` or `rejected`. An approved proposal links to its fix node.
+- While the proposer is `Blocked` in the attempt of an assessment with open proposals, the section `Fix proposals` and the Overview decision item of the proposer each offer one `Decide` action. No proposal row holds its own approve action.
+- `Decide` opens one dialog. The dialog lists each open proposal of the assessment with a checkbox and holds the optional reason. It states "Checked proposals become fix nodes. Unchecked proposals become rejected. A decision cannot be undone."
+- The confirm stays disabled until the human checks one proposal or more. Its reason reads "Check one proposal or more. To reject every proposal, use Unblock or Discard." The confirm sends `mission.proposal.decide`.
 
 ## Authorization integration
 
@@ -839,7 +848,8 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests refuse a self-dependency and a dependency cycle of two or more nodes through dependency add and import with `mission.import.cycle`.
 - Tests refuse a change of `intent` on a node whose attempt reads 1 or more with `mission.node.intent_locked`.
 - Tests refuse a node write that adds an unmatched pair with `mission.node.tags_unmatched`, and accept a write that keeps an existing unmatched pair.
-- Tests refuse a node write and a proposal approval that take a used node or task plan file name with `mission.node.filename_conflict`, and export and import both formats with every task file name unchanged.
+- Tests refuse a node write and a proposal decision that take a used node or task plan file name with `mission.node.filename_conflict`, and export and import both formats with every task file name unchanged.
+- Tests decide two of three open proposals of one assessment and assert two created nodes with their dependencies, one rejected proposal and one unblock of the proposer. They assert that a repeated decision answers `mission.proposal.decided`, that a stale proposer answers `mission.node.state_conflict`, and that each refusal writes nothing.
 - Tests refuse a node update that names a task of another node with `mission.node.content_invalid`, refuse a nonempty task `bindings` list with `mission.node.bindings_invalid`, and refuse the identity of a removed task with `mission.import.retired_id`.
 - Tests refuse a task identity of a retired node with `mission.import.retired_id`. They accept a task that moved out of that node in the import that retired it.
 - Tests refuse a dependency add and a dependency remove on a dependent in `Waiting`, `Evaluating` and each `External.*` state with `mission.node.state_conflict`.
@@ -897,7 +907,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfied_ids` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that an unblock with `start_point: base_branch` opens an attempt that records it, that an unblock without the field records `node_branch`, and that another value answers 400 and writes nothing.
-- Tests assert that attempt 1 records `base_branch` when a claim, a ready act or a resume to `Waiting` opens it, and that a proposal approval records `node_branch`.
+- Tests assert that attempt 1 records `base_branch` when a claim, a ready act or a resume to `Waiting` opens it, and that a proposal decision records `node_branch`.
 - Tests assert that `nodeBranchesOf` answers `kanthord/<node id>` before the first restart, and `kanthord/<node id>-a<k>` for restart attempt k and for each later attempt that continues it. A steps claim and an evaluation claim of one attempt answer the same value.
 - Tests assert that `attempt get` and `attempt list` answer `start_point`.
 - Tests assert that, after a restart, an event for the pull request of the earlier node branch answers `duplicate` or `unmatched` and changes no state.
