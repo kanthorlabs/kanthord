@@ -1534,7 +1534,8 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - Each repository of a node runs its own command on its own change set. The commands run in checkout order, after the listed commands.
 - The affected run keeps a listed test in its selection, so a test file can run twice.
 - The wall budget of the execution covers the affected run.
-- A node can edit its own selector so that it selects fewer tests. KanthorD accepts this limit, because the CI of the repository runs the whole suite before the landing.
+- A node can edit its own selector so that it selects fewer tests. The selector, the [suite pass configuration](project-service.impl.md#the-suite-pass-record) and the CI workflow are gate files, so such a change lands with `human`.
+- Before the landing, CI runs every test with no matching suite pass record and every test of the always-run list. A nightly full run on the base branch catches a test that the import graph misses.
 
 ### The command
 
