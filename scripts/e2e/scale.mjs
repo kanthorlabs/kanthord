@@ -4,6 +4,7 @@ import { client, mainCheckout, tokenOf } from "./api.mjs";
 import {
   enablementCredentials,
   instanceCli,
+  scaleServerBinding,
   scaleWorkerBinding,
   signInMessage,
 } from "./instances.mjs";
@@ -35,12 +36,20 @@ if (entry.kind !== "worker")
   throw new Error(`binding ${binding} is not a worker binding`);
 
 if (isServerManaged(state.placement)) {
-  entry.config.instance_count = count;
-  await api.put(`/api/project/${state.project_id}/binding-set`, {
-    version: bindingSet.version,
-    bindings: bindingSet.bindings,
-  });
-  console.log(`e2e-scale: ${binding} instance_count -> ${count}`);
+  const prepared = await scaleServerBinding(
+    {
+      api,
+      projectId: state.project_id,
+      bindingSet,
+      binding,
+      count,
+      placement: state.placement,
+      run,
+    },
+    { api, cli: instanceCli(ENGINE, state.endpoint, token), main: MAIN },
+  );
+  for (const { name, result } of prepared)
+    console.log(`e2e-scale: ${name} instance ${result}`);
 } else {
   if (!state.config)
     throw new Error("run.json holds no config. Start a new run with make e2e");
@@ -73,7 +82,7 @@ if (isServerManaged(state.placement)) {
   }
   state.instances = scaled.instances;
   writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
-  console.log(
-    `e2e-scale: ${binding} worker_instances -> ${entry.config.worker_instances.join(", ")}`,
-  );
 }
+console.log(
+  `e2e-scale: ${binding} worker_instances -> ${entry.config.worker_instances.join(", ")}`,
+);

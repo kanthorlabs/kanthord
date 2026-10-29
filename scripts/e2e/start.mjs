@@ -28,6 +28,7 @@ import {
   enablementCredentials,
   instanceCli,
   prepareInstances,
+  prepareServerInstances,
   runInstances,
   hasSignInGaps,
   signInGaps,
@@ -155,14 +156,28 @@ if (isServerManaged(placement)) {
   requireEnablementCredentials(
     await unsuitableEnablementCredentials(api, config.enablements, configPath),
   );
+  const prepared = await prepareServerInstances(
+    configInstances(config.workers, placement, run),
+    placement,
+    {
+      api,
+      cli: instanceCli(ENGINE, config.endpoint, humanToken),
+      main: MAIN,
+    },
+  );
+  for (const { name, result } of prepared)
+    log("server instance ready", { name, placement, instance: result });
 } else {
-  instances = await prepareInstances(configInstances(config.workers), {
-    api,
-    cli: instanceCli(ENGINE, config.endpoint, humanToken),
-    main: MAIN,
-    spawn: (home, logFile, name) => spawnWorker(ENGINE, home, logFile, name),
-    stop: stopWorkers,
-  });
+  instances = await prepareInstances(
+    configInstances(config.workers, placement),
+    {
+      api,
+      cli: instanceCli(ENGINE, config.endpoint, humanToken),
+      main: MAIN,
+      spawn: (home, logFile, name) => spawnWorker(ENGINE, home, logFile, name),
+      stop: stopWorkers,
+    },
+  );
   for (const { name, pid, result, started } of instances)
     log("worker instance ready", { name, instance: result, pid, started });
   const gaps = await signInGaps(
@@ -267,7 +282,7 @@ const bindings = {
 for (const worker of config.workers)
   bindings[worker.binding] = {
     kind: "worker",
-    config: workerBindingConfig(worker, placement),
+    config: workerBindingConfig(worker, placement, run),
   };
 const bindingSet = await api.get(`/api/project/${project.id}/binding-set`);
 await api.put(`/api/project/${project.id}/binding-set`, {

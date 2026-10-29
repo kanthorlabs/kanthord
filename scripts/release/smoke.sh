@@ -117,8 +117,10 @@ cli agent enablement put swe@1 --file "$home/enablement.json" >/dev/null ||
 	die "agent enablement put failed"
 project_id=$(cli project create --name smoke-slot | node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).id') ||
 	die "project create failed"
+cli worker instance create smoke-1 --worker coder@1 --placement server >/dev/null ||
+	die "worker instance create smoke-1 failed"
 cat >"$home/bindings.json" <<'JSON'
-{"version":1,"bindings":{"general":{"kind":"worker","config":{"worker":"coder@1","instance_count":1,"placement":"server","entries":[{"agent":"swe@1","agent_provider":"default","model_identifier":"claude-sonnet-4-5","reasoning_effort":"off"}]}}}}
+{"version":1,"bindings":{"general":{"kind":"worker","config":{"worker":"coder@1","worker_instances":["smoke-1"],"entries":[{"agent":"swe@1","agent_provider":"default","model_identifier":"claude-sonnet-4-5","reasoning_effort":"off"}]}}}}
 JSON
 cli project binding apply "$project_id" --file "$home/bindings.json" >/dev/null ||
 	die "project binding apply failed"
@@ -144,14 +146,14 @@ if "$binary" serve worker --instance smoke >"$home/worker-absent.log" 2>&1; then
 fi
 grep -q '^worker\.start\.instance_config_absent:' "$home/worker-absent.log" ||
 	die "serve worker did not refuse the absent instance configuration. See $home/worker-absent.log"
-cli worker instance create smoke --worker coder@1 --output >/dev/null ||
+cli worker instance create smoke --worker coder@1 --placement worker --output >/dev/null ||
 	die "worker instance create failed"
 [ -f "$XDG_CONFIG_HOME/kanthord/workers/smoke.yaml" ] ||
 	die "worker instance create wrote no instance file in $XDG_CONFIG_HOME/kanthord/workers"
 instance_project=$(cli project create --name smoke-instance | node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).id') ||
 	die "project create failed"
 cat >"$home/instance-bindings.json" <<'JSON'
-{"version":1,"bindings":{"laptop":{"kind":"worker","config":{"worker":"coder@1","placement":"worker","worker_instances":["smoke"]}}}}
+{"version":1,"bindings":{"laptop":{"kind":"worker","config":{"worker":"coder@1","worker_instances":["smoke"]}}}}
 JSON
 cli project binding apply "$instance_project" --file "$home/instance-bindings.json" >/dev/null ||
 	die "project binding apply of the instance binding failed"
