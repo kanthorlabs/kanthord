@@ -409,7 +409,7 @@ The suite pass record is a repository setup that works without KanthorD. A devel
 - The toolchain is the runtime version and the package manager version.
 - The global inputs are the lockfile, the test configuration and each path that the selector treats as a global input, for example `package.json`. In `engine`, they also hold `static/pi-tools.json`.
 - The import closure comes from the import graph of the selector of [the affected test declaration](#the-affected-test-declaration). No second map exists.
-- Only a run in a clean clone with a frozen install writes a record. A dirty or untracked work tree writes no record.
+- Only a run in a clean clone with a frozen install writes a record. A dirty or untracked work tree writes no record. A dirty or untracked work tree also reads no record, so every test runs.
 - CI writes the records through `actions/cache` first. A record that a developer or KanthorD writes comes later.
 - A repository with no selector, or whose selector gives no import graph, uses one record for the whole tree. Its key is the tree id and the toolchain.
 - CI runs every test file with no matching record and every test file of the always-run list. A nightly full run on the base branch runs every test file.
