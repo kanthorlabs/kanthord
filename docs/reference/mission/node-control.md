@@ -42,6 +42,7 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 - `override` and `discard` revoke a live claim. They fail while the open attempt has an unresolved external request, except for the discard of a human landing.
 - `override` with `landed_commit` adds repository evidence attributed to the human. The node must be an `implement` node, and the binding must be a repository binding that the revision of the act pins. The service does not check the repository.
 - `discard` cancels no external request, except for a human landing. A `Discarded` node satisfies no dependency.
+- `discard` and `override` of a `Blocked` `examine` node reject every open [fix-node proposal](assessment.md#fix-node-proposals) of the assessment that blocked it, in the same transaction.
 - A **human landing** is an `External.Requested` node with only `branch_push` requests unresolved in the open attempt. Each request belongs to a `merge_push` action with a changed gate file. `discard` admits such a node. It sets the end state `other` on those requests, then closes the attempt. See [gate files](../project/binding.md#gate-files) of a repository binding.
 
 ### unblock
@@ -50,6 +51,7 @@ Readiness requires two conditions. The dependency closure of the node holds. For
 - `change` holds new `content`, a `reason` and `tasks`, the complete task list of the node. `tasks` follows the task list rules of [`node update`](node.md#node-update). A task in the list has no bindings. An `examine` node sends `tasks: []`.
 - A change of `intent` while the attempt reads `1` or more fails with `mission.node.intent_locked`. A change that adds an unmatched pair fails with `mission.node.tags_unmatched`.
 - A content change writes a revision with `change.write` `unblock` and increases the mission version.
+- `unblock` of a `Blocked` `examine` node rejects every open [fix-node proposal](assessment.md#fix-node-proposals) of the assessment that blocked it, in the same transaction.
 - With attempt `0`, `unblock` opens no attempt. Otherwise it opens the next attempt, pinned to the current revision, with the human as `opened_by`.
 - `start_point` names where the next attempt starts. `node_branch`, the default, continues the node branch of the cleared attempt. `base_branch` starts a new node branch `kanthord/<node id>-a<attempt>` from the base branch. Another value answers 400 `gateway.request.validation_failed`, and nothing is written.
 - A start from the base branch deletes, renames and force-pushes no branch. An open pull request of the earlier node branch stays open, and a human closes it. The start point of an `examine` attempt has no effect.

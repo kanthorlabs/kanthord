@@ -324,7 +324,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 - Only an `undetermined` execution assessment of an `examine` node holds proposals, at most 10. `dependency_id` in `content` names a current direct dependency of that node with `intent: implement`.
 - The service writes the proposal rows in the transaction that closes the attempt and writes the outcome.
-- A human decides every proposal of one assessment in one decision. Each approval creates an `implement` node with the one task of the proposal, adds the dependency of the proposer on that node, and sets `created_node_id` and `approved_at` once. The same decision sets `rejected_at` of every other open proposal of the assessment once. A node unblock or a node discard of the `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked it. No other write changes a proposal row.
+- A human decides every proposal of one assessment in one decision. Each approval creates an `implement` node with the one task of the proposal, adds the dependency of the proposer on that node, and sets `created_node_id` and `approved_at` once. The same decision sets `rejected_at` of every other open proposal of the assessment once. A node unblock, a node discard or a node override of the `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked it. No other write changes a proposal row.
 
 ### Mission Service: requests
 

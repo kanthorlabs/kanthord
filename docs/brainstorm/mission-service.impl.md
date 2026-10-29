@@ -328,6 +328,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - A proposal record holds `approved_at` and `rejected_at`. A proposal is `open` while both are null, `approved` after the approval and `rejected` after the rejection. A decided proposal never changes again.
 - RULED 2026-10-29 by Ulrich: a human takes one decision for each assessment. `mission.proposal.decide` uses `POST /api/mission/assessment/:assessment_id/decide` with `human` access. Its body holds `expected_mission_version`, `approved_proposal_ids` and an optional nonblank `reason`.
 - `approved_proposal_ids` is a duplicate-free list of 1 to 10 proposal identities. Another list answers 400 `gateway.request.validation_failed` with an issue at `approved_proposal_ids`.
+- An unknown assessment answers 404 `mission.record.not_found`.
 - An identity that names no proposal of the assessment answers 400 `mission.proposal.assessment_mismatch` with `details: { proposal_ids }`.
 - In one transaction, the decision creates one `implement` node for each approved proposal, in the order of `approved_proposal_ids`. Each node holds the one task of its proposal and copies `bindings` and `tags` from the node of `dependency_id`.
 - The same transaction adds the dependency of the proposer `examine` node on each new node and reads the unmatched pairs of the Scheduler Service.
@@ -337,7 +338,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - The proposer routes to `Pending` and stays unclaimable until every new node reaches `Completed`, under the dependency rule.
 - An assessment with no open proposal answers 409 `mission.proposal.decided` with `details: { assessment_id }`. A repeated decision answers this code.
 - A proposer that is not `Blocked` in the attempt of the assessment answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.tags_unmatched`. A refused decision writes nothing.
-- A node unblock or a node discard of a `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked the proposer, in the same transaction. That is the rejection of every proposal.
+- A node unblock, a node discard or a node override of a `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked the proposer, in the same transaction. That is the rejection of every proposal.
 
 ## The release admission
 
@@ -849,7 +850,8 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests refuse a change of `intent` on a node whose attempt reads 1 or more with `mission.node.intent_locked`.
 - Tests refuse a node write that adds an unmatched pair with `mission.node.tags_unmatched`, and accept a write that keeps an existing unmatched pair.
 - Tests refuse a node write and a proposal decision that take a used node or task plan file name with `mission.node.filename_conflict`, and export and import both formats with every task file name unchanged.
-- Tests decide two of three open proposals of one assessment and assert two created nodes with their dependencies, one rejected proposal and one unblock of the proposer. They assert that a repeated decision answers `mission.proposal.decided`, that a stale proposer answers `mission.node.state_conflict`, and that each refusal writes nothing.
+- Tests decide two of three open proposals of one assessment and assert two created nodes with their dependencies, one rejected proposal and one unblock of the proposer. They assert that a repeated decision answers `mission.proposal.decided`, that a stale proposer answers `mission.node.state_conflict`, that an unknown assessment answers `mission.record.not_found`, and that each refusal writes nothing.
+- Tests run a node unblock, a node discard and a node override of a `Blocked` proposer with two open proposals, and assert `rejected_at` on both proposals after each act.
 - Tests refuse a node update that names a task of another node with `mission.node.content_invalid`, refuse a nonempty task `bindings` list with `mission.node.bindings_invalid`, and refuse the identity of a removed task with `mission.import.retired_id`.
 - Tests refuse a task identity of a retired node with `mission.import.retired_id`. They accept a task that moved out of that node in the import that retired it.
 - Tests refuse a dependency add and a dependency remove on a dependent in `Waiting`, `Evaluating` and each `External.*` state with `mission.node.state_conflict`.
