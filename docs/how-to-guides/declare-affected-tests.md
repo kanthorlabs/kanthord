@@ -107,7 +107,7 @@ KanthorD checks the report with a strict schema. These rules apply:
 - `failed` and `flaky` hold no common test id.
 - The report holds at most 1 MiB. Each list holds at most 10000 entries. Each text holds at most 1024 bytes.
 - The exit code is 0 exactly when `failed` is empty.
-- A version 1 report holds no `floor`.
+- A `floor` key in a version 1 report gives an invalid report.
 
 An absent report, a report that breaks a rule, or an exit code that does not match `failed` is an invalid report.
 
