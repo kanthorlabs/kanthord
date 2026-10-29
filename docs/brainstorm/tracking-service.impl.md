@@ -37,6 +37,7 @@ A kanthord operation name stays the span operation, and `gen_ai.operation.name` 
 - `gen_ai.request.model` holds the model of the agent configuration. `gen_ai.response.model` holds the model that the provider names in its reply.
 - `gen_ai.agent.name` and `kanthord.agent.name` hold the agent name, for example `swe@1`.
 - `error.type` of an `agent.turn` holds the provider failure code. `error.type` of an `agent.tool` holds `tool_error` on an error end. A turn or a tool that the close of the agent trace ends holds `stopped`.
+- A turn that the close of the agent trace ends also holds the usage attributes of its last finished reply. A revoked or lost execution counts no usage of a turn with no end. The session entry of the reply keeps the usage.
 - `kanthord.turn.model_duration_ms` holds `durationMs` of the model reply. Without it, the producer measures the time from the start of the turn to the end of the reply.
 - `gen_ai.usage.input_tokens` counts every input token, also the tokens that a cache read or a cache write covers. The two cache attributes count a part of it.
 - An attribute that the conventions do not define takes the `kanthord.` prefix, for example `kanthord.usage.cost_usd` and `kanthord.session.entry_id`.
