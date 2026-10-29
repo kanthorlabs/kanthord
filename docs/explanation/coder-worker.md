@@ -22,8 +22,8 @@ Read [How a worker works](worker.md) first. That page defines the terms of this 
 - The work of a node splits into **units**. Each task of the node is one unit. A node with no task is one unit.
 - `swe@1` runs only coding **turns**: a work turn, a revision turn and a merge conflict turn. A turn is one prompt of the worker and every reply of the agent until the agent is idle. The agent answers no question of the worker.
 - After every turn, the worker runs **gate G**. The gate checks the git state of each checkout and commits every change of the turn.
-- The worker runs the verifications of a unit itself. A pass writes a **done record** on the commit of the unit, so no later execution redoes the unit. A pass with no new commit writes no record.
-- After the last unit, the **release gate** merges the base branch and runs every verification of the node in a clean clone. It then runs the **affected test command** of each repository that declares one. Only a pass of the release gate releases the node with `further_work: false`.
+- The worker runs the verifications of a unit itself. The live checkout runs only the **own commands** of the unit. An own command is a verification of the unit that the node does not list. A pass writes a **done record** on the commit of the unit, so no later execution redoes the unit. A pass with no new commit writes no record.
+- After the last unit, the **release gate** merges the base branch and runs every verification of the node in a clean clone. Each node command runs once there. It then runs the **affected test command** of each repository that declares one. Only a pass of the release gate releases the node with `further_work: false`.
 - A budget end always releases with `further_work: true`. The next execution continues from the pushed node branch.
 
 ## Who does what inside one execution
@@ -45,7 +45,7 @@ The worker code and the agent have separate jobs. This split is the key to the w
 
 The role prompt of `swe@1` tells the agent to check its work against the criterion before it ends a turn. That check only helps the agent. No step of the worker reads an answer of the agent. The agent can also run the verification commands itself. The run that counts is the run of the worker code, on the committed head.
 
-A unit is done when every verification of the unit passes on its commit. Only `reviewer@1` judges a criterion, in its own execution, after the release.
+A unit is done when every own command of the unit passes on its commit. Only `reviewer@1` judges a criterion, in its own execution, after the release.
 
 ## The execution at a glance
 
@@ -137,7 +137,7 @@ The `implement` node `node_01JZ8Q0K4M6N8P0R2S4T6V8W0X` has the name `Add a healt
    task_01JZ8Q1A…
    ```
 
-6. The worker runs `npm test -- healthz` and `npm run build` at the agent root. Both commands exit with code 0. The worker discards every change and every untracked file that the commands wrote, then adds the done record to the commit:
+6. The worker runs `npm test -- healthz` at the agent root. It skips `npm run build`, because the node lists it. The command exits with code 0. The worker discards every change and every untracked file that the command wrote, then adds the done record to the commit:
 
    ```text
    feat: add GET /healthz
@@ -149,7 +149,7 @@ The `implement` node `node_01JZ8Q0K4M6N8P0R2S4T6V8W0X` has the name `Add a healt
 
 7. The second task follows the same path, with the commit `feat: document the route`.
 8. Step 8 fetches `origin/main`. The base did not move, so the worker merges nothing.
-9. Step 9 clones the checkout into `workspaces/node_01JZ8Q0K…/release/api/` and checks out the head, detached. It runs `npm run build`, `npm test -- healthz`, `npm run build` and `grep -q '/healthz' docs/api.md` there, in this order: the node verification first, then the verifications of each task. Every command exits with code 0. The worker removes the clone.
+9. Step 9 clones the checkout into `workspaces/node_01JZ8Q0K…/release/api/` and checks out the head, detached. It runs `npm run build`, `npm test -- healthz`, `npm run build` and `grep -q '/healthz' docs/api.md` there, in this order: the node verification first, then the verifications of each task. Every command exits with code 0. The second `npm run build` copies the result of the first one and writes no span. The worker removes the clone.
 10. Steps 10 and 11 push the node branch and submit the head commit as evidence:
 
     ```json
@@ -235,13 +235,13 @@ For each unit, in the order of the plan, the first matching row decides:
 
 A revision that changes the content of one task changes its digest, so only that task is pending again. The done record lives in the pushed branch, so a fresh clone on another host reads the same records.
 
-After the units, the worker decides the **verdict unit**. The **node unit** is the unit that holds the node content and the task list as its work prompt, and the node verifications as its commands. The **verdict unit** is one run of the node unit with the verdict or the cleared text as its instruction. This page uses that term for both texts. In a node with tasks, the node unit gets no work turn. It runs only as the verdict unit, or when the release gate routes a failed node command to it. The first matching row decides:
+After the units, the worker decides the **verdict unit**. The **node unit** is the unit that holds the node content and the task list as its work prompt, and the node verifications. Each node verification is a node command, so the node unit has no own command. The **verdict unit** is one run of the node unit with the verdict or the cleared text as its instruction. This page uses that term for both texts. In a node with tasks, the node unit gets no work turn. It runs only as the verdict unit, or when the release gate routes a failed node command to it. The first matching row decides:
 
 | #   | Condition                                                                | Result                                                                 |
 | --- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | 1   | A verdict exists, and the **verdict rule** holds now.                    | No verdict unit. The work after the review already exists.             |
 | 2   | A verdict exists, and at least one judged commit is on the node history. | Verdict unit, with the verdict rule. It runs after the pending units.  |
-| 3   | A verdict exists, and no judged commit is on the node history.           | Verdict unit, with no rule. Its verification decides, as for any unit. |
+| 3   | A verdict exists, and no judged commit is on the node history.           | Verdict unit, with no rule. The release gate decides.                  |
 | 4   | No verdict, and a cleared assessment gives a text.                       | Verdict unit with the cleared text, with no rule. A pass completes it. |
 | 5   | Neither exists.                                                          | No verdict unit.                                                       |
 
@@ -263,7 +263,7 @@ The verdict text goes to the agent in one instruction, with the task list of the
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
 flowchart TB
     accTitle: One unit of coder@1
-    accDescr: The worker checks the claim, swe@1 runs a work turn or a revision turn, and gate G checks the git state and commits the change. An unchanged revision turn adds one to the unchanged-turn counter, and the second one in a row stops with no_progress. The worker verifies the unit in the live checkout and restores the checkout. A code failure sends a revision instruction with the failed result and the last 4 KiB of output. An infrastructure failure on the run and its rerun stops the execution. A pass writes the done record and completes the unit. A budget end at any point ends the unit loop.
+    accDescr: The worker checks the claim, swe@1 runs a work turn or a revision turn, and gate G checks the git state and commits the change. An unchanged revision turn adds one to the unchanged-turn counter, and the second one in a row stops with no_progress. The worker runs the own commands of the unit in the live checkout and restores the checkout. A code failure sends a revision instruction with the failed result and the last 4 KiB of output. An infrastructure failure on the run and its rerun stops the execution. A pass writes the done record and completes the unit. A budget end at any point ends the unit loop.
     start(["Pending unit"]) --> check["Worker checks the claim"]
     check --> work["swe@1 works<br/>work prompt or revision instruction"]
     work --> gate["Gate G in write mode<br/>check git state, commit"]
@@ -271,7 +271,7 @@ flowchart TB
     changed -- "yes: counter + 1" --> limit{"Counter at 2?"}
     limit -- yes --> stop(["Stop no_progress"])
     limit -- no --> verify
-    changed -- no --> verify{"Worker verifies<br/>in the live checkout"}
+    changed -- no --> verify{"Worker runs the own commands<br/>in the live checkout"}
     verify -- "code failure" --> failed["Revision instruction<br/>failed result + last 4 KiB of output"] --> check
     verify -- "infrastructure failure twice" --> infra(["Stop operation_failed"])
     verify -- pass --> record["Write the done record"] --> done(["Unit complete<br/>next unit"])
@@ -288,11 +288,13 @@ Each pass through the loop does these things:
 2. **Turn.** The worker sends the work prompt of the unit for a **work turn**, or a revision instruction for a **revision turn**. `swe@1` reads files, edits files and runs commands until it is idle. Each reply of the model with the tool calls of that reply is one **model turn**. Each model turn counts toward the budget of 200, so one turn of the worker can use many model turns.
 3. **Gate G.** The gate checks the git state of each checkout and commits every change of the turn, as [Gate G](#gate-g-the-commit-after-every-turn) explains. It reports `changed`: true when the turn changed a file of at least one checkout.
 4. **Progress check.** A revision turn with `changed` false adds one to the **unchanged-turn counter**. A turn with `changed` true sets the counter to zero. At two, the worker stops with `no_progress` before it verifies, because the same head gives the same result. A work turn with `changed` false adds nothing, because the verification of the unit decides.
-5. **Verify.** The worker runs each verification command of the unit on the head, in order, with `bash -c` at the agent root. The first command that does not pass ends the run. Each command has a limit of 10 minutes, and the remaining budget can cut it shorter. The worker classifies the result of each command, as the table below shows.
+5. **Verify.** The worker runs each own command of the unit on the head, in order, with `bash -c` at the agent root. The first command that does not pass ends the run. Each command has a limit of 10 minutes, and the remaining budget can cut it shorter. The worker classifies the result of each command, as the table below shows. A unit with no own command passes with an empty list.
 6. **Restore.** After the run, the worker runs the restore sequence to the head commit on each checkout. It removes every change and every untracked file that the commands made, but keeps the ignored files, for example installed dependencies. A test run therefore never leaks into the next commit.
 7. **Decide.** A pass completes the unit and writes its done record. A code failure sends a revision instruction with the failed result and the last 4 KiB of output, and the loop runs again.
 
 The counter belongs to the execution, not to one unit. No event other than a changed turn sets it to zero.
+
+The execution keeps a **verification memo**. Inside one execution, a command on an unchanged tree reuses its earlier pass. Only the release gate also reuses a code failure. The memo never reuses a timeout, a cancellation, a budget end, an infrastructure result or an exit code 127. The memo replays a whole run list or nothing. A command with no stored result runs the whole list again. At the release gate, a replay needs a stored code failure at its end. A release clone is fresh, so a later command and the affected test run need the output of each listed command. A result never crosses from the live checkout to the release gate. A memo hit writes no span.
 
 The worker classifies the result of each verification command. The first matching row decides:
 
@@ -364,6 +366,8 @@ The worker writes the done record right after the unit passes step 7:
 
 When no checkout holds a commit of the unit in this execution, the worker writes no record and logs `done record skipped`. This happens when the unit passes with no change, for example a task whose verifications already pass on the base. The next execution then runs a work turn for that unit again. Correctness rests on the release gate. The records only save turns.
 
+A done record certifies the own commands of its unit only. The release gate runs each node command.
+
 A unit **completed** in this execution when this execution wrote a new done record for it and step 6 found no record for it, or when the verdict unit passed. Only an `implement` execution counts completed units. The count decides the `budget_end` stop of [a budget end](#how-the-execution-ends).
 
 ### The verdict unit
@@ -372,7 +376,7 @@ The verdict unit runs like any other unit, with three differences:
 
 - Its first turn sends the verdict instruction, or the cleared text, not the work prompt. With no rule, an unchanged first turn adds nothing to the counter, as a work turn.
 - With the verdict rule, the worker checks the rule after each turn. While the rule fails, the turn counts as unchanged, also when it changed a file of a checkout that holds no judged commit, and the worker sends the verdict instruction again. It runs no verification until the rule holds.
-- It runs the node verifications only.
+- It runs no command in the live checkout. The release gate runs the node verifications.
 
 A pass of the verdict unit always counts as [completed](#the-done-record), also when it writes no new done record. With the verdict rule, two verdict turns in a row with no new work in a judged checkout stop the execution with `no_progress`, so the same head never goes back to review unchanged. With no rule, the progress rule of any unit applies.
 
@@ -385,7 +389,7 @@ The units can pass one by one while the node as a whole fails. Task 2 can break 
 **Step 9** runs every verification of the node in clean local clones:
 
 1. For each checkout, the worker clones the live checkout into `workspaces/<node_id>/release/`, in the layout of the agent root. It runs `git clone --local --no-checkout`, copies the `origin` remote-tracking refs of the live checkout, sets the `origin` URL to the repository address, and checks out the head, detached. The clone holds no ignored file and no untracked file of the live checkout.
-2. It runs the verifications of the node, then the verifications of each task in the order of the plan, at the agent root of the clones. It classifies each result as at step 7. It runs no rerun of a code failure.
+2. It runs the verifications of the node, then the verifications of each task in the order of the plan, at the agent root of the clones. A command that the list holds again copies the result of its first run. When an earlier release gate of this execution ended with a stored code failure on the same trees, the memo replays its results. It classifies each result as at step 7. It runs no rerun of a code failure.
 3. It removes the clones after the run, also at a budget end or a stop.
 4. When a command fails, the worker finds the **owner** of the first failed command. The owner is the node unit for a node command, and the task for a task command. It sends that unit one revision turn with the failed result and its output, and the loop of step 7 runs that unit. After the unit passes, the execution comes back to step 8.
 5. When every command passes, the worker runs [the affected test run](#the-affected-test-run) of each checkout in its clone, in checkout order.
@@ -680,7 +684,7 @@ Unmet:
 
 The worker sends the whole text, the task id included, to the verdict unit. It routes no work to the task by that id.
 
-`swe@1` fixes the body. Gate G commits `feat: add a health endpoint`, and the verdict rule now holds. The worker runs `npm run build`, which passes, writes the done record of the node unit and runs the release gate. When `swe@1` brings no new work in two verdict turns in a row, the worker stops with `no_progress` instead, and the unchanged head never goes back to review.
+`swe@1` fixes the body. Gate G commits `feat: add a health endpoint`, and the verdict rule now holds. The node unit has no own command, so the worker runs no command and writes the done record of the node unit. The release gate then runs the four commands, as at step 9. When `swe@1` brings no new work in two verdict turns in a row, the worker stops with `no_progress` instead, and the unchanged head never goes back to review.
 
 The rationale holds up to three blocks after its text, in this order. `Plan conflict:` lists the items with the ground `conflict`. `Plan gap:` lists the items with the ground `unstated`. `Unmet:` lists the other items. The rationale omits an empty block.
 
