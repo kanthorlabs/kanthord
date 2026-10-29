@@ -1366,7 +1366,7 @@ The target is `before` in the violation path, the head of the checkout step in p
 - Format: the trailer `Kanthord-Done: <unit id> <digest>`.
 - Digest: `digest` of `src/kernel/json.ts`, the SHA-256 hex of the canonical JSON with sorted keys, of the content of the unit. For a task, the content is the task content. For the node unit, the content is the node content.
 - An own command of a unit is a verification of the unit that the node does not list. Each command of the node unit is a node command, so the node unit has no own command.
-- The live checkout skips each node command. The release gate runs each node command once, in its clean clone. A unit with no own command passes its live verification with an empty list. A node with no task runs its verifications once, at the release gate.
+- The live checkout skips each node command. The release gate runs each node command once, in its clean clone. A unit with no own command passes its live verification with an empty list. The steps execution runs the verifications of a node with no task only in the release gate.
 - A done record certifies the own commands of its unit only.
 - Write: after a unit passes its live verification, `writeDoneRecord` takes each checkout whose head is in the commit set of the gated agent of that unit run. It runs `git commit --amend --no-edit --trailer "Kanthord-Done: <id> <digest>"` on it and reads `HEAD` again. It logs `done recorded`.
 - A unit run whose gate made no commit writes no record and logs `done record skipped`.
@@ -1406,7 +1406,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - `judgedCheckouts` keeps a judged commit only when the checkout holds it and it is an ancestor of `HEAD`. It logs `judged commit off the node history` for each other one.
 - The verdict rule holds when at least one kept checkout gives a nonempty `git rev-list --first-parent --ancestry-path --no-merges --max-count=1 <judged commit>..HEAD`. A merge commit never satisfies the rule. `verdictRuleHolds` of `src/worker/unit/verdict-rule.ts` checks it.
 - At planning, a verdict whose rule holds plans no verdict unit. Any other verdict plans the node unit with the `criterion-revision` text of the verdict, after the pending units. The planning logs `verdict planned`.
-- With no kept judged commit, the verdict unit has no rule, and its verification decides.
+- With no kept judged commit, the verdict unit has no rule, and the release gate decides.
 - While the rule fails after a verdict turn, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
 - When the rule holds, the flow goes to the release gate, which runs the node verifications. The live checkout runs no node command.
 - A cleared assessment that is not `success` plans the node unit with its rationale as plain instruction text, with no rule. A pass completes the unit.
@@ -1475,20 +1475,22 @@ Tests assert that the action performer does not reuse an open pull request of th
 ### The result copy
 
 - Inside one run list, a repeated command on one tested input copies the first result of that command. This applies at the release gate and at the evaluation.
-- Only a result that is a pass or a failed exit is copied. A timeout, a cancellation or an infrastructure failure is never copied, and the command runs again.
+- The run stops at the first failed item, so only a `pass` reaches a repeated command.
 - A copied result adds one entry to `results`, in list order. Only the first run writes a `worker.verification` span.
 - Command owners do not change. The node commands come first, so a node command owns the first run.
 
 ### The verification memo
 
-- The execution keeps a memo of the verification results of its claim. The memo key is the context, the command text, the tree id of each checkout in binding order and the environment digests. The context is `live`, `release` or `evaluation`.
+- The execution keeps a memo of the verification results of its claim. The memo key is the context, the command text, the tree id of each checkout in binding order and the environment digests.
+- The context is a value of `VerificationContext`: `task`, `node` or `release`. The evaluation reads no memo, so each rerun of the reviewer runs its command.
 - The key uses the tree id, not the commit, because the done record amends the commit and keeps the tree.
-- In the live checkout, the memo reuses only a pass. Installed dependencies can change while the tree stays the same.
-- In the release clone and in the evaluation, the memo reuses a pass and a failed exit. The coder runs no rerun of a code failure.
-- The memo never reuses a timeout, a cancellation or an infrastructure failure.
+- In the contexts `task` and `node`, the memo reuses only a `pass`. Installed dependencies of the live checkout can change while the tree stays the same.
+- In the context `release`, the memo reuses a `pass`, and a `code_failure` with `timed_out` false and no cancellation. The coder runs no rerun of a code failure.
+- The memo never reuses a `budget_end`, an `environment` result or an `infrastructure` result.
 - A result never crosses a context. A live result never counts at the release gate, because the live checkout holds ignored files.
+- A memo hit writes no `worker.verification` span and counts in `ran` of the `no_progress` detail.
 - The memo lives in the state of the execution. No memo crosses a claim.
-- The agent may run a whole suite inside its turn. That run is advisory, and the memo does not read it.
+- The agent can run a whole suite inside its turn. That run is advisory, and the memo does not read it.
 
 ## The environment setup
 
@@ -1534,7 +1536,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - Each repository of a node runs its own command on its own change set. The commands run in checkout order, after the listed commands.
 - The affected run keeps a listed test in its selection, so a test file can run twice.
 - The wall budget of the execution covers the affected run.
-- A node can edit its own selector so that it selects fewer tests. The selector, the [suite pass configuration](project-service.impl.md#the-suite-pass-record) and the CI workflow are gate files, so such a change lands with `human`.
+- A node can edit its own selector so that it selects fewer tests. A repository lists the selector, the [suite pass configuration](project-service.impl.md#the-suite-pass-record) and the CI workflow in `gate_files`, so such a change lands with `human`.
 - Before the landing, CI runs every test with no matching suite pass record and every test of the always-run list. A nightly full run on the base branch catches a test that the import graph misses.
 
 ### The command
@@ -1594,6 +1596,19 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - The floor is the set of test files whose import closure holds every production file of the repository. The selector computes it from its import graph.
 - `floor` holds `tests`, `seconds` and `total_seconds`. `tests` is the count of floor test files. `seconds` is the test time of the floor test files that ran. `total_seconds` is the test time of every test file, or null unless `selection` is `all`.
 - A `floor` key in a version 1 report gives an invalid report.
+
+```json
+{
+  "version": 2,
+  "selection": "all",
+  "reason": "global input: package.json",
+  "tests": ["src/tracking/service.test.ts"],
+  "failed": [],
+  "flaky": [],
+  "excluded_e2e": [],
+  "floor": { "tests": 83, "seconds": 674.2, "total_seconds": 1428.5 }
+}
+```
 
 ```json
 {

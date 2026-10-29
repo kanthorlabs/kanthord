@@ -240,9 +240,9 @@ A repeated command on one tested input can copy the first result of that command
 `signal` is the POSIX signal name that ended the process or null.
 `timed_out` is true when the deadline of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that deadline.
 Both `exit_code` and `signal` are null for a process that the execution started and could not observe.
-An item passes only with `exit_code: 0`; every other result fails, and an unstarted item has no result.
+An item passes only with `exit_code: 0`; every other result fails, and an item that the execution neither started nor copied has no result.
 A run passes when `results` hold one entry per verification and every entry has `exit_code` 0.
-No result claims that an unrun item ran. A copied result names a run of the same command on the same tested input.
+No result claims that an unrun item ran. A copied result repeats the result of an earlier run of the same command on the same tested input.
 The start refuses a host without bash.
 No execution identity infers a verification from prose.
 
