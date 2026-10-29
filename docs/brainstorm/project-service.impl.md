@@ -432,7 +432,7 @@ The suite pass configuration lives in `.kanthord/suite-pass.json` at the root of
 - `version` is 1.
 - `always_run` lists the test files that CI runs with no record lookup: a test file that bundles code, reaches `bin/` or reads a path that it builds at run time.
 - `.kanthord/affected-tests.json` takes no key of the suite pass record.
-- The repository lists `.kanthord/suite-pass.json` and its CI workflow file in `gate_files` of [the affected test declaration](#the-affected-test-declaration).
+- The repository lists `.kanthord/suite-pass.json`, the record steps and its CI workflow file in `gate_files` of [the affected test declaration](#the-affected-test-declaration).
 
 ## The Onboarding component
 
@@ -633,11 +633,15 @@ The component computes the status of a group in this order. The first rule that 
 ### The suite pass proposal
 
 - The Onboarding component proposes [the suite pass record](#the-suite-pass-record). It writes nothing to the repository.
-- For every source, the component reads `.kanthord/suite-pass.json` at the base-branch head with `fileAtRevision`. This read is outside `files` of the run, so it does not change the digest of the environment.
+- For every source, the component reads `.kanthord/suite-pass.json` at the base commit with `repositoryFiles.readFilesAtCommit`, in the same SSH read as the environment files. This read is outside `files` of the run, so it does not change the digest of the environment.
 - The value `suite_pass` is a [suite pass state](project-service.vocabulary.md#suite-pass-state): `present` when the file exists, else `absent`.
-- Only a binding with the action `pull_request` with `landing: human` gets the proposal. Any other binding gets no proposal.
-- A human accepts the proposal with an import of the shipped plan `suite-pass-setup`. The import records the human as the actor.
-- The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the repository and the CI change. With an affected test declaration, it adds `.kanthord/suite-pass.json` and the CI workflow file to `gate_files`. Its verification checks the written files.
+- When the read fails, `suite_pass` is null and the answer keeps the stored environment. A binding with `suite_pass` null gets no proposal.
+- Only a binding with the action `pull_request` with `landing: human` gets the proposal. Any other binding gets no proposal. An absent `landing` reads as `human`.
+- A human accepts the proposal with a node create from the shipped plan `suite-pass-setup`. The read `project.binding.suite_pass.plan.get` gives the body of `mission.node.create` from the shipped file. The node create records the human as the actor and changes no other node.
+- `project.binding.suite_pass.plan.get` at `GET /api/project/:project_id/binding/:binding_id/suite-pass/plan` is a `human` read. It answers `{ filename, content, tasks, reason }` from the shipped file `static/plan/suite-pass-setup.md`. The client adds `expected_mission_version`.
+- The read refuses a binding that gets no proposal with 409 `project.suite_pass.not_proposed`. It reads no repository file.
+- The CLI leaf `kanthord project environment suite-pass plan <project-id> <binding-id>` calls the read and prints the answer.
+- The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the repository and the CI change. With an affected test declaration, it adds `.kanthord/suite-pass.json`, the record steps and the CI workflow file to `gate_files`. Its verification checks the written files.
 - The setup node lands with `human`, the `landing` of the binding.
 
 ### The universal environment
@@ -799,7 +803,7 @@ At every placement, the server derives the client identity of an instance for a 
 - A failed environment with no enabled `env@1` shows "Enable env@1 to let KanthorD repair it." and the link `Enable env@1` to `/agents/env@1#enablement`.
 - A failed environment shows its class, its command and exit code, the tail in a scrollable block with `Copy`, and the reproduce command with `Copy`.
 - The section holds `Run onboarding again`, `Edit environment` and `Copy environment`. `Run onboarding again` calls `project.binding.environment.rebuild`. A success shows the toast "Onboarding of <binding> started.". A 409 `project.environment.run_active` shows an info toast, and another refusal shows an error toast with `Retry`. `Copy environment` copies the `environment` of `project.binding.environment.get` as indented JSON.
-- A binding with `suite_pass` `absent` and the proposal shows "Add the suite pass record so that CI skips the test files that already passed." and the action `Import setup plan`. The action imports the plan `suite-pass-setup`.
+- A binding with `suite_pass` `absent` and the proposal shows "Add the suite pass record so that CI skips the test files that already passed." and the action `Add setup node`. The action creates the node of the plan `suite-pass-setup` with `mission.node.create`.
 - `Edit environment` opens a sheet with one text field that holds the stored environment as indented JSON. With no stored environment, the field is empty. `Save environment` calls `project.binding.environment.set`. The sheet checks before the send that the text is one JSON object, and it shows "The environment is not a JSON object. Remove the comments and the trailing commas." otherwise, because a `devcontainer.json` file often holds JSONC. A refusal of the server shows its message under the field. After a save, the binding sheet reads its entry again, so a later `Save binding` keeps the new environment.
 - The path `/projects/<project>?tab=bindings&environment=<binding name>` opens the sheet of that binding at its `Environment` section.
 - The form of a worker binding holds the select `Environment` when its selection holds a `container` instance. It lists the repository bindings of the draft set. With one repository binding, it preselects it on a new binding. With two or more, the form marks the field as required. With none, the select is empty, not required, and shows "Add a repository binding first." The form writes the key only when the selection holds a `container` instance.

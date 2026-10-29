@@ -345,7 +345,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
   - `queue_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `steps`.
   - `review_wait`: `kanthord.queue.wait_ms` of each root span with `kanthord.execution.kind` `evaluation`.
   - `revision_turns`: one value for each node attempt with a `scheduler.execution` root span in the range.
-  - `test_floor_share`: `kanthord.affected.floor_seconds` divided by `kanthord.affected.total_seconds` of the latest `worker.verification` span of each group and bucket. The span has `kanthord.verification.kind` `affected`, `kanthord.verification.context` `release` and both attributes.
+  - `test_floor_share`: `kanthord.affected.floor_seconds` divided by `kanthord.affected.total_seconds` of the latest `worker.verification` span of each group and bucket. The span has `kanthord.verification.kind` `affected`, `kanthord.verification.context` `release`, both attributes and a total above 0.
   - `instance_busy_ratio`: the sum of `duration_ms` of the root spans in the range for one `kanthord.worker.instance`, divided by the length of the range in milliseconds.
 - Every measure other than `span_duration` ignores `operation`.
 - `instance_busy_ratio` takes the `group_by` value `worker_instance` only. Another `group_by` with `instance_busy_ratio` answers 400 `gateway.request.validation_failed`.
