@@ -1538,7 +1538,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - Each repository of a node runs its own command on its own change set. The commands run in checkout order, after the listed commands.
 - The affected run keeps a listed test in its selection, so a test file can run twice.
 - The wall budget of the execution covers the affected run.
-- A node can edit its own selector so that it selects fewer tests. A repository lists the selector, the [suite pass configuration](project-service.impl.md#the-suite-pass-record) and the CI workflow in `gate_files`, so such a change lands with `human`.
+- A node can edit its own selector so that it selects fewer tests. A repository lists the selector, the [suite pass configuration](project-service.impl.md#the-suite-pass-record), the record steps and the CI workflow in `gate_files`, so such a change lands with `human`.
 - Before the landing, CI runs every test with no matching suite pass record and every test of the always-run list. A nightly full run on the base branch catches a test that the import graph misses.
 
 ### The command
@@ -1596,6 +1596,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - KanthorD parses the report with a strict schema. A missing report, an invalid report, or an exit code that does not match `failed`, is an invalid report.
 - `version` is 1 or 2. Version 2 adds the optional object `floor`. Every other key keeps its version 1 rule, and a version 1 report stays valid.
 - The floor is the set of test files whose import closure holds every production file of the repository. The selector computes it from its import graph.
+- A production file is a file in the import closure of the entry that the program runs. The engine entry is `src/main.ts`.
 - `floor` holds `tests`, `seconds` and `total_seconds`. `tests` is the count of floor test files. `seconds` is the test time of the floor test files that ran. `total_seconds` is the test time of every test file, or null unless `selection` is `all`.
 - A `floor` key in a version 1 report gives an invalid report.
 
