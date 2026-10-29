@@ -415,7 +415,7 @@ The suite pass record is a repository setup that works without KanthorD. A devel
 - CI runs every test file with no matching record and every test file of the always-run list. A nightly full run on the base branch runs every test file.
 - The CI job summary prints the floor of the affected report and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
 - The test files that load every production file run for every production change.
-- A push to the base branch runs the selected test files again. That run stops when the base branch reads the records of the pull request.
+- A push to the base branch runs each test file again that has no record in the cache of the base branch. The cache of a pull request never reaches the base branch.
 
 The suite pass configuration lives in `.kanthord/suite-pass.json` at the root of the repository. The `.gitignore` of the repository holds the exception `!/.kanthord/suite-pass.json`.
 
