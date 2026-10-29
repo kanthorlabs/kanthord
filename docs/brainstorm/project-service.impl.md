@@ -636,8 +636,11 @@ The component computes the status of a group in this order. The first rule that 
 - For every source, the component reads `.kanthord/suite-pass.json` at the base commit with `repositoryFiles.readFilesAtCommit`, in the same SSH read as the environment files. This read is outside `files` of the run, so it does not change the digest of the environment.
 - The value `suite_pass` is a [suite pass state](project-service.vocabulary.md#suite-pass-state): `present` when the file exists, else `absent`.
 - When the read fails, `suite_pass` is null and the answer keeps the stored environment. A binding with `suite_pass` null gets no proposal.
-- Only a binding with the action `pull_request` with `landing: human` gets the proposal. Any other binding gets no proposal.
+- Only a binding with the action `pull_request` with `landing: human` gets the proposal. Any other binding gets no proposal. An absent `landing` reads as `human`.
 - A human accepts the proposal with a node create from the shipped plan `suite-pass-setup`. The read `project.binding.suite_pass.plan.get` gives the body of `mission.node.create` from the shipped file. The node create records the human as the actor and changes no other node.
+- `project.binding.suite_pass.plan.get` at `GET /api/project/:project_id/binding/:binding_id/suite-pass/plan` is a `human` read. It answers `{ filename, content, tasks, reason }` from the shipped file `static/plan/suite-pass-setup.md`. The client adds `expected_mission_version`.
+- The read refuses a binding that gets no proposal with 409 `project.suite_pass.not_proposed`. It reads no repository file.
+- The CLI leaf `kanthord project environment suite-pass plan <project-id> <binding-id>` calls the read and prints the answer.
 - The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the repository and the CI change. With an affected test declaration, it adds `.kanthord/suite-pass.json`, the record steps and the CI workflow file to `gate_files`. Its verification checks the written files.
 - The setup node lands with `human`, the `landing` of the binding.
 
