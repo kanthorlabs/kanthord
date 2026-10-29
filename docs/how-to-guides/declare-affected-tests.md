@@ -87,15 +87,16 @@ KanthorD computes `files` with `git diff --name-status -z --find-renames <base_c
 }
 ```
 
-| Field          | Value                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| `version`      | `1`.                                                                                            |
-| `selection`    | `related` for the tests that the change set reaches, `all` for every test, `none` for no test.  |
-| `reason`       | A nonblank text of at most 256 bytes for `all`. `null` for `related` and `none`.                |
-| `tests`        | Each selected test file, relative to the root of the repository. `none` requires an empty list. |
-| `failed`       | The test id of each test that failed.                                                           |
-| `flaky`        | The test id of each test that failed and then passed in the second run of its file.             |
-| `excluded_e2e` | Each end-to-end test file that the change set reaches and that the selection leaves out.        |
+| Field          | Value                                                                                                                                                                                                                                        |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`      | `1` or `2`. Version 2 adds the optional `floor`.                                                                                                                                                                                             |
+| `selection`    | `related` for the tests that the change set reaches, `all` for every test, `none` for no test.                                                                                                                                               |
+| `reason`       | A nonblank text of at most 256 bytes for `all`. `null` for `related` and `none`.                                                                                                                                                             |
+| `tests`        | Each selected test file, relative to the root of the repository. `none` requires an empty list.                                                                                                                                              |
+| `failed`       | The test id of each test that failed.                                                                                                                                                                                                        |
+| `flaky`        | The test id of each test that failed and then passed in the second run of its file.                                                                                                                                                          |
+| `excluded_e2e` | Each end-to-end test file that the change set reaches and that the selection leaves out.                                                                                                                                                     |
+| `floor`        | Version 2 only. `tests`: the count of test files whose import closure holds every production file. `seconds`: the test time of those files that ran. `total_seconds`: the test time of every test file, or null unless `selection` is `all`. |
 
 A test id is `{ "file": "<test file>", "name": "<full name>" }`. Join the suite names and the test name with a space, `>` and a space. An example full name is `server > answers 200`. A test file that fails to load gives one id with the file path as its name.
 
@@ -106,6 +107,7 @@ KanthorD checks the report with a strict schema. These rules apply:
 - `failed` and `flaky` hold no common test id.
 - The report holds at most 1 MiB. Each list holds at most 10000 entries. Each text holds at most 1024 bytes.
 - The exit code is 0 exactly when `failed` is empty.
+- A version 1 report holds no `floor`.
 
 An absent report, a report that breaks a rule, or an exit code that does not match `failed` is an invalid report.
 
