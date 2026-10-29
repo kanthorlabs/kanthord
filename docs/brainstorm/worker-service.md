@@ -400,11 +400,11 @@ A violation of the git state restores the head before the turn and stops the exe
 The execution is the only author of the commits on the node branch, and a commit of the agent becomes part of the commit of the execution.
 A checkout with no change keeps its head, and a revision that changes no checkout counts as no progress.
 Two revision turns in a row with no progress stop the execution with `no_progress`.
-The execution code, never the agent, runs the verifications of the unit against the committed heads.
+The execution code, never the agent, runs the verifications of the unit against the committed heads. The live checkout skips each verification that the node lists, and the release gate runs it once.
 It discards every change that the verifications make.
 A failed verification leads the agent to revise the unit within the resource budget.
 A verification that a signal ends, or that fails to start, runs once more, and a second such failure stops the execution with `operation_failed`.
-A unit whose verifications pass is complete, and the execution writes a done record on its commit.
+A unit whose own commands pass is complete, and the execution writes a done record on its commit. An own command is a verification of the unit that the node does not list.
 The done record names the unit and the digest of its content, and it lives in the node branch.
 The execution writes no evidence, no assessment and no outcome for a task.
 
@@ -425,7 +425,7 @@ No part of the verdict routes work to a task by name.
 After a human unblock with no verdict, a cleared assessment that does not pass gives its rationale to the node unit as one instruction.
 
 Before a release with evidence, the execution runs the release gate.
-The release gate merges `origin/<base_branch>` again in every checkout and runs every verification of the node and of each task in a clean local clone of each checkout.
+The release gate merges `origin/<base_branch>` again in every checkout and runs every verification of the node and of each task in a clean local clone of each checkout. A repeated command copies its first result.
 A failed verification of the release gate sends a revision turn to the unit that owns the command, and the release gate runs again after that unit passes.
 After every verification passes, the release gate of an `implement` node runs the affected test command of each repository that declares one. The verdict `failed` of that run sends a revision turn to the node unit.
 The release gate is the only path to a release with no further work.

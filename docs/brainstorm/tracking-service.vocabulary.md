@@ -152,7 +152,7 @@ The analytics of project `Billing` hold the cost of each model by day and the p9
 ## analytics measure
 
 An analytics measure names the value of one duration read.
-The set is closed and it holds seven values.
+The set is closed and it holds eight values.
 
 - **span_duration**
 - **tool_latency**
@@ -161,6 +161,7 @@ The set is closed and it holds seven values.
 - **review_wait**
 - **revision_turns**
 - **instance_busy_ratio**
+- **test_floor_share**
 
 ## cause
 

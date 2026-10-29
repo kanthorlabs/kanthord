@@ -40,6 +40,18 @@ The origin of the environment of a repository binding. The source is a closed se
 - **universal**: The universal environment of KanthorD, when detection finds no stack.
 - **none**: No source applies to the target.
 
+## suite pass record
+
+A repository setup that lets CI skip a test file that already passed on the same input. A developer, another harness and CI use it without KanthorD.
+The engine repository keys each test file on its import closure, so a change to `src/mission/import.ts` runs only the test files that load it.
+
+## suite pass state
+
+Whether a repository binding holds the suite pass configuration at the base-branch head. The state is a closed set.
+
+- **present**: The file `.kanthord/suite-pass.json` exists.
+- **absent**: The file does not exist.
+
 ## environment target
 
 The place where the worker instances of a repository binding run their commands. The target is a closed set.

@@ -233,15 +233,16 @@ The service derives one `FrozenAction` for each configured action of each reposi
 The execution runs the verifications in list order, one by one, never in parallel.
 Each item runs through `bash -c` at the agent root of the execution workspace, under the [workspace layout](worker-service.impl.md#workspace).
 The run stops at the first failed item.
-The verification records one result `{ command, exit_code, signal, timed_out }` per item that the execution started, in list order.
+The verification records one result `{ command, exit_code, signal, timed_out }` per item that the execution started or copied, in list order.
+A repeated command on one tested input can copy the first result of that command under [the result copy](worker-service.impl.md#the-result-copy).
 `Verification` holds `tested_input` and `results`, and the evidence that records the run holds it in `verification`.
 `exit_code` is the exit status or null.
 `signal` is the POSIX signal name that ended the process or null.
 `timed_out` is true when the deadline of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that deadline.
 Both `exit_code` and `signal` are null for a process that the execution started and could not observe.
-An item passes only with `exit_code: 0`; every other result fails, and an unstarted item has no result.
+An item passes only with `exit_code: 0`; every other result fails, and an item that the execution neither started nor copied has no result.
 A run passes when `results` hold one entry per verification and every entry has `exit_code` 0.
-No result claims that an unrun item ran.
+No result claims that an unrun item ran. A copied result repeats the result of an earlier run of the same command on the same tested input.
 The start refuses a host without bash.
 No execution identity infers a verification from prose.
 

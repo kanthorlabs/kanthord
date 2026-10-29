@@ -381,7 +381,7 @@ A revision of the node that names another repository binding starts a new node b
 
 ## done record
 
-A done record is the trailer `Kanthord-Done: <unit id> <digest>` that the execution adds to the commit of a work unit after its verifications pass.
+A done record is the trailer `Kanthord-Done: <unit id> <digest>` that the execution adds to the commit of a work unit after its own commands pass. An own command is a verification of the unit that the node does not list.
 Task "Add reset token expiry" of "Add password reset" passes its verifications, so Execution 1 adds `Kanthord-Done: task_01ARZ3NDEKTSV4RRFFQ69G5FAW <digest>` to its last commit.
 Execution 2 reads the trailer on the node branch and skips the task. A revision that changes the content of the task changes the digest, so the task runs again.
 

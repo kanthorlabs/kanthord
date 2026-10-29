@@ -370,7 +370,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `customizations.kanthord` holds one key, `checks`: a list of 0 to 32 nonblank commands. The proof runs them. An absent key reads as `[]`.
 - At `environment set` and at a binding-set write, a refused key, value or path answers 400 `project.environment.key_refused` with the message "The environment key <key> is refused: <reason>." and `details: { key, reason }`. A document that is no JSON object or that holds a wrong type answers 400 `project.environment.invalid`.
 - Before the Onboarding component, a refused repository file fails the start of a `container` instance and logs `project.environment.key_refused` with the key and the reason. From the Onboarding component on, a refused repository file or a refused build ends the run with the class `build_failed` and the key in the output tail.
-- `project.binding.environment.get` at `GET /api/project/:project_id/binding/:binding_id/environment` is a `human` read. It answers `{ source, commit, environment, reason }` of the target of the binding. `source` is a value of [the environment source](project-service.vocabulary.md#environment-source). `reason` holds the parse failure of a repository file, or null.
+- `project.binding.environment.get` at `GET /api/project/:project_id/binding/:binding_id/environment` is a `human` read. It answers `{ source, commit, environment, reason, suite_pass }` of the target of the binding. `suite_pass` follows [the suite pass proposal](#the-suite-pass-proposal). `source` is a value of [the environment source](project-service.vocabulary.md#environment-source). `reason` holds the parse failure of a repository file, or null.
 - `project.binding.environment.set` at `PUT /api/project/:project_id/binding/:binding_id/environment` is a `human` mutation with the body `{ environment }`. It writes the whole current binding set with the new key, so the change is a binding revision. A change of the key alone skips the `ls-remote` check of [the network git operations](#the-network-git-operations).
 - `project.binding.environment.set` with `{ environment: null }` removes the key, so the source returns to the repository file or the next source.
 - A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`.
@@ -399,6 +399,40 @@ A repository declares its affected test command in the file `.kanthord/affected-
 - `gate_files` is optional, a list of at most 10000 nonblank repository paths with `/`. The default is `[]`. KanthorD compares each path with the paths of the change set as an exact string, with no glob.
 - A file that is no JSON object, that holds another key, or that holds a wrong type stops the execution with `environment_failed` and the class `affected_invalid`. The detail names the file and the parse error.
 - No proof of the Onboarding component runs the command. The first release gate of a node runs it first.
+
+## The suite pass record
+
+The suite pass record is a repository setup that works without KanthorD. A developer, another harness and CI use it. KanthorD runs no part of it in the release gate or in the evaluation.
+
+- A suite pass record holds one key for each test file that passed. CI skips a test file whose current key matches a record.
+- The key of a test file is a SHA-256. It covers the toolchain, the blob ids of the global inputs and of the `gate_files`, and the blob ids of the import closure of the test file.
+- The toolchain is the runtime version and the package manager version.
+- The global inputs are the lockfile, the test configuration and each path that the selector treats as a global input, for example `package.json`. In `engine`, they also hold `static/pi-tools.json`.
+- The import closure comes from the import graph of the selector of [the affected test declaration](#the-affected-test-declaration). No second map exists.
+- Only a run in a clean clone with a frozen install writes a record. A dirty or untracked work tree writes no record.
+- CI writes the records through `actions/cache` first. A record that a developer or KanthorD writes comes later.
+- A repository with no selector, or whose selector gives no import graph, uses one record for the whole tree. Its key is the tree id and the toolchain.
+- CI runs every test file with no matching record and every test file of the always-run list. A nightly full run on the base branch runs every test file.
+- The CI job summary prints the floor of the affected report and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
+- The test files that load every production file run for every production change.
+- A push to the base branch runs the selected test files again. That run stops when the base branch reads the records of the pull request.
+
+The suite pass configuration lives in `.kanthord/suite-pass.json` at the root of the repository. The `.gitignore` of the repository holds the exception `!/.kanthord/suite-pass.json`.
+
+```json
+{
+  "version": 1,
+  "always_run": [
+    "src/apps/worker/worker-oauth-flows.test.ts",
+    "src/apps/cli/index.test.ts"
+  ]
+}
+```
+
+- `version` is 1.
+- `always_run` lists the test files that CI runs with no record lookup: a test file that bundles code, reaches `bin/` or reads a path that it builds at run time.
+- `.kanthord/affected-tests.json` takes no key of the suite pass record.
+- The repository lists `.kanthord/suite-pass.json` and its CI workflow file in `gate_files` of [the affected test declaration](#the-affected-test-declaration).
 
 ## The Onboarding component
 
@@ -596,6 +630,16 @@ The component computes the status of a group in this order. The first rule that 
 - When the workspace holds `flake.nix`, the KanthorD layer copies the whole workspace to `/etc/kanthord-flake/` before the first `onCreateCommand`, so a flake that imports a local file finds it. The copy skips `.git`. The build of a document without `flake.nix` copies nothing.
 - A repository with no manifest has no detected source.
 
+### The suite pass proposal
+
+- The Onboarding component proposes [the suite pass record](#the-suite-pass-record). It writes nothing to the repository.
+- For every source, the component reads `.kanthord/suite-pass.json` at the base-branch head with `fileAtRevision`. This read is outside `files` of the run, so it does not change the digest of the environment.
+- The value `suite_pass` is a [suite pass state](project-service.vocabulary.md#suite-pass-state): `present` when the file exists, else `absent`.
+- Only a binding with the action `pull_request` with `landing: human` gets the proposal. Any other binding gets no proposal.
+- A human accepts the proposal with an import of the shipped plan `suite-pass-setup`. The import records the human as the actor.
+- The setup node writes `.kanthord/suite-pass.json`, the `.gitignore` exception, the record steps of the repository and the CI change. With an affected test declaration, it adds `.kanthord/suite-pass.json` and the CI workflow file to `gate_files`. Its verification checks the written files.
+- The setup node lands with `human`, the `landing` of the binding.
+
 ### The universal environment
 
 - The universal environment is the document `static/environment/universal.json` of the `engine` repository. It holds `mcr.microsoft.com/devcontainers/base:bookworm` with the features of Node 24, Python 3.12, Go and Java 21, each at a pinned version.
@@ -755,6 +799,7 @@ At every placement, the server derives the client identity of an instance for a 
 - A failed environment with no enabled `env@1` shows "Enable env@1 to let KanthorD repair it." and the link `Enable env@1` to `/agents/env@1#enablement`.
 - A failed environment shows its class, its command and exit code, the tail in a scrollable block with `Copy`, and the reproduce command with `Copy`.
 - The section holds `Run onboarding again`, `Edit environment` and `Copy environment`. `Run onboarding again` calls `project.binding.environment.rebuild`. A success shows the toast "Onboarding of <binding> started.". A 409 `project.environment.run_active` shows an info toast, and another refusal shows an error toast with `Retry`. `Copy environment` copies the `environment` of `project.binding.environment.get` as indented JSON.
+- A binding with `suite_pass` `absent` and the proposal shows "Add the suite pass record so that CI skips the test files that already passed." and the action `Import setup plan`. The action imports the plan `suite-pass-setup`.
 - `Edit environment` opens a sheet with one text field that holds the stored environment as indented JSON. With no stored environment, the field is empty. `Save environment` calls `project.binding.environment.set`. The sheet checks before the send that the text is one JSON object, and it shows "The environment is not a JSON object. Remove the comments and the trailing commas." otherwise, because a `devcontainer.json` file often holds JSONC. A refusal of the server shows its message under the field. After a save, the binding sheet reads its entry again, so a later `Save binding` keeps the new environment.
 - The path `/projects/<project>?tab=bindings&environment=<binding name>` opens the sheet of that binding at its `Environment` section.
 - The form of a worker binding holds the select `Environment` when its selection holds a `container` instance. It lists the repository bindings of the draft set. With one repository binding, it preselects it on a new binding. With two or more, the form marks the field as required. With none, the select is empty, not required, and shows "Add a repository binding first." The form writes the key only when the selection holds a `container` instance.

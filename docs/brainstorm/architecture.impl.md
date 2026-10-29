@@ -1548,10 +1548,11 @@ The prompt block:
 - The `Cost` section shows the totals of the range from a read with `group_by=none&bucket=none`.
 - The `Cost` section shows one row for each group and one row for each bucket.
 - A cost row shows the turns, the input, output and cached tokens, `Est. cost` and a bar of its cost against the largest row.
-- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait` and `Revision turns`.
+- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait`, `Revision turns` and `Test floor share`.
 - The `Time` section holds the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`.
 - A time row shows the count, p50, p90, p99 and max.
 - A time row shows one bar from 0 to the largest max, with marks at p50, p90 and p99.
+- A `Test floor share` row shows the count and the share as a percent, with one bar from 0 to 1.
 - A group row of a node shows the node name, and a group row of a project shows the project name.
 - A section reads at the page load and at each change of a filter. `Refresh` reads again. The page reads nothing on a timer.
 - A read with `truncated: true` shows "The range holds more groups. Narrow the range or the filter."
