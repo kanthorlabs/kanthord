@@ -16,33 +16,39 @@ const INSTANCE_ID_LINE = /^instance_id: (\S+)$/m;
 const PROCESS_FILE = "process.json";
 const LOG_FILE = "serve.log";
 const WORKER_PLACEMENT = "worker";
+const CONTAINER_PLACEMENT = "container";
 
-export function devInstanceName(worker, index) {
-  return `e2e-${worker.split("@")[0]}-${index}`;
+function devInstancePrefix(placement, run) {
+  if (placement === WORKER_PLACEMENT) return "e2e";
+  if (placement === CONTAINER_PLACEMENT) return `e2e-${placement}-${run}`;
+  return `e2e-${placement}`;
 }
 
-export function devInstances(worker, count) {
+export function devInstanceName(worker, index, placement, run) {
+  return `${devInstancePrefix(placement, run)}-${worker.split("@")[0]}-${index}`;
+}
+
+export function devInstances(worker, count, placement, run) {
   return Array.from({ length: count }, (_, index) => ({
-    name: devInstanceName(worker, index + 1),
+    name: devInstanceName(worker, index + 1, placement, run),
     worker,
   }));
 }
 
-export function configInstances(workers) {
+export function configInstances(workers, placement, run) {
   const instances = new Map();
   for (const { worker, instances: count } of workers)
-    for (const instance of devInstances(worker, count))
+    for (const instance of devInstances(worker, count, placement, run))
       instances.set(instance.name, instance);
   return [...instances.values()];
 }
 
-export function workerBindingConfig({ worker, instances }, placement) {
-  if (placement !== WORKER_PLACEMENT)
-    return { worker, instance_count: instances, placement };
+export function workerBindingConfig({ worker, instances }, placement, run) {
   return {
     worker,
-    placement,
-    worker_instances: devInstances(worker, instances).map(({ name }) => name),
+    worker_instances: devInstances(worker, instances, placement, run).map(
+      ({ name }) => name,
+    ),
   };
 }
 
@@ -70,12 +76,58 @@ export function instanceCli(engine, endpoint, token) {
     });
 }
 
-export async function ensureInstance(api, cli, home, { name, worker }) {
+async function liveInstanceRecord(api, name) {
   const record = await api.get(`/api/worker/instance/${name}`);
   if (record !== null && record.ended_at !== null)
     throw new Error(
       `worker instance ${name} is archived. An archived name stays taken, so the run cannot create it again. Reset the dev database`,
     );
+  return record;
+}
+
+export async function ensureServerInstance(
+  api,
+  cli,
+  home,
+  { name, worker },
+  placement,
+) {
+  if ((await liveInstanceRecord(api, name)) !== null) return "kept";
+  cli(home, [
+    "worker",
+    "instance",
+    "create",
+    name,
+    "--worker",
+    worker,
+    "--placement",
+    placement,
+  ]);
+  return "created";
+}
+
+export async function prepareServerInstances(
+  instances,
+  placement,
+  { api, cli, main },
+) {
+  const prepared = [];
+  for (const instance of instances)
+    prepared.push({
+      ...instance,
+      result: await ensureServerInstance(
+        api,
+        cli,
+        instanceHome(main, instance.name),
+        instance,
+        placement,
+      ),
+    });
+  return prepared;
+}
+
+export async function ensureInstance(api, cli, home, { name, worker }) {
+  const record = await liveInstanceRecord(api, name);
   if (record !== null && localInstanceId(home, name) === record.id)
     return "kept";
   mkdirSync(home, { recursive: true, mode: PRIVATE_DIRECTORY });
@@ -88,6 +140,8 @@ export async function ensureInstance(api, cli, home, { name, worker }) {
       name,
       "--worker",
       worker,
+      "--placement",
+      WORKER_PLACEMENT,
       "--output",
     ]);
     return "created";
@@ -196,7 +250,7 @@ export async function scaleWorkerBinding(
   deps,
 ) {
   const entry = bindingSet.bindings[binding];
-  const instances = devInstances(entry.config.worker, count);
+  const instances = devInstances(entry.config.worker, count, WORKER_PLACEMENT);
   const prepared = await prepareInstances(instances, deps);
   const gaps = await signInGaps(api, instances, credentials);
   if (hasSignInGaps(gaps)) return { prepared, gaps, instances: null };
@@ -213,6 +267,21 @@ export async function scaleWorkerBinding(
       ...runInstances(prepared),
     ]),
   };
+}
+
+export async function scaleServerBinding(
+  { api, projectId, bindingSet, binding, count, placement, run },
+  deps,
+) {
+  const entry = bindingSet.bindings[binding];
+  const instances = devInstances(entry.config.worker, count, placement, run);
+  const prepared = await prepareServerInstances(instances, placement, deps);
+  entry.config.worker_instances = instances.map(({ name }) => name);
+  await api.put(`/api/project/${projectId}/binding-set`, {
+    version: bindingSet.version,
+    bindings: bindingSet.bindings,
+  });
+  return prepared;
 }
 
 export async function stopInstanceProcesses(

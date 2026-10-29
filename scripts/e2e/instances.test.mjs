@@ -20,12 +20,14 @@ import {
   listedInstances,
   localInstanceId,
   prepareInstances,
+  prepareServerInstances,
   processCommand,
   runInstances,
   runningProcess,
   connectionChanges,
   hasSignInGaps,
   restartInstanceProcesses,
+  scaleServerBinding,
   scaleWorkerBinding,
   signInGaps,
   signInMessage,
@@ -97,37 +99,200 @@ function recordingCli(instanceId = LIVE_ID) {
 }
 
 test("the dev instances of a config are e2e-<worker>-<n>, one list for each worker", () => {
-  assert.deepEqual(devInstances("reviewer@1", 2), [
+  assert.deepEqual(devInstances("reviewer@1", 2, "worker"), [
     { name: "e2e-reviewer-1", worker: "reviewer@1" },
     { name: "e2e-reviewer-2", worker: "reviewer@1" },
   ]);
-  assert.deepEqual(configInstances(TODOAPP.workers), [
+  assert.deepEqual(configInstances(TODOAPP.workers, "worker"), [
     CODER,
     { name: "e2e-reviewer-1", worker: "reviewer@1" },
   ]);
   assert.deepEqual(
-    configInstances([
-      { binding: "a", worker: "coder@1", instances: 2 },
-      { binding: "b", worker: "coder@1", instances: 1 },
-    ]).map(({ name }) => name),
+    configInstances(
+      [
+        { binding: "a", worker: "coder@1", instances: 2 },
+        { binding: "b", worker: "coder@1", instances: 1 },
+      ],
+      "worker",
+    ).map(({ name }) => name),
     ["e2e-coder-1", "e2e-coder-2"],
   );
 });
 
-test("a worker binding lists its dev instances at the worker placement and keeps instance_count elsewhere", () => {
+test("a server dev instance name holds the placement, and a container dev instance name also holds the run", () => {
+  assert.deepEqual(
+    configInstances(TODOAPP.workers, "server", "run-1").map(({ name }) => name),
+    ["e2e-server-coder-1", "e2e-server-reviewer-1"],
+  );
+  assert.deepEqual(
+    configInstances(TODOAPP.workers, "container", "run-1").map(
+      ({ name }) => name,
+    ),
+    ["e2e-container-run-1-coder-1", "e2e-container-run-1-reviewer-1"],
+  );
+});
+
+test("a worker binding holds only the worker and its dev instances at every placement", () => {
   const coder = { binding: "coder", worker: "coder@1", instances: 2 };
-  assert.deepEqual(workerBindingConfig(coder, "worker"), {
+  assert.deepEqual(workerBindingConfig(coder, "worker", "run-1"), {
     worker: "coder@1",
-    placement: "worker",
     worker_instances: ["e2e-coder-1", "e2e-coder-2"],
   });
-  for (const placement of ["server", "container"])
-    assert.deepEqual(workerBindingConfig(coder, placement), {
-      worker: "coder@1",
-      instance_count: 2,
-      placement,
-    });
+  assert.deepEqual(workerBindingConfig(coder, "server", "run-1"), {
+    worker: "coder@1",
+    worker_instances: ["e2e-server-coder-1", "e2e-server-coder-2"],
+  });
+  assert.deepEqual(workerBindingConfig(coder, "container", "run-1"), {
+    worker: "coder@1",
+    worker_instances: [
+      "e2e-container-run-1-coder-1",
+      "e2e-container-run-1-coder-2",
+    ],
+  });
 });
+
+test("a server instance is created with its placement when absent and kept when live", async () =>
+  withMain(async (main) => {
+    const calls = [];
+    const cli = (home, args) => calls.push(args);
+    const server = { name: "e2e-server-coder-1", worker: "coder@1" };
+    const container = {
+      name: "e2e-container-run-1-coder-1",
+      worker: "coder@1",
+    };
+    const { api } = fakeApi({
+      "/api/worker/instance/e2e-server-coder-1": {
+        ...LIVE_RECORD,
+        name: server.name,
+        placement: "server",
+      },
+    });
+    assert.deepEqual(
+      await prepareServerInstances([server], "server", { api, cli, main }),
+      [{ ...server, result: "kept" }],
+    );
+    assert.deepEqual(
+      await prepareServerInstances([container], "container", {
+        api,
+        cli,
+        main,
+      }),
+      [{ ...container, result: "created" }],
+    );
+    assert.deepEqual(calls, [
+      [
+        "worker",
+        "instance",
+        "create",
+        "e2e-container-run-1-coder-1",
+        "--worker",
+        "coder@1",
+        "--placement",
+        "container",
+      ],
+    ]);
+    assert.equal(existsSync(instanceHome(main, container.name)), false);
+  }));
+
+test("an archived server instance stops the run", async () =>
+  withMain(async (main) => {
+    const calls = [];
+    const { api } = fakeApi({
+      "/api/worker/instance/e2e-server-coder-1": {
+        ...LIVE_RECORD,
+        ended_at: 1792426097901,
+      },
+    });
+    await assert.rejects(
+      prepareServerInstances(
+        [{ name: "e2e-server-coder-1", worker: "coder@1" }],
+        "server",
+        { api, cli: (home, args) => calls.push(args), main },
+      ),
+      /e2e-server-coder-1 is archived/,
+    );
+    assert.deepEqual(calls, []);
+  }));
+
+test("scale at a server placement creates the missing dev instances and lists the first n", async () =>
+  withMain(async (main) => {
+    const calls = [];
+    const puts = [];
+    const { api } = fakeApi({
+      "/api/worker/instance/e2e-container-run-1-coder-1": {
+        ...LIVE_RECORD,
+        name: "e2e-container-run-1-coder-1",
+        placement: "container",
+      },
+    });
+    api.put = (path, body) => {
+      puts.push({ path, body: structuredClone(body) });
+      return Promise.resolve(null);
+    };
+    const bindingSet = {
+      version: 3,
+      bindings: {
+        coder: {
+          kind: "worker",
+          config: {
+            worker: "coder@1",
+            worker_instances: ["e2e-container-run-1-coder-1"],
+          },
+        },
+      },
+    };
+    const prepared = await scaleServerBinding(
+      {
+        api,
+        projectId: "project_1",
+        bindingSet,
+        binding: "coder",
+        count: 2,
+        placement: "container",
+        run: "run-1",
+      },
+      { api, cli: (home, args) => calls.push(args), main },
+    );
+    assert.deepEqual(
+      prepared.map(({ name, result }) => [name, result]),
+      [
+        ["e2e-container-run-1-coder-1", "kept"],
+        ["e2e-container-run-1-coder-2", "created"],
+      ],
+    );
+    assert.deepEqual(
+      calls.map((args) => args.slice(3)),
+      [
+        [
+          "e2e-container-run-1-coder-2",
+          "--worker",
+          "coder@1",
+          "--placement",
+          "container",
+        ],
+      ],
+    );
+    assert.deepEqual(puts, [
+      {
+        path: "/api/project/project_1/binding-set",
+        body: {
+          version: 3,
+          bindings: {
+            coder: {
+              kind: "worker",
+              config: {
+                worker: "coder@1",
+                worker_instances: [
+                  "e2e-container-run-1-coder-1",
+                  "e2e-container-run-1-coder-2",
+                ],
+              },
+            },
+          },
+        },
+      },
+    ]);
+  }));
 
 test("a missing record removes the local configuration and creates the instance again", async () =>
   withMain(async (main) => {
@@ -145,6 +310,8 @@ test("a missing record removes the local configuration and creates the instance 
         "e2e-coder-1",
         "--worker",
         "coder@1",
+        "--placement",
+        "worker",
         "--output",
       ],
     ]);
@@ -454,7 +621,6 @@ function scaleFixture(main, answers) {
         kind: "worker",
         config: {
           worker: "coder@1",
-          placement: "worker",
           worker_instances: ["e2e-coder-1"],
         },
       },
@@ -518,7 +684,6 @@ test("scale at worker lists the first n dev instances and starts the missing pro
               kind: "worker",
               config: {
                 worker: "coder@1",
-                placement: "worker",
                 worker_instances: ["e2e-coder-1", "e2e-coder-2"],
               },
             },
