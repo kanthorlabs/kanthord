@@ -1273,7 +1273,7 @@ The flow of one execution:
 3. Open the `swe@1` session.
 4. Run merge step M under [The base merge](#the-base-merge).
 5. Plan the units under [The done record](#the-done-record) and [The verdict unit](#the-verdict-unit).
-6. For each pending unit, in plan order: check the claim, run a work turn or a revision turn, run gate G in write mode, apply the progress rule, verify the unit in the live checkout, run the restore sequence, and write the done record on a pass. A code failure sends a revision turn.
+6. For each pending unit, in plan order: check the claim, run a work turn or a revision turn, run gate G in write mode, apply the progress rule, verify the own commands of the unit in the live checkout, run the restore sequence, and write the done record on a pass. A code failure sends a revision turn.
 7. Run the verdict unit when step 5 planned one.
 8. Run [The release gate](#the-release-gate). A routed failure goes back to step 6 with one unit.
 9. Push the node branch of each checkout. The push is not forced.
@@ -1365,6 +1365,9 @@ The target is `before` in the violation path, the head of the checkout step in p
 
 - Format: the trailer `Kanthord-Done: <unit id> <digest>`.
 - Digest: `digest` of `src/kernel/json.ts`, the SHA-256 hex of the canonical JSON with sorted keys, of the content of the unit. For a task, the content is the task content. For the node unit, the content is the node content.
+- An own command of a unit is a verification of the unit that the node does not list. Each command of the node unit is a node command, so the node unit has no own command.
+- The live checkout skips each node command. The release gate runs each node command once, in its clean clone. A unit with no own command passes its live verification with an empty list. A node with no task runs its verifications once, at the release gate.
+- A done record certifies the own commands of its unit only.
 - Write: after a unit passes its live verification, `writeDoneRecord` takes each checkout whose head is in the commit set of the gated agent of that unit run. It runs `git commit --amend --no-edit --trailer "Kanthord-Done: <id> <digest>"` on it and reads `HEAD` again. It logs `done recorded`.
 - A unit run whose gate made no commit writes no record and logs `done record skipped`.
 - Read: `readDoneRecords` runs `git log --format=%(trailers:key=Kanthord-Done,valueonly) origin/<base_branch>..HEAD --` in each checkout and takes the union.
@@ -1382,7 +1385,7 @@ The target is `before` in the violation path, the head of the checkout step in p
 1. `refreshAtRelease` fetches the base of each checkout and runs merge step M. A budget end ends the gate.
 2. `verificationCommands(revision)` gives the node commands, then the commands of each task in plan order. `commandOwners` gives one owner for each index: the node unit for a node command, the task for a task command.
 3. The gate removes `workspaces/<node identity>/release/`, then builds one clone for each checkout in the layout of the agent root under it. For each checkout it runs `git clone --local --no-checkout -- <live checkout> <dir>`, fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, and runs `git checkout --detach <checkout.head>`.
-4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline, with no rerun of a code failure.
+4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline, with no rerun of a code failure. A repeated command copies the result of its first run under [the result copy](#the-result-copy).
 5. It removes the release directory after the run, in a `finally` block, so a budget end and a stop also remove it.
 6. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
 7. When a command fails, the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
@@ -1405,7 +1408,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - At planning, a verdict whose rule holds plans no verdict unit. Any other verdict plans the node unit with the `criterion-revision` text of the verdict, after the pending units. The planning logs `verdict planned`.
 - With no kept judged commit, the verdict unit has no rule, and its verification decides.
 - While the rule fails after a verdict turn, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
-- When the rule holds, the flow runs the node verifications. A failure sends the `task-revision` text.
+- When the rule holds, the flow goes to the release gate, which runs the node verifications. The live checkout runs no node command.
 - A cleared assessment that is not `success` plans the node unit with its rationale as plain instruction text, with no rule. A pass completes the unit.
 - No substring of a verdict routes work to a task.
 - A pass of the verdict unit counts as completed, also with no new done record.
@@ -1453,7 +1456,10 @@ Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
 Steps tests skip each unit whose done record matches, also on a fresh clone, and run a work turn for every other unit, also when its verifications pass on the base.
-Steps tests run an `implement` node with no task as one work unit, with the node verifications, under the node identity as the done-record id.
+Steps tests run an `implement` node with no task as one work unit under the node identity as the done-record id. The live checkout runs no node verification, and the release gate runs each node verification once.
+Steps tests skip each node command in the live checkout of a task unit, and run each own command of that task.
+Tests copy the result of a repeated command at the release gate and at the evaluation, and assert one real run in the spans.
+Tests reuse a memo pass on an unchanged tree, and run again after a timeout, a cancellation or a live failure.
 Steps tests count zero answer turns in an `implement` execution.
 Steps tests with two repository bindings commit only the checkouts with a change.
 They merge every checkout before a release in the release gate, and route a failure of the release gate to the owner of the first failed command.
@@ -1465,6 +1471,24 @@ Missing-branch tests delete a pushed node branch at the remote and assert `repos
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
 Rework tests assert that a verdict with no task id still runs a verdict turn, that an unchanged verdict ends with `no_progress`, and that a base move gives no new work under the verdict rule.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
+
+### The result copy
+
+- Inside one run list, a repeated command on one tested input copies the first result of that command. This applies at the release gate and at the evaluation.
+- Only a result that is a pass or a failed exit is copied. A timeout, a cancellation or an infrastructure failure is never copied, and the command runs again.
+- A copied result adds one entry to `results`, in list order. Only the first run writes a `worker.verification` span.
+- Command owners do not change. The node commands come first, so a node command owns the first run.
+
+### The verification memo
+
+- The execution keeps a memo of the verification results of its claim. The memo key is the context, the command text, the tree id of each checkout in binding order and the environment digests. The context is `live`, `release` or `evaluation`.
+- The key uses the tree id, not the commit, because the done record amends the commit and keeps the tree.
+- In the live checkout, the memo reuses only a pass. Installed dependencies can change while the tree stays the same.
+- In the release clone and in the evaluation, the memo reuses a pass and a failed exit. The coder runs no rerun of a code failure.
+- The memo never reuses a timeout, a cancellation or an infrastructure failure.
+- A result never crosses a context. A live result never counts at the release gate, because the live checkout holds ignored files.
+- The memo lives in the state of the execution. No memo crosses a claim.
+- The agent may run a whole suite inside its turn. That run is advisory, and the memo does not read it.
 
 ## The environment setup
 

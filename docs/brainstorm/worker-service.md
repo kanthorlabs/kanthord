@@ -400,7 +400,7 @@ A violation of the git state restores the head before the turn and stops the exe
 The execution is the only author of the commits on the node branch, and a commit of the agent becomes part of the commit of the execution.
 A checkout with no change keeps its head, and a revision that changes no checkout counts as no progress.
 Two revision turns in a row with no progress stop the execution with `no_progress`.
-The execution code, never the agent, runs the verifications of the unit against the committed heads.
+The execution code, never the agent, runs the verifications of the unit against the committed heads. The live checkout skips each verification that the node lists, and the release gate runs it once.
 It discards every change that the verifications make.
 A failed verification leads the agent to revise the unit within the resource budget.
 A verification that a signal ends, or that fails to start, runs once more, and a second such failure stops the execution with `operation_failed`.
