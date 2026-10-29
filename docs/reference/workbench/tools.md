@@ -105,7 +105,7 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 | `mission--node--update` | `PUT /api/mission/node/:node_id` | Yes | Update mission node content. |
 | `mission--outcome--get` | `GET /api/mission/outcome/:outcome_id` | No | Get an outcome with its evidence union. |
 | `mission--outcome--list` | `GET /api/mission/node/:node_id/outcome` | No | List a node's outcomes. |
-| `mission--proposal--approve` | `POST /api/mission/proposal/:proposal_id/approve` | Yes | Approve a fix-node proposal, create its node, add the dependency of the proposer on it and unblock the proposer. |
+| `mission--proposal--decide` | `POST /api/mission/assessment/:assessment_id/decide` | Yes | Decide every fix-node proposal of one assessment: create a fix node for each approved proposal, reject the other open proposals and unblock the proposer once. |
 | `mission--proposal--list` | `GET /api/mission/node/:node_id/proposal` | No | List the fix-node proposals of an examine proposer. |
 
 ## Project
@@ -186,7 +186,7 @@ The tool name is the operation id with each `.` replaced by `--`. A tool runs wi
 | ---- | ----- | -------- | ----------- |
 | `worker--catalog--get` | `GET /api/worker/catalog/:worker_name` | No | Get a supplied worker declaration. |
 | `worker--catalog--list` | `GET /api/worker/catalog` | No | List released workers in ascending worker-name order. |
-| `worker--instance--archive` | `POST /api/worker/instance/:instance_name/archive` | Yes | Archive a worker instance that no binding lists and whose registrations hold no live execution, and end its registrations. |
+| `worker--instance--archive` | `POST /api/worker/instance/:instance_name/archive` | Yes | Archive a worker instance that no binding lists, and end its registrations. A live execution of the instance refuses the archive, unless force is true: force revokes the execution first. |
 | `worker--instance--get` | `GET /api/worker/instance/:instance_name` | No | Read the live or latest revision of a worker instance with the bindings that list it, its connection, its live registrations and its credential copies with the last health report of each copy. |
 | `worker--instance--list` | `GET /api/worker/instance` | No | Page worker instances in ascending name order with their connection, binding count and holder mismatch. |
 | `worker--placement--list` | `GET /api/worker/placement` | No | List each worker placement with its availability on this server and the reason when it is unavailable, in the order server, container, worker. |
