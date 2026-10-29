@@ -1486,6 +1486,8 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The key uses the tree id, not the commit, because the done record amends the commit and keeps the tree.
 - In the contexts `task` and `node`, the memo reuses only a `pass`. Installed dependencies of the live checkout can change while the tree stays the same.
 - In the context `release`, the memo reuses a `pass`, and a `code_failure` with `timed_out` false and no cancellation. The coder runs no rerun of a code failure.
+- The memo replays a whole run list or nothing. A replay takes the stored results of each command in list order, up to the first stored `code_failure`. A command with no stored result runs the whole list again.
+- In the context `release`, a replay needs a stored `code_failure` at its end. A release clone is fresh, so a later command and the affected test run need the output of each listed command.
 - The memo never reuses a `budget_end`, an `infrastructure` result or an exit 127 that [the environment classification](#the-environment-classification) decides.
 - A result never crosses a context. A live result never counts at the release gate, because the live checkout holds ignored files.
 - A memo hit writes no `worker.verification` span and counts in `ran` of the `no_progress` detail.
