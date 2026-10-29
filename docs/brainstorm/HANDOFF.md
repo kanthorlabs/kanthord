@@ -46,7 +46,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
   - CI writes the records through `actions/cache` first. Records from KanthorD or a developer come later.
   - `.kanthord/suite-pass.json` holds the configuration and the always-run list: tests that bundle code, reach `bin/` or use a root URL. The setup adds a gitignore exception for it. `affected-tests.json` takes no new key.
   - A repository without a selector uses one record for the whole tree.
-  - The CI job summary prints the floor and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
+  - The CI job summary prints the floor of the affected report and the saved share. The saved share is the test time of the skipped test files divided by the test time of all test files.
   - Accepted limits: the test files that load the composed server run for every production change. The push to `main` re-runs the selected tests until records that `main` can read land.
   - The Onboarding component detects a missing setup and proposes it. After the approval, a setup node writes the files and opens the pull request with `landing: human`.
 
@@ -99,7 +99,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
   - An own command of a task is a command of the task list that the node does not list.
   - The live checkout runs only the own commands of a unit. It skips each command that the node lists. This covers the task units, the node unit and the verdict unit. The release gate runs each node command once, in its clean clone. A node with no task runs the suite once, at the release gate.
   - This rule replaces "verify the unit in the live checkout" of step 6 of [The coder flow](worker-service.impl.md#the-coder-flow) for a node command. It also replaces "Steps tests run an `implement` node with no task as one work unit, with the node verifications".
-  - In the release gate and in the evaluation, a repeated command on one tested input copies the first result that is a pass or a failed exit. A copied result still adds one entry to `results`. Amend "No result claims that an unrun item ran" and the sentence on the entries that the execution started in [The verifications](mission-service.impl.md#the-verifications) to permit the copy.
+  - In the release gate and in the evaluation, a repeated command on one tested input copies the first result that is a pass or a failed exit. A copied result still adds one entry to `results`. Amend "No result claims that an unrun item ran" and "The verification records one result `{ command, exit_code, signal, timed_out }` per item that the execution started, in list order." in [The verifications](mission-service.impl.md#the-verifications) to permit the copy.
   - Across turns, the execution keeps a memo of verification results. Its key is the context, the command, the tree id of each checkout and the environment digests. In the live checkout, the memo reuses only a pass. No context reuses a timeout or a cancelled run. No memo crosses a claim.
   - A done record certifies the own commands of its task only. A task with no own command passes with an empty list.
   - Replace "Run the verification commands of the work prompt, also when a command runs a whole test suite. Do not run another whole test suite." in `engine/static/prompt/swe@1.md` and `docs/brainstorm/assets/prompt/swe@1.md`. The new text tells the agent to run targeted tests, and a whole suite only when its situation needs one.
