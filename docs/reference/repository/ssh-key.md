@@ -69,7 +69,7 @@ Each network git operation runs its own SSH agent. Steps 2 to 8 run on the serve
 3. Create the directory `kd-ssh-<deadline>-<6 characters>` in the temporary directory of the host, with mode `0700`. `<deadline>` is the deadline in Unix milliseconds, in base 36.
 4. Write `id.pub` (the public key) and `known_hosts` (the pinned line), each with mode `0600`. The line is `<host> <key>` for a host on port 22 and `[<host>]:443 <key>` for a host on port 443; see [SSH host keys](host-key.md#function-description). The directory holds no private key file.
 5. Start `sh`. It starts `ssh-agent -D -a <directory>/a` and a `cat` in the background, then waits for the agent. `-D` stops the agent from forking into a daemon, so it stays a child of `sh`. KanthorD holds the standard input of `cat`. When that input closes, `cat` ends, and the agent stops with `SIGTERM`. An agent that fails at its start, for example on a bind error, ends `sh` at once, so the git operation fails at once with `repository.connector.ssh_agent_failed`. A crash of KanthorD closes the input, so the agent ends at once. KanthorD does not start the agent as its own direct child, because such an agent keeps running after a crash of KanthorD.
-6. Load the key through the standard input of `ssh-add -t <seconds> -`. `<seconds>` is the remaining deadline of the operation, rounded up, at least 1.
+6. Wait until the socket of the agent accepts a connection. The agent creates the socket file before it accepts connections, so the file alone does not end the wait. Then load the key through the standard input of `ssh-add -t <seconds> -`. `<seconds>` is the remaining deadline of the operation, rounded up, at least 1.
 7. Run git with `GIT_SSH_COMMAND`. The command starts `ssh -F none` with `Port=<port>`, the SSH port of the address host from [the port table](host-key.md#function-description), `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `BatchMode=yes`, `GlobalKnownHostsFile=/dev/null` and the three files of the directory.
 8. Remove the key from the agent. Close the standard input of `cat`, and wait until `sh` and the agent exit. Delete the directory.
 
@@ -77,14 +77,14 @@ Each network git operation runs its own SSH agent. Steps 2 to 8 run on the serve
 
 A failure of steps 3 to 6 fails the operation with `repository.connector.ssh_agent_failed`. Its `step` field names the step, and its cause holds the text of the tool, never the key. A worker execution fails with this diagnostic. A binding operation reports only a `failure_reason`; see below.
 
-The deadline of the operation also covers the agent. When the deadline ends before the agent starts, or before its socket appears, the operation fails with `system.context.deadline_exceeded` and starts no git process. A binding check and verify report it in the `address` entry with `failure_reason` `deadline_exceeded`.
+The deadline of the operation also covers the agent. When the deadline ends before the agent starts, or before its socket accepts a connection, the operation fails with `system.context.deadline_exceeded` and starts no git process. A binding check and verify report it in the `address` entry with `failure_reason` `deadline_exceeded`.
 
 | `step`        | Cause                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------ |
 | `directory`   | The directory cannot be created, or its mode is not `0700`.                                |
 | `socket_path` | The socket path is longer than 100 bytes, or it holds a character outside `A-Za-z0-9/._-`. |
 | `files`       | `id.pub` or `known_hosts` cannot be written.                                               |
-| `agent`       | The agent exits before its socket appears.                                                 |
+| `agent`       | The agent exits before its socket accepts a connection.                                    |
 | `load`        | `ssh-add` refuses the key.                                                                 |
 
 A binding apply reports this failure as `422 project.bindings.repository.ssh_unreachable` with `details.failure_reason` `identity_unavailable`. A binding check and verify report it in the `address` entry with the same value.
