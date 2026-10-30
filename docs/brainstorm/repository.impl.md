@@ -222,16 +222,16 @@ KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of 
 2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
 3. Refuse a socket path above 100 bytes, because `sun_path` holds 104 bytes on macOS and `ssh-agent` fails without a message on a longer path. Refuse a path that holds a character outside `A-Za-z0-9/._-`.
 4. Write `id.pub` with the public key and `known_hosts` with the lines of `access`, each with mode `0600` and flag `wx`. The directory holds no private key at any time.
-5. Spawn `sh -c 'exec 3<&0; ssh-agent -D -a "$1" & agent=$!; { cat; kill 0; } <&3 2>/dev/null & wait "$agent"' sh <dir>/a` with the environment `{ PATH }` and `detached: true`, so `sh` leads its own process group. Node holds the stdin pipe of `sh`. `sh` copies it to file descriptor 3, and the background `cat` reads it, because a background command of a non-interactive `sh` reads `/dev/null` by default. Wait for the socket until the deadline, the exit of `sh` or a cancel.
+5. Spawn `sh -c 'exec 3<&0; ssh-agent -D -a "$1" & agent=$!; { cat; kill 0; } <&3 2>/dev/null & wait "$agent"' sh <dir>/a` with the environment `{ PATH }` and the spawn option `detached: true`, so `sh` leads its own process group. Node holds the stdin pipe of `sh`. `sh` copies it to file descriptor 3, and the background `cat` reads it, because a background command of a non-interactive `sh` reads `/dev/null` by default. Wait for the socket until the deadline, the exit of `sh` or a cancel.
    - `sh` waits for the SSH agent, not for `cat`. An SSH agent that exits early, for example on a bind error, ends `sh` at once, so the wait ends at once.
    - The background `cat` writes its standard error to `/dev/null`. It then holds no stderr pipe of `sh`, so the exit of `sh` closes every pipe that Node reads.
    - `-a` is mandatory. Without `-a`, OpenSSH 10.1 and later put the socket under `$HOME/.ssh/agent/` and clean stale sockets there at start.
-   - `-D` stops the SSH agent from forking into a daemon, so it stays a child of `sh`. `cat` ends when the pipe closes. The background subshell then sends `SIGTERM` to the process group of `sh`, and `sh` waits for the exit of the SSH agent.
-   - `kill 0` ends every process of the group, not only the SSH agent. Another process of the group that holds the stderr pipe of `sh` then cannot keep the pipe open after a cancel.
+   - `-D` stops the SSH agent from forking into a daemon, so it stays a child of `sh`. `cat` ends when the pipe closes. The background subshell then sends `SIGTERM` to the process group of `sh`. The signal ends `sh`, the SSH agent and the background subshell. The SSH agent holds the stderr pipe of `sh`, so Node sees the close of `sh` only after the exit of the SSH agent.
+   - `kill 0` sends `SIGTERM` to every process of the group, also to `sh` and to the background subshell itself. A child of the SSH agent that holds the stderr pipe of `sh` then cannot keep the pipe open after the stop.
    - `sh` owns the SSH agent, so the SSH agent ends with the pipe, also after a `SIGKILL` of Node.
 6. Spawn `ssh-add -q -t <seconds> -` with the environment `{ PATH, SSH_AUTH_SOCK: <dir>/a }`. Write the private key to its stdin and close it. `<seconds>` is the remaining deadline rounded up, at least 1. Clear the key buffer after the write.
 7. Run `work(environment)`. The environment is the output of `isolatedGitEnvironment`, plus `GIT_SSH_VARIANT=ssh` and the `GIT_SSH_COMMAND` below, with each path in single quotes.
-8. In `finally`, run `ssh-add -D` on the socket, close the stdin pipe of `cat`, await the exit of `sh` and remove the directory. The SSH agent exits before `sh`, so no SSH agent process outlives `withSshAgent`.
+8. In `finally`, run `ssh-add -D` on the socket, close the stdin pipe of `cat`, await the close of every pipe of `sh` and remove the directory. The SSH agent holds the stderr pipe of `sh`, so no SSH agent process outlives `withSshAgent`.
 
 ```text
 ssh -F none -o Port=<port> -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o IdentityAgent=<dir>/a
@@ -254,8 +254,8 @@ ssh -F none -o Port=<port> -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o
 ### Crash and abort cleanup
 
 - A cancel of the `Context` aborts git through the abort plugin of `simple-git`. The `finally` of step 8 ends the SSH agent.
-- A crash of the process closes the stdin pipe of `cat`, so `cat` ends and `sh` stops the SSH agent at once.
-- A terminated worker thread closes its child pipes, so `sh` also stops the SSH agent at once.
+- A crash of the process closes the stdin pipe of `cat`, so `cat` ends and the background subshell ends the process group of `sh` at once.
+- A terminated worker thread closes its child pipes, so the background subshell also ends the process group of `sh` at once.
 - The key lifetime of `ssh-add -t` removes the key from the SSH agent at the deadline in every case.
 - Each `withSshAgent` call first sweeps the `kd-ssh-*` directories of the same user in the system temporary directory. It removes each directory whose deadline lies more than 60 s in the past and whose socket accepts no connection. The sweep kills no process and reads no pid.
 
