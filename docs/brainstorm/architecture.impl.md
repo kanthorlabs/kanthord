@@ -1245,7 +1245,7 @@ The rules of the credential sections follow.
 
 - `/workers` lists the worker catalog. Each card links to its worker page and shows the count of live registrations of the worker.
 - The dashboard reads the expected instance count of a worker binding as `worker_instances.length`, and as `instance_count` for a binding of an external harness. A worker card counts that value.
-- The Overview lists the waiting jobs of one node state, intent and tag set that no live registration takes in the group `Fixes` with the cause `No taker`. When a worker binding matches them, the text names the binding and its worker and ends with the situation of the binding. The situation reads no placement of a binding:
+- The Overview lists the waiting jobs of one node state, intent and tag set that no live registration takes in the tab Fix setup with the cause `No taker`. When a worker binding matches them, the text names the binding and its worker and ends with the situation of the binding. The situation reads no placement of a binding:
   - A binding of a hosted worker with `worker_instances: []`: "lists no instance. Add an instance to the binding on the Bindings tab."
   - A binding of a hosted worker that lists instances: "has no live registration of a listed instance. Open the worker page to check its instances."
   - A binding of an external harness: "has no live registration. Start its worker program."
@@ -1689,8 +1689,140 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The text of the bar is a polite live region, so a screen reader hears each change of the step.
 - When every state becomes `none` or `ready` while the page is open, the bar shows `Ready` for 10 seconds and then hides. A page that opens with every state `none` or `ready` shows no bar.
 - Below `md`, the bar keeps one row: the badge, the binding name and the step line, which truncates. `Details` becomes an icon button with the label `Details`. The progress takes a thin line below the row. No content scrolls sideways.
-- The Overview lists each failed environment in the group `Fixes` with the cause "Environment failed". The text reads "<binding> of <project> failed: <class>. Workers claim no node of it." Its action `Open project` opens the project page.
+- The Overview lists each failed environment in the tab Fix setup with the cause "Environment failed". The text reads "<binding> of <project> failed: <class>. Workers claim no node of it." Its action `Open project` opens the project page.
 - The Overview also lists each `pending` environment whose `reason_started_at` is more than 10 minutes old (`PENDING_FIX_AFTER_MS` in `apps/src/lib/fix-attention.ts`). The cause is "Environment waiting". The text reads "<binding> of <project> waits: <reason> Workers claim no node of it. The server reads it again each minute." The item shows the age of `reason_started_at`. Its action `Open project` opens the project page. The retries of the Onboarding component continue.
+
+### The Overview page
+
+The Overview is an Action Board. It lists each act that waits for the human, with the most costly wait first. `apps/src/lib/board-*.ts` holds the board model, and `apps/src/features/overview/` holds the screen.
+
+The board holds six tabs in a fixed order. The cost of the wait sets the order, so the keys 1 to 6 stay stable.
+
+| `kind`     | Name            | Short   | Verb                     | Key | Items                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------ | --- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `tool`     | Approve tool    | Tool    | Approve or reject.       | 1   | `tool_approval`                                                                                                                      |
+| `setup`    | Fix setup       | Setup   | Change the setup.        | 2   | `credential_refused`, `request_rejected`, `environment_failed`, `environment_pending`, `no_taker`, `agent_invalid`, `project_paused` |
+| `paused`   | Resume          | Resume  | Resume or discard.       | 3   | `paused`                                                                                                                             |
+| `proposal` | Decide proposal | Decide  | Decide the proposals.    | 4   | `blocked` of an examine node with an open proposal, or with a proposals read that is not ready                                       |
+| `blocked`  | Rule            | Rule    | Act on the stopped node. | 5   | every other `blocked`, and `dependency_discarded`                                                                                    |
+| `outside`  | Act outside     | Outside | Act on the platform.     | 6   | `merge_wait`, `delivery_unconfirmed`                                                                                                 |
+
+The rules of the board model follow.
+
+- A blocked examine node stays in Decide proposal until its proposals read answers no open proposal. It then moves to Rule.
+- A node item holds its node. A fix item holds its own `nodeIds` and `projects`. A tool approval holds no node and names no project.
+- An environment item holds each node that is not terminal and whose `content.bindings` holds its binding revision id.
+- The held nodes of an item are its nodes plus their transitive dependents that are not terminal. `Completed` and `Discarded` are terminal.
+- A tool approval counts under every project filter. Under a filter, the Approve tool tab states "all projects".
+- A paused item is gated when its newest execution stops with `provider_failed` and code `unauthorized`. A `credential_refused` item must also name a credential of that execution.
+- The need of a gated item reads "Rotate <credential> in Fix setup". The short need reads "Rotate <credential>".
+- `rankBoardItems` orders the items: gated last, then more held nodes first, then the oldest `at` first with null last, then the subject, then the id.
+- The same rank sets the list, Start here, the initial tab and the initial selection.
+- Card line 1 holds the subject and the age. Line 2 holds the cause label, then " · " and one fact.
+- Card line 3 holds the project chips, the held text, and the label of the next act. A gated card shows "Needs: <short need>" in place of the label.
+- The held text reads "No node waits", "1 node waits" or "<n> nodes wait".
+- The long summary reads "<n> acts wait for you[ in <project>]. <m> nodes wait on them. Start here: <subject> in <tab name>."
+- The short summary reads "<n> acts · <m> nodes wait · Start: <subject>". Compact width shows it. The subject is a link that selects the Start here card.
+- With no card, the summary reads "Nothing waits for you in <project>." under a filter. Else it reads "No act found. Some records could not be read." with a read fault.
+- With no card, no filter and no read fault, the summary reads "No decision waits for you."
+- The workforce fact under the summary reads "<r> executions run · <w> jobs wait", with "1 execution runs" and "1 job waits".
+- Each cooling fact is one muted line under the summary: "<agent> in <binding>[ of <project>]: every model cools down until <time>." It reads `cooling` of the worker binding agent view.
+- The accessible name of a tab reads "<name>, <n> acts[, all projects][, clear]".
+- The URL holds `project`, `kind` and `item`. A filter change, a tab change, a selection on expanded width and a step of the detail sheet replace the history entry.
+- A card that opens the detail sheet on compact or medium width adds a history entry.
+- `useBoardWidth` reads the width of the board frame with a `ResizeObserver`. Compact is below 600 px, medium is 600 to 959 px, and expanded is 960 px and up.
+
+The screen shows these regions, top to bottom, at every width:
+
+1. The header row: the h2 "Overview", the keyboard shortcuts button, the refresh status, and the filter on expanded width.
+2. The system health alert, then the read faults alert.
+3. The filter, on compact and medium width.
+4. The summary with the workforce fact and the cooling lines.
+5. The tab strip, the card list and the detail.
+
+The rules of the screen follow.
+
+- The filter is the stock `ToggleGroup`, single value, `variant="outline" size="sm"`, with "All · <n>" first. A press on the pressed item returns to All.
+- A polite status message follows each filter change. On compact width, the filter scrolls sideways inside itself.
+- The tab strip is the stock `Tabs` with `TabsList variant="line"` and a `Badge` count. A tab with no act stays, with the count "0" and the line "clear".
+- From 760 px of board width, the strip is one row with the `tabSubOf` line under each name. Below 760 px, it is a grid of six cells, the count over the short name.
+- On compact and medium width, the wrapper of the strip sticks at `top: var(--app-header-height)`.
+- The panel holds a visually hidden `h3` with the tab name, the verb line, the card list and Done this session.
+- The verb line adds the `what` text of the tab on medium width. Under a filter, the verb line of Approve tool adds "Counts all projects."
+- A card is a stock `Item variant="outline" size="sm"` in a wrapper `div role="listitem"`. Its title is the one control of the card.
+- The title is a stock `Button variant="link"` with `after:absolute after:inset-0`, and the card `Item` has `relative`. The hit area thus covers the card.
+- The selected card is `Item variant="muted"` with `aria-current="true"`, with no ink bar.
+- A `className` on a primitive carries layout only. Size, wrap and overflow classes count as layout. Color comes only from the theme tokens.
+- An empty tab shows "Nothing waits in <tab name>[ in <project>]." with the `what` text, `Show all projects` when the filter hides an item of the tab, and `Go to <Start here subject>`.
+- On expanded width, the grid is `minmax(400px, 1fr) minmax(544px, 740px)`. The list and the detail body scroll each on their own. The act bar stays at the bottom of the pane.
+- On expanded width, the detail is a persistent `section` labelled by its title, with no scrim and no Close. The Start here card is selected on load.
+- On medium width, the detail opens as a right `Sheet` with Close, width `min(560px, 100%)`. On compact width, it opens as a full-width `Sheet` with Back.
+- The host overrides the stock `sm:max-w-sm` cap of the sheet with `data-[side=right]:sm:max-w-none`.
+- The sheet bar holds Close or Back, "<n> of <total>", Previous card and Next card. A step replaces `item` in the URL and focuses the detail title.
+- On expanded width, "<n> of <total>" shows beside the detail title.
+- The detail title is `detailTitleOf(item, details)`, for example "Provider refuses credential <name>".
+- The board holds the refresh while an act dialog is open. The selection stays on its item across a refresh.
+- When the selected item leaves the list, the detail reads "This item no longer waits" with Next card.
+- After an act, the next card is the card at the same index in the new list of the tab, or the last card.
+- After an act on expanded width, the board selects the next card and focuses the detail title. On medium and compact width, it closes the detail and focuses the next card.
+
+The detail shows these sections in this order: What, Change asked, Proposal, Impact, Why, Root cause, Evidence and Suggestion. The act bar follows them. Each text column is at most 80 characters wide.
+
+| Section      | Content                                                                                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Crumbs       | The project chips, the tab name, the node state badge and the age, above the title.                                                                                         |
+| What         | The cause sentence. A pause at the failure limit adds "failures <count> of <limit>" from the `scheduler.transition` span of the newest execution.                           |
+| Change asked | A tool approval only: the operation and one "<field> becomes" row for each input field of the call that waits, from the session read.                                       |
+| Proposal     | Each open proposal of a node in Decide proposal: the name, the requirement and the verifications.                                                                           |
+| Impact       | The spread text of a fix item, the held text, and each held node with its project and state.                                                                                |
+| Why          | The assessment rationale of a blocked node with the reviewer quote (`figure`, `blockquote`, `cite`), the discard reason of each discarded dependency, and a failed command. |
+| Root cause   | The cause line of the newest trace and "assigned by <assigner>". A discarded dependency reads "No fault. A human act ended the dependency."                                 |
+| Evidence     | `listNodeEvidence` of a blocked node, the executions with links to `/traces/<trace_id>`, and the log tail and the reproduce command of a failure.                           |
+| Suggestion   | One client rule for each kind with "Source: client rule". A blocked node with an open proposal shows "Source: proposal of <reviewer>".                                      |
+
+- On compact width, Evidence shows three lines and "Show <n> more".
+- The suggestion of a gated pause reads "<gate need> first. A resume before that fix spends the extra try."
+
+Each act with an effect opens its KanthorD dialog as it is: `NodeResumeDialog`, `NodeUnblockDialog`, `NodeOverrideDialog`, `NodeDiscardDialog`, `ProposalDecisionDialog` or `DependencyRemoveDialog`. The board holds no client undo window. The act labels follow the KanthorD labels.
+
+Each kind follows one order: the primary act, the other acts, Last trace, then Discard. An act shows only when the act state of the item offers it.
+
+| Kind                                 | Acts in order                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `tool_approval`                      | Approve, Reject, Open chat                                                      |
+| `credential_refused`                 | Rotate, Verify credential, Open credential                                      |
+| `environment_failed`                 | Open project, Run onboarding again                                              |
+| `project_paused`                     | Resume project                                                                  |
+| other fix kinds                      | the link act of `fixTargetOf`                                                   |
+| `paused`                             | Resume, Go to <credential> when gated, Override, Check now, Last trace, Discard |
+| `blocked` in Decide proposal         | Decide, Unblock, Override, Check now, Last trace, Discard                       |
+| `blocked` in Rule                    | Unblock, Override, Check now, Last trace, Discard                               |
+| `dependency_discarded`               | Remove dependency (one for each dependency), Check now, Last trace, Discard     |
+| `merge_wait`, `delivery_unconfirmed` | Open pull request, Check now                                                    |
+
+- The board keeps each KanthorD act of today, also an act outside the mockup set.
+- Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens a sheet with "Also rotate on".
+- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait.
+- A gated Resume stays in the row through `DisabledAction` with its need. Go to <credential> selects the `credential_refused` card in Fix setup.
+- On compact width, the act bar shows the lead act and `More`. `More` opens a bottom sheet with the other acts and Discard last.
+- The lead act is the first act that is not gated and not Discard. With no such act, the lead act is the first act.
+- Check now and Verify credential show their result as a badge next to the act. A failure shows an error toast.
+- A failed Approve, Reject or Run onboarding again keeps the card. The act bar then shows "<Doing> <subject> failed. <message>" with Retry, and an error toast names the subject.
+- A dialog act shows the `role="alert"` line of its dialog. A failed rotate shows its error in the rotate sheet.
+- A success toast names the act and the subject in the KanthorD form, for example "Rotated anthropic-main to revision 4."
+
+The keys follow.
+
+- With the shortcuts on, 1 to 6 select a tab. An open detail sheet closes first.
+- With the shortcuts on and the focus in the list, j and k move the selection. In an open detail sheet on compact and medium width, j and k step the sheet.
+- With the shortcuts on, `p` cycles the project filter, and `?` opens the shortcuts dialog.
+- With the focus in the list, the arrow keys, Home and End move the selection. Enter opens the detail of the selected card and focuses its title.
+- On expanded width, Esc in the detail returns focus to the selected card. On medium and compact width, Esc closes the detail sheet.
+- An act letter acts on the selected card from the list or the detail: a approve, n reject, o open, c check or verify, w rotate, r resume.
+- More act letters: y run onboarding again, u unblock, v override, x discard, d decide, m remove dependency, f go to, t last trace.
+- The letter of a gated act announces its need. A single key does nothing in a text field or while another dialog is open.
+- The switch `Single-key shortcuts` of the shortcuts dialog turns the shortcuts off. The browser stores it in `localStorage` under `kd-board-shortcuts`.
+- The arrows, Home, End, Enter and Esc stay on with the shortcuts off. The key hints and the shortcuts button hide on `(hover: none)`.
 
 ## The dashboard toasts
 
