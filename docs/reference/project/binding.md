@@ -210,7 +210,7 @@ After a reviewer release to `External.Requested`, the Mission Service checks the
 - When a request answers `checks_pending`, or a check call of the round fails, the next round runs after 60 seconds.
 - When the request of a `pull_request` action with the landing `kanthord` answers `none`, the Mission Service requests a **service merge**. The request needs no execution claim. The Mission Service requests a service merge only when no live claim holds the node. When the Intake Service accepts the service merge, the next round runs at once and folds the merge.
 - A service merge that answers `confirmed_failure`, `retryable_refusal` or `unknown_outcome` counts as a failed call. The next round then runs after 60 seconds. A `final_refusal` answer or a merge call that throws counts as no failed call and no merge.
-- The loop stops after a round with no `checks_pending` answer, no failed call and no merge. It also stops after round 60, and when the node leaves `External.Requested`.
+- The loop stops after a round with no `checks_pending` answer, no failed call and no merge. It also stops after round 60, when the node leaves `External.Requested`, and when the server stops.
 - After the loop stops, a human merges the pull request. Then run [`mission node check`](../mission/node-control.md#check), or rely on an Intake inbound of the repository.
 
 The Mission Service authorizes a service merge only in these conditions:
