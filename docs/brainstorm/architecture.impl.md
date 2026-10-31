@@ -595,6 +595,7 @@ The stop runs four phases.
   - The Scheduler Service starts no new claim.
   - The Worker Service starts no new execution.
   - The Worker Service signals the instances in flight.
+  - The Mission Service starts no new deferred check round.
   - Every service stops its timers and sweeps.
   - No service releases a resource.
 - Phase 2 drains work with everything available.
