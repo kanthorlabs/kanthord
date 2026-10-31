@@ -721,7 +721,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - An `implement` node card ends with a `Tasks (<count>)` section. Each task is a row that opens the node sheet of its node. A card without a task shows no section.
 - The Mission tab offers `Export JSON` and `Export Markdown`. `Export Markdown` downloads one zip archive `<project name>-mission-v<mission version>.zip` that holds each plan file under its `filename`.
 - The node sheet of an `examine` node shows the section `Fix proposals`. Each proposal shows the badge `open`, `approved` or `rejected`. An approved proposal links to its fix node.
-- While the proposer is `Blocked` in the attempt of an assessment with open proposals, the section `Fix proposals` and the Overview decision item of the proposer each offer one `Decide` action. No proposal row holds its own approve action.
+- While the proposer is `Blocked` in the attempt of an assessment with open proposals, the section `Fix proposals` and the Overview card of the proposer in the tab Decide proposal each offer one `Decide` action. No proposal row holds its own approve action.
 - `Decide` opens one dialog. The dialog lists each open proposal of the assessment with a checkbox and holds the optional reason. It states "Checked proposals become fix nodes. Unchecked proposals become rejected. A decision cannot be undone."
 - The confirm stays disabled until the human checks one proposal or more. Its reason reads "Check one proposal or more. To reject every proposal, use Unblock or Discard." The confirm sends `mission.proposal.decide`.
 
