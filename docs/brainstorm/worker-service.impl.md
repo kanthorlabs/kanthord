@@ -410,6 +410,7 @@ The Docker form of `Container on this host`:
 - The thread entry `src/apps/worker/thread.ts` builds one port transport for each binding entry and runs `WorkerUnit`.
 - The `thread` driver sends a `parentPort` message `{ kind: "drain" }` or `{ kind: "stop" }`. `thread.ts` maps it to `drain()` or `stop()`.
 - The `thread` driver sends a `parentPort` message `{ kind: "bindings", entries }` with the full entry list and the new ports in the transfer list. `thread.ts` adds and drains entries of the unit.
+- `thread.ts` applies the start entry list after `start()` ends. A `bindings` message that arrives during the start applies after the start entry list, in arrival order.
 - After `run()` returns, `thread.ts` closes its port, and the thread ends by itself.
 - `src/apps/worker/thread-start.ts` starts the thread entry. The `thread` driver and `serve slot` both use it.
 - The release build embeds a bundle of `src/apps/worker/thread.ts` as the SEA asset `worker-thread.cjs`. It uses the esbuild flags of `kanthord.cjs`, but its banner resolves `import.meta.url` from `process.execPath`, because `__filename` of eval code is `[worker eval]`. The release build checks that URL. `thread-start.ts` starts it with `eval: true`.
