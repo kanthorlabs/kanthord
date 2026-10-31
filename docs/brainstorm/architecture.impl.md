@@ -1540,27 +1540,23 @@ The prompt block:
 
 ### The analytics page
 
-- `/analytics` shows the [analytics](tracking-service.vocabulary.md#analytics) of the stored spans from `tracking.analytics.cost` and `tracking.analytics.duration`.
-- The toolbar holds the project filter with `All projects` first, the time range and the bucket. The query string holds every value.
-- The time range offers `Last 24 hours`, `Last 7 days` and `Last 30 days`, with `Last 7 days` as the default.
-- The bucket offers `Hour`, `Day` and `Week`, with `Day` as the default.
-- The `Cost` section holds the group select `Model`, `Agent`, `Provider`, `Worker`, `Node` and `Project`.
-- The `Cost` section shows the totals of the range from a read with `group_by=none&bucket=none`.
-- The `Cost` section shows one row for each group and one row for each bucket.
-- A cost row shows the turns, the input, output and cached tokens, `Est. cost` and a bar of its cost against the largest row.
-- The `Time` section holds the measure select `Span duration`, `Tool latency`, `Verification time`, `Queue wait`, `Review wait`, `Revision turns` and `Test floor share`.
-- The `Time` section holds the group select `None`, `Operation`, `Tool`, `Agent`, `Model`, `Worker`, `Node` and `Project`.
-- A time row shows the count, p50, p90, p99 and max.
-- A time row shows one bar from 0 to the largest max, with marks at p50, p90 and p99.
-- A `Test floor share` row shows the count and the share as a percent, with one bar from 0 to 1.
-- A group row of a node shows the node name, and a group row of a project shows the project name.
-- A section reads at the page load and at each change of a filter. `Refresh` reads again. The page reads nothing on a timer.
-- A read with `truncated: true` shows "The range holds more groups. Narrow the range or the filter."
-- The cost bar is the shadcn `Progress` primitive.
-- The percentile bar of the `Time` section is a `Progress` from 0 to the largest max with three marks in the theme tokens.
-- The text of each row repeats each value, so a bar holds no information alone.
+- `/analytics` shows the [analytics](tracking-service.vocabulary.md#analytics) of the executions from one `tracking.analytics.flow` read. The read serves both tabs.
+- The context line, the toolbar and the rebuild banner sit above the tabs and serve both tabs.
+- The toolbar holds the project filter with `All projects` first, the worker filter with `All workers` first, and the range. The query string holds every value.
+- The range offers `24h`, `7d` and `30d`, with `7d` as the default. `24h` reads hour buckets. `7d` and `30d` read day buckets.
+- The toolbar also holds the data badge, the update time, `Refresh` and `Pause auto-refresh`. The data badge links to the data footer with `#flow-data`.
+- The page has two tabs, `Flow` and `Cost`. `Flow` is the default. The URL param `tab` takes `flow` or `cost`.
+- The `Flow` tab holds Out of bounds, the flow of six stages, Why, the stop reasons and the data footer, in that order.
+- The six stages are Queued, Executing, Verification, Release gate, Evaluation and Outcome.
+- A range with no claimed execution shows "No executions claimed in this range." with `Scheduler` and `Workers` in place of Out of bounds and the flow.
+- The `Cost` tab holds the cost and token scorecard `Cost and tokens`: rows of tiles, then a split table.
+- The `Cost` tab shows "No LLM turns in this range." in place of the split table when the range holds no turn.
+- The page reads at the page load and at each change of a filter. `Refresh` reads again.
+- The page reads every 60 s while it is visible. `Pause auto-refresh` stops these reads.
+- A rebuild in progress shows "Aggregates rebuild in progress. Numbers before <day> are incomplete."
+- A read failure with no earlier answer shows "The flow could not be read.", the error and `Retry`.
+- A read failure after an earlier answer keeps that answer and shows "Not refreshed since <time>" with `Retry`.
 - The page uses no chart library.
-- The empty text of a section reads "No spans in this range." A read failure shows the error and `Retry`.
 
 ### The trace links of other pages
 
@@ -1573,8 +1569,8 @@ The prompt block:
 - The paused detail reads that trace with `tracking.trace.list` and `execution_id`, and shows its cause line beside `Last trace`. A failed read shows no cause line and keeps the link.
 - The project page header offers `Traces`. It opens `/traces?project_id=<project id>`.
 - The worker page offers `Traces`. It opens `/traces?worker_name=<worker name>`. The agent page offers `Traces`. It opens `/traces?agent_name=<agent name>`.
-- A cost row or a time row of the analytics page offers `Traces` for the group `node_id` or `model`. It opens `/traces?node_id=<key>` or `/traces?model=<key>`, with the key encoded. A row of another group or a null key has no link.
 - The Workbench pages hold no trace link, because a workbench session is no execution.
+- The drill links of the Analytics page open `/traces` or `/timeline` with `from` and `to` in Unix ms. A range choice on those pages removes both.
 
 ### The phone width
 
