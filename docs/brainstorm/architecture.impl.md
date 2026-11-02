@@ -1802,8 +1802,13 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 | `merge_wait`, `delivery_unconfirmed` | Open pull request, Check now                                                    |
 
 - The board keeps each KanthorD act of today, also an act outside the mockup set.
-- Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens a sheet with "Also rotate on".
-- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait.
+- Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens the rotate sheet.
+- The secret fields of the rotate sheet follow the `secret_shape` of the platform of the server copy, as on the credential detail.
+- For a shape other than `oauth`, the sheet offers "Also rotate on" with each other holder. Its description adds "The server seals it to the current key of each holder."
+- For the shape `oauth`, the sheet rotates the server copy only. It shows no "Also rotate on" and no seal sentence.
+- An OAuth provider can issue a new refresh token on each refresh. Two copies of one refresh token can thus make each other invalid.
+- For the shape `oauth`, the sheet names each other holder: "<holder> keeps its own secret. Sign in again on its worker instance page." "Open workers" opens `/workers`.
+- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait. Rotate waits for the credential read, a server copy and the platform read, for example "Rotate needs: the platform read."
 - A gated Resume stays in the row through `DisabledAction` with its need. Go to <credential> selects the `credential_refused` card in Fix setup.
 - On compact width, the act bar shows the lead act and `More`. `More` opens a bottom sheet with the other acts and Discard last.
 - The lead act is the first act that is not gated and not Discard. With no such act, the lead act is the first act.
