@@ -1722,7 +1722,8 @@ The rules of the board model follow.
 - Card line 3 holds the project chips, the held text, and the label of the next act. A gated card shows "Needs: <short need>" in place of the label.
 - The held text reads "No node waits", "1 node waits" or "<n> nodes wait".
 - The long summary reads "<n> acts wait for you[ in <project>]. <m> nodes wait on them. Start here: <subject> in <tab name>."
-- The short summary reads "<n> acts · <m> nodes wait · Start: <subject>". Compact width shows it. The subject is a link that selects the Start here card.
+- The short summary reads "<n> acts · <m> nodes wait · Start: <subject>". Compact width shows it.
+- In both summaries, the subject is a link that selects the Start here card.
 - With no card, the summary reads "Nothing waits for you in <project>." under a filter. Else it reads "No act found. Some records could not be read." with a read fault.
 - With no card, no filter and no read fault, the summary reads "No decision waits for you."
 - The workforce fact under the summary reads "<r> executions run · <w> jobs wait", with "1 execution runs" and "1 job waits".
@@ -1734,7 +1735,7 @@ The rules of the board model follow.
 
 The screen shows these regions, top to bottom, at every width:
 
-1. The header row: the h2 "Overview", the keyboard shortcuts button, the refresh status, and the filter on expanded width.
+1. The header row: the h2 "Overview", `Resume onboarding` when the onboarding can resume, the filter on expanded width, the keyboard shortcuts button and the refresh status.
 2. The system health alert, then the read faults alert.
 3. The filter, on compact and medium width.
 4. The summary with the workforce fact and the cooling lines.
@@ -1753,9 +1754,11 @@ The rules of the screen follow.
 - The title is a stock `Button variant="link"` with `after:absolute after:inset-0`, and the card `Item` has `relative`. The hit area thus covers the card.
 - The selected card is `Item variant="muted"` with `aria-current="true"`, with no ink bar.
 - A `className` on a primitive carries layout only. Size, wrap and overflow classes count as layout. Color comes only from the theme tokens.
+- The controls of the cards, the tabs, the summary, the detail, the act bar and the rotate sheet sit in `TouchTarget`.
+- `TouchTarget` makes a control at least 44 px high below the `lg` breakpoint of the window. It ignores the board width class.
 - An empty tab shows "Nothing waits in <tab name>[ in <project>]." with the `what` text, `Show all projects` when the filter hides an item of the tab, and `Go to <Start here subject>`.
 - On expanded width, the grid is `minmax(400px, 1fr) minmax(544px, 740px)`. The list and the detail sections scroll each on their own.
-- In the pane and in the sheet, the detail head and the act bar stay in place. Only the sections between them scroll.
+- In the pane and in the sheet, the detail head and the act bar stay in place. Only the sections between them scroll. In the sheet, the sheet bar also stays in place above the head.
 - On expanded width, the detail is a persistent `section` labelled by its title, with no scrim and no Close. The Start here card is selected on load.
 - On medium width, the detail opens as a right `Sheet` with Close, width `min(560px, 100%)`. On compact width, it opens as a full-width `Sheet` with Back.
 - The host overrides the stock `sm:max-w-sm` cap of the sheet with `data-[side=right]:sm:max-w-none`.
@@ -1767,11 +1770,10 @@ The rules of the screen follow.
 - After an act, the next card is the card at the same index in the new list of the tab, or the last card.
 - After an act on expanded width, the board selects the next card and focuses the detail title. On medium and compact width, it closes the detail and focuses the next card.
 
-The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The sections follow in this order: What, Change asked, Proposal, Impact, Why, Root cause, Evidence and Suggestion. Each text column is at most 80 characters wide.
+The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The crumbs hold the project chips, the tab name, the node state badge and the age. The sections follow in this order: What, Change asked, Proposal, Impact, Why, Root cause, Evidence and Suggestion. Each text column is at most 80 characters wide.
 
 | Section      | Content                                                                                                                                                                     |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Crumbs       | The project chips, the tab name, the node state badge and the age, above the title in the head.                                                                             |
 | What         | The cause sentence. A pause at the failure limit adds "failures <count> of <limit>" from the `scheduler.transition` span of the newest execution.                           |
 | Change asked | A tool approval only: the operation and one "<field> becomes" row for each input field of the call that waits, from the session read.                                       |
 | Proposal     | Each open proposal of a node in Decide proposal: the name, the requirement and the verifications.                                                                           |
@@ -1803,18 +1805,21 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 
 - The board keeps each KanthorD act of today, also an act outside the mockup set.
 - Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens the rotate sheet.
-- The secret fields of the rotate sheet follow the `secret_shape` of the platform of the server copy, as on the credential detail.
-- For a shape other than `oauth`, the sheet offers "Also rotate on" with each other holder. Its description adds "The server seals it to the current key of each holder."
+- The rotate sheet title reads "Rotate <credential>". The description reads "The new secret becomes the next revision of the server copy."
+- The footer holds "Rotate secret" and "Cancel". The sheet shows no stock Close. Cancel and Esc close it.
+- The secret fields of the rotate sheet follow the `secret_shape` of the platform of the server copy, as on the credential detail. An `api_key` platform shows "API Key". An `oauth` platform shows "Refresh Token", "Access Token" and "Access Token Expiry".
+- For a shape other than `oauth`, the sheet offers "Also rotate on" with each other holder that has a live revision. Its description adds "The server seals it to the current key of each holder."
 - For the shape `oauth`, the sheet rotates the server copy only. It shows no "Also rotate on" and no seal sentence.
 - An OAuth provider can issue a new refresh token on each refresh. Two copies of one refresh token can thus make each other invalid.
-- For the shape `oauth`, the sheet names each other holder: "<holder> keeps its own secret. Sign in again on its worker instance page." "Open workers" opens `/workers`.
-- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait. Rotate waits for the credential read, a server copy and the platform read, for example "Rotate needs: the platform read."
+- For the shape `oauth`, the sheet names each other holder that has a live revision: "<holder> keeps its own secret. Sign in again on its worker instance page."
+- The holder lines end with "Open workers", which opens `/workers`. The board read holds no worker name of a holder, so the link opens the worker list. With no such holder, the sheet shows no holder line and no "Open workers".
+- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait. Rotate waits for the credential read, a server copy and the platform read. Its need reads "Rotate needs: the credential read.", "Rotate needs: a server copy of <credential>." or "Rotate needs: the platform read." A credential with no live revision on the holder `server` keeps the need "a server copy of <credential>". The board does not rotate it.
 - A gated Resume stays in the row through `DisabledAction` with its need. Go to <credential> selects the `credential_refused` card in Fix setup.
 - On compact width, the act bar shows the lead act and `More`. `More` opens a bottom sheet with the other acts and Discard last.
 - The lead act is the first act that is not gated and not Discard. With no such act, the lead act is the first act.
 - Check now and Verify credential show their result as a badge next to the act. A failure shows an error toast.
 - A failed Approve, Reject or Run onboarding again keeps the card. The act bar then shows "<Doing> <subject> failed. <message>" with Retry, and an error toast names the subject.
-- A dialog act shows the `role="alert"` line of its dialog. A failed rotate shows its error in the rotate sheet.
+- A dialog act shows the `role="alert"` line of its dialog. A failed rotate of the server copy alone shows "The secret was not rotated." with "Read the latest" on a conflict. A rotate of several holders shows "Not every copy was rotated." and "<holder>: not rotated. <message>" for each failed holder.
 - A success toast names the act and the subject in the KanthorD form, for example "Rotated anthropic-main to revision 4."
 
 The keys follow.
@@ -1826,7 +1831,7 @@ The keys follow.
 - On expanded width, Esc in the detail returns focus to the selected card. On medium and compact width, Esc closes the detail sheet.
 - An act letter acts on the selected card from the list or the detail: a approve, n reject, o open, c check or verify, w rotate, r resume.
 - More act letters: y run onboarding again, u unblock, v override, x discard, d decide, m remove dependency, f go to, t last trace.
-- The letter of a gated act announces its need. A single key does nothing in a text field or while another dialog is open.
+- The letter of a gated act announces its need. An act that waits for a read is also a gated act. A single key does nothing in a text field or while another dialog is open.
 - The switch `Single-key shortcuts` of the shortcuts dialog turns the shortcuts off. The browser stores it in `localStorage` under `kd-board-shortcuts`.
 - The arrows, Home, End, Enter and Esc stay on with the shortcuts off. The key hints and the shortcuts button hide on `(hover: none)`.
 
