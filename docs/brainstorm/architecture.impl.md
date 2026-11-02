@@ -1754,7 +1754,8 @@ The rules of the screen follow.
 - The selected card is `Item variant="muted"` with `aria-current="true"`, with no ink bar.
 - A `className` on a primitive carries layout only. Size, wrap and overflow classes count as layout. Color comes only from the theme tokens.
 - An empty tab shows "Nothing waits in <tab name>[ in <project>]." with the `what` text, `Show all projects` when the filter hides an item of the tab, and `Go to <Start here subject>`.
-- On expanded width, the grid is `minmax(400px, 1fr) minmax(544px, 740px)`. The list and the detail body scroll each on their own. The act bar stays at the bottom of the pane.
+- On expanded width, the grid is `minmax(400px, 1fr) minmax(544px, 740px)`. The list and the detail sections scroll each on their own.
+- In the pane and in the sheet, the detail head and the act bar stay in place. Only the sections between them scroll.
 - On expanded width, the detail is a persistent `section` labelled by its title, with no scrim and no Close. The Start here card is selected on load.
 - On medium width, the detail opens as a right `Sheet` with Close, width `min(560px, 100%)`. On compact width, it opens as a full-width `Sheet` with Back.
 - The host overrides the stock `sm:max-w-sm` cap of the sheet with `data-[side=right]:sm:max-w-none`.
@@ -1766,11 +1767,11 @@ The rules of the screen follow.
 - After an act, the next card is the card at the same index in the new list of the tab, or the last card.
 - After an act on expanded width, the board selects the next card and focuses the detail title. On medium and compact width, it closes the detail and focuses the next card.
 
-The detail shows these sections in this order: What, Change asked, Proposal, Impact, Why, Root cause, Evidence and Suggestion. The act bar follows them. Each text column is at most 80 characters wide.
+The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The sections follow in this order: What, Change asked, Proposal, Impact, Why, Root cause, Evidence and Suggestion. Each text column is at most 80 characters wide.
 
 | Section      | Content                                                                                                                                                                     |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Crumbs       | The project chips, the tab name, the node state badge and the age, above the title.                                                                                         |
+| Crumbs       | The project chips, the tab name, the node state badge and the age, above the title in the head.                                                                             |
 | What         | The cause sentence. A pause at the failure limit adds "failures <count> of <limit>" from the `scheduler.transition` span of the newest execution.                           |
 | Change asked | A tool approval only: the operation and one "<field> becomes" row for each input field of the call that waits, from the session read.                                       |
 | Proposal     | Each open proposal of a node in Decide proposal: the name, the requirement and the verifications.                                                                           |
