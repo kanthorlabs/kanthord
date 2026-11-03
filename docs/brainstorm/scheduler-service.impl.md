@@ -298,7 +298,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - The Scheduler assigns the cause of the two endings that no worker stop describes, with the assigner `rule`:
   - `lost` gets `infrastructure.execution_lost`;
   - the revoke cause `human` gets `human.intervention`.
-- The reviewer execution hands the rework cause with its assessment submit, and the Mission Service hands it to the revocation. Another assessment result writes no cause. A stop with no `cause` writes `unattributed` with no suspects.
+- The reviewer execution hands the rework cause with its assessment submit, and the Mission Service hands it to the revocation. Another assessment result, a success rework included, writes no cause. A stop with no `cause` writes `unattributed` with no suspects.
 - The timeline and the span detail show "Revoked by a human" for a revocation with the cause `human`.
 - A release, a loss and a revocation with the cause `assessment` each write one `scheduler.transition` span. It is a child of the root span, with the record identity `<root_span_id>:transition`.
 - A revocation with the cause `human` writes the root end only. The [act trace](mission-service.impl.md#the-act-trace) of the Mission Service holds that transition.
@@ -309,7 +309,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - The transition span holds `kanthord.transition.rule`, with one of five values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;
   - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
-  - `rework_limit` when a `criterion-not-met` assessment at `mission.rework_limit` moves the node to `Blocked`;
+  - `rework_limit` when a `criterion-not-met` assessment of the final round (round limit + 1) moves the node to `Blocked`;
   - `plan_defect` when a current `criterion-not-met` assessment with a cause of the category `plan` moves the node to `Blocked`;
   - `none` otherwise.
 - With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none` and `plan_defect` hold neither.

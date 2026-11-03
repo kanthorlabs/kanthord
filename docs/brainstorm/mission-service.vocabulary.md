@@ -199,6 +199,32 @@ One node attempt holds two evaluation attempts.
 An evaluation attempt ends while its node attempt stays open.
 An evaluation attempt is one reviewer execution and holds no record of its own.
 
+## review round
+
+One execution assessment of an attempt.
+Round k of an attempt is its k-th execution assessment.
+A review round is not a new attempt, not an [evaluation attempt](#evaluation-attempt) and not a revision turn.
+[Rework limit](mission-service.md#rework-limit) owns the rule.
+
+Take "Add password reset" with `mission.rework_limit: 2`.
+
+1. Round 1 reports 2 blockers and 8 suggestions with `action: yes`, and the node reworks in attempt 1.
+2. Round 2 lists 8 findings as fixed and reports 1 new suggestion, and the node reworks again.
+3. Round 3 is the final round. It lists 2 findings as fixed, and the node reaches `Completed`.
+
+One attempt holds three review rounds and two fix executions.
+An evaluation execution that stops with no assessment is no review round, and the next one has the same round number.
+
+## review base
+
+The tested commit of each binding in the latest earlier base round of the attempt.
+A base round has the result `success`, or it holds a reviewer finding or a proposal of its own.
+Round 1 has no review base.
+
+Take round 2 of "Add password reset".
+Its review base is the tested commit of round 1, so round 2 reviews only the patch since that commit.
+When round 2 ends at the setup instead, round 2 is no base round, and round 3 keeps the review base of round 1.
+
 ## attempt closure
 
 The act that ends an attempt and every execution and evaluation attempt in flight under it.
@@ -355,6 +381,52 @@ The assessment result follows this order for "Add password reset":
    That violation turns `success` into `criterion-not-met`.
 
 Only the first case permits an empty judgement, and no case permits an absent rationale.
+
+## finding
+
+The record of one blocker or one suggestion that a review round reports.
+A finding holds a label, a kind, an action, a name, a description, a fix and a why, and a blocker also holds a ground.
+Its status is `open` or `fixed`: `fixed` when a later current assessment of the attempt lists it in `fixed_finding_ids`.
+[Review finding](mission-service.md#review-finding) owns the rule.
+
+Round 1 of "Add password reset" reports the blocker `B1` "Reset link never expires" with `action: yes`.
+Round 2 lists the identity of `B1` in `fixed_finding_ids`, so `B1` reads `fixed`.
+Round 2 does not list the suggestion `S4`, so `S4` stays `open` with its first text.
+
+## finding route
+
+Who acts on a finding.
+The closed set holds `fix`, `report` and `record`.
+
+- `fix`: KanthorD fixes the finding in a rework of the same attempt.
+- `report`: a human reviews the finding.
+- `record`: the finding is information only.
+
+In "Add password reset", the 10 findings of round 1 with `action: yes` get `fix`, and the 3 with `action: no` get `record`.
+Round 3 is final and does not list `S4`, so the open suggestion `S4` of round 1 gets `report`.
+
+## human finding
+
+A finding that a human creates for a defect found after delivery.
+A human finding has the label `H<n>`, names the assessment that missed the defect and names the owner of the cause.
+It has no round and the route `report`.
+
+After "Add password reset" reaches `Completed`, a human finds that the reset form accepts an empty password.
+The human creates `H1` with the kind `blocker`, the assessment of round 3 and the cause owner `reviewer`.
+
+## finding decision
+
+The answer of a human to a finding with the route `report`.
+The closed set holds `accepted` and `dismissed`.
+
+- `accepted`: the human agrees that the finding is a defect and owns its fix outside KanthorD.
+- `dismissed`: the human judges that the finding is no defect.
+
+A finding decision changes no node.
+A finding decision differs from a [disposition](#disposition), which is the answer of delivery admission to one inbound event.
+
+The human accepts the open suggestion `S4` of "Add password reset" with a reason.
+`S4` then no longer waits for a human, and the node stays `Completed`.
 
 ## tested input
 

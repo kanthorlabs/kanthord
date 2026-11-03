@@ -18,6 +18,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An evidence record uses `evidence_<ulid>`.
 - An assessment uses `assessment_<ulid>`.
 - An outcome uses `outcome_<ulid>`.
+- A review finding uses `finding_<ulid>`.
 - An evidence asset uses `evidence_asset_<ulid>`.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>`.
 - An attempt uses its attempt number as its key within the node. An attempt takes no prefix.
@@ -123,7 +124,7 @@ The service derives one `FrozenAction` for each configured action of each reposi
 
 - The Mission Service owns the section `mission` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
 - `mission.consecutive_failure_limit` holds the [consecutive failure limit](mission-service.md#consecutive-failure-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
-- `mission.rework_limit` holds the [rework limit](mission-service.md#rework-limit), as a non-negative integer in the `nat` format of `convict`, and it defaults to `2`. The value `0` turns rework off.
+- `mission.rework_limit` holds the [rework limit](mission-service.md#rework-limit), as a non-negative integer in the `nat` format of `convict`, and it defaults to `2`. Its `doc` text is "Reworks of an attempt that the Mission Service permits. A criterion-not-met assessment and, on an implement node, a success assessment with an action:yes finding or an open finding cause a rework below the limit. An assessment of a later round causes no rework, and its findings are report-only. The value 0 turns rework off." The value `0` gives one round, and that round is final.
 - `mission.further_work_limit` holds the count of consecutive `budget_end` releases of one attempt, as a non-negative integer in the `nat` format of `convict`, and it defaults to `3`. The value `0` turns the limit off.
 - `mission.text_max_bytes` holds the upper bound of a `Text` value in UTF-8 bytes, as a positive integer in the `nat` format of `convict`, and it defaults to `32768`.
 - The bound applies at a write. A stored value keeps its length after a change of the bound.
@@ -273,7 +274,7 @@ The result follows this order:
 
 Only the first case permits an empty judgement.
 The judgement is absent in that case; the rationale is never absent.
-The rationale names each default-standard violation. An assessment holds no separate list of findings.
+The rationale names each default-standard violation. An assessment holds no finding list. Each finding is its own record that names its assessment.
 The rationale of an `implement` assessment also names each current task whose criterion is unmet.
 The Mission Service answers `mission.assessment.verification_failed` when an assessment asserts success with a failed or unrun verification.
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
@@ -286,6 +287,13 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - `mission.assessment.submit` takes the optional `gate_files`, a list of `{ binding_id, paths }` with a nonempty `paths`. Each `binding_id` names a repository address of `tested_input`. No `binding_id` repeats, and no path of one entry repeats. Another list answers HTTP 400 with an issue at `gate_files`.
 - The service stores the list as canonical JSON in `mission_assessment.gate_files`. A submit without the key and a human assessment store null. The read of an assessment does not show the column.
 - The service writes one `mission_proposal` row for each proposal in the transaction that closes the attempt and writes the outcome. A non-current assessment records no proposal.
+- The read of an assessment answers `round`. For an execution assessment, `round` is `ROW_NUMBER() OVER (PARTITION BY node_id, attempt ORDER BY sequence)` over the execution assessments of the node. A human assessment reads `round: null`. `mission_assessment` holds no round column.
+- `mission.assessment.submit` takes the optional `findings`, a list of at most `FINDING_MAX` items with the default `[]`. Each item holds `label`, `action`, `task_id`, `ground`, `name`, `description`, `fix` and `why`. [The review finding](#the-review-finding) holds the field rules.
+- `mission.assessment.submit` takes the optional `fixed_finding_ids`, a duplicate-free list of `finding_<ulid>` identities with the default `[]`. A submit of an external harness that omits both fields stays valid.
+- A finding text uses the fixed limit `FINDING_TEXT_MAX_BYTES`, not `mission.text_max_bytes`.
+- The service refuses these submits with 400 `gateway.request.validation_failed` and an issue at `findings`: a bad label, a duplicate label, a blocker with `action: no` or with no ground, a suggestion with a ground, an unknown `task_id`, a blank or oversized text, more than `FINDING_MAX` items, and a `success` with a blocker.
+- The service refuses these submits with 400 `gateway.request.validation_failed` and an issue at `fixed_finding_ids`: a duplicate id, an id that names no open finding of the attempt with `route: fix`, and a `success` that leaves out an open blocker of the attempt.
+- Only a current assessment writes `fixed_assessment_id` and changes the route of an earlier finding. A non-current assessment stores each of its findings with `route: record` and changes no other finding.
 - `node_revision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment.
@@ -340,6 +348,196 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - An assessment with no open proposal answers 409 `mission.proposal.decided` with `details: { assessment_id }`. A repeated decision answers this code.
 - A proposer that is not `Blocked` in the attempt of the assessment answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.tags_unmatched`. A refused decision writes nothing.
 - A node unblock, a node discard or a node override of a `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked the proposer, in the same transaction. That is the rejection of every proposal.
+
+## The review finding
+
+[Review finding](mission-service.md#review-finding) owns the rule. This section holds the record, the reads and the acts.
+
+### The table
+
+`createMissionTables` of `src/mission/migrations.ts` creates the table.
+
+```sql
+CREATE TABLE mission_finding (
+  id TEXT NOT NULL PRIMARY KEY,
+  node_id TEXT NOT NULL REFERENCES mission_node(id),
+  assessment_id TEXT NOT NULL REFERENCES mission_assessment(id),
+  label TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  action TEXT NOT NULL,
+  task_id TEXT,
+  ground TEXT,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  fix TEXT NOT NULL,
+  why TEXT NOT NULL,
+  route TEXT NOT NULL,
+  fixed_assessment_id TEXT REFERENCES mission_assessment(id),
+  cause_owner TEXT,
+  created_by TEXT,
+  decision TEXT,
+  decision_reason TEXT,
+  decided_by TEXT,
+  decided_at INTEGER
+);
+CREATE UNIQUE INDEX mission_finding_label ON mission_finding (assessment_id, label);
+CREATE UNIQUE INDEX mission_finding_node ON mission_finding (node_id, id);
+CREATE UNIQUE INDEX mission_finding_human_label ON mission_finding (node_id, label) WHERE created_by IS NOT NULL;
+```
+
+- `mission_assessment` gets no column. The table holds no `CHECK` constraint, and each index is a unique index.
+- The project read joins `mission_node` and `mission_mission`, and it needs no other index.
+
+### The column justification
+
+Each column answers a question that no computation from related records answers at a lower cost.
+
+| Column                                                    | Question that it answers                                                                | Computation that the column replaces                                                                           | Reason to store it                                                                                                                                                                                      |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                      | Which finding?                                                                          | None.                                                                                                          | The identity and the primary key.                                                                                                                                                                       |
+| `node_id`                                                 | Which node holds the finding?                                                           | `assessment.node_id` through `assessment_id`.                                                                  | The unique index of the human labels `H1`, `H2` of a node needs the column, and an index cannot span two tables.                                                                                        |
+| `assessment_id`                                           | Which assessment reported the finding? For a human finding, which assessment missed it? | None.                                                                                                          | A reviewer statement or a human statement that no other record holds. `created_by` gives the meaning, and each predicate on the findings of an assessment counts only reviewer findings.                |
+| `label`                                                   | The label `B1`, `S3` or `H2`.                                                           | Reviewer: none. Human: `ROW_NUMBER` over the human findings of the node by `id`.                               | The reviewer gives it, and the coder answer cites it. The human computation is not stable: a ULID from a clock that goes back sorts before older ids and renumbers the labels.                          |
+| `kind`                                                    | Blocker or suggestion?                                                                  | The prefix `B` or `S` of `label` for a reviewer finding.                                                       | A human finding has the label `H<n>` and a kind that the human sets. One column for both sources costs less than a human-only column plus a parse.                                                      |
+| `action`                                                  | `yes` or `no`?                                                                          | None for a reviewer finding. A human finding always holds `yes`.                                               | A reviewer statement.                                                                                                                                                                                   |
+| `task_id`                                                 | Which task, or the node?                                                                | None.                                                                                                          | A reviewer statement or a human statement.                                                                                                                                                              |
+| `ground`                                                  | The ground of a blocker.                                                                | None.                                                                                                          | A reviewer statement. The rework cause reads it.                                                                                                                                                        |
+| `name`, `description`, `fix`, `why`                       | The text of the finding.                                                                | None.                                                                                                          | The content of the record.                                                                                                                                                                              |
+| `route`                                                   | Does KanthorD fix it, does a human review it, or is it information only?                | Part of it from `action`, the round, the intent and the later rounds.                                          | The route reads `mission.rework_limit` at the submit, `body.cause` and the request evidence. The configuration can change, `mission_assessment` stores no cause, and a forced delete removes a request. |
+| `fixed_assessment_id`                                     | Which assessment fixed the finding?                                                     | None. The value is the `fixed_finding_ids` statement of a later reviewer, and no other record holds that list. | A reviewer statement, written once by the assessment that lists the finding. It is null while the finding is open, and the status reads it.                                                             |
+| `cause_owner`                                             | Who owns the cause of a defect that a human finds after delivery?                       | None.                                                                                                          | A human statement. It is null for a reviewer finding.                                                                                                                                                   |
+| `created_by`                                              | Which human created a human finding?                                                    | The act trace of `mission.finding.create`.                                                                     | No service reads an act trace. It is null for a reviewer finding, whose actor is the execution of `assessment_id`. It also gives the source of the finding.                                             |
+| `decision`, `decision_reason`, `decided_by`, `decided_at` | The human decision.                                                                     | The act trace of `mission.finding.decide`.                                                                     | No service reads an act trace, and the dashboard and the undecided list read the decision.                                                                                                              |
+
+The read computes these values, and no column stores them.
+
+| Value                    | Computation at the read                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attempt`                | `attempt` of the assessment of `assessment_id`. For a human finding, the assessment that missed the defect names the attempt that delivered the code.                                                      |
+| `round`                  | The round of the assessment of `assessment_id`. A human finding reads null.                                                                                                                                |
+| `round` of an assessment | `ROW_NUMBER() OVER (PARTITION BY node_id, attempt ORDER BY sequence)` over the execution assessments of the node, through the unique index `(node_id, sequence)`. `submitAssessment` counts the same rows. |
+| `status`                 | `fixed` when `fixed_assessment_id IS NOT NULL`, else `open`.                                                                                                                                               |
+| `source`                 | `human` when `created_by IS NOT NULL`, else `reviewer`. The partial index of the human labels uses the same predicate.                                                                                     |
+| `created_at`             | `identityTime(id)` of `src/kernel/identity.ts`.                                                                                                                                                            |
+| label number             | `CAST(substr(label, 2) AS INTEGER)` in the order.                                                                                                                                                          |
+
+- The read maps the status to `FindingStatus` in code.
+- Only a finding with `route: fix` takes `fixed_assessment_id`, so a finding with `route: report` or `route: record` always reads `open`.
+- The read of the review base owns the base round predicate in `src/mission/record-store.ts`. It binds `AssessmentResult.Success` as a parameter, as `readExecutionAssessmentsOfAttempt` binds `result`. The SQL holds no literal of a closed value set.
+- A base round is an execution assessment of the attempt with the result `success`, or with a reviewer finding (`created_by IS NULL`) or a proposal of its own. A human finding never makes a base round. Each predicate on the findings of an assessment counts only reviewer findings.
+
+### The enums and the constants
+
+`src/mission/contract.ts` holds each enum. The Mission Service validates each value before the write.
+
+| Enum                        | Values                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `FindingKind`               | `blocker`, `suggestion`                                                                         |
+| `FindingAction`             | `yes`, `no`                                                                                     |
+| `FindingGround`             | `stated`, `standard`, `unstated`, `conflict`. The worker imports it as the ground of a blocker. |
+| `FindingRoute`              | `fix`, `report`, `record`                                                                       |
+| `FindingStatus` (read only) | `open`, `fixed`                                                                                 |
+| `FindingSource` (read only) | `reviewer`, `human`                                                                             |
+| `FindingCauseOwner`         | `plan`, `agent`, `reviewer`, `gate`, `engine`, `apps`, `load`, `human`                          |
+| `FindingDecision`           | `accepted`, `dismissed`                                                                         |
+
+`src/mission/contract.ts` holds the constants `FINDING_MAX = 100` and `FINDING_TEXT_MAX_BYTES = 8192`, and the worker imports them.
+
+### The field rules
+
+- `label` of a reviewer finding matches `^[BS][1-9][0-9]{0,2}$` and is unique inside one assessment. The service derives `kind` from it.
+- `label` of a human finding is `H<n>`, where n is 1 plus the count of the human findings of the node. The service gives it, and the partial unique index keeps it unique in the node.
+- A reviewer blocker holds `action: yes` and a `ground`. A reviewer suggestion holds `ground: null`.
+- A human finding holds `action: yes`, `ground: null`, the `kind` that the human gives and a `cause_owner`.
+- `task_id` names a task of the revision that the assessment names, or it is null for the node criterion or the default standard.
+- `name`, `description`, `fix` and `why` each hold nonblank text of at most `FINDING_TEXT_MAX_BYTES` UTF-8 bytes. The worker schema checks that limit without the server configuration. 100 findings with 4 fields of 8 KiB give 3.2 MiB, under the 10 MiB body limit.
+- One assessment holds at most `FINDING_MAX` reviewer findings.
+- `fixed_assessment_id` is null at the insert. A later current assessment of the same node and attempt writes it once, when its `fixed_finding_ids` lists the finding.
+- `decision`, `decision_reason`, `decided_by` and `decided_at` are null until the human decision. `decided_by` holds the JSON human `Actor`.
+
+### The route
+
+The route at the insert:
+
+| Finding                                                       | Route    |
+| ------------------------------------------------------------- | -------- |
+| `action: no`                                                  | `record` |
+| A finding of a non-current assessment                         | `record` |
+| `action: yes`, `implement`, its assessment causes a rework    | `fix`    |
+| `action: yes`, its assessment is current and causes no rework | `report` |
+| `action: yes`, `examine`, its assessment causes a rework      | `record` |
+| A human finding                                               | `report` |
+
+- A current assessment that causes no rework changes the route of each finding of the attempt with `route: fix` and `status: open` to `report`. The change runs in two paths: the close branch, and a current `success` that waits for the external actions.
+- The change runs in the same transaction, after the insert of the new findings and after the write of `fixed_assessment_id`.
+- A human act that closes the attempt changes the route of each finding of the closed attempt with `route: fix` and `status: open`. `overrideNode` and `blockNode` give it `report`. `discardNode` gives it `record`, as a discard rejects the open proposals.
+- `closeHuman` serves `blockNode` and `discardNode`, so each caller passes the target route. The change runs only where `closeAttempt` runs. `closeExternalAttempt` changes no route, because the request path changed it first.
+- A finding waits for a human when `route = report` and `decision IS NULL`.
+
+### The resolution of earlier findings
+
+- The check of `fixed_finding_ids` reads the open set before the insert of the assessment, in `admitAssessment`. It runs for every submit, also for one that the currency check later marks non-current.
+- Each listed id names a finding of the node and the attempt with `route: fix` and `status: open`. The check refuses another id with an issue at `fixed_finding_ids`.
+- An open blocker of the attempt is a reviewer finding of the attempt with `kind: blocker`, `route: fix` and `status: open`. A human finding and a finding of a non-current assessment are never open blockers.
+- A `success` lists each open blocker of the attempt in `fixed_finding_ids`. The check refuses a `success` that leaves one out.
+- A current assessment writes its own identity into `fixed_assessment_id` of each listed finding. A non-current assessment writes nothing.
+- `action_items` of a submit is the count of its findings with `action: yes`, plus the count of the open findings of the attempt with `route: fix` that `fixed_finding_ids` does not list. A current `success` of an `implement` node causes a rework when `action_items` is above 0 and the round is not final.
+- The worker submits a round that ends before the judgement with an empty `fixed_finding_ids`, so the open findings stay open.
+
+### The human finding
+
+- A human creates a finding on a node in any state. `assessment_id` names an execution assessment or a human assessment of the node in the attempt that delivered the code. With a human assessment, the round reads null.
+- A node with no assessment takes no human finding. A closing submit writes an assessment, and a human override writes a human assessment, also on a node with no attempt.
+- A human finding never makes its assessment a base round. It changes no review base and no status.
+- No round reads a human finding, and no `fixed_finding_ids` lists it, because its route is `report`.
+- The human updates the cause owner, the kind, the task and the texts until a decision exists.
+
+### The read shape
+
+- `Finding` (`findingSchema`) holds `id`, `node_id`, `attempt`, `round`, `assessment_id`, `source`, `label`, `kind`, `action`, `task_id`, `ground`, `name`, `description`, `fix`, `why`, `route`, `status`, `fixed_assessment_id`, `cause_owner`, `created_by` (`Actor | null`), `created_at`, `decision`, `decision_reason`, `decided_by` (`Actor | null`) and `decided_at`.
+- The read computes `attempt`, `round`, `source`, `status` and `created_at`.
+- `created_at` is `identityTime(id)`, the wall time of the ULID. `decided_at` is the service time.
+- `assessmentSchema` gets `round: number | null`, computed at the read. A human assessment reads null.
+- `mission.finding.list` and `review_round.findings` order by the round with a human finding last, then by `kind` with `blocker` first, then by the label number, then by `id`. The cursor of a page follows the same order.
+- `mission.finding.undecided.list` orders by `id`, with the last `id` as the cursor, as `listProposals` does. The page reads stored columns only, and it computes `attempt` and `round` for the rows of the page.
+
+### The operations
+
+| Operation identity                   | Route                                                            | Access                        | Answer                                                |
+| ------------------------------------ | ---------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------- |
+| `mission.execution.review_round.get` | `GET /api/mission/execution/:execution_id/review-round`          | `client`, `requiresExecution` | `ReviewRound`                                         |
+| `mission.finding.list`               | `GET /api/mission/node/:node_id/finding?attempt=&round=&cursor=` | `human`                       | `Page<Finding>`                                       |
+| `mission.finding.get`                | `GET /api/mission/finding/:finding_id`                           | `human`                       | `Finding`                                             |
+| `mission.finding.undecided.list`     | `GET /api/mission/project/:project_id/undecided-finding?cursor=` | `human`                       | `Page<Finding>` of the findings that wait for a human |
+| `mission.finding.decide`             | `POST /api/mission/finding/:finding_id/decide`                   | `human`                       | `Finding`                                             |
+| `mission.finding.create`             | `POST /api/mission/node/:node_id/finding`                        | `human`                       | `Finding`                                             |
+| `mission.finding.update`             | `PATCH /api/mission/finding/:finding_id`                         | `human`                       | `Finding`                                             |
+
+- `ReviewRound` holds `round`, `final`, `review_base` and `findings`. `round` is the round of the next assessment of the claimed attempt.
+- `final` is true when `round - 1 >= mission.rework_limit` or the attempt holds a request evidence.
+- `review_base` is `TestedInput | null`: the tested input of the latest earlier base round of the attempt.
+- `findings` lists each finding of the attempt with `route: fix` and `status: open`, in the order of the list, with `id`. An `examine` claim answers `findings: []` and `review_base: null`.
+- `mission.execution.rework_assessment.get` answers the latest execution assessment of the claimed attempt with `criterion-not-met`, or with `success` while the attempt holds an open finding with `route: fix`. A success that caused a rework is then the verdict, also when its only open items are unlisted earlier findings.
+- The body of `mission.finding.decide` holds `decision` (`accepted` or `dismissed`) and `decision_reason` (`Text`). The act writes only the finding, so it admits a finding of a `Completed` node.
+- The body of `mission.finding.create` holds `expected_mission_version`, `assessment_id`, `kind`, `task_id`, `name`, `description`, `fix`, `why` and `cause_owner`. The service gives `label`, `action: yes`, `ground: null`, `route: report` and `created_by`.
+- `mission.finding.create` checks `expected_mission_version` and keeps the mission version, because a finding changes no node.
+- The body of `mission.finding.update` holds `expected_mission_version` and at least one of `cause_owner`, `kind`, `task_id`, `name`, `description`, `fix` and `why`. The act admits only a human finding with no decision.
+- `mission.finding.create`, `mission.finding.update` and `mission.finding.decide` each write one act trace with equal node states.
+
+### The error codes
+
+| HTTP | Code                                | Operation and condition                                                                                                                                                                                                                                 |
+| ---- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 404  | `mission.node.not_found`            | `mission.finding.list`, `mission.finding.create`: no node has the identity.                                                                                                                                                                             |
+| 404  | `mission.mission.not_found`         | `mission.finding.undecided.list`: the project holds no mission.                                                                                                                                                                                         |
+| 404  | `mission.record.not_found`          | `mission.finding.get`, `mission.finding.decide`, `mission.finding.update`: no finding has the identity.                                                                                                                                                 |
+| 409  | `mission.finding.not_reported`      | `mission.finding.decide`: the route of the finding is not `report`.                                                                                                                                                                                     |
+| 409  | `mission.finding.decided`           | `mission.finding.decide`, `mission.finding.update`: the finding already holds a decision.                                                                                                                                                               |
+| 409  | `mission.finding.not_human`         | `mission.finding.update`: the finding is a reviewer finding.                                                                                                                                                                                            |
+| 409  | `mission.version.conflict`          | `mission.finding.create`, `mission.finding.update`: `expected_mission_version` differs from the mission version.                                                                                                                                        |
+| 400  | `gateway.request.validation_failed` | A body or a query that the schema refuses. For `mission.finding.create`, an `assessment_id` that names no assessment of the node, with an issue at `assessment_id`, or a `task_id` outside the revision of that assessment, with an issue at `task_id`. |
+
+`MissionErrorCode` adds `FindingNotReported`, `FindingDecided` and `FindingNotHuman`.
 
 ## The release admission
 
@@ -513,7 +711,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
   Its basis is a human assessment, and only an execution assessment supports `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
 - `execution cleared-assessment get` answers the assessment that the outcome of the cleared attempt names, the cause that [The unblock](mission-service.md#the-unblock) requires the next execution to read. It answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
-- `execution rework-assessment get` answers the execution assessment with the greatest `sequence` among the assessments of the claimed attempt whose result is `criterion-not-met`. It answers 404 `mission.record.not_found` when the claimed attempt holds no such assessment.
+- `execution rework-assessment get` answers the rework assessment that [the review finding](#the-review-finding) selects. It answers 404 `mission.record.not_found` when the claimed attempt holds no such assessment.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   The execution of that claim is the opener of that attempt.
 - A discard or a success override that meets a requested external action of the open attempt with no end state answers 409 `mission.node.action_unresolved` with `details: { requirement_keys }`, because a node reaches a terminal state only when no external action of its open attempt is unresolved.
@@ -599,8 +797,9 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act. A node with no attempt gives the trace a null attempt.
 
-- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.decide` and `mission.evidence.delete`. The operation of the root span is the operation identity of the act.
+- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.decide`, `mission.evidence.delete`, `mission.finding.create`, `mission.finding.update` and `mission.finding.decide`. The operation of the root span is the operation identity of the act.
 - The act trace of `mission.evidence.delete` names the node of the evidence and holds `kanthord.evidence.id`. Its two node states are equal when the delete changes no state. It is the Tracking span of the delete that [evidence retention](#evidence-retention) names.
+- The act traces of `mission.finding.create`, `mission.finding.update` and `mission.finding.decide` name the node of the finding. Their two node states are equal, because a finding act edits no node.
 - The root span starts and ends at the time of the act, with the status `Ok`.
 - It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. A null attempt omits `kanthord.attempt`. `mission.proposal.decide` names the proposer, and `kanthord.node.state.from` is `Blocked`.
 - The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
@@ -608,7 +807,7 @@ Each human act on a node writes one [act trace](tracking-service.vocabulary.md#a
 - An override to `Completed` writes `kanthord.node.lead_time_ms` on its act trace: the time from the first `Available` of the node to the override.
 - That act hands the revoke cause `human` to the [revocation](scheduler-service.impl.md#the-execution-trace).
 - `mission.assessment.submit` hands the revoke cause `assessment` and the states of its transition to the revocation of the reviewer execution. A `criterion-not-met` submit also hands its rework `cause` to the revocation.
-- At the rework limit, it also hands the rework count and `mission.rework_limit`.
+- At the criterion-not-met close of round limit + 1, it also hands the rework count (round - 1) and `mission.rework_limit`.
 - A current `criterion-not-met` submit with a cause of the category `plan` hands the transition rule `plan_defect` with no count and no limit. The Mission Service stores no cause. The cause reaches the Tracking Service only.
 - A refused act writes no act trace. A lost act trace changes no state, and no service reads it.
 
@@ -759,7 +958,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 
 ## Tests
 
-- Tests accept a `Text` value of `mission.text_max_bytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
+- Tests accept a `Text` value of `mission.text_max_bytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound. The four text fields of a finding take `FINDING_TEXT_MAX_BYTES` in place of that bound.
 
 - Tests call `revokeForInstanceArchive` for a live steps claim and a live evaluation claim. They assert `Executing -> Available` and `Evaluating -> Waiting`, an open attempt, an unchanged consecutive failure count, a job with no `available_at`, and no change for an execution that ended first. A test hands the answered `ExecutionEnds` to `reportExecutionEnds` and asserts the execution trace `revoked` with the revoke cause `human` and no act trace.
 
@@ -915,7 +1114,21 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests assert that `nodeBranchesOf` answers `kanthord/<node id>` before the first restart, and `kanthord/<node id>-a<k>` for restart attempt k and for each later attempt that continues it. A steps claim and an evaluation claim of one attempt answer the same value.
 - Tests assert that `attempt get` and `attempt list` answer `start_point`.
 - Tests assert that, after a restart, an event for the pull request of the earlier node branch answers `duplicate` or `unmatched` and changes no state.
-- Tests assert that a current `criterion-not-met` execution assessment below `mission.rework_limit` moves the node to `Available` with a job, ends the claim, keeps the attempt open and writes no outcome. They assert `Blocked` with an outcome at the limit, at once for `undetermined` and below the limit when the attempt holds a request evidence. They assert `Blocked` with an outcome and the transition rule `plan_defect` for a `plan` cause. They assert it below the limit, at the limit and with a request evidence. A stale assessment with a `plan` cause changes no state and writes no outcome. They assert that the next attempt counts from zero, and that `execution rework-assessment get` answers the latest `criterion-not-met` assessment of the claimed attempt or 404.
+- Tests assert that a current `criterion-not-met` execution assessment of a round that is not final moves the node to `Available` with a job, ends the claim, keeps the attempt open and writes no outcome. They assert `Blocked` with an outcome and the rule `rework_limit` at round limit + 1. They assert `Blocked` with an outcome at once for `undetermined`, and at a round after a request evidence, with no `rework_limit` rule. They assert `Blocked` with an outcome and the transition rule `plan_defect` for a `plan` cause. They assert it at round 1, at the final round and with a request evidence. A stale assessment with a `plan` cause changes no state and writes no outcome. They assert that the next attempt counts its rounds from 1, and that `execution rework-assessment get` answers the selection of [the operations](#the-operations) or 404.
+- Tests count the rounds 1 to 3. A `success` with an `action: yes` finding below the limit causes a rework with no outcome and a null cause. At round limit + 1 it writes the outcome and sets `route: report`. A `criterion-not-met` and a failed verification at round limit + 1 block with the rule `rework_limit`.
+- Tests assert that a request evidence stops the rework, and that a round after it stores its `action: yes` findings with `route: report`. A forced request delete leaves one rework less. `rework_limit: 0` gives one final round.
+- Tests assert that a listed finding reads `fixed` with that round as `fixed_assessment_id`. An unlisted open finding stays `open` with its first text, makes a `success` below the limit cause a rework, and gets `route: report` at the final round. A finding that the final round lists keeps `route: fix` and reads `fixed`.
+- Tests assert the base round rule. A round that ends before the judgement keeps the open findings and is no base round. A `criterion-not-met` with no new finding whose only blocker is an unlisted open blocker causes a rework and is no base round. A `criterion-not-met` with one new suggestion and an unlisted open blocker is the next review base.
+- Tests admit a non-current submit with a valid `fixed_finding_ids`. It writes no `fixed_assessment_id`, changes no route and stores its findings with `route: record`. These findings stay out of `review_round.findings` and the undecided list.
+- Tests refuse at `fixed_finding_ids` a duplicate id, an unknown id, a `fixed` finding, a `report` or `record` finding and a `success` that leaves an open blocker out. They admit a current `success` that lists every open finding. They admit a current `success` while the attempt holds an open human blocker `H1` or a blocker of a non-current assessment.
+- Tests refuse each field rule at `findings`, a text of `FINDING_TEXT_MAX_BYTES` plus one byte and more than `FINDING_MAX` findings.
+- Tests assert that an `examine` finding never gets `route: fix` and causes no rework, and that only the closing round gives `route: report`. A current `success` that requests the actions changes the open findings to `route: report`.
+- Tests assert the `review_round` values and the order `B2` before `B10`, a review base that skips an unjudged round, and `final: true` with a request evidence at round 1. `execution rework-assessment get` selects a success with open findings.
+- Tests assert that `overrideNode` and `blockNode` change the open `route: fix` findings of the closed attempt to `route: report`, and that the undecided list then holds them. `discardNode` changes them to `route: record`, and the undecided list does not hold them. An override or a discard of a `Blocked` node changes no route.
+- Tests decide a finding with `accepted` and `dismissed`, and assert `mission.finding.decided`, `mission.finding.not_reported`, `mission.record.not_found` and a decision on a `Completed` node.
+- Tests read the findings: the `attempt` filter through the assessment, the order, the pages, and the computed `attempt`, `round`, `status` and `source`. They assert `created_at === identityTime(id)`, the undecided order by `id` with the last `id` as the cursor, `mission.node.not_found` and `mission.mission.not_found`. The round of an assessment equals the count of `submitAssessment`.
+- Tests create a human finding on a `Completed`, a `Blocked` and an `Available` node, with the labels `H1` and `H2` in each node. They refuse an `assessment_id` of another node and a node with no assessment. They admit a human assessment as `assessment_id`, with `round: null`.
+- Tests assert that a human finding on an unjudged round changes neither the review base of the next round nor any status. They assert `mission.version.conflict`, an unchanged mission version after a create, the update of the cause owner and the texts, `mission.finding.not_human`, `mission.finding.decided` after a decision and the act traces.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a dependency terminal transition, a dependency edit and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `include_retired`.
 - Tests admit node creation at any time.
