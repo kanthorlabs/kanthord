@@ -147,6 +147,7 @@ The timeline of the node `Add password reset` holds each execution, each transit
 ## analytics
 
 Analytics are the totals and the percentiles of the measurements that the stored spans hold, by group and by time bucket.
+The flow analytics count each execution into one stage flow in the bucket of its claim time.
 The analytics of project `Billing` hold the cost of each model by day and the p90 of the tool latency.
 
 ## analytics measure
@@ -230,7 +231,8 @@ The set is closed and it holds two values.
 ## retention
 
 Retention is the period for which the Tracking Service holds a trace.
-The trace is the only unit of retention.
+The trace is the unit of retention of every stored span.
+The flow rollups outlive their traces for a longer period.
 The server deletes the trace of an execution of project `Billing` when its retention ends.
 The deletion removes every span, record, telemetry text and session entry of that trace.
 The retention of a trace of project `Billing` ends 30 days after the trace opens.

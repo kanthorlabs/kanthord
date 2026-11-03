@@ -90,6 +90,7 @@ The Worker Service writes these facts for [the affected test run](worker-service
 
 - The texts of the span stay `command` and `output`.
 - `worker.release_gate` ends with `kanthord.release_gate.affected`, the verdict of the node, `absent` included.
+- `worker.release_gate` also ends with `kanthord.release_gate.result`: `passed`, `routed` or `budget_end`. Every `worker.verification` span holds `kanthord.verification.context`: `task`, `node`, `release` or `evaluation`.
 - `worker.evaluation` ends with `kanthord.evaluation.affected`. `kanthord.evaluation.stage` takes the [stage values](worker-service.impl.md#the-cause-of-a-stop) of the Worker Service.
 - A stop of the class `affected_invalid` or `affected_timeout` writes the stop attributes of every other stop.
 
@@ -363,6 +364,59 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `--project <project-id>` and `--node <node-id>` set `project_id` and `node_id`. `--from <unix-ms>` and `--to <unix-ms>` set `from` and `to`.
 - `--bucket`, `--group-by`, `--measure` and `--operation` set the field of their name.
 
+### The flow read
+
+`tracking.analytics.flow` reads the flow rollups. It reads no span.
+
+- `tracking_trace` holds 23 flow columns: `kind`, `stage`, `root_end`, `revoke_cause`, `transition_to`, `transition_rule`, `cause_category`, `cause_detail`, `cause_assigner`, `evaluation_stage`, `tool_error_count`, `turn_rate_limited`, `turn_quota_exhausted`, `turn_unavailable`, `turn_error_other`, `gate_routed`, `gate_affected`, `affected_runs`, `affected_failed`, `affected_base_red`, `affected_flaky_runs`, `flaky_tests` and `late_records`.
+- `tracking_flow_rollup` has the primary key `(grain, bucket_start, project_id, worker_name, stage, exit, stop_reason, cause_category, cause_detail, cause_assigner)`.
+- `tracking_flow_histogram` has the primary key `(grain, bucket_start, project_id, worker_name, measure)`. `bins` holds the log bins of one measure.
+- `tracking_usage_rollup` has the primary key `(grain, bucket_start, project_id, worker_name, model)`.
+- `grain` takes `hour` or `day`.
+- `tracking.analytics.flow` uses `GET /api/tracking/analytics/flow` and has `human` access.
+- The query takes `from`, `to`, `bucket`, `project_id`, `worker_name` and `compare`.
+- `to` defaults to the time of the read. `from` defaults to 7 days before `to`.
+- A range of more than 31 days answers 400 `tracking.filter.range_invalid`. A `from` after `to` answers the same code.
+- `bucket` takes `hour` or `day`. Without `bucket`, the read uses `hour` for a range of at most 2 days and `day` otherwise.
+- `bucket=hour` with a range of more than 2 days answers 400 `tracking.filter.range_invalid`.
+- The window starts at the start of the bucket of `from`. It ends at the end of the bucket of `to`.
+- `window.now` is the earlier of `to` and the time of the read. `window.buckets` lists the start of each bucket of the window.
+- `compare` takes `previous` or `none`, and it defaults to `previous`.
+- `previous_window` is the window of the same length directly before the window.
+- `previous_window` is null for `compare=none`, or when `tracking_flow_rollup` holds no row of the grain.
+- It is also null when its start lies before the retention cutoff of the grain or before the first rollup row of the grain.
+- `project_id` and `worker_name` filter the rollup rows.
+- The cut of the same-hour sums is the end of the hour of `window.now`, less the length of the window.
+- The same-hour sums add the rows of the previous window before the cut.
+- At the `day` grain, a cut inside a day adds the hour rows of that day before the cut.
+- The cut is null when `previous_window` is null. At the `day` grain, a cut inside a day is also null when the start of that day lies before the retention cutoff of the hour rows.
+
+One read runs at most six statements in one read transaction. Each statement reads a range of `grain` and `bucket_start` on the primary key.
+
+1. Read the first `bucket_start` of `tracking_flow_rollup` for the grain.
+2. Read the rows of `tracking_flow_rollup` from the start of `previous_window`, else of the window, to the end of the window.
+3. Read the rows of `tracking_flow_histogram` in the same range.
+4. Read the rows of `tracking_usage_rollup` in the same range.
+5. At the `day` grain with a cut inside a day, read the hour rows of `tracking_flow_rollup` from the start of that day to the cut.
+6. In the same case, read the hour rows of `tracking_usage_rollup` in the same range.
+
+The service builds the answer in memory from these rows. The answer holds raw numbers, and it holds no threshold.
+
+- `window` holds `from`, `to`, `now`, `bucket` and `buckets`. `previous_window` holds `from` and `to`, or is null.
+- `percentile_method` is `log_bins_4`.
+- `stages` holds one item for each stage: `queued`, `executing`, `verification`, `release_gate`, `evaluation` and `outcome`.
+- A stage item holds `stage`, `current`, `previous`, `series`, `dimensions` and `previous_bucket_median`.
+- `cost` holds `current`, `previous`, `previous_same_hour` and `series`.
+- `causes` holds `rows`, `previous_rows`, `previous_unattributed_share`, `unattributed_share_series` and `truncated`.
+- `stop_reasons` holds `order`, `rows` and `previous_totals`.
+- `usage` holds `current`, `previous`, `previous_same_hour`, `series` and `by`. `by` holds the usage rows by `model`, `worker_name` and `project_id`.
+- A usage row holds `previous_same_hour` with the previous cost of its key.
+- `completeness` holds `executions`, `open`, `no_root`, `exit_unknown`, `awaiting_ingestion` and `late_records`.
+- `rebuild` holds `pending_until` while the server start fills the flow columns of old traces. It is null otherwise.
+- The CLI command is `kanthord tracking analytics flow`. It prints the answer as JSON.
+- `--project <project-id>` and `--worker <worker-name>` set `project_id` and `worker_name`. `--from <unix-ms>` and `--to <unix-ms>` set `from` and `to`.
+- `--bucket` and `--compare` set the field of their name.
+
 ## Retention
 
 - `tracking.retention_days` holds the retention of a trace in days. It defaults to `30`.
@@ -376,6 +430,8 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - A late record reuses the predicate of the sweep and needs no tombstone. The time of an execution identity is the time of its ULID. When that time is older than the retention, `tracking.telemetry.write` refuses every record with `trace_expired` and opens no trace row.
 - `serverSpan` drops a span of such an execution and counts the drop.
 - `serverTraceSpan` drops a span when `created_at` of its trace is older than the retention, and counts the drop.
+- The flow rollups outlive their traces. Hour rows stay 8 days. Day rows stay 64 days.
+- The sweep deletes old rollup rows in batches of 500 rows, at most 50 transactions for each table and grain.
 
 ## Configuration
 
@@ -395,6 +451,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - RULED 2026-10-25 by Ulrich. The analytics reads select the traces whose window overlaps the range, count only the spans that start inside it, and read their spans in steps of at most 100 traces.
 - RULED 2026-10-25 by Ulrich. The analytics reads answer at most 1000 items, and they take a range of 7 days by default and 31 days at most.
 - RULED 2026-10-25 by Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
+- RULED 2026-10-31 by Ulrich. `tracking_trace` adds 23 flow columns. `tracking.db` adds `tracking_flow_rollup`, `tracking_flow_histogram` and `tracking_usage_rollup` with primary keys only. This ruling supersedes the ruling of 2026-10-25 on the schema.
 - RULED 2026-10-25 by Ulrich. The cause lives only as `kanthord.cause.*` on the root span end. The Tracking Service derives no cause and adds no cause column. `tracking.trace.list` filters by `cause_category`, and `tracking.facet.get` answers `cause_categories`.
 - RULED 2026-10-25 by Ulrich. `tracking.cause.label` writes the span `tracking.cause_label` with the span identity `<root_span_id>.cause_label`. A new label replaces the old one, and every reader takes the label over the rule cause.
 - RULED 2026-10-25 by Ulrich. The producer records each fact, and an analytics read only adds up and divides. `instance_busy_ratio` sums the root `duration_ms` per `kanthord.worker.instance`.
