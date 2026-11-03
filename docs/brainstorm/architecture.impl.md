@@ -1480,7 +1480,7 @@ The prompt block:
   - A `worker.verification` shows the `output` text, `process.exit.code`, `kanthord.verification.timed_out` and `kanthord.verification.kind`, then the `command` text. An affected span also shows the selection, the counts, the reason and the failed test ids of [the affected run spans](tracking-service.impl.md#the-affected-run-spans).
   - A `worker.git` and a `worker.gate` show the `error` text and `kanthord.gate.violation`, then `kanthord.git.step`, `kanthord.gate.mode` and `kanthord.gate.changed`.
   - A `worker.task` shows the stop facts `kanthord.stop.*`, then `kanthord.task.revision_count`.
-  - A `worker.evaluation` shows `kanthord.evaluation.result`, `kanthord.evaluation.stage`, `kanthord.evaluation.unmet_grounds` and the `rationale` text.
+  - A `worker.evaluation` shows `kanthord.evaluation.result`, `kanthord.evaluation.stage`, `kanthord.evaluation.unmet_grounds`, `kanthord.evaluation.round`, `kanthord.evaluation.final_round`, `kanthord.evaluation.action_labels`, `kanthord.evaluation.fixed_count` and the `rationale` text.
   - A `scheduler.execution` shows the cause, `kanthord.stop.reason`, `kanthord.stop.code`, `kanthord.stop.detail` and `kanthord.execution.end`, then `kanthord.queue.wait_ms`.
 - It shows the start, the end, the duration and the offset from the root start.
 - It shows the model, the input, output and cached tokens, `Est. cost`, the finish reason and the model duration of a turn.

@@ -1403,12 +1403,15 @@ The target is `before` in the violation path, the head of the checkout step in p
 The verdict is the latest review that asks for more work. `readPrior` of `src/worker/unit/node-reads.ts` reads it, under [The unblock reads](#the-unblock-reads).
 
 - A verdict holds a text and a judged commit for each binding that the review saw.
+- A verdict also holds the open findings of the attempt. `readPrior` reads them from `findings` of `mission.execution.review_round.get`.
+- The `criterion-revision` text lists each open finding with its id, its label, its round, its name, its description, its fix and its why. The coder answers each finding id with FIXED or OPEN and the reason in its final reply. A finding answer is no blocker of the finding list of the coder.
 - The judged commit of an assessment is the commit of each `repository` address of its `tested_input`. The judged commit of change requests is the `commit_id` of the latest change request of each binding, by `submitted_at`.
 - `judgedCheckouts` keeps a judged commit only when the checkout holds it and it is an ancestor of `HEAD`. It logs `judged commit off the node history` for each other one.
 - The verdict rule holds when at least one kept checkout gives a nonempty `git rev-list --first-parent --ancestry-path --no-merges --max-count=1 <judged commit>..HEAD`. A merge commit never satisfies the rule. `verdictRuleHolds` of `src/worker/unit/verdict-rule.ts` checks it.
 - At planning, a verdict whose rule holds plans no verdict unit. Any other verdict plans the node unit with the `criterion-revision` text of the verdict, after the pending units. The planning logs `verdict planned`.
 - With no kept judged commit, the verdict unit has no rule, and the release gate decides.
 - While the rule fails after a verdict turn, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
+- When the coder answers a finding OPEN and makes no commit, each verdict turn counts as unchanged. The no-progress limit then pauses the node, as for a `criterion-not-met` verdict.
 - When the rule holds, the flow goes to the release gate, which runs the node verifications. The live checkout runs no node command.
 - A cleared assessment that is not `success` plans the node unit with its rationale as plain instruction text, with no rule. A pass completes the unit.
 - No substring of a verdict routes work to a task.
@@ -1417,6 +1420,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 ## The unblock reads
 
 - At the start of the steps method on an `implement` node, the execution reads the verdict. The rework assessment of the attempt, from `mission.execution.rework_assessment.get`, comes first. Its rationale is the verdict text.
+- A `success` assessment that caused a rework is also a rework assessment. With a rework assessment, the execution reads the open findings of the attempt from `mission.execution.review_round.get`.
 - With no rework assessment, an execution of attempt 2 or later reads `mission.execution.clearedOutcome.get`.
 - When the cleared outcome has the closing event `external-failed`, the execution reads `worker.execution.change_request.get`.
 - `worker.execution.change_request.get` is an API-only `client` read of the Worker Service. It reads the external actions of the cleared attempt.
@@ -1452,7 +1456,18 @@ When a rerun passes, the rationale states that the test is flaky. The rationale 
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
-The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is an unmet stated item. The exception is a change that correct work needs for a criterion, a verification or an affected test.
+For a [review round](mission-service.md#rework-limit) with a review base, the review bundle holds the round files below, and it adds `round` (`{ number, review_base }`), `patch_paths` and `empty_patches`.
+`B` is the review-base commit of a binding. The worker checks that `git rev-list --first-parent HEAD` contains `B`.
+When the binding has no review-base commit, or `B` is not on that first-parent chain, the binding uses the full change against `origin/<base branch>`. The worker logs `review base off the node history`.
+When `B` equals `HEAD`, the patch of the binding is empty. The bundle lists the binding in `empty_patches`, and the reviewer judges no change of that binding.
+The patch is the output of `git log --first-parent --diff-merges=remerge --patch --no-color --format=fuller B..HEAD --`. A merge commit shows only its conflict resolution, so a base merge adds nothing.
+`changed_files` of the round is the sorted union of `git log --first-parent --diff-merges=remerge --name-only --format= B..HEAD --`. `added_files` of the round is the same read with `--diff-filter=A`, minus each path that does not exist at `HEAD`.
+The worker writes each patch to `evidence/round-<k>-<binding name>.patch`. `--diff-merges=remerge` needs git 2.36, and the host start requires git 2.40.
+The worker submits one evidence for each binding with a nonempty patch, with the subject `Review round patch` (`ROUND_PATCH_SUBJECT`) and one `produced` asset of the media type `text/x-diff`. The assessment names each such evidence in `evidence_ids`.
+A patch over `INLINE_BYTES_MAX` (5 MiB) keeps its first part and ends with the line `[The patch exceeds 5 MiB and ends here.]`. The kept part and that line together hold at most `INLINE_BYTES_MAX` bytes. The reviewer still reads the full patch file.
+`isSupportEvidence` excludes `ROUND_PATCH_SUBJECT`, as it excludes `AFFECTED_SUBJECT`, so a later round places no old patch.
+`prepareEvaluation` places only the newest evidence of the attempt with the subject `CODER_REPORT_SUBJECT`, by evidence identity. An earlier coder report describes an earlier round.
+The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is a blocker with the ground `stated`. The exception is a change that correct work needs for a criterion, a verification or an affected test.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
@@ -1970,20 +1985,31 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `criterion-not-met`, stage `setup`        | none                                                                     | `unattributed`, suspects `environment`, `model`                    |
 | `criterion-not-met`, stage `verification` | [class](#the-verifications) `code_failure`                               | `unattributed`, suspects `model`, `plan`                           |
 | `criterion-not-met`, stage `affected`     | any                                                                      | `unattributed`, suspects `model`, `plan`                           |
-| `criterion-not-met`, stage `judgement`    | an unmet ground `conflict`                                               | `plan.requirement_conflict`                                        |
-| `criterion-not-met`, stage `judgement`    | an unmet ground `unstated`                                               | `plan.criterion_unstated`                                          |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `stated`                                              | `model.work_defect`                                                |
-| `criterion-not-met`, stage `judgement`    | first unmet ground `standard`                                            | `model.standard_violation`                                         |
+| `criterion-not-met`, stage `judgement`    | a blocker ground `conflict`                                              | `plan.requirement_conflict`                                        |
+| `criterion-not-met`, stage `judgement`    | a blocker ground `unstated`                                              | `plan.criterion_unstated`                                          |
+| `criterion-not-met`, stage `judgement`    | first blocker ground `stated`                                            | `model.work_defect`                                                |
+| `criterion-not-met`, stage `judgement`    | first blocker ground `standard`                                          | `model.standard_violation`                                         |
 | none of the above                         | none                                                                     | `unattributed`                                                     |
 
 - The stop classes `affected_invalid` and `affected_timeout` take the cause `environment.<code>`, as `setup_failed` and `command_absent` do.
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
-- Each unmet item of the judgement holds the required field `ground`: `stated`, `standard`, `unstated` or `conflict`. A reply with no `ground` goes through the repair turn.
-- A `conflict` item names two stated requirements or criteria that the work cannot meet together. Its reason quotes both as `"A" vs "B"`. For example, correct work fails a criterion, a verification or an affected test unless it changes a file that the requirement forbids. A failure that a defect of the work causes is no conflict and stays a `stated` item.
-- A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the first unmet ground decides.
-- `judgementRationale` appends up to three blocks to the rationale and omits an empty block. The order is `Plan conflict:` for the `conflict` items, `Plan gap:` for the `unstated` items and `Unmet:` for the other items.
+- The `worker.evaluation` span also holds `kanthord.evaluation.round`, `kanthord.evaluation.final_round` (`final` of the review round), `kanthord.evaluation.action_labels` (the labels with `action: yes`) and `kanthord.evaluation.fixed_count` (the count of `fixed_finding_ids`).
+- `kanthord.evaluation.unmet_ids` and `kanthord.evaluation.unmet_grounds` derive from the blockers. The verdict unit task span of a fix execution holds `kanthord.evaluation.round` of the round that it fixes.
+- The blockers of a judgement are its new blocker findings and each open prior blocker that `fixed_finding_ids` does not list. `unmet_ids` holds `task_id ?? node_id` of each blocker, and `unmet_grounds` holds the ground of each blocker.
+- Each blocker finding of the judgement holds the required field `ground`: `stated`, `standard`, `unstated` or `conflict`. A suggestion holds `ground: null`. A reply with no `ground` goes through the repair turn.
+- `evaluationJudgementSchemaOf({ priorIds, priorBlockerIds, taskIds })` of `src/worker/unit/judgement.ts` refuses each value that the Mission Service refuses, so a reviewer error goes through the repair turn.
+  - `criterion-not-met` holds a blocker, an id of `priorBlockerIds` outside `fixed_finding_ids`, or a proposal. `success` holds no blocker and lists each id of `priorBlockerIds` in `fixed_finding_ids`.
+  - Each label matches `^[BS][1-9][0-9]{0,2}$` and is unique.
+  - A blocker holds `action: yes` and a ground. A suggestion holds `ground: null`.
+  - `task_id` is null or one of `taskIds`, the tasks of the pinned revision.
+  - The judgement holds at most `FINDING_MAX` findings. Each text is nonblank and holds at most `FINDING_TEXT_MAX_BYTES` bytes.
+  - Each id of `fixed_finding_ids` is one of `priorIds`, the open findings of `review_round.findings`, and no id repeats. `priorBlockerIds` are the open blockers of the attempt among them.
+- `parseJudgement` returns the zod issues of a refused reply. The `repair` text takes `issues`, a list of `{ path, message }`, and names each issue of the last line. An absent marker line gives an empty list.
+- A `conflict` blocker names two stated requirements or criteria that the work cannot meet together. Its description quotes both as `"A" vs "B"`. For example, correct work fails a criterion, a verification or an affected test unless it changes a file that the requirement forbids. A failure that a defect of the work causes is no conflict and stays a `stated` blocker.
+- A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the ground of the first blocker decides.
+- `judgementRationale` appends up to three blocks to the rationale and omits an empty block. The order is `Plan conflict:` for the `conflict` blockers, `Plan gap:` for the `unstated` blockers and `Unmet:` for the other blockers. Each block gives the `description` of a blocker as its reason.
 - The Scheduler assigns the cause of `lost` and `revoked`, as [The execution trace](scheduler-service.impl.md#the-execution-trace) states.
 - Tests assert one cause for each row, and the `timed_out` suspects of a `no_progress` stop and of a budget end.
 

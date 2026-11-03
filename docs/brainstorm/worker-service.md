@@ -417,6 +417,7 @@ A work unit with a done record for its id and its current digest is complete, an
 The execution executes every other work unit, also when its verifications pass on the base.
 No record of an earlier attempt decides that a task is complete, unless the attempt continues the same node branch.
 The verdict of a rework is the rationale of the assessment that caused the latest rework of the attempt, or else the change requests of the pull request of the cleared attempt.
+The verdict of a rework also holds each open finding of the attempt with its identity.
 The verdict names the commit that the review judged in each binding.
 When no checkout holds new work after the judged commit, the execution sends the whole verdict to the agent in a revision turn of the node unit, and repeats it until new work exists.
 A merge commit is no new work.
@@ -633,6 +634,9 @@ A failed or unrun verification causes the reviewer execution to write an assessm
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
 On an `implement` node, the evaluation runs the affected test command of each repository that declares one before the judgement. The verdict `failed` of that run gives `criterion-not-met` with no judgement. [worker-service.impl.md](worker-service.impl.md#the-affected-test-run) holds the rules.
+A later [review round](mission-service.md#rework-limit) reviews only the patch of each binding since its review base.
+The reviewer lists each open finding that the change fixes in `fixed_finding_ids`, and a finding that it does not list stays open.
+The reviewer execution stores the patch of each binding with a nonempty patch as one evidence with the subject `Review round patch`.
 For an `examine` node, the judgement can hold one fix-node proposal for each defect inside a direct `implement` dependency.
 A judgement with proposals writes an `undetermined` assessment that holds them.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.

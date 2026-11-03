@@ -151,6 +151,29 @@ erDiagram
         integer created_at "Unix ms"
     }
 
+    mission_finding {
+        text id PK "finding_ + ULID"
+        text node_id FK "node"
+        text assessment_id FK "reporting assessment, or the assessment that a human finding names"
+        text label "B1 or S1 of a reviewer, H1 of a human, unique in the assessment"
+        text kind "blocker | suggestion, FindingKind enum in code"
+        text action "yes | no, FindingAction enum in code"
+        text task_id "task of the revision, null for the node"
+        text ground "stated | standard | unstated | conflict for a reviewer blocker, else null"
+        text name "nonblank, at most 8192 bytes"
+        text description "nonblank, at most 8192 bytes"
+        text fix "nonblank, at most 8192 bytes"
+        text why "nonblank, at most 8192 bytes"
+        text route "fix | report | record, FindingRoute enum in code"
+        text fixed_assessment_id FK "assessment that lists the finding as fixed, null while open"
+        text cause_owner "FindingCauseOwner enum in code, human finding only"
+        text created_by "JSON human Actor, null for a reviewer finding"
+        text decision "accepted | dismissed, null until the decision"
+        text decision_reason "nonblank, null until the decision"
+        text decided_by "JSON human Actor, null until the decision"
+        integer decided_at "Unix ms, null until the decision"
+    }
+
     project_binding }o..o{ worker_registration : "ref by (project_id, resource_identity), no FK"
     worker_instance |o..o{ worker_registration : "ref instance_id to id, no FK"
     project_binding ||..o{ scheduler_execution : "ref worker_binding_id, no FK"
@@ -175,6 +198,10 @@ erDiagram
     mission_node ||..o{ mission_proposal : "FK node_id, FK created_node_id"
     mission_assessment ||..o{ mission_proposal : "FK assessment_id"
 
+    mission_node ||..o{ mission_finding : "FK node_id"
+    mission_assessment ||..o{ mission_finding : "FK assessment_id"
+    mission_assessment |o..o{ mission_finding : "FK fixed_assessment_id"
+
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
@@ -187,7 +214,7 @@ erDiagram
     class project_binding,mission_node,worker_instance stub
     class worker_registration worker
     class scheduler_execution scheduler
-    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal mission
+    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal,mission_finding mission
 ```
 
 ## Tables
@@ -202,6 +229,7 @@ erDiagram
 | `mission_assessment`     | Mission Service   | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order.                                                                                                                                                                                                                         |
 | `mission_outcome`        | Mission Service   | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). `sequence` is derived: the current outcome is the outcome with the greatest `sequence`, and neither a timestamp nor an identity establishes that order.                                                                                                                                                                                                        |
 | `mission_proposal`       | Mission Service   | Derived from [the fix-node proposal](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-fix-node-proposal).                                                                                                                                                                                                                                                                                                                                                          |
+| `mission_finding`        | Mission Service   | Derived from [the review finding](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-review-finding).                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Keys and relationship notation
 
