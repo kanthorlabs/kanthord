@@ -7,7 +7,7 @@ description: Rewrite, review or reader-test a KanthorD documentation page or pag
 
 Usage: `/crucible [$ARGUMENTS]`
 
-`$ARGUMENTS` names the topic and the pages, for example `worker: explanation/worker.md, coder-worker.md`. With no arguments, ask for the topic and the page list.
+`$ARGUMENTS` names the topic and the pages, for example `worker: explanation/worker.html, coder-worker.html`. With no arguments, ask for the topic and the page list.
 
 The skill turns a documentation page set into pages that a mid-level engineer understands from the concept down to the low level.
 
@@ -57,6 +57,8 @@ When the reader needs behavior that the code does not build:
 
 ## Phase 2: Author
 
+Write each public page as a static HTML file `<name>.html`. Copy the template of a sibling page in the same section: the `head`, the site header, the `On this page` list, the breadcrumb, the `article`, the footer and the scripts. Give every heading an `id` and list each `h2` in `On this page`. Wrap each table in `<div class="table-wrap">`. Link other public pages with relative `.html` hrefs, never with `.md` hrefs.
+
 ### An entry page
 
 An entry page introduces the concept above its detail pages. Write the sections in this order.
@@ -102,17 +104,17 @@ An entry page introduces the concept above its detail pages. Write the sections 
 
 ### Diagram rules
 
-- Copy the `%%{init: ...}%%` theme block from an existing diagram in `docs/explanation/*.md`. Use the flowchart block for flowcharts and the sequence block for sequence diagrams.
+- Copy the `%%{init: ...}%%` theme block from an existing diagram in `docs/explanation/*.html`. Use the flowchart block for flowcharts and the sequence block for sequence diagrams.
+- Write each diagram as a `<pre class="mermaid">` block. Keep the stylesheet `assets/diagram.css` and the script `assets/diagram-page.mjs` of a sibling page with a diagram.
 - Give every diagram `accTitle` and `accDescr`. The description states the full path in words.
 - Put no fact only in a diagram. Repeat it in text.
 
 ### Index and navigation
 
-Update all three. A page without them is hard to find.
+Update both. A page without them is hard to find.
 
-1. `docs/explanation/README.md`: one bullet per page.
-2. `docs/README.md`: one row in the question table.
-3. `docs/index.html`: one `<li>` in the navigation.
+1. `docs/explanation/index.html`: one `<li>` per page.
+2. `docs/index.html`: one link on the home page.
 
 ## Phase 3: Gate and commit
 

@@ -61,7 +61,7 @@ def main():
         base = root / directory
         if not base.is_dir():
             continue
-        for path in sorted(base.rglob("*.md")):
+        for path in sorted([*base.rglob("*.md"), *base.rglob("*.html")]):
             for number, line in enumerate(path.read_text().splitlines(), start=1):
                 for package, name, pattern, versions in rules:
                     for match in pattern.finditer(line):

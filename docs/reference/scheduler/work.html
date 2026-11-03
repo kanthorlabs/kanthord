@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pull work · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="pull-work">Pull work</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A registered worker instance asks for one job that it can execute.
+            When the Scheduler admits a claim, it creates an execution and
+            returns it. When it cannot admit a claim, it holds the request for
+            at most 90 seconds and then answers <code>no-work</code>.
+          </p>
+          <p>
+            The caller is a machine identity with a live
+            <a href="../worker/register.html">worker registration</a>. The
+            request body names the runtime identity and the resource identity of
+            that registration. The authenticated binding sets the project; the
+            body cannot select a project, node, priority or attempt.
+          </p>
+          <p>The Scheduler processes a pull in this order:</p>
+          <ol>
+            <li>
+              When the runtime identity holds a live execution, the pull returns
+              that execution as <code>claimed</code>. It creates no second
+              execution.
+            </li>
+            <li>
+              When the project is
+              <a href="../project/project.html#project-pause">paused</a>, the
+              pull admits no claim. The claim creates no execution and moves no
+              job.
+            </li>
+            <li>
+              When the registration healthcheck fails, the pull answers
+              <code>no-work</code> at once. The healthcheck fails for an ended
+              registration, an absent or deleted binding, a binding with an
+              instance count of <code>0</code>, a binding that no longer lists
+              the instance of the registration, or an invalid agent
+              configuration of a server-hosted worker.
+            </li>
+            <li>
+              When the binding group already runs as many executions as its
+              instance count, the pull admits no claim. The instance count is
+              the length of <code>worker_instances</code>, or
+              <code>instance_count</code> for an external harness. A worker
+              instance holds at most one execution at a time over all its
+              registrations.
+            </li>
+            <li>
+              Otherwise, the Scheduler reads the project queue in queue order.
+              It skips each job whose node the claimant does not admit through
+              the match. It claims the first job whose node the Mission Service
+              admits for the node states that the worker declares.
+            </li>
+          </ol>
+          <p>
+            The claimant admits a node when two facts hold. The worker declares
+            the <code>intent</code> of the node, and the tags of the worker
+            binding include every tag of the node. The match compares exact
+            strings. The intent and the tags come from the node revision that
+            the claim pins: the revision of the open attempt, else the current
+            revision. A worker name with no worker declaration gives no
+            claimant, and its pull answers <code>no-work</code>.
+          </p>
+          <p>
+            For each native agent, the claim selects the first fallback chain
+            entry whose credential is not cooling. It pins the chain position
+            and the enablement revision of that entry in
+            <code>agent_selections</code> of the execution. The answer shows the
+            pinned selection that the server rebuilds from the pin. When the
+            credential of every entry of one agent is cooling, the pull admits
+            no claim and answers <code>no-work</code>. That answer creates no
+            block, no pause and no failed execution. A later cooldown changes no
+            pinned selection; see
+            <a href="../agent/cooldown.html">agent cooldowns</a>.
+          </p>
+          <p>
+            A claim creates one execution with a fixed deadline.
+            <code>expired_at</code> is <code>created_at</code>, plus the wall
+            time of the binding or the worker declaration, plus
+            <code>scheduler.release_reserve</code> seconds (default
+            <code>600</code>). After <code>expired_at</code>, the claim is lost.
+          </p>
+          <p>
+            When step 2, step 4 or step 5 admits no claim, the request waits. A
+            wakeup for the project, for example after a release, a Mission
+            change, a Project change or a
+            <a href="../project/project.html#project-resume">project resume</a>,
+            makes it try again. A pull that waits under a project pause claims
+            after the resume when its window is still open. The 30-second loss
+            sweep also wakes every pull that waits. It answers
+            <code>no-work</code> when the 90-second window ends. It answers at
+            once in these cases:
+          </p>
+          <ul>
+            <li>Another pull of the same runtime identity already waits.</li>
+            <li>
+              The pull settles an expired execution of this instance or of a
+              node in the queue.
+            </li>
+            <li>
+              The server stops. During shutdown, a pull claims nothing and
+              answers <code>no-work</code>.
+            </li>
+          </ul>
+          <p>
+            <code>no-work</code> opens no attempt, creates no execution and
+            holds no reservation. The worker decides when to pull again.
+          </p>
+          <p>
+            <code>work pull</code> is a mutation and requires an idempotency
+            key. A retry with the same key and the same body returns the
+            recorded answer while the gateway holds the record
+            (<code>gateway.idempotency_ttl</code>, default 86400 seconds). A
+            replay does not show later changes to the execution. A new key from
+            an instance with a live execution also returns that execution.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>The API returns HTTP <code>200</code> with one of two objects.</p>
+          <pre><code class="language-json">{ "kind": "no-work" }</code></pre>
+          <pre><code class="language-json">{
+  "kind": "claimed",
+  "execution": {
+    "execution_id": "execution_01JZ8R2B3C4D5E6F7G8H9J0K1M",
+    "project_id": "project_01JZ8PZ0A1B2C3D4E5F6G7H8J9",
+    "node_id": "node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
+    "claimant": {
+      "worker_binding_id": "binding_01JZ8PZ5N6P7Q8R9S0T1V2W3X4",
+      "resource_identity": "&lt;resource-identity&gt;",
+      "runtime_identity": "worker_registration_01JZ8R0Y1Z2A3B4C5D6E7F8G9H",
+      "client_id": "client_identity_01JZ8QZW2X3Y4Z5A6B7C8D9E0F",
+      "name": "Worker display name"
+    },
+    "attempt": 1,
+    "pinned_revision": 3,
+    "node_branch": "kanthord/node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
+    "credentials": [],
+    "agent_selections": [
+      {
+        "agent_name": "swe@1",
+        "position": 0,
+        "level": "enablement",
+        "agent_provider": "main",
+        "provider": "anthropic",
+        "credential": "&lt;credential-name&gt;",
+        "model_identifier": "claude-sonnet-4-5",
+        "reasoning_effort": "high"
+      }
+    ],
+    "claim_state": "running",
+    "expired_at": 1791449400000,
+    "created_at": 1791447600000,
+    "ended_at": null,
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "root_span_id": "00f067aa0ba902b7"
+  }
+}</code></pre>
+          <p>
+            The CLI adds the retry key, writes one JSON line to stdout, and
+            exits <code>0</code>. Both <code>claimed</code> and
+            <code>no-work</code> exit <code>0</code>.
+          </p>
+          <pre><code class="language-json">{
+  "kind": "no-work",
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td><code>claimed</code> or <code>no-work</code></td>
+                  <td>API and CLI</td>
+                  <td>Result of the pull.</td>
+                </tr>
+                <tr>
+                  <td><code>execution</code></td>
+                  <td><code>ExecutionRecord</code></td>
+                  <td>API and CLI</td>
+                  <td>
+                    Only with <code>claimed</code>. The fields are in
+                    <a href="execution.html#executionrecord"
+                      >the execution record</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>Key used for this request; retain it for a retry.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Missing, invalid or expired token, a human token, or a
+                    machine token whose binding does not resolve.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.registration.required</code></td>
+                  <td>
+                    The machine identity holds no live worker registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    The <code>Content-Type</code> is not
+                    <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>
+                    The body is not valid JSON, or an object repeats a member
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    The body is not the closed object below, or a field is
+                    invalid.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>Missing or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    The key is in use by a request that has not completed, or by
+                    a different request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>403 scheduler.work.claimant_mismatch</code></td>
+                  <td>
+                    <code>runtime_identity</code> or
+                    <code>resource_identity</code> differs from the live
+                    registration of the caller.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>The operation did not complete in 120 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks the file and the key before it sends a request. Each
+            local failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.file.invalid_path</code></td>
+                  <td>
+                    <code>--file -</code> is not accepted; the command does not
+                    read stdin.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_found</code></td>
+                  <td>The file does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_regular</code></td>
+                  <td>The path is not a regular file.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.encoding_invalid</code></td>
+                  <td>The file is not valid UTF-8.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_json</code></td>
+                  <td>The file is not valid JSON.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.duplicate_key</code></td>
+                  <td>A JSON object repeats a member name.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_object</code></td>
+                  <td>The JSON value is not an object.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.schema_invalid</code></td>
+                  <td>The object is not the closed request body below.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.scheduler.work.pull.token_required</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared API failure makes the CLI exit <code>1</code>. The
+            diagnostic starts with the error code of the API and holds the rows
+            <code>status</code> and <code>idempotency_key</code>. A transport
+            failure, timeout or malformed response exits <code>1</code> with
+            <code>cli.scheduler.work.pull.indeterminate</code>, the message
+            <code
+              >the result is unknown; retry with the same idempotency key</code
+            >
+            and the row <code>idempotency_key</code>. After an indeterminate
+            result, send the same file with the same key and machine token.
+            There is no automatic retry.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/scheduler/work/pull</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>scheduler.work.pull</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live worker
+                    registration
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>120 seconds; the wait window is 90 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>Closed JSON object; see the table below</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Requirement</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>nonempty string</td>
+                  <td>
+                    Required. Must equal the resource identity of the machine
+                    identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>runtime_identity</code></td>
+                  <td><code>worker_registration_&lt;ulid&gt;</code></td>
+                  <td>
+                    Required. Must equal the runtime identity of the live
+                    registration.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the registered
+                    worker instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    pull; retain it for retries of that pull.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/scheduler/work/pull \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  --max-time 125 \
+  -d '{"resource_identity":"&lt;resource-identity&gt;","runtime_identity":"&lt;runtime-identity&gt;"}'</code></pre>
+          <p>
+            A disconnect ends the wait for an answer. It does not undo a
+            committed claim. The next pull of the same runtime identity returns
+            that live execution.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord scheduler work pull --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">cat &gt; pull.json &lt;&lt;'EOF'
+{ "resource_identity": "&lt;resource-identity&gt;", "runtime_identity": "&lt;runtime-identity&gt;" }
+EOF
+kanthord scheduler work pull --file pull.json --token '&lt;machine-jwt&gt;'</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>
+                    JSON file that holds the request body. The file must be a
+                    regular UTF-8 file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when you retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Machine JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>scheduler</code> group, and each leaf command accepts them.
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. Generate the machine JWT with
+            <a href="../auth/jwt.html"
+              ><code>kanthord auth jwt generate</code></a
+            >. The command reads no server configuration. The HTTP client has a
+            121-second deadline for this 120-second operation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

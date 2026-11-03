@@ -1,0 +1,2829 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How the coder@1 worker works · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#in-short">In short</a></li>
+          <li>
+            <a href="#who-does-what-inside-one-execution"
+              >Who does what inside one execution</a
+            >
+          </li>
+          <li>
+            <a href="#the-execution-at-a-glance">The execution at a glance</a>
+          </li>
+          <li>
+            <a href="#example-a-run-with-no-problem"
+              >Example: a run with no problem</a
+            >
+          </li>
+          <li><a href="#prepare-steps-1-to-4">Prepare: steps 1 to 4</a></li>
+          <li><a href="#start-steps-5-and-6">Start: steps 5 and 6</a></li>
+          <li><a href="#tasks-steps-7-to-9">Tasks: steps 7 to 9</a></li>
+          <li><a href="#finish-steps-10-to-12">Finish: steps 10 to 12</a></li>
+          <li><a href="#how-the-execution-ends">How the execution ends</a></li>
+          <li><a href="#edge-cases">Edge cases</a></li>
+          <li>
+            <a href="#examples-of-the-edge-cases">Examples of the edge cases</a>
+          </li>
+          <li>
+            <a href="#an-examine-node-the-report"
+              >An examine node: the report</a
+            >
+          </li>
+          <li>
+            <a href="#under-the-hood-how-coder1-drives-pi-and-git"
+              >Under the hood: how coder@1 drives pi and git</a
+            >
+          </li>
+          <li><a href="#what-coder1-reports">What coder@1 reports</a></li>
+          <li><a href="#limits">Limits</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="how-the-coder1-worker-works">How the coder@1 worker works</h1>
+          <p>
+            <code>coder@1</code> is the native worker that does the work of an
+            <code>implement</code> node. It drives one LLM agent,
+            <code>swe@1</code>, in a git checkout. The agent only writes code.
+            The worker commits after every agent turn, runs every verification
+            itself, and releases the node to <code>reviewer@1</code> only after
+            every verification of the node passes in a clean clone.
+          </p>
+          <p>
+            Read <a href="worker.html">How a worker works</a> first. That page
+            defines the terms of this page: node, attempt, claim, execution,
+            release, evidence and assessment.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method</td>
+                  <td><code>steps</code></td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td><code>swe@1</code></td>
+                </tr>
+                <tr>
+                  <td>Claims</td>
+                  <td>
+                    An <code>implement</code> node or an
+                    <code>examine</code> node in state <code>Available</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Default budget</td>
+                  <td>
+                    200 model turns and 2 hours of wall time for each execution
+                  </td>
+                </tr>
+                <tr>
+                  <td>Repository</td>
+                  <td>
+                    The repository bindings that the <code>implement</code> node
+                    names, by convention one, under
+                    <a
+                      href="../reference/mission/import.html#bindings-of-a-node"
+                      >bindings of a node</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Git branch</td>
+                  <td>The node branch <code>kanthord/&lt;node_id&gt;</code></td>
+                </tr>
+                <tr>
+                  <td>After a success</td>
+                  <td>
+                    The node moves to <code>Waiting</code>, and
+                    <code>reviewer@1</code> evaluates the whole node
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="in-short">In short</h2>
+          <ul>
+            <li>
+              One execution of <code>coder@1</code> works on one
+              <code>implement</code> node. It can finish the node, or stop at
+              the budget and leave the rest to the next execution.
+            </li>
+            <li>
+              The work of a node splits into <strong>units</strong>. Each task
+              of the node is one unit. A node with no task is one unit.
+            </li>
+            <li>
+              <code>swe@1</code> runs only coding <strong>turns</strong>: a work
+              turn, a revision turn and a merge conflict turn. A turn is one
+              prompt of the worker and every reply of the agent until the agent
+              is idle. The agent answers no question of the worker.
+            </li>
+            <li>
+              After every turn, the worker runs <strong>gate G</strong>. The
+              gate checks the git state of each checkout and commits every
+              change of the turn.
+            </li>
+            <li>
+              The worker runs the verifications of a unit itself. The live
+              checkout runs only the <strong>own commands</strong> of the unit.
+              An own command is a verification of the unit that the node does
+              not list. A pass writes a <strong>done record</strong> on the
+              commit of the unit, so no later execution redoes the unit. A pass
+              with no new commit writes no record.
+            </li>
+            <li>
+              After the last unit, the <strong>release gate</strong> merges the
+              base branch and runs every verification of the node in a clean
+              clone. Each node command runs once there. It then runs the
+              <strong>affected test command</strong> of each repository that
+              declares one. Only a pass of the release gate releases the node
+              with <code>further_work: false</code>.
+            </li>
+            <li>
+              A budget end always releases with <code>further_work: true</code>.
+              The next execution continues from the pushed node branch.
+            </li>
+          </ul>
+          <h2 id="who-does-what-inside-one-execution">
+            Who does what inside one execution
+          </h2>
+          <p>
+            The worker code and the agent have separate jobs. This split is the
+            key to the whole worker.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th align="center">Worker code</th>
+                  <th align="center"><code>swe@1</code></th>
+                  <th align="center"><code>reviewer@1</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Prepare the checkout and the node branch</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Merge the base branch</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Edit files, run commands to explore and test</td>
+                  <td align="center"></td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Resolve the files of a merge conflict</td>
+                  <td align="center"></td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Commit, after every agent turn</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Run the verification commands that decide a unit</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Decide that a unit is done</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Count turns and stop at the budget</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Push, submit evidence, release</td>
+                  <td align="center">Yes</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                </tr>
+                <tr>
+                  <td>Judge whether a criterion and the standard are met</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                  <td align="center">Yes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The role prompt of <code>swe@1</code> tells the agent to check its
+            work against the criterion before it ends a turn. That check only
+            helps the agent. No step of the worker reads an answer of the agent.
+            The agent can also run the verification commands itself. The run
+            that counts is the run of the worker code, on the committed head.
+          </p>
+          <p>
+            A unit is done when every own command of the unit passes on its
+            commit. Only <code>reviewer@1</code> judges a criterion, in its own
+            execution, after the release.
+          </p>
+          <h2 id="the-execution-at-a-glance">The execution at a glance</h2>
+          <p>
+            An execution of an <code>implement</code> node has four phases and
+            12 steps. An <code>examine</code> node has no units, so
+            <code>coder@1</code> writes a report instead, as
+            <a href="#an-examine-node-the-report">An examine node</a> explains.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
+flowchart TB
+    accTitle: The coder@1 execution in 12 steps
+    accDescr: Four phases. Prepare reads the revision and the verdict, prepares the workspace and opens swe@1. Start merges the base branch and plans the units from the done records. Tasks runs each pending unit, then the release gate merges the base again and runs every verification in a clean clone. A failure of the release gate routes a revision turn to the unit that owns the failed command and goes back to the unit loop. Finish pushes, submits the head commit and releases the node to Waiting.
+    claim(["Claim: node Available → Executing"]) --&gt; s1
+    subgraph prepare ["Prepare"]
+        s1["&lt;b&gt;1&lt;/b&gt; Read the pinned revision"] --&gt; kind{"Intent of the node?"}
+        kind -- implement --&gt; s2["&lt;b&gt;2&lt;/b&gt; Read the verdict"]
+        s2 --&gt; s3["&lt;b&gt;3&lt;/b&gt; Prepare the workspace&lt;br/&gt;on the node branch"]
+        s3 --&gt; s4["&lt;b&gt;4&lt;/b&gt; Open swe@1"]
+    end
+    kind -- examine --&gt; report(["Examine report"])
+    subgraph start ["Start"]
+        s5["&lt;b&gt;5&lt;/b&gt; Merge step M:&lt;br/&gt;merge origin/&amp;lt;base_branch&amp;gt;"]
+        s5 --&gt; s6["&lt;b&gt;6&lt;/b&gt; Plan the units&lt;br/&gt;from the done records"]
+    end
+    s4 --&gt; s5
+    subgraph tasks ["Tasks"]
+        s7["&lt;b&gt;7&lt;/b&gt; Run each pending unit&lt;br/&gt;turn, gate G, verify, done record"]
+        s7 --&gt; s8["&lt;b&gt;8&lt;/b&gt; Release gate:&lt;br/&gt;merge step M again"]
+        s8 --&gt; s9{"&lt;b&gt;9&lt;/b&gt; Release gate:&lt;br/&gt;every verification passes&lt;br/&gt;in a clean clone?"}
+        s9 -- "no: route to the owner" --&gt; s7
+    end
+    s6 --&gt; s7
+    subgraph finish ["Finish"]
+        s10["&lt;b&gt;10&lt;/b&gt; Push the node branch"]
+        s10 --&gt; s11["&lt;b&gt;11&lt;/b&gt; Submit the head commit&lt;br/&gt;as evidence"]
+        s11 --&gt; s12["&lt;b&gt;12&lt;/b&gt; Release&lt;br/&gt;further_work: false"]
+    end
+    s9 -- yes --&gt; s10
+    s12 --&gt; waiting(["Node Waiting → reviewer@1"])
+    classDef focal fill:#fbeae1,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
+    classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class s7,s9 focal;
+    class claim,report,waiting outcome;
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Phase</th>
+                  <th>Steps</th>
+                  <th>Question that the phase answers</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Prepare</td>
+                  <td>1 to 4</td>
+                  <td>
+                    What is the intent, what is the verdict, and where is the
+                    checkout?
+                  </td>
+                </tr>
+                <tr>
+                  <td>Start</td>
+                  <td>5 and 6</td>
+                  <td>
+                    Is the newest base merged, and which units still need work?
+                  </td>
+                </tr>
+                <tr>
+                  <td>Tasks</td>
+                  <td>7 to 9</td>
+                  <td>
+                    Does each unit pass, and does the whole node pass in a clean
+                    clone?
+                  </td>
+                </tr>
+                <tr>
+                  <td>Finish</td>
+                  <td>10 to 12</td>
+                  <td>Which head does <code>reviewer@1</code> get?</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A failure of the release gate at step 9 sends the execution back to
+            step 7, with one unit and one revision instruction. The loop ends
+            when the release gate passes, when the budget ends, or when a stop
+            ends the execution.
+          </p>
+          <h2 id="example-a-run-with-no-problem">
+            Example: a run with no problem
+          </h2>
+          <p>
+            The <code>implement</code> node
+            <code>node_01JZ8Q0K4M6N8P0R2S4T6V8W0X</code> has the name
+            <code>Add a health endpoint</code> and no <code>commit_type</code>.
+            It names one repository binding, <code>api</code>, with the base
+            branch <code>main</code>. It has one node verification,
+            <code>npm run build</code>, which the first task also holds, and two
+            tasks:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Criterion</th>
+                  <th>Verifications</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>task_01JZ8Q1A…</code> Add <code>GET /healthz</code>
+                  </td>
+                  <td>
+                    The route answers 200 with
+                    <code>{&quot;status&quot;:&quot;ok&quot;}</code>
+                  </td>
+                  <td>
+                    <code>npm test -- healthz</code>, <code>npm run build</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>task_01JZ8Q1B…</code> Document the route</td>
+                  <td>
+                    <code>docs/api.md</code> describes the route and its body
+                  </td>
+                  <td><code>grep -q &#39;/healthz&#39; docs/api.md</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ol>
+            <li>
+              <p>
+                The worker claims the node. The claim gives
+                <code>execution_01JZ8R2B…</code> and attempt 1.
+              </p>
+            </li>
+            <li>
+              <p>
+                Steps 1 to 4 read the revision, find no verdict, check out
+                <code>kanthord/node_01JZ8Q0K…</code> and open
+                <code>swe@1</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                Step 5 finds that <code>origin/main</code> is an ancestor of the
+                head, so it merges nothing. Step 6 reads no done record on
+                <code>origin/main..HEAD</code>, so both tasks are pending.
+              </p>
+            </li>
+            <li>
+              <p>Step 7 sends the work prompt of the first task:</p>
+              <pre><code class="language-text"># Add GET /healthz
+
+## Requirement
+
+Add a route GET /healthz to the HTTP server.
+
+## Criterion
+
+The route answers 200 with {"status":"ok"}
+
+## Verifications
+
+1. npm test -- healthz
+2. npm run build</code></pre>
+            </li>
+            <li>
+              <p>
+                <code>swe@1</code> edits <code>src/server.ts</code>, adds a test
+                and ends its turns. Gate G finds the checkout on the node branch
+                with no git operation in progress. It stages every change and
+                commits:
+              </p>
+              <pre><code class="language-text">feat: add GET /healthz
+
+task_01JZ8Q1A…</code></pre>
+            </li>
+            <li>
+              <p>
+                The worker runs <code>npm test -- healthz</code> at the agent
+                root. It skips <code>npm run build</code>, because the node
+                lists it. The command exits with code 0. The worker discards
+                every change and every untracked file that the command wrote,
+                then adds the done record to the commit:
+              </p>
+              <pre><code class="language-text">feat: add GET /healthz
+
+task_01JZ8Q1A…
+
+Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
+            </li>
+            <li>
+              <p>
+                The second task follows the same path, with the commit
+                <code>feat: document the route</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                Step 8 fetches <code>origin/main</code>. The base did not move,
+                so the worker merges nothing.
+              </p>
+            </li>
+            <li>
+              <p>
+                Step 9 clones the checkout into
+                <code>workspaces/node_01JZ8Q0K…/release/api/</code> and checks
+                out the head, detached. It runs <code>npm run build</code>,
+                <code>npm test -- healthz</code>, <code>npm run build</code> and
+                <code>grep -q &#39;/healthz&#39; docs/api.md</code> there, in
+                this order: the node verification first, then the verifications
+                of each task. Every command exits with code 0. The second
+                <code>npm run build</code> copies the result of the first one
+                and writes no span. The worker removes the clone.
+              </p>
+            </li>
+            <li>
+              <p>
+                Steps 10 and 11 push the node branch and submit the head commit
+                as evidence:
+              </p>
+              <pre><code class="language-json">{
+  "execution_id": "execution_01JZ8R2B…",
+  "attempt": 1,
+  "node_revision": 3,
+  "subject": "Head commit of the node branch",
+  "assets": [
+    {
+      "kind": "repository",
+      "address": {
+        "kind": "repository",
+        "binding_id": "binding_01JZ…",
+        "commit": "9f2c4e1…"
+      }
+    }
+  ]
+}</code></pre>
+            </li>
+            <li>
+              <p>
+                Step 12 releases with
+                <code
+                  >{ &quot;further_work&quot;: false, &quot;stop&quot;: null
+                  }</code
+                >. The node moves to <code>Waiting</code>, and
+                <code>reviewer@1</code> claims it.
+              </p>
+            </li>
+          </ol>
+          <p>
+            The agent ran two turns, one work turn for each task. The worker
+            asked it no question.
+          </p>
+          <p>
+            The sections below explain each phase, and then every way that a run
+            can differ from this one.
+          </p>
+          <h2 id="prepare-steps-1-to-4">Prepare: steps 1 to 4</h2>
+          <p>
+            <strong>Step 1</strong> reads the node revision that the attempt
+            pins. The revision holds the content of the node, its intent and its
+            tasks. The intent selects the form of the method:
+            <code>implement</code> or <code>examine</code>.
+          </p>
+          <p>
+            <strong>Step 2</strong> reads the <strong>verdict</strong>: the
+            latest review of the node that asks for more work. The worker takes
+            the first source that exists:
+          </p>
+          <ol>
+            <li>
+              The failed
+              <a href="../reference/project/binding.html#required-checks"
+                >required checks</a
+              >
+              of each unresolved pull request of the attempt. The worker reads
+              them with <code>worker.execution.failed_check.get</code> of the
+              Worker Service. The text starts with
+              <code>The pull request cannot merge:</code> and names each failed
+              check, the binding and the head commit, at most 4 KiB. When a
+              rework assessment also exists, its rationale follows after a blank
+              line.
+            </li>
+            <li>
+              The assessment that caused the latest rework of this attempt.
+              <code>reviewer@1</code> wrote it with the result
+              <code>criterion-not-met</code>. The verdict text is its rationale.
+            </li>
+            <li>
+              The change requests of the reviewers on the pull request, when the
+              earlier attempt ended with the closing event
+              <code>external-failed</code>. The worker reads them with
+              <code>worker.execution.change_request.get</code> of the Worker
+              Service and writes one requested-changes text of at most 4 KiB.
+            </li>
+          </ol>
+          <p>
+            A verdict also holds one <strong>judged commit</strong> for each
+            repository binding that the review saw. For failed checks, it is the
+            head commit of each pull request with a failed check. For an
+            assessment, it is the commit of each <code>repository</code> address
+            in <code>tested_input</code>. For change requests, it is the
+            <code>commit_id</code> of the latest change request of each binding.
+          </p>
+          <p>
+            When no verdict exists, the worker reads the
+            <strong>cleared assessment</strong>: the assessment that closed the
+            earlier attempt, before a human unblock. Attempt 1 has none. A
+            cleared assessment with the result <code>success</code> gives no
+            text. Any other result gives its rationale as a plain instruction.
+            It is not a verdict, and it has no judged commit.
+          </p>
+          <p>
+            <strong>Step 3</strong> prepares the <strong>workspace</strong>, the
+            git checkout of the <code>implement</code> node:
+          </p>
+          <ul>
+            <li>
+              The workspace is <code>workspaces/&lt;node_id&gt;/</code> in the
+              data directory of the worker instance. At the
+              <code>worker</code> placement, that directory is
+              <code>$XDG_DATA_HOME/kanthord/workers/&lt;name&gt;/</code>, by
+              default
+              <code>~/.local/share/kanthord/workers/&lt;name&gt;/</code>. It
+              holds one checkout for each repository binding, in
+              <code>checkouts/&lt;binding name&gt;/</code>. The worker reuses a
+              checkout when the instance holds it, and clones the repository
+              otherwise.
+            </li>
+            <li>
+              With one repository binding, its checkout is the
+              <strong>agent root</strong>. With two or more,
+              <code>checkouts/</code> is the agent root, and it holds one
+              directory for each binding.
+            </li>
+            <li>
+              The agent works from the agent root, and the worker runs every
+              verification from it. With two or more repository bindings, each
+              step below acts on every checkout and every node branch, and the
+              evidence holds one head commit for each binding.
+            </li>
+            <li>
+              The worker fetches <code>origin</code> and checks out the node
+              branch of the attempt from the remote. When the remote holds no
+              node branch yet, the worker creates it from the base branch.
+            </li>
+            <li>
+              The worker then runs the <strong>restore sequence</strong> on each
+              checkout. It quits every open rebase, <code>am</code>, cherry-pick
+              or revert, aborts an open merge, forces the node branch to the
+              target commit, and removes every change and every untracked file.
+              The target here is the head that the checkout step read. A branch
+              switch also removes the ignored files of the earlier branch. Every
+              execution therefore starts from the pushed state.
+            </li>
+            <li>
+              The node branch is <code>kanthord/&lt;node_id&gt;</code>. An
+              unblock with the start point <code>base_branch</code> opens
+              attempt k on a new branch,
+              <code>kanthord/&lt;node_id&gt;-a&lt;k&gt;</code>. The default
+              start point, <code>node_branch</code>, keeps the earlier branch.
+            </li>
+            <li>
+              The remote can lose a node branch that existed, for example after
+              a manual delete. The worker detects this when the attempt holds
+              repository evidence, or when the workspace saw the remote branch
+              before. It then stops with <code>operation_failed</code> and the
+              code <code>repository.node_branch.missing</code>. It never starts
+              the branch again from the base branch, because a record names a
+              commit of the lost branch. The stop releases with
+              <code>further_work: true</code>, so the node returns to
+              <code>Available</code>, and each next execution stops the same
+              way. After <code>mission.consecutive_failure_limit</code> stops,
+              the node moves to <code>Paused</code>. A human restores the branch
+              on the git host and resumes the node. Or the human pauses and
+              blocks the node, then unblocks it with the start point
+              <code>base_branch</code>, which opens the next attempt on a new
+              branch.
+            </li>
+            <li>
+              The worker adds <code>.kanthord-scratch/</code> to the git exclude
+              file. The agent writes its probe and debug files there, and no
+              commit takes them.
+            </li>
+            <li>
+              The worker also removes
+              <code>workspaces/&lt;node_id&gt;/release/</code>, the clones of an
+              earlier release gate.
+            </li>
+            <li>
+              The worker reads the
+              <a href="#the-affected-test-run">affected test declaration</a> of
+              each checkout at <code>origin/&lt;base_branch&gt;</code>. The work
+              prompt of each unit lists the command of each valid declaration
+              under <code>## Affected tests</code>, and tells the agent not to
+              run it. An absent or invalid declaration adds no line.
+            </li>
+          </ul>
+          <p>
+            <strong>Step 4</strong> opens the agent <code>swe@1</code> at the
+            agent root.
+            <a href="native-agent.html">How the native agent works</a> explains
+            what the agent receives: the model, the prompt and the tools. The
+            execution opens one session, and every turn of steps 5 to 9 runs in
+            it.
+          </p>
+          <h2 id="start-steps-5-and-6">Start: steps 5 and 6</h2>
+          <h3 id="step-5-merge-step-m">Step 5: merge step M</h3>
+          <p>
+            The base branch can move while the node waits.
+            <strong>Merge step M</strong> brings the newest base into the node
+            branch, so that all work starts from it. For each checkout:
+          </p>
+          <ol>
+            <li>
+              When <code>origin/&lt;base_branch&gt;</code> is an ancestor of the
+              head, the step does nothing.
+            </li>
+            <li>
+              Otherwise the worker runs
+              <code>git merge --no-edit --no-ff</code> with the merge message
+              <code>feat: merge main</code>, for a node with no
+              <code>commit_type</code> and the base <code>main</code>.
+            </li>
+            <li>
+              A merge with no conflict ends the step. The merge commit is the
+              new head.
+            </li>
+            <li>
+              A merge with a conflict sends <code>swe@1</code> one
+              <strong>conflict turn</strong>. The instruction names the binding,
+              the directory, the base branch and the conflicted files. It asks
+              the agent to resolve every conflict and to remove every marker. It
+              tells the agent that the worker commits.
+            </li>
+            <li>
+              Gate G then runs in conflict mode. It scans only the conflicted
+              files for a line that starts with
+              <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> or
+              <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>, followed by a space or
+              the end of the line. A marker aborts the merge and stops the
+              execution with <code>operation_failed</code> and the code
+              <code>worker.merge.markers_left</code>, with no
+              <code>detail</code>. With no marker, the gate concludes the merge
+              with the merge message.
+            </li>
+          </ol>
+          <p>
+            After a <code>worker.merge.markers_left</code> stop, the node branch
+            holds no part of the merge and no part of the resolution. Its head
+            is the commit before the merge. The stop path runs gate G in
+            checkpoint mode, which finds no open merge and nothing to commit,
+            and pushes the node branch at that head. At step 5, that head is the
+            pushed head. At step 8, the push carries the unit commits of this
+            execution. The next execution merges the base again at step 5 and
+            sends a new conflict turn.
+          </p>
+          <h3 id="step-6-plan-the-units">Step 6: plan the units</h3>
+          <p>
+            The node branch survives between executions. Step 6 decides which
+            units still need work, from records on the node branch only. It runs
+            no verification and asks the agent nothing.
+          </p>
+          <p>
+            The worker reads the <strong>done records</strong> of each checkout:
+            the <code>Kanthord-Done</code> trailers of the commits on
+            <code>origin/&lt;base_branch&gt;..HEAD</code>. It takes the union
+            over the checkouts. A done record has the form
+            <code>Kanthord-Done: &lt;unit id&gt; &lt;digest&gt;</code>. The
+            digest is the SHA-256 hex of the canonical JSON, with sorted keys,
+            of the content of the unit. For a task, the content is the object
+            <code
+              >{ name, requirement, criterion, verifications, bindings }</code
+            >
+            of the task, with <code>bindings</code> always <code>[]</code>. For
+            the node unit, the content is the node content: <code>name</code>,
+            <code>requirement</code>, <code>criterion</code>,
+            <code>verifications</code>, <code>bindings</code>,
+            <code>intent</code>, <code>tags</code>, and
+            <code>commit_type</code> when the node sets it. The id and the plan
+            file name are not part of the content, so a rename of the plan file
+            reopens no unit.
+          </p>
+          <p>
+            For each unit, in the order of the plan, the first matching row
+            decides:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Condition</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>
+                    A done record matches the id of the unit and the digest of
+                    its current content.
+                  </td>
+                  <td>Done. The unit gets no turn.</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>Any other unit.</td>
+                  <td>Pending. The unit starts with its work prompt.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A revision that changes the content of one task changes its digest,
+            so only that task is pending again. The done record lives in the
+            pushed branch, so a fresh clone on another host reads the same
+            records.
+          </p>
+          <p>
+            After the units, the worker decides the
+            <strong>verdict unit</strong>. The <strong>node unit</strong> is the
+            unit that holds the node content and the task list as its work
+            prompt, and the node verifications. Each node verification is a node
+            command, so the node unit has no own command. The
+            <strong>verdict unit</strong> is one run of the node unit with the
+            verdict or the cleared text as its instruction. This page uses that
+            term for both texts. In a node with tasks, the node unit gets no
+            work turn. It runs only as the verdict unit, or when the release
+            gate routes a failed node command to it. The first matching row
+            decides:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Condition</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>
+                    A verdict exists, and the
+                    <strong>verdict rule</strong> holds now.
+                  </td>
+                  <td>
+                    No verdict unit. The work after the review already exists.
+                  </td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>
+                    A verdict exists, and at least one judged commit is on the
+                    node history.
+                  </td>
+                  <td>
+                    Verdict unit, with the verdict rule. It runs after the
+                    pending units.
+                  </td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>
+                    A verdict exists, and no judged commit is on the node
+                    history.
+                  </td>
+                  <td>Verdict unit, with no rule. The release gate decides.</td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>No verdict, and a cleared assessment gives a text.</td>
+                  <td>
+                    Verdict unit with the cleared text, with no rule. A pass
+                    completes it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td>Neither exists.</td>
+                  <td>No verdict unit.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A judged commit is <strong>on the node history</strong> when the
+            checkout holds it and it is an ancestor of the head. A judged commit
+            that fails this check drops out of the rule, and the worker logs
+            <code>judged commit off the node history</code>.
+          </p>
+          <p>
+            Only a binding with a judged commit takes part in the rule. Change
+            requests give a judged commit only to a binding that holds a change
+            request. An assessment gives one only to a binding with a
+            <code>repository</code> address in <code>tested_input</code>. A
+            binding with no judged commit is ignored by the rule, so a verdict
+            turn that changes only that binding counts as unchanged.
+          </p>
+          <p>
+            The <strong>verdict rule</strong> holds when at least one checkout
+            with a judged commit holds new work after it:
+            <code
+              >git rev-list --first-parent --ancestry-path --no-merges
+              &lt;judged commit&gt;..HEAD</code
+            >
+            is not empty. A merge commit never counts. A base merge therefore
+            never satisfies the rule, also when the base brings commits of its
+            own.
+          </p>
+          <p>
+            The verdict text goes to the agent in one instruction, with the task
+            list of the work prompt. For a verdict, the instruction is
+            <code
+              >Revise the task work to meet its criterion. Previous judgement:
+              &lt;verdict text&gt;</code
+            >. The worker routes no part of the text by a task id. The agent
+            reads the whole review and decides which file to change.
+          </p>
+          <h2 id="tasks-steps-7-to-9">Tasks: steps 7 to 9</h2>
+          <h3 id="step-7-the-unit-loop">Step 7: the unit loop</h3>
+          <p>
+            <code>swe@1</code> works on one pending unit until its verifications
+            pass. The units run in the order of the plan, then the verdict unit.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
+flowchart TB
+    accTitle: One unit of coder@1
+    accDescr: The worker checks the claim, swe@1 runs a work turn or a revision turn, and gate G checks the git state and commits the change. An unchanged revision turn adds one to the unchanged-turn counter, and the second one in a row stops with no_progress. The worker runs the own commands of the unit in the live checkout and restores the checkout. A code failure sends a revision instruction with the failed result and the last 4 KiB of output. An infrastructure failure on the run and its rerun stops the execution. A pass writes the done record and completes the unit. A budget end at any point ends the unit loop.
+    start(["Pending unit"]) --&gt; check["Worker checks the claim"]
+    check --&gt; work["swe@1 works&lt;br/&gt;work prompt or revision instruction"]
+    work --&gt; gate["Gate G in write mode&lt;br/&gt;check git state, commit"]
+    gate --&gt; changed{"Revision turn&lt;br/&gt;with no change?"}
+    changed -- "yes: counter + 1" --&gt; limit{"Counter at 2?"}
+    limit -- yes --&gt; stop(["Stop no_progress"])
+    limit -- no --&gt; verify
+    changed -- no --&gt; verify{"Worker runs the own commands&lt;br/&gt;in the live checkout"}
+    verify -- "code failure" --&gt; failed["Revision instruction&lt;br/&gt;failed result + last 4 KiB of output"] --&gt; check
+    verify -- "infrastructure failure twice" --&gt; infra(["Stop operation_failed"])
+    verify -- pass --&gt; record["Write the done record"] --&gt; done(["Unit complete&lt;br/&gt;next unit"])
+    work -. "budget ends" .-&gt; budget(["Finish phase"])
+    classDef focal fill:#fbeae1,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
+    classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class gate,failed focal;
+    class start,done,budget,stop,infra outcome;
+</pre>
+          <p>Each pass through the loop does these things:</p>
+          <ol>
+            <li>
+              <strong>Claim check.</strong> The worker reads its claim. A claim
+              that is not running, for example after a human pause, ends the
+              execution as revoked.
+            </li>
+            <li>
+              <strong>Turn.</strong> The worker sends the work prompt of the
+              unit for a <strong>work turn</strong>, or a revision instruction
+              for a <strong>revision turn</strong>. <code>swe@1</code> reads
+              files, edits files and runs commands until it is idle. Each reply
+              of the model with the tool calls of that reply is one
+              <strong>model turn</strong>. Each model turn counts toward the
+              budget of 200, so one turn of the worker can use many model turns.
+            </li>
+            <li>
+              <strong>Gate G.</strong> The gate checks the git state of each
+              checkout and commits every change of the turn, as
+              <a href="#gate-g-the-commit-after-every-turn">Gate G</a> explains.
+              It reports <code>changed</code>: true when the turn changed a file
+              of at least one checkout.
+            </li>
+            <li>
+              <strong>Progress check.</strong> A revision turn with
+              <code>changed</code> false adds one to the
+              <strong>unchanged-turn counter</strong>. A turn with
+              <code>changed</code> true sets the counter to zero. At two, the
+              worker stops with <code>no_progress</code> before it verifies,
+              because the same head gives the same result. A work turn with
+              <code>changed</code> false adds nothing, because the verification
+              of the unit decides.
+            </li>
+            <li>
+              <strong>Verify.</strong> The worker runs each own command of the
+              unit on the head, in order, with <code>bash -c</code> at the agent
+              root. The first command that does not pass ends the run. Each
+              command has a limit of 10 minutes, and the remaining budget can
+              cut it shorter. The worker classifies the result of each command,
+              as the table below shows. A unit with no own command passes with
+              an empty list.
+            </li>
+            <li>
+              <strong>Restore.</strong> After the run, the worker runs the
+              restore sequence to the head commit on each checkout. It removes
+              every change and every untracked file that the commands made, but
+              keeps the ignored files, for example installed dependencies. A
+              test run therefore never leaks into the next commit.
+            </li>
+            <li>
+              <strong>Decide.</strong> A pass completes the unit and writes its
+              done record. A code failure sends a revision instruction with the
+              failed result and the last 4 KiB of output, and the loop runs
+              again.
+            </li>
+          </ol>
+          <p>
+            The counter belongs to the execution, not to one unit. No event
+            other than a changed turn sets it to zero.
+          </p>
+          <p>
+            The execution keeps a <strong>verification memo</strong>. Inside one
+            execution, a command on an unchanged tree reuses its earlier pass.
+            Only the release gate also reuses a code failure. The memo never
+            reuses a timeout, a cancellation, a budget end, an infrastructure
+            result or an exit code 127. The memo replays a whole run list or
+            nothing. A command with no stored result runs the whole list again.
+            At the release gate, a replay needs a stored code failure at its
+            end. A release clone is fresh, so a later command and the affected
+            test run need the output of each listed command. A result never
+            crosses from the live checkout to the release gate. A memo hit
+            writes no span.
+          </p>
+          <p>
+            The worker classifies the result of each verification command. The
+            first matching row decides:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Condition</th>
+                  <th>Class</th>
+                  <th>What the worker does</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>
+                    The budget is spent, the wall deadline killed the command,
+                    or the command did not start before the deadline.
+                  </td>
+                  <td>Budget end</td>
+                  <td>Ends the unit loop and takes the budget end.</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>
+                    The limit of 10 minutes killed the command, or a stop of the
+                    execution cancelled it.
+                  </td>
+                  <td>Code failure</td>
+                  <td>Sends a revision instruction.</td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>
+                    The command did not spawn, a signal ended it, or it exited
+                    with a code from 129 to 192.
+                  </td>
+                  <td>Infrastructure failure</td>
+                  <td>
+                    Runs the command once more, and classifies the new result.
+                  </td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>Exit code 0.</td>
+                  <td>Pass</td>
+                  <td>
+                    Runs the next command, or completes the unit after the last
+                    one.
+                  </td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td>Any other exit code, 127 included.</td>
+                  <td>Code failure</td>
+                  <td>Sends a revision instruction.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The limit of 10 minutes kills the whole process group of the command
+            with <code>SIGKILL</code>. The result then holds
+            <code>&quot;exit_code&quot;: null</code>,
+            <code>&quot;signal&quot;: &quot;SIGKILL&quot;</code> and
+            <code>&quot;timed_out&quot;: true</code>. Row 2 decides before row
+            3, so this signal is a code failure, and the revision instruction
+            says that the command reached its deadline. A kill at the wall
+            deadline gives the same result values, and row 1 makes it a budget
+            end.
+          </p>
+          <p>
+            A pass on the rerun of an infrastructure failure is a pass. A second
+            infrastructure failure stops the execution with
+            <code>operation_failed</code>, the code
+            <code>worker.verification.infrastructure_failed</code>, and a detail
+            that holds the command and its result. That stop counts toward
+            <code>mission.consecutive_failure_limit</code>. The rerun does not
+            start when the deadline already passed: the result is then a budget
+            end. When the execution is already stopping, the rerun does not
+            start, and the result is a code failure. An exit code from 129 to
+            192 is the code of a shell after a signal, for example 137 after an
+            out-of-memory kill.
+          </p>
+          <h3 id="gate-g-the-commit-after-every-turn">
+            Gate G: the commit after every turn
+          </h3>
+          <p>
+            The agent has <code>bash</code>, so it can run any git command. Gate
+            G makes every agent act on git harmless. The gate runs after every
+            agent turn of the execution: a work turn, a revision turn and a
+            conflict turn. The worker records <code>before</code>, the head of
+            each checkout before the turn. The gate then runs these steps for
+            each checkout:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Mode</th>
+                  <th>Check or act</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>G0</td>
+                  <td>checkpoint</td>
+                  <td>
+                    When a merge is open, run <code>git merge --abort</code>.
+                    Keep no part of the resolution.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G1</td>
+                  <td>all</td>
+                  <td>
+                    Check that <code>HEAD</code> is
+                    <code>refs/heads/&lt;node branch&gt;</code>. Else the
+                    violation <code>worker.turn.branch_changed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G2</td>
+                  <td>all</td>
+                  <td>
+                    Check that <code>before</code> is an ancestor of
+                    <code>HEAD</code>. Else the violation
+                    <code>worker.turn.history_rewritten</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G3</td>
+                  <td>conflict</td>
+                  <td>
+                    Check that the open merge is the merge of step M. Else the
+                    violation <code>worker.turn.merge_missing</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G3</td>
+                  <td>all</td>
+                  <td>
+                    Check that no rebase, <code>am</code>, cherry-pick or revert
+                    is in progress, and no merge outside conflict mode. Else the
+                    violation <code>worker.turn.git_in_progress</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G4</td>
+                  <td>all</td>
+                  <td>
+                    When <code>HEAD</code> is not <code>before</code>, run
+                    <code>git reset --soft &lt;before&gt;</code>. A commit of
+                    the agent becomes a staged change of the worker commit.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G5</td>
+                  <td>all</td>
+                  <td>
+                    Stage every change with <code>git add --all</code>.
+                    <code>changed</code> is true when the stage differs from
+                    <code>before</code>. In conflict mode,
+                    <code>changed</code> is always true.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G6</td>
+                  <td>conflict</td>
+                  <td>
+                    Scan the conflicted files for a marker. A marker aborts the
+                    merge and stops with <code>worker.merge.markers_left</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G7</td>
+                  <td>all</td>
+                  <td>
+                    Commit when the stage holds a change, with the message of
+                    the unit. In conflict mode, always commit, to conclude the
+                    merge. Make no empty commit outside conflict mode.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G8</td>
+                  <td>all</td>
+                  <td>
+                    Read <code>HEAD</code> into the head of the checkout. Check
+                    the invariant: on the node branch, no change, no untracked
+                    file and no git operation in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td>G9</td>
+                  <td>all</td>
+                  <td>
+                    With two or more checkouts, remove each entry of the agent
+                    root that is not a checkout or
+                    <code>.kanthord-scratch</code>. Log the names.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The gate has three modes. <strong>Write mode</strong> follows a work
+            turn or a revision turn. <strong>Conflict mode</strong> follows a
+            conflict turn. <strong>Checkpoint mode</strong> runs at a budget end
+            or a stop. The worker is the only author of the commits on the node
+            branch, because G4 folds every agent commit into the worker commit.
+          </p>
+          <p>
+            A violation at G1, G2 or G3 is a defect of the agent turn. The
+            worker then runs the restore sequence to <code>before</code> on
+            every checkout, so the work of the turn is lost. It makes no
+            checkpoint commit. It stops with <code>operation_failed</code>, the
+            code of the violation and a detail that names the checkout. The stop
+            path pushes the node branch at <code>before</code>.
+          </p>
+          <p>
+            In the checkpoint of any other stop, a violation also restores
+            <code>before</code> on every checkout and commits nothing. The stop
+            keeps its own reason and code.
+          </p>
+          <p>
+            A rebase in progress detaches <code>HEAD</code>. G1 therefore finds
+            it first and reports <code>worker.turn.branch_changed</code>. An
+            open merge, <code>am</code>, cherry-pick or revert keeps
+            <code>HEAD</code> on the node branch, so G3 reports
+            <code>worker.turn.git_in_progress</code>.
+          </p>
+          <p>
+            Every git command of the worker runs in an isolated git environment:
+            <code>GIT_CONFIG_GLOBAL=/dev/null</code>,
+            <code>GIT_CONFIG_NOSYSTEM=1</code>,
+            <code>GIT_ATTR_NOSYSTEM=1</code>, and through
+            <code>GIT_CONFIG_COUNT=3</code> the keys
+            <code>core.hooksPath</code>, <code>core.excludesFile</code> and
+            <code>core.attributesFile</code>, each <code>/dev/null</code>. The
+            worker removes <code>GIT_CONFIG_PARAMETERS</code> of the host, the
+            pager, editor and askpass variables, and the SSH agent variables.
+            When the environment names no author or committer, the identity is
+            <code>kanthord &lt;kanthord@localhost&gt;</code>. The hooks of the
+            repository therefore never run, and no global or system git
+            configuration applies. A <code>commit-msg</code> hook of the target
+            repository therefore cannot refuse a worker commit. The
+            verifications of the node run the checks of the repository instead.
+          </p>
+          <h3 id="the-commit-names">The commit names</h3>
+          <p>
+            Every worker commit has the header
+            <code>&lt;commit_type&gt;: &lt;subject&gt;</code>, with no scope.
+            The pull request that <code>reviewer@1</code> requests uses the same
+            header as its title. The plan sets <code>commit_type</code> on the
+            node: <code>feat</code>, <code>fix</code>, <code>docs</code>,
+            <code>style</code>, <code>refactor</code>, <code>test</code> or
+            <code>chore</code>. A node with no <code>commit_type</code> gets
+            <code>feat</code>.
+            <a href="../reference/mission/import.html#plan-files">Plan files</a>
+            states the validation of <code>commit_type</code> and
+            <code>name</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Commit</th>
+                  <th>Subject</th>
+                  <th>Example header</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Task commit</td>
+                  <td>The <code>name</code> of the task</td>
+                  <td><code>feat: add GET /healthz</code></td>
+                </tr>
+                <tr>
+                  <td>Node unit commit</td>
+                  <td>The <code>name</code> of the node</td>
+                  <td><code>feat: add a health endpoint</code></td>
+                </tr>
+                <tr>
+                  <td>Merge commit</td>
+                  <td><code>merge &lt;base_branch&gt;</code></td>
+                  <td><code>feat: merge main</code></td>
+                </tr>
+                <tr>
+                  <td>Checkpoint commit</td>
+                  <td>The <code>name</code> of the current unit</td>
+                  <td><code>feat: document the route</code></td>
+                </tr>
+                <tr>
+                  <td>Pull request title</td>
+                  <td>The <code>name</code> of the node</td>
+                  <td><code>feat: add a health endpoint</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every worker commit of the node uses the <code>commit_type</code> of
+            the node, the merge commit and the checkpoint commit included: a
+            node with <code>commit_type: fix</code> merges its base as
+            <code>fix: merge main</code>. The first letter of the subject
+            becomes lowercase. The worker first replaces each run of whitespace
+            with one space. It then cuts the subject to <code>100</code> minus
+            the length of <code>&lt;commit_type&gt;: </code> UTF-16 characters,
+            removes a final half of a split surrogate pair, and then removes
+            every final full stop and space. The body is the id of the unit
+            after a blank line: the task id for a task commit, and the node id
+            for a node unit commit, a verdict commit and a merge commit. A
+            checkpoint commit takes the id of the current unit. A done record
+            follows the id after a blank line on a passed unit. The worker
+            writes no other trailer.
+          </p>
+          <p>
+            In a node with tasks, the node unit commit appears only for the
+            verdict unit or for a routed node command.
+          </p>
+          <p>
+            The design requires that every commit of the execution is
+            attributable to its task and its attempt. Today the body names the
+            unit and no attempt, and the evidence of the attempt names the head
+            commit.
+          </p>
+          <h3 id="the-done-record">The done record</h3>
+          <p>
+            The worker writes the done record right after the unit passes step
+            7:
+          </p>
+          <ol>
+            <li>
+              It takes each checkout whose head is a commit of gate G for this
+              unit in this execution.
+            </li>
+            <li>
+              It runs
+              <code
+                >git commit --amend --no-edit --trailer &quot;Kanthord-Done:
+                &lt;unit id&gt; &lt;digest&gt;&quot;</code
+              >
+              on that head. The amend rewrites no pushed commit, because the
+              worker pushes only at the finish or at a stop.
+            </li>
+            <li>It reads the new head.</li>
+          </ol>
+          <p>
+            When no checkout holds a commit of the unit in this execution, the
+            worker writes no record and logs <code>done record skipped</code>.
+            This happens when the unit passes with no change, for example a task
+            whose verifications already pass on the base. The next execution
+            then runs a work turn for that unit again. Correctness rests on the
+            release gate. The records only save turns.
+          </p>
+          <p>
+            A done record certifies the own commands of its unit only. The
+            release gate runs each node command.
+          </p>
+          <p>
+            A unit <strong>completed</strong> in this execution when this
+            execution wrote a new done record for it and step 6 found no record
+            for it, or when the verdict unit passed. Only an
+            <code>implement</code> execution counts completed units. The count
+            decides the <code>budget_end</code> stop of
+            <a href="#how-the-execution-ends">a budget end</a>.
+          </p>
+          <h3 id="the-verdict-unit">The verdict unit</h3>
+          <p>
+            The verdict unit runs like any other unit, with three differences:
+          </p>
+          <ul>
+            <li>
+              Its first turn sends the verdict instruction, or the cleared text,
+              not the work prompt. With no rule, an unchanged first turn adds
+              nothing to the counter, as a work turn.
+            </li>
+            <li>
+              With the verdict rule, the worker checks the rule after each turn.
+              While the rule fails, the turn counts as unchanged, also when it
+              changed a file of a checkout that holds no judged commit, and the
+              worker sends the verdict instruction again. It runs no
+              verification until the rule holds.
+            </li>
+            <li>
+              It runs no command in the live checkout. The release gate runs the
+              node verifications.
+            </li>
+          </ul>
+          <p>
+            A pass of the verdict unit always counts as
+            <a href="#the-done-record">completed</a>, also when it writes no new
+            done record. With the verdict rule, two verdict turns in a row with
+            no new work in a judged checkout stop the execution with
+            <code>no_progress</code>, so the same head never goes back to review
+            unchanged. With no rule, the progress rule of any unit applies.
+          </p>
+          <h3 id="steps-8-and-9-the-release-gate">
+            Steps 8 and 9: the release gate
+          </h3>
+          <p>
+            The units can pass one by one while the node as a whole fails. Task
+            2 can break the verification of task 1, or a verification can need a
+            file that exists only in the live checkout. The
+            <strong>release gate</strong> checks the whole node in the form that
+            <code>reviewer@1</code> sees it.
+          </p>
+          <p>
+            <strong>Step 8</strong> fetches
+            <code>origin/&lt;base_branch&gt;</code> for each checkout and runs
+            merge step M again. A conflict goes through a conflict turn and gate
+            G in conflict mode, as at step 5.
+          </p>
+          <p>
+            <strong>Step 9</strong> runs every verification of the node in clean
+            local clones:
+          </p>
+          <ol>
+            <li>
+              For each checkout, the worker clones the live checkout into
+              <code>workspaces/&lt;node_id&gt;/release/</code>, in the layout of
+              the agent root. It runs
+              <code>git clone --local --no-checkout</code>, copies the
+              <code>origin</code> remote-tracking refs of the live checkout,
+              sets the <code>origin</code> URL to the repository address, and
+              checks out the head, detached. The clone holds no ignored file and
+              no untracked file of the live checkout.
+            </li>
+            <li>
+              It runs the verifications of the node, then the verifications of
+              each task in the order of the plan, at the agent root of the
+              clones. A command that the list holds again copies the result of
+              its first run. When an earlier release gate of this execution
+              ended with a stored code failure on the same trees, the memo
+              replays its results. It classifies each result as at step 7. It
+              runs no rerun of a code failure.
+            </li>
+            <li>
+              It removes the clones after the run, also at a budget end or a
+              stop.
+            </li>
+            <li>
+              When a command fails, the worker finds the
+              <strong>owner</strong> of the first failed command. The owner is
+              the node unit for a node command, and the task for a task command.
+              It sends that unit one revision turn with the failed result and
+              its output, and the loop of step 7 runs that unit. After the unit
+              passes, the execution comes back to step 8.
+            </li>
+            <li>
+              When every command passes, the worker runs
+              <a href="#the-affected-test-run">the affected test run</a> of each
+              checkout in its clone, in checkout order.
+            </li>
+            <li>
+              The verdict <code>failed</code> sends the node unit one revision
+              turn with the text of the affected failure. After the node unit
+              passes, the execution comes back to step 8.
+            </li>
+            <li>
+              When the verdict of each checkout is <code>passed</code>,
+              <code>base_red</code> or <code>absent</code>, the worker logs
+              <code>release verified</code> with the affected verdict. The
+              execution then goes to step 10.
+            </li>
+          </ol>
+          <p>
+            A failure of the release gate never resets the head. The live
+            checkout stays the place of the unit loop, so installed dependencies
+            persist between turns. The unchanged-turn counter also covers the
+            routed revision turns. Two routed revision turns in a row that
+            change no file therefore stop with <code>no_progress</code>.
+          </p>
+          <h3 id="the-affected-test-run">The affected test run</h3>
+          <p>
+            A node lists its own verifications. A change can still break a test
+            that no verification lists. The
+            <strong>affected test run</strong> runs the tests that the change
+            reaches. The repository declares the command in
+            <code>.kanthord/affected-tests.json</code>.
+            <a href="../how-to-guides/declare-affected-tests.html"
+              >Declare the affected tests of a repository</a
+            >
+            shows the declaration, the changes file and the report.
+          </p>
+          <p>
+            The worker runs the affected test command at two points, and only
+            for an <code>implement</code> node with a repository checkout:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>When</th>
+                  <th>Verdict <code>failed</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Release gate of <code>coder@1</code></td>
+                  <td>After every verification of step 9 passes</td>
+                  <td>One revision turn of the node unit</td>
+                </tr>
+                <tr>
+                  <td>Evaluation of <code>reviewer@1</code></td>
+                  <td>After the setup and every verification pass</td>
+                  <td>
+                    <code>criterion-not-met</code> with the stage
+                    <code>affected</code>. No agent judges the node
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The verification of a unit at step 7 runs no affected test command.
+            An <code>examine</code> node runs none.
+          </p>
+          <p>For each checkout, the worker does these steps:</p>
+          <ol>
+            <li>
+              It reads the declaration at
+              <code>origin/&lt;base_branch&gt;</code>. A checkout with no
+              declaration has the verdict <code>absent</code>. An invalid
+              declaration stops the execution with
+              <code>environment_failed</code> and the code
+              <code>affected_invalid</code>.
+            </li>
+            <li>
+              It computes the merge base of
+              <code>origin/&lt;base_branch&gt;</code> and the node head, and the
+              change set from the merge base to the node head.
+            </li>
+            <li>
+              It writes the changes file in
+              <code>affected/&lt;binding name&gt;/</code> of the workspace,
+              outside every checkout.
+            </li>
+            <li>
+              It runs <code>command</code> with <code>bash -c</code> in the
+              checkout, at the node head. The command runs under
+              <code>time_limit_s</code> of the declaration and under the wall
+              deadline of the execution. The worker sets
+              <code>KANTHORD_CHANGES</code>,
+              <code>KANTHORD_AFFECTED_REPORT</code> and
+              <code>KANTHORD_BASE_COMMIT</code>.
+            </li>
+            <li>
+              It reads the report and decides the verdict of the checkout.
+            </li>
+            <li>It removes <code>affected/&lt;binding name&gt;/</code>.</li>
+          </ol>
+          <p>
+            A flaky test of the report counts as failed when its file is in the
+            change set. A flaky test in another file passes. The worker
+            classifies the result of the command at the node head. The first row
+            that matches decides:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Result at the node head</th>
+                  <th>Class</th>
+                  <th>What the worker does</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td><code>time_limit_s</code> ended the command</td>
+                  <td>Timeout</td>
+                  <td>
+                    Stops with <code>environment_failed</code> and the code
+                    <code>affected_timeout</code>, with no base check
+                  </td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>The command exited with code 127</td>
+                  <td>No valid report</td>
+                  <td>Runs the base check</td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>
+                    No report, an invalid report, or an exit code that does not
+                    match <code>failed</code>
+                  </td>
+                  <td>No valid report</td>
+                  <td>Runs the base check</td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>
+                    A valid report with one or more failed tests after the flaky
+                    rule
+                  </td>
+                  <td>Failed tests</td>
+                  <td>Runs the base check</td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td>
+                    A valid report with no failed test after the flaky rule
+                  </td>
+                  <td>Passed</td>
+                  <td>Verdict <code>passed</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The wall deadline, a signal and an exit code from 129 to 192 follow
+            the classes of <a href="#step-7-the-unit-loop">step 7</a>. The wall
+            deadline gives a budget end. The other results give one rerun, and
+            then <code>worker.verification.infrastructure_failed</code>.
+          </p>
+          <p>
+            The <strong>base check</strong> runs the same command with the same
+            changes file in the clone of the base-branch head. The base check
+            then decides:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Node head</th>
+                  <th>Base head</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Failed tests</td>
+                  <td>
+                    A valid report, and each failed test of the node head fails
+                  </td>
+                  <td>Verdict <code>base_red</code></td>
+                </tr>
+                <tr>
+                  <td>Failed tests</td>
+                  <td>Any other result</td>
+                  <td>Verdict <code>failed</code></td>
+                </tr>
+                <tr>
+                  <td>No valid report</td>
+                  <td>A valid report</td>
+                  <td>Verdict <code>failed</code></td>
+                </tr>
+                <tr>
+                  <td>No valid report</td>
+                  <td><code>time_limit_s</code> ended the command</td>
+                  <td>
+                    Stop with <code>environment_failed</code> and the code
+                    <code>affected_timeout</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>No valid report</td>
+                  <td>Exit code 127</td>
+                  <td>
+                    Stop with <code>environment_failed</code> and the code
+                    <code>command_absent</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>No valid report</td>
+                  <td>Any other result</td>
+                  <td>
+                    Stop with <code>environment_failed</code> and the code
+                    <code>affected_invalid</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The base check uses the setup of the base-head clone. When that
+            setup fails, the execution stops with
+            <code>environment_failed</code> and the code
+            <code>setup_failed</code>.
+          </p>
+          <p>
+            The verdict of the node is the first verdict of this list that one
+            checkout holds: <code>failed</code>, <code>base_red</code>,
+            <code>passed</code>, <code>absent</code>.
+            <code>base_red</code> passes the release gate and goes to the
+            reviewer. It routes no revision turn and gives no
+            <code>criterion-not-met</code>.
+          </p>
+          <p>
+            The declaration can list <strong>gate files</strong> in
+            <code>gate_files</code>, for example the selector of the repository.
+            The worker compares them with the change set, also with the previous
+            path of a rename. The evaluation records each changed gate file in
+            the assessment. A human then lands the node. KanthorD does not merge
+            its pull request, also with the landing <code>kanthord</code>. The
+            pull request text names each changed gate file. For a
+            <code>merge_push</code> action, KanthorD pushes nothing and records
+            a <code>branch_push</code> request. The node waits in
+            <code>External.Requested</code> until a human lands the node branch.
+            See
+            <a href="../reference/project/binding.html#gate-files">gate files</a
+            >.
+          </p>
+          <p>
+            The revision text of a <code>failed</code> verdict names the
+            repository, the command and the count of changed files. It also
+            names the count of selected test files and each failed test, at most
+            20. For example:
+          </p>
+          <pre><code class="language-text">The affected test run of repository api failed. KanthorD ran `npm run --silent test:affected` for 2 changed files. The run selected 2 test files, and 1 test failed: src/server.test.ts &gt; server &gt; answers 200 on GET /healthz. Each selected test imports a changed file directly or through other files. Change the code or the test so that every selected test passes.</code></pre>
+          <p>
+            The instruction also holds the result of the command and the last 4
+            KiB of its output.
+          </p>
+          <h2 id="finish-steps-10-to-12">Finish: steps 10 to 12</h2>
+          <p>
+            <strong>Step 10</strong> pushes the node branch of each checkout.
+            The push is not forced. Every end after step 4 pushes, except a
+            revocation. A stop before the workspace exists, for example
+            <code>repository.node_branch.missing</code>, has nothing to push.
+          </p>
+          <p>
+            <strong>Step 11</strong> submits the head commit of each node branch
+            as the evidence of the node. <code>reviewer@1</code> checks out
+            exactly these commits.
+          </p>
+          <p>
+            <strong>Step 12</strong> releases with
+            <code>further_work: false</code>. The Mission Service moves the node
+            to <code>Waiting</code>. Only the release gate leads to this
+            release.
+          </p>
+          <h2 id="how-the-execution-ends">How the execution ends</h2>
+          <p>
+            The release body decides the next state of the node. A release with
+            <code>further_work: true</code> returns the node to
+            <code>Available</code> for the next <code>coder@1</code> execution.
+            A release with <code>further_work: false</code> moves the node to
+            <code>Waiting</code> for <code>reviewer@1</code>.
+          </p>
+          <p>
+            The table below covers an <code>implement</code> execution. An
+            <code>examine</code> execution ends as
+            <a href="#an-examine-node-the-report">An examine node</a> explains.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>End</th>
+                  <th>What the worker does</th>
+                  <th>Release body</th>
+                  <th>Next node state</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>The release gate passes</td>
+                  <td>Push, submit the head commit</td>
+                  <td>
+                    <code>further_work: false</code>, <code>stop: null</code>
+                  </td>
+                  <td><code>Waiting</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    The budget ends, and at least one unit
+                    <a href="#the-done-record">completed</a>
+                  </td>
+                  <td>
+                    Abort the agent, remove the release clones, run gate G in
+                    checkpoint mode, push
+                  </td>
+                  <td>
+                    <code>further_work: true</code>, <code>stop: null</code>
+                  </td>
+                  <td><code>Available</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    The budget ends, and no unit
+                    <a href="#the-done-record">completed</a>
+                  </td>
+                  <td>The same</td>
+                  <td>
+                    <code>further_work: true</code>, <code>stop</code> with the
+                    reason <code>budget_end</code> and the code
+                    <code>turns</code> or <code>wall_time</code>
+                  </td>
+                  <td>
+                    <code>Available</code>, or <code>Paused</code> at
+                    <code>mission.further_work_limit</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Gate G finds a violation of the git state</td>
+                  <td>
+                    Restore each checkout to <code>before</code>, make no
+                    checkpoint commit, push
+                  </td>
+                  <td>
+                    <code>further_work: true</code>, <code>stop</code> with
+                    <code>operation_failed</code>, the code
+                    <code>worker.turn.*</code> and the detail
+                  </td>
+                  <td>
+                    <code>Available</code>, or <code>Paused</code> at the
+                    failure limit
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A stop: <code>provider_failed</code>,
+                    <code>no_progress</code>, <code>operation_failed</code>
+                  </td>
+                  <td>
+                    Abort the agent, run gate G in checkpoint mode, push. A
+                    violation there restores <code>before</code> and commits
+                    nothing
+                  </td>
+                  <td>
+                    <code>further_work: true</code>, <code>stop</code> with the
+                    reason, the code and the detail when one exists
+                  </td>
+                  <td>
+                    <code>Available</code>, or <code>Paused</code> at the
+                    failure limit
+                  </td>
+                </tr>
+                <tr>
+                  <td>The claim is revoked, for example by a pause</td>
+                  <td>Abort the agent. No gate, no push</td>
+                  <td>
+                    No release. The execution counts as no failure and resets
+                    the failure and stall counts
+                  </td>
+                  <td>Set by the human act</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The failure limit is <code>mission.consecutive_failure_limit</code>.
+            A <code>provider_failed</code> stop with a busy code does not count
+            toward it, as
+            <a href="worker.html#limits-that-stop-a-loop"
+              >Limits that stop a loop</a
+            >
+            explains.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
+flowchart LR
+    accTitle: How a coder@1 execution ends
+    accDescr: A pass of the release gate releases with further work false to Waiting. A budget end runs gate G in checkpoint mode, pushes and releases with further work true to Available, with the budget_end stop only when no unit completed. A violation of the git state restores the head before the turn, pushes and releases with further work true and the stop. Any other stop runs gate G in checkpoint mode, pushes and releases with further work true and the stop. A revocation ends with no gate, no push and no release.
+    ok["Release gate passes"] --&gt; r1["push, evidence,&lt;br/&gt;further_work: false"] --&gt; waiting(["Waiting&lt;br/&gt;reviewer@1"])
+    budget["Budget ends"] --&gt; r2["gate G checkpoint, push,&lt;br/&gt;further_work: true"] --&gt; available(["Available&lt;br/&gt;next execution"])
+    r2 -. "budget_end count at&lt;br/&gt;mission.further_work_limit" .-&gt; paused(["Paused"])
+    violation["Git state violation"] --&gt; r3["restore to before, push,&lt;br/&gt;further_work: true + stop"] --&gt; available
+    stop["Stop: provider_failed,&lt;br/&gt;no_progress, operation_failed"] --&gt; r4["gate G checkpoint, push,&lt;br/&gt;further_work: true + stop"] --&gt; available
+    r3 -. "failure count at&lt;br/&gt;mission.consecutive_failure_limit" .-&gt; paused
+    r4 -. "failure count" .-&gt; paused
+    revoked["Claim revoked"] --&gt; r5["no gate, no push,&lt;br/&gt;no release"] --&gt; ended(["Execution ended"])
+    classDef good fill:#ffffff,stroke:#4f5d75,color:#2d3142,stroke-width:2px;
+    classDef focal fill:#fbeae1,stroke:#eb6c36,color:#2d3142;
+    classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class ok good;
+    class budget,violation,stop,revoked focal;
+    class waiting,available,paused,ended outcome;
+</pre>
+          <p>Four rules of the end need attention:</p>
+          <ul>
+            <li>
+              <strong>A budget end always gives further work.</strong> Only the
+              release gate releases with <code>further_work: false</code>. A
+              budget end during a verification, or during the release gate, also
+              releases with <code>further_work: true</code>. The next execution
+              plans the units again from the done records and runs the release
+              gate.
+            </li>
+            <li>
+              <strong>The checkpoint commit is not a result.</strong> At a
+              budget end or a stop, gate G in checkpoint mode commits the work
+              in progress with the message of the current unit, for example
+              <code>feat: document the route</code>. It writes no done record.
+              The next execution finds the unit pending at step 6 and continues
+              it. Two exceptions apply. A checkpoint commit of the verdict unit
+              is new work after the judged commit, so the verdict rule holds at
+              the next step 6, and the verdict unit does not run again. A
+              checkpoint commit of a routed unit that already holds a matching
+              done record leaves that unit done. In both cases, the release gate
+              of the next execution decides. Today a checkpoint commit therefore
+              can satisfy the verdict rule.
+            </li>
+            <li>
+              <strong
+                >The <code>budget_end</code> stop marks a stalled
+                execution.</strong
+              >
+              The release carries
+              <code
+                >stop: { &quot;reason&quot;: &quot;budget_end&quot;,
+                &quot;code&quot;: &quot;turns&quot;, &quot;cause&quot;: { ... }
+                }</code
+              >
+              only when no unit <a href="#the-done-record">completed</a> in that
+              <code>implement</code> execution. The code is
+              <code>wall_time</code> when the wall time ended first. Such
+              releases count toward <code>mission.further_work_limit</code>. A
+              release without that stop resets the count.
+            </li>
+            <li>
+              <strong>A violation wins over a budget end.</strong> When the
+              budget ends inside a turn, the worker runs no write-mode gate. The
+              checkpoint gate then checks the git state. A violation there
+              restores <code>before</code> and ends the execution with the
+              violation stop, not with the budget end.
+            </li>
+          </ul>
+          <p>
+            All cleanup after a budget end or a stop runs under
+            <code>expired_at</code>, not under the spent budget: every git
+            command of gate G, the restore sequence, the push and the release.
+            The claim keeps a reserve of 10 minutes after the budget for this
+            cleanup.
+          </p>
+          <h2 id="edge-cases">Edge cases</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>Behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A verification fails</td>
+                  <td>
+                    <code>swe@1</code> gets the failed command, the results and
+                    the last 4 KiB of its output in a revision turn.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A verification command runs longer than 10 minutes</td>
+                  <td>
+                    The worker kills the command. It is a code failure, and
+                    later commands do not run.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A verification is killed by a signal or exits with 137
+                  </td>
+                  <td>
+                    The worker runs it once more. A second such result stops
+                    with <code>worker.verification.infrastructure_failed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The wall time ends during a verification</td>
+                  <td>
+                    A budget end. The worker restores the checkout, commits
+                    nothing new and releases with
+                    <code>further_work: true</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The agent runs <code>git commit</code> in a turn</td>
+                  <td>
+                    G4 folds the commit. The worker commit holds the change.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The agent switches the branch or rewrites history</td>
+                  <td>
+                    Gate G restores <code>before</code> and stops with
+                    <code>worker.turn.branch_changed</code> or
+                    <code>worker.turn.history_rewritten</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The agent leaves a merge, cherry-pick or revert open</td>
+                  <td>
+                    Gate G restores <code>before</code> and stops with
+                    <code>worker.turn.git_in_progress</code>. An open rebase
+                    detaches <code>HEAD</code>, so it stops with
+                    <code>worker.turn.branch_changed</code>. The next prepare
+                    restores the checkout.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Two revision turns in a row change no file</td>
+                  <td>
+                    The worker stops with <code>no_progress</code> before it
+                    verifies the unchanged head a third time.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A task breaks the verification of an earlier task</td>
+                  <td>
+                    The release gate fails. The earlier task gets a revision
+                    turn, then the release gate runs again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A change breaks a test that no verification lists</td>
+                  <td>
+                    The affected test run of the release gate fails. The node
+                    unit gets a revision turn with the failed tests, then the
+                    release gate runs again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A test fails on the node head and on the base head</td>
+                  <td>
+                    The verdict is <code>base_red</code>. The release gate
+                    passes, and <code>reviewer@1</code> weighs the verdict.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The affected test declaration is invalid</td>
+                  <td>
+                    The worker stops with <code>environment_failed</code> and
+                    the code <code>affected_invalid</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A verification needs an ignored file of the live checkout
+                  </td>
+                  <td>
+                    The release gate fails in the clean clone. The owner gets a
+                    revision turn. Two unchanged turns stop with
+                    <code>no_progress</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Conflict at the step 5 or step 8 merge</td>
+                  <td>
+                    <code>swe@1</code> resolves the files in a conflict turn. A
+                    file that still holds a marker stops with
+                    <code>worker.merge.markers_left</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The base moves during the run</td>
+                  <td>
+                    Step 8 merges it. The release gate verifies the merged head.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A rework after a <code>criterion-not-met</code> assessment
+                  </td>
+                  <td>
+                    The verdict unit runs with the rationale of the assessment.
+                    It ends when the head holds new work after the judged
+                    commit.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A rework whose review changes nothing</td>
+                  <td>
+                    With the verdict rule, two verdict turns with no new work
+                    stop with <code>no_progress</code>. The same head never
+                    returns to review.
+                  </td>
+                </tr>
+                <tr>
+                  <td>An unblock after a change request on the pull request</td>
+                  <td>
+                    The verdict unit runs with the requested-changes text.
+                  </td>
+                </tr>
+                <tr>
+                  <td>An unblock after any other review</td>
+                  <td>
+                    The verdict unit runs with the rationale of the cleared
+                    assessment, with no rule. A pass completes it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A unit passes with no change</td>
+                  <td>
+                    No done record. The unit does not count as completed, and
+                    the next execution runs a work turn for it again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A model call fails at the provider</td>
+                  <td>
+                    The turn ends with the error, and the worker stops with
+                    <code>provider_failed</code>, its code and the provider text
+                    as <code>detail</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A commit hook of the repository refuses commits</td>
+                  <td>No effect. The worker runs git with no hook.</td>
+                </tr>
+                <tr>
+                  <td>The node branch is gone after a recorded push</td>
+                  <td>
+                    The worker stops with <code>operation_failed</code> and
+                    <code>repository.node_branch.missing</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The node is paused during the execution</td>
+                  <td>
+                    The claim check after the next model turn, or before the
+                    next turn of a unit, ends the execution as revoked.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The budget ends inside a unit</td>
+                  <td>
+                    Gate G in checkpoint mode commits, the worker pushes and
+                    releases. The next execution continues the unit, except a
+                    verdict unit or a routed unit with a done record: the
+                    release gate decides then.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The next execution runs on another host</td>
+                  <td>
+                    The worker clones the repository and checks out the pushed
+                    node branch. The done records on the branch skip every done
+                    unit.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="examples-of-the-edge-cases">Examples of the edge cases</h2>
+          <p>
+            Each example starts from
+            <a href="#example-a-run-with-no-problem">the run with no problem</a>
+            and changes one fact.
+          </p>
+          <h3 id="a-verification-fails">A verification fails</h3>
+          <p>
+            <code>npm test -- healthz</code> exits with code 1 after the first
+            turn. The worker sends this revision instruction:
+          </p>
+          <pre><code class="language-text">Revise the task work to satisfy its criterion and verifications. When a verification or an affected test needs a change to a forbidden file, make the smallest such change. Verification 1 `npm test -- healthz` failed with exit code 1.
+Verification results: [{"command":"npm test -- healthz","exit_code":1,"signal":null,"timed_out":false}]
+
+Output of the last verification that ran (the last 4 KiB):
+
+```text
+FAIL test/healthz.test.ts
+  expected 200, received 404
+```</code></pre>
+          <p>
+            <code>swe@1</code> fixes the route. Gate G commits
+            <code>feat: add GET /healthz</code> again, and the worker verifies
+            the new head.
+          </p>
+          <p>
+            A verification or an affected test can need a change to a forbidden
+            file. <code>swe@1</code> then makes the smallest such change. When
+            correct work needs that change, the reviewer gives the ground
+            <code>conflict</code>, as
+            <a href="#a-rework">the rework example</a> shows.
+          </p>
+          <h3 id="the-agent-commits-its-own-work">
+            The agent commits its own work
+          </h3>
+          <p>
+            In the first turn, <code>swe@1</code> runs
+            <code>git commit -am &quot;wip&quot;</code>. Gate G finds the head
+            one commit after <code>before</code>. G4 runs
+            <code>git reset --soft &lt;before&gt;</code>, so the change of the
+            agent becomes a staged change. G7 commits it as
+            <code>feat: add GET /healthz</code>. The message <code>wip</code> is
+            gone, and the turn counts as changed.
+          </p>
+          <h3 id="the-agent-switches-the-branch">
+            The agent switches the branch
+          </h3>
+          <p>
+            In the first turn, <code>swe@1</code> runs
+            <code>git checkout -b experiment</code>. G1 finds
+            <code>HEAD</code> at <code>refs/heads/experiment</code>. The worker
+            forces the node branch back to <code>before</code>, removes every
+            change, pushes the node branch at <code>before</code> and releases:
+          </p>
+          <pre><code class="language-json">{
+  "further_work": true,
+  "stop": {
+    "reason": "operation_failed",
+    "code": "worker.turn.branch_changed",
+    "detail": "Error: The HEAD of checkout api is refs/heads/experiment, not [redacted]",
+    "cause": {
+      "category": "unattributed",
+      "suspects": ["model", "prompt"],
+      "assigner": "rule"
+    }
+  }
+}</code></pre>
+          <p>
+            The work of the turn is lost. The redaction replaces the whole ref
+            <code>refs/heads/kanthord/node_01JZ8Q0K4M6N8P0R2S4T6V8W0X.</code>
+            with <code>[redacted]</code>. The ref is one token of 32 or more
+            characters, and it is no visible path, because its last segment,
+            with the final full stop, holds 32 characters. A commit hash in the
+            detail of <code>worker.turn.history_rewritten</code> and
+            <code>worker.turn.merge_missing</code> becomes
+            <code>[redacted]</code> for the same reason. Today the detail of a
+            violation therefore names the checkout and the branch of the agent,
+            but not the node branch or the commit.
+          </p>
+          <h3 id="the-release-gate-fails">The release gate fails</h3>
+          <p>
+            The second task changes the route, and
+            <code>npm test -- healthz</code> now fails. Each task passed its own
+            verification in the live checkout. At step 9, the clean clone runs
+            <code>npm run build</code>, which passes, then
+            <code>npm test -- healthz</code>, which fails. The first failed
+            command belongs to the first task. The worker logs
+            <code>release failure routed</code> and sends the first task one
+            revision turn with the failure output. After the first task passes
+            again, the worker runs steps 8 and 9 again. When all four commands
+            pass, the execution releases with <code>further_work: false</code>.
+          </p>
+          <h3 id="a-verification-is-killed">A verification is killed</h3>
+          <p>
+            The host runs out of memory, and the kernel kills
+            <code>npm test -- healthz</code> with exit code 137 at step 7. The
+            worker runs the command once more. It is killed again, and the
+            worker stops. Gate G in checkpoint mode finds nothing new to commit.
+            The worker pushes and releases:
+          </p>
+          <pre><code class="language-json">{
+  "further_work": true,
+  "stop": {
+    "reason": "operation_failed",
+    "code": "worker.verification.infrastructure_failed",
+    "detail": "{\"exit_code\":137,\"signal\":null,\"timed_out\":false,\"command\":\"npm test -- healthz\"}",
+    "cause": {
+      "category": "infrastructure",
+      "subcategory": "verification_killed",
+      "assigner": "rule"
+    }
+  }
+}</code></pre>
+          <p>
+            No revision turn follows, because the code is not at fault. A pass
+            on the rerun completes the task like a pass on the first run.
+          </p>
+          <h3 id="the-budget-ends-inside-a-unit">
+            The budget ends inside a unit
+          </h3>
+          <p>
+            The 200th model turn ends while <code>swe@1</code> works on the
+            second task. The first task is complete with its done record. The
+            worker aborts the session. Gate G in checkpoint mode commits the
+            work in progress as <code>feat: document the route</code>, with no
+            done record. The worker pushes and releases:
+          </p>
+          <pre><code class="language-json">{ "further_work": true, "stop": null }</code></pre>
+          <p>
+            The stop is <code>null</code> because one unit completed in this
+            execution. The node moves to <code>Available</code>. The next
+            execution reads the done record of the first task at step 6 and
+            gives it no turn. It runs a work turn for the second task on top of
+            the checkpoint commit.
+          </p>
+          <p>
+            When no unit completes before the budget ends, the release carries
+            the stop, and the count toward
+            <code>mission.further_work_limit</code> grows:
+          </p>
+          <pre><code class="language-json">{
+  "further_work": true,
+  "stop": {
+    "reason": "budget_end",
+    "code": "turns",
+    "cause": {
+      "category": "unattributed",
+      "suspects": ["plan", "model"],
+      "assigner": "rule"
+    }
+  }
+}</code></pre>
+          <h3 id="the-wall-time-ends-during-a-verification">
+            The wall time ends during a verification
+          </h3>
+          <p>
+            The worker commits the second task and runs
+            <code>grep -q &#39;/healthz&#39; docs/api.md</code>. The 2-hour wall
+            time ends while the command runs. The worker kills the command, and
+            the result is a budget end, not a failure. The worker restores the
+            checkout to the task commit, writes no done record, pushes and
+            releases with <code>further_work: true</code>. The stop is
+            <code>null</code>, because the first task completed in this
+            execution. The next execution runs a turn for the second task again,
+            verifies it, and then runs the release gate.
+          </p>
+          <h3 id="two-revisions-change-no-file">
+            Two revisions change no file
+          </h3>
+          <p>
+            <code>npm test -- healthz</code> fails. <code>swe@1</code> answers
+            two revision instructions in a row and changes no file. After the
+            second one, the worker stops and does not verify the same head
+            again:
+          </p>
+          <pre><code class="language-json">{
+  "further_work": true,
+  "stop": {
+    "reason": "no_progress",
+    "code": null,
+    "detail": "{\"rule\":\"unchanged_revision\",\"count\":2,\"limit\":2,\"verification\":{\"passed\":false,\"ran\":1,\"exit_code\":1,\"timed_out\":false}}",
+    "cause": {
+      "category": "unattributed",
+      "suspects": ["model", "prompt", "plan"],
+      "assigner": "rule"
+    }
+  }
+}</code></pre>
+          <h3 id="a-rework">A rework</h3>
+          <p>
+            <code>reviewer@1</code> reviews the head and answers
+            <code>criterion-not-met</code>. Its rationale is
+            <code
+              >The route answers 200, but the body is the text ok, not
+              {&quot;status&quot;:&quot;ok&quot;}.</code
+            >, followed by <code>Unmet:</code> and
+            <code
+              >- task_01JZ8Q1A…: The body of GET /healthz is the text ok.</code
+            >
+            The assessment names the head <code>9f2c4e1…</code> in
+            <code>tested_input</code>. The node returns to
+            <code>Available</code> in the same attempt.
+          </p>
+          <p>
+            The next execution reads the assessment at step 2. At step 6, both
+            done records still match, so no task is pending. The verdict rule
+            fails: the head is still <code>9f2c4e1…</code>. The worker sends the
+            verdict unit one revision turn:
+          </p>
+          <pre><code class="language-text">Revise the task work to meet its criterion. Previous judgement: The route answers 200, but the body is the text ok, not {"status":"ok"}.
+Unmet:
+- task_01JZ8Q1A…: The body of GET /healthz is the text ok.</code></pre>
+          <p>
+            The worker sends the whole text, the task id included, to the
+            verdict unit. It routes no work to the task by that id.
+          </p>
+          <p>
+            <code>swe@1</code> fixes the body. Gate G commits
+            <code>feat: add a health endpoint</code>, and the verdict rule now
+            holds. The node unit has no own command, so the worker runs no
+            command and writes the done record of the node unit. The release
+            gate then runs the four commands, as at step 9. When
+            <code>swe@1</code> brings no new work in two verdict turns in a row,
+            the worker stops with <code>no_progress</code> instead, and the
+            unchanged head never goes back to review.
+          </p>
+          <p>
+            The rationale holds up to three blocks after its text, in this
+            order. <code>Plan conflict:</code> lists the items with the ground
+            <code>conflict</code>. <code>Plan gap:</code> lists the items with
+            the ground <code>unstated</code>. <code>Unmet:</code> lists the
+            other items. The rationale omits an empty block.
+          </p>
+          <p>
+            A <code>Plan conflict:</code> or a <code>Plan gap:</code> item gives
+            the assessment a cause of the category <code>plan</code>. Such an
+            assessment causes no rework. The node moves to
+            <code>Blocked</code> with the transition rule
+            <code>plan_defect</code>, and no execution gets a verdict turn. For
+            example, the task criterion needs a test file that the requirement
+            forbids:
+          </p>
+          <pre><code class="language-text">The route answers {"status":"ok"}, but the criterion and the requirement disagree on the test file.
+Plan conflict:
+- task_01JZ8Q1A…: "Add test/healthz.test.js" vs "Change no file under test/"</code></pre>
+          <p>
+            The human corrects the content and the tasks, and unblocks the node
+            with that <code>change</code>. The next attempt pins the edited
+            revision.
+          </p>
+          <h3 id="the-provider-refuses-a-call">The provider refuses a call</h3>
+          <p>
+            The provider answers 429 to a model call. The turn ends with
+            <code>stopReason: &quot;error&quot;</code>. Gate G in checkpoint
+            mode commits the work in progress, and the worker pushes and
+            releases:
+          </p>
+          <pre><code class="language-json">{
+  "further_work": true,
+  "stop": {
+    "reason": "provider_failed",
+    "code": "rate_limited",
+    "detail": "429 Too Many Requests: rate limit exceeded",
+    "cause": {
+      "category": "llm_provider",
+      "subcategory": "rate_limited",
+      "assigner": "rule"
+    }
+  }
+}</code></pre>
+          <p>
+            The <code>detail</code> holds the provider error text, with the
+            secrets removed and cut to 300 characters. The code
+            <code>rate_limited</code> moves the agent to the next model of its
+            fallback chain for the next execution. It does not count as a
+            failure. The codes <code>bad_request</code> and
+            <code>unauthorized</code> count, and after
+            <code>mission.consecutive_failure_limit</code> failures in a row the
+            node moves to <code>Paused</code>.
+          </p>
+          <h3 id="the-base-moves-during-the-run">
+            The base moves during the run
+          </h3>
+          <p>
+            At step 8, <code>origin/main</code> holds a new commit. The merge
+            has no conflict, so the worker commits
+            <code>feat: merge main</code> and runs the release gate on the
+            merged head. When a command fails there, its owner gets a revision
+            turn on top of the merge commit. The merge commit stays.
+          </p>
+          <h3 id="a-human-pauses-the-node">A human pauses the node</h3>
+          <p>
+            The human pauses the node during the work on the first task. After
+            the next model turn, the claim check reads a claim that is not
+            <code>running</code>. The worker ends the execution as revoked. It
+            runs no gate, does not push and does not release, because the claim
+            is no longer its own.
+          </p>
+          <h2 id="an-examine-node-the-report">An examine node: the report</h2>
+          <p>
+            An <code>examine</code> node has no tasks and no node branch.
+            <code>coder@1</code> claims it in <code>Available</code>, after
+            every direct dependency is <code>Completed</code>. The execution
+            then does these steps:
+          </p>
+          <ol>
+            <li>
+              It checks out the base-branch head of each repository binding that
+              the node names, read-only, under
+              <code>checkouts/&lt;binding name&gt;/</code> of a fresh directory.
+              A node with no repository binding gets an empty directory.
+            </li>
+            <li>
+              When the node names a repository binding, it runs the
+              verifications of the node, for example an end-to-end suite.
+            </li>
+            <li>
+              It sends <code>swe@1</code> the direct dependencies, their
+              outcomes, their evidence and the verification results, and asks
+              for its findings.
+            </li>
+            <li>
+              It submits the findings as produced evidence with the subject
+              <code>Report on current dependency outcomes</code>, and releases
+              with <code>further_work: false</code>.
+            </li>
+          </ol>
+          <p>
+            A budget end of an <code>examine</code> execution releases with
+            <code>further_work: true</code> and <code>stop: null</code>. It
+            never carries the <code>budget_end</code> stop, because an
+            <code>examine</code> execution has no unit to complete.
+          </p>
+          <p>
+            <code>reviewer@1</code> then judges the <code>examine</code> node
+            from the report and the outcomes of its direct dependencies.
+          </p>
+          <h2 id="under-the-hood-how-coder1-drives-pi-and-git">
+            Under the hood: how coder@1 drives pi and git
+          </h2>
+          <p>
+            <code>swe@1</code> runs on the pi SDK,
+            <code>@earendil-works/pi-coding-agent</code> 1.1.0. The
+            <a href="native-agent.html">native agent</a> page explains the
+            configuration, the prompt and the tool set. This section shows which
+            pi calls <code>coder@1</code> makes, and which git commands the
+            worker runs.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Need of the worker</th>
+                  <th>pi API</th>
+                  <th>What the worker does with it</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A model with a credential</td>
+                  <td>
+                    <code>ModelRuntime.create</code>, then
+                    <code>runtime.getModel</code>
+                  </td>
+                  <td>
+                    Step 4. The runtime reads the secret from the custody
+                    handover. It makes no network call.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A session in the workspace</td>
+                  <td>
+                    <code>createAgentSession</code> with
+                    <code>SessionManager.create</code>
+                  </td>
+                  <td>
+                    Step 4. pi persists the session to a session file of the
+                    execution. A new execution opens a new session.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The unit in every model call</td>
+                  <td>
+                    The <code>context</code> hook and a guard on
+                    <code>agent.streamFunction</code>
+                  </td>
+                  <td>
+                    The worker pins the work prompt of the current unit, so that
+                    a compaction does not remove it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A turn of work</td>
+                  <td>
+                    <code>session.prompt(text)</code>, then
+                    <code>session.waitForIdle()</code>
+                  </td>
+                  <td>
+                    Steps 5 to 9. The worker sends the work prompt or an
+                    instruction and waits for the agent. Gate G runs after the
+                    wait.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A provider failure</td>
+                  <td>
+                    The last assistant message with
+                    <code>stopReason: &quot;error&quot;</code>
+                  </td>
+                  <td>
+                    The worker maps <code>errorMessage</code> to a code and
+                    stops with <code>provider_failed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The turn budget</td>
+                  <td>
+                    <code>session.subscribe</code> for <code>turn_end</code>,
+                    and an override of <code>agent.finishTurn</code>
+                  </td>
+                  <td>
+                    Each <code>turn_end</code> counts one model turn. After each
+                    model turn, the worker checks the budget and the claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A safe <code>bash</code></td>
+                  <td>
+                    <code>createBashToolDefinition</code> with a
+                    <code>spawnHook</code> and a timeout
+                  </td>
+                  <td>
+                    The hook removes every provider key from the environment.
+                    The timeout is 10 minutes or less.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Evidence from the agent</td>
+                  <td>A custom tool <code>evidence-upload</code></td>
+                  <td>
+                    The tool uploads a workspace file and returns
+                    <code>evidence_id</code>, <code>asset_id</code> and
+                    <code>uri</code>. No step of the worker depends on it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A stop</td>
+                  <td><code>session.abort()</code></td>
+                  <td>
+                    The worker aborts on a budget end, on a cancellation and
+                    before a checkpoint.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The transcript</td>
+                  <td>
+                    <code>SessionManager.create</code> and
+                    <code>sessionManager.getEntries()</code>
+                  </td>
+                  <td>
+                    pi persists each entry to
+                    <code>pi/sessions/execution/&lt;execution_id&gt;/</code>.
+                    The worker sends each new entry to the Tracking Service.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The worker does not use <code>steer</code> or <code>followUp</code>.
+            Each instruction is a new <code>prompt</code> call after the agent
+            is idle. The worker reads no reply of <code>swe@1</code> in an
+            <code>implement</code> execution.
+          </p>
+          <p>
+            The worker wraps the agent of the execution in one gated agent. Each
+            <code>prompt</code> and each <code>instruct</code> call records
+            <code>before</code>, runs the turn and then runs gate G. A new call
+            site cannot skip the gate. One unit, from the side of the worker,
+            has this shape:
+          </p>
+          <pre><code class="language-ts">const agent = gatedAgent(state, unitCommitMessage(state, unit));
+await agent.prompt(taskWork(state, unit));
+const run = await verifyTaskRun(state, unit);
+if (verificationPassed(run.verification, unit.content.verifications))
+  await writeDoneRecord(state, unit, agent.commits());
+else
+  await agent.instruct(
+    taskWork(state, unit),
+    taskRevisionInstruction(templates, run.verification, commands, output),
+  );</code></pre>
+          <p>
+            The code sketch leaves out the loop, the budget checks, the claim
+            checks and the progress check.
+            <a href="#step-7-the-unit-loop">Step 7: the unit loop</a> shows the
+            full loop.
+          </p>
+          <p>
+            The restore sequence runs these git commands on one checkout, in
+            order:
+          </p>
+          <ol>
+            <li>
+              For each operation whose state exists:
+              <code>git rebase --quit</code>, <code>git am --quit</code>,
+              <code>git cherry-pick --quit</code>,
+              <code>git revert --quit</code> or <code>git merge --abort</code>.
+            </li>
+            <li>
+              <code
+                >git checkout --force -B &lt;node branch&gt;
+                &lt;target&gt;</code
+              >.
+            </li>
+            <li>
+              <code>git reset --hard HEAD</code>, then
+              <code>git clean -ffd</code>.
+            </li>
+            <li>The invariant check of G8.</li>
+          </ol>
+          <p>
+            The target is <code>before</code> after a violation, and the head of
+            the checkout after a verification. Prepare runs the same sequence on
+            the head that its checkout step read.
+          </p>
+          <h2 id="what-coder1-reports">What coder@1 reports</h2>
+          <p>
+            <code>coder@1</code> reports on the two channels of the
+            <a href="worker-contract.html">worker contract</a>. On the state
+            channel, it checks its claim, submits the head commit as evidence
+            and releases. On the telemetry channel, it writes these spans:
+          </p>
+          <ul>
+            <li>
+              A <code>worker.phase</code> span for each phase:
+              <code>prepare</code> covers step 3, <code>start</code> covers
+              steps 5 and 6, <code>tasks</code> covers steps 7 to 9, and
+              <code>finish</code> covers steps 10 and 11 and the checkpoint of a
+              budget end.
+            </li>
+            <li>
+              A <code>worker.task</code> span for each run of a unit.
+              <code>kanthord.task.id</code> is the task id, or the node id for
+              the node unit. <code>kanthord.task.result</code> is
+              <code>complete</code> or <code>budget_end</code>. A
+              <code>no_progress</code> stop adds
+              <code>kanthord.stop.reason</code>,
+              <code>kanthord.stop.rule</code>, <code>kanthord.stop.count</code>,
+              <code>kanthord.stop.limit</code> and, after a verification,
+              <code>kanthord.stop.verification.passed</code>.
+            </li>
+            <li>
+              A <code>worker.verification</code> span for each command run, and
+              for each run of the affected test command at the node head and at
+              the base head. <code>kanthord.verification.kind</code> is
+              <code>listed</code>, <code>affected</code> or
+              <code>affected_base</code>.
+            </li>
+            <li>
+              A <code>worker.release_gate</code> span for each run of the
+              release gate, below the <code>tasks</code> phase span. The
+              verification spans of the release gate have it as their parent.
+              Its end holds <code>kanthord.release_gate.result</code>, and
+              <code>kanthord.release_gate.affected</code> after an affected test
+              run.
+            </li>
+            <li>
+              A <code>worker.git</code> span for the merge of step M
+              (<code>merge_base</code>), the fetch of step 8
+              (<code>fetch_base</code>) and the push of step 10 or of a budget
+              end (<code>push</code>). The push of a stop has no
+              <code>worker.git</code> span. Each run of gate G writes one
+              <code>worker.gate</code> span, also the checkpoint of a budget
+              end, and its commit writes no <code>worker.git</code> span.
+            </li>
+            <li>
+              <code>agent.turn</code> and <code>agent.tool</code> spans below
+              the span that encloses the turn. An external harness writes the
+              same <code>agent.turn</code> and <code>agent.tool</code> spans.
+            </li>
+          </ul>
+          <p>
+            The worker process also writes one JSON log line to stderr for each
+            event of the method, for example <code>units planned</code>,
+            <code>task started</code>, <code>task committed</code>,
+            <code>task verified</code>, <code>done recorded</code>,
+            <code>done record skipped</code>, <code>verdict planned</code>,
+            <code>verdict rule checked</code>, <code>release verified</code>,
+            <code>release failure routed</code>, <code>base merged</code>,
+            <code>turn violation</code> and <code>root entries removed</code>. A
+            line holds identities and results, and no agent content.
+          </p>
+          <h2 id="limits">Limits</h2>
+          <ul>
+            <li>
+              <strong>One review, at the node.</strong>
+              <code>coder@1</code> judges no criterion. Only
+              <code>reviewer@1</code> reviews the work, and only after the
+              release.
+            </li>
+            <li>
+              <strong>No atomic landing across repositories.</strong> The head
+              commit of a node with two or more repository bindings is the set
+              of the heads of its node branches. Each required external action
+              resolves on its own. An action with the end state other blocks the
+              node, and the landed commit of a sibling action stays a record of
+              its attempt.
+            </li>
+            <li>
+              <strong>No memory in the agent.</strong> Each execution starts a
+              new agent conversation. Only the node branch with its done
+              records, and the records of the Mission Service, carry over. The
+              workspace saves clones and installed dependencies, and decides
+              nothing.
+            </li>
+            <li>
+              <strong>A stalled node pauses.</strong> An
+              <code>implement</code> execution that completes no unit before its
+              budget ends counts toward <code>mission.further_work_limit</code>.
+              At the limit, the node moves to <code>Paused</code>. An
+              <code>examine</code> execution has no unit. Its budget end
+              releases with <code>further_work: true</code> and
+              <code>stop: null</code>, so it does not count and resets the stall
+              count.
+            </li>
+            <li>
+              <strong>The agent can use git.</strong> <code>swe@1</code> has
+              <code>bash</code>, and its commands run with the git and SSH
+              configuration of the host user. Gate G makes an agent commit, a
+              branch switch, a history rewrite and an open operation harmless.
+              Nothing blocks a <code>git push</code> by the agent. The push of
+              the worker is not forced, so an agent push that diverges from the
+              node branch fails the push of the worker with a visible cause.
+              KanthorD removes <code>SSH_AUTH_SOCK</code> and
+              <code>SSH_AGENT_PID</code> from each command, so a command reaches
+              no SSH agent of the host user. During a network git operation of
+              KanthorD on the same host, a command of the same user can still
+              sign through the SSH agent socket of that operation. A
+              <code>git push</code> of the agent can also use a key under
+              <code>~/.ssh</code> of the host user. KanthorD has no sandbox; see
+              <a href="worker.html#where-a-worker-runs">where a worker runs</a>.
+            </li>
+            <li>
+              <strong>The worker commit has no content filter.</strong> Gate G
+              commits every file that the agent leaves outside
+              <code>.kanthord-scratch/</code> and the ignored files.
+              <code>reviewer@1</code> judges the added files.
+            </li>
+            <li>
+              <strong>Workspace reuse by a superseded process.</strong> The
+              worker holds the workspace of an <code>implement</code> node for
+              one execution at a time. Each worker instance holds its own
+              <code>workspaces/</code> in its data directory, so two instances
+              share no workspace. One case stays. A second process with the same
+              instance configuration takes the connection of the instance. Until
+              the first process ends the child tree of its running bash tool,
+              both processes can act in the same workspace. That time is at most
+              one heartbeat interval of 15 s, plus the time of the heartbeat
+              request.
+            </li>
+          </ul>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>

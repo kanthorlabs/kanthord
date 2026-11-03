@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ERD 3: External integration · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+    <link rel="stylesheet" href="../../assets/diagram.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#scope">Scope</a></li>
+          <li><a href="#capability-limits">Capability limits</a></li>
+          <li>
+            <a href="#records-without-a-table">Records without a table</a>
+          </li>
+          <li><a href="#diagram">Diagram</a></li>
+          <li><a href="#tables">Tables</a></li>
+          <li><a href="#constraints">Constraints</a></li>
+          <li><a href="#cross-group-references">Cross-group references</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="erd-3-external-integration">ERD 3: External integration</h1>
+          <h2 id="scope">Scope</h2>
+          <p>
+            This view holds the tables that receive the events of an external
+            platform and turn them into end states of request evidence. After
+            this group, a human creates an inbound for a remote resource of a
+            platform. The Intake Service acquires events through a webhook or a
+            poll, and hands each event to the delivery admission of the Mission
+            Service. Delivery admission calls the check of the Intake Service
+            and sets the end state of the request evidence, so a node in
+            <code>External.Requested</code> reaches its end state. The view also
+            holds the outbound requests: the Intake Service records each
+            outbound write before it performs it, for example the pull request
+            of a configured action.
+          </p>
+          <p>
+            The <a href="index.html">README</a> holds the conventions, the
+            colors and the map of every group.
+          </p>
+          <h2 id="capability-limits">Capability limits</h2>
+          <ul>
+            <li>
+              The ruled acquisition machinery supports the GitHub platform only.
+              Slack, Telegram and Jira wait for their platform entries and
+              credential types in
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#project-service"
+                >HANDOFF</a
+              >.
+            </li>
+            <li>
+              The schema of <code>configuration</code> per kind and platform
+              beyond <code>resource</code> is open in the
+              <a
+                href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/intake.md"
+                >Intake CLI</a
+              >.
+            </li>
+            <li>
+              Acceptance as a human act needs a linked human identity. The
+              mapping from a platform account to a human identity is open.
+            </li>
+            <li>
+              A request for new WHAT receives no acceptance. The inbound request
+              contract is POSTPONED in HANDOFF.
+            </li>
+            <li>
+              The outbound operations are <code>github.pull_request</code>,
+              <code>github.pull_request_merge</code>,
+              <code>git.merge_push</code> and <code>s3.delete_object</code>. A
+              native push send and a CLI write wait for their designs.
+            </li>
+            <li>
+              The Intake Service is extractable in principle: it declares one
+              collaboration with custody, and no foreign key crosses its
+              boundary. It still runs in the server process and in
+              <code>kanthord.db</code>. Its peers reach it through the
+              <code>client</code>, <code>human</code> and
+              <code>service</code> operations that
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#outbound-operations-and-checks"
+                >intake-service.impl.md</a
+              >
+              declares. Only the direct adapter serves these operations, and the
+              cross-process identity contract is POSTPONED.
+            </li>
+          </ul>
+          <h2 id="records-without-a-table">Records without a table</h2>
+          <ul>
+            <li>
+              The material of a credential release stays in memory for one call.
+              No store holds it.
+            </li>
+            <li>
+              The set of inbound events whose handoff runs stays in the memory
+              of the dispatcher.
+            </li>
+            <li>
+              The set of outbound requests whose call runs stays in the memory
+              of the Intake Service.
+            </li>
+            <li>
+              A read, a check, a presign and an inbound control call write no
+              row.
+            </li>
+            <li>
+              An error of an inbound after its insert is a span of the Tracking
+              Service.
+            </li>
+            <li>
+              The disposition of delivery admission and its refusal reason are a
+              span of the Tracking Service. No table records an admission.
+            </li>
+            <li>No store holds a resource healthcheck result.</li>
+          </ul>
+          <h2 id="diagram">Diagram</h2>
+          <pre class="mermaid">
+erDiagram
+    credential {
+        text id PK "credential_ + ULID, ERD 1"
+    }
+    project_project {
+        text id PK "project_ + ULID, ERD 1"
+    }
+    mission_evidence {
+        text id PK "evidence_ + ULID, ERD 2"
+    }
+
+    intake_inbound {
+        text id PK "inbound_ + ULID"
+        text project_id
+        text kind "webhook | poll"
+        text platform "for example github"
+        text consumer "mission.delivery.admit"
+        text credential "credential name for a poll, null for a webhook"
+        text configuration "JSON per kind and platform, holds resource"
+        text checkpoint "poll cursor, JSON per platform, or null"
+        integer created_at "Unix ms"
+    }
+
+    intake_inbound_event {
+        text id PK "inbound_event_ + ULID"
+        text inbound_id FK
+        text event_id "platform event identity"
+        blob event "exact content, bounded bytes"
+        text metadata "JSON per platform"
+        text state "pending | succeeded | failed | discarded"
+        text error "JSON array of errors or null"
+        integer created_at "Unix ms"
+    }
+
+    intake_outbound_request {
+        text id PK "outbound_request_ + ULID"
+        text project_id
+        text operation "for example github.pull_request"
+        text request_key "derived by the caller, unique per operation"
+        text credential "credential name, null for git.merge_push"
+        text state "pending | succeeded | failed | discarded"
+        text result "JSON, bounded 2xx answer, or null"
+        text error "JSON array of errors or null"
+        integer created_at "Unix ms"
+    }
+
+    project_project ||..o{ intake_inbound : "ref project_id, no FK"
+    credential |o..o{ intake_inbound : "ref by name, no FK"
+    intake_inbound ||--o{ intake_inbound_event : "FK inbound_id"
+    project_project ||..o{ intake_outbound_request : "ref project_id, no FK"
+    credential |o..o{ intake_outbound_request : "ref by name, no FK"
+
+    intake_inbound_event |o..o{ mission_evidence : "ref inbound_event_id in provenance, no FK"
+
+    classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
+    classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
+    classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
+    classDef intake fill:#e8daef,stroke:#6c3483,color:#212529
+    classDef stub stroke-dasharray:4 3
+
+    class credential custody
+    class project_project project
+    class mission_evidence mission
+    class credential,project_project,mission_evidence stub
+    class intake_inbound,intake_inbound_event,intake_outbound_request intake
+</pre>
+          <h2 id="tables">Tables</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>Owner</th>
+                  <th>Basis</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>intake_inbound</code></td>
+                  <td>Intake Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbounds"
+                      >inbounds</a
+                    >
+                    and
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-inbound-store"
+                      >the inbound store</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>intake_inbound_event</code></td>
+                  <td>Intake Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbound-events"
+                      >inbound events</a
+                    >,
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff"
+                      >handoff</a
+                    >
+                    and
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-handoff"
+                      >the handoff</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>intake_outbound_request</code></td>
+                  <td>Intake Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#outbound-requests"
+                      >outbound requests</a
+                    >
+                    and
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-outbound-record"
+                      >the outbound record</a
+                    >.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The verification secret of a webhook inbound derives from
+            <code>master_key</code> and the inbound identity, so no table holds
+            a webhook secret.
+          </p>
+          <h2 id="constraints">Constraints</h2>
+          <p>
+            The owning service enforces every rule below in the transaction of
+            its write. A remote effect never commits with a SQLite transaction.
+            An outbound request commits as <code>pending</code> before its call.
+            <code>succeeded</code> commits only after a 2xx answer, a CLI exit
+            code 0 or a read-back match.
+          </p>
+          <h3 id="intake-service">Intake Service</h3>
+          <ul>
+            <li>
+              <code>intake_inbound.project_id</code> names a project of ERD 1.
+            </li>
+            <li>
+              No column of an inbound changes after its insert, except
+              <code>checkpoint</code>, which a poll writes. A change of the
+              configuration is a new inbound.
+            </li>
+            <li>
+              <code>intake_inbound</code> holds no unique index other than its
+              key, because a duplicate inbound serves a rotation.
+            </li>
+            <li>
+              <code>kind</code> and <code>consumer</code> hold values of closed
+              sets in code. The Intake Service validates
+              <code>configuration</code> per <code>(kind, platform)</code> in
+              code, and the platform implementation validates
+              <code>checkpoint</code>. Every property name inside a JSON column
+              is snake_case.
+            </li>
+            <li>
+              <code>credential</code> holds a credential name. A poll names a
+              credential, and a webhook holds a null <code>credential</code>.
+              The insert transaction checks that the name exists and that its
+              platform suits the inbound. A credential archive calls
+              <code>inboundsNaming</code> in its own transaction and is refused
+              while an inbound names the credential.
+            </li>
+            <li>
+              kanthord registers no webhook at a platform. A human sets the
+              address and the secret of a webhook inbound at the platform.
+            </li>
+            <li>
+              The create of a poll performs each request of one poll cycle with
+              the credential before the insert.
+            </li>
+            <li>
+              A poll advances one field of <code>checkpoint</code> in the
+              transaction that stores the batch of one read. A batch whose
+              inbound no longer exists is discarded.
+            </li>
+            <li>No row holds credential material or a webhook secret.</li>
+            <li>
+              A delete of an inbound is refused while the inbound holds a
+              pending event. A delete calls no platform. One transaction deletes
+              the events of the inbound and the row.
+            </li>
+            <li>
+              <code>intake_inbound_event</code> has a unique index on
+              <code>(inbound_id, event_id)</code>, so a redelivery inside one
+              inbound creates no second row.
+            </li>
+            <li>
+              A webhook event is verified before it is stored, and it is stored
+              before its acknowledgement. An event that fails verification is
+              stored nowhere. A verified handshake stores no row.
+            </li>
+            <li>
+              A stored row keeps <code>event</code> and
+              <code>metadata</code> unchanged, so every handoff of the event
+              carries the same identity and the same content.
+            </li>
+            <li>
+              <code>state</code> starts as <code>pending</code>. The one handoff
+              sets <code>succeeded</code> on an answer of the consumer, and
+              <code>failed</code> on a declared failure or an indeterminate
+              result. A human retry sets <code>pending</code> on a
+              <code>failed</code> event. A human discard sets
+              <code>discarded</code> on a <code>pending</code> or a
+              <code>failed</code> event, and it is refused while the handoff of
+              that event runs. <code>discarded</code> is terminal. Every write
+              of <code>state</code> is conditional on its expected state.
+            </li>
+            <li>
+              <code>error</code> is null until the first failure. Each failure
+              appends <code>{ code, message, created_at }</code>. The array has
+              a bound in bytes, and its value is open. An append beyond the
+              bound drops the oldest items.
+            </li>
+            <li>
+              No process deletes an event by itself. A human delete names a
+              state with a range of <code>id</code>, or a list of exact
+              identities. It removes <code>succeeded</code>,
+              <code>failed</code> and <code>discarded</code> events, and it
+              never removes a <code>pending</code> event.
+            </li>
+            <li>
+              The count of pending events has a bound, and its value is open.
+            </li>
+            <li>
+              <code>intake_outbound_request.project_id</code> names the project
+              of the binding that the caller resolved.
+            </li>
+            <li>
+              <code>operation</code> holds a value of the closed set of outbound
+              operations in code, named
+              <code>&lt;platform&gt;.&lt;operation&gt;</code>.
+            </li>
+            <li>
+              <code>credential</code> holds the name of the credential that
+              custody released for the write. <code>git.merge_push</code> holds
+              the name of the <code>ssh_credential</code> of the binding.
+            </li>
+            <li>
+              <code>intake_outbound_request</code> has a unique index on
+              <code>(operation, request_key)</code>, so a repeat of a key finds
+              the first request and calls the write no second time. The caller
+              derives <code>request_key</code> from its durable intent, and the
+              key holds every operand that can change under that intent.
+            </li>
+            <li>
+              A service merge of the Mission Service stores
+              <code>request_key</code> with the prefix
+              <code>service_merge/</code>.
+              <code>intake.action.perform</code> refuses a
+              <code>request_key</code> with that prefix, so a worker key never
+              takes the row of a service merge. A stored answer that names
+              another pull request answers <code>final_refusal</code>, and the
+              Intake Service calls no merge.
+            </li>
+            <li>
+              The Intake Service authorizes the write and obtains its release
+              before the insert. A refusal inserts no row.
+            </li>
+            <li>
+              <code>state</code> starts as <code>pending</code>, and the insert
+              commits before the call. The call sets <code>succeeded</code> on a
+              2xx answer or a CLI exit code 0, and <code>failed</code> on every
+              other result, with a write conditional on <code>pending</code>.
+            </li>
+            <li>
+              A read-back sets <code>succeeded</code> on <code>pending</code> or
+              <code>failed</code>, and it runs only inside a repeat of the
+              caller. A read-back that finds nothing changes no row.
+            </li>
+            <li>
+              A human discard sets <code>discarded</code> on a
+              <code>pending</code> request whose call does not run.
+              <code>succeeded</code> and <code>discarded</code> are terminal.
+            </li>
+            <li>
+              <code>result</code> holds the bounded body of the 2xx answer.
+              <code>error</code> follows the rules of <code>error</code> of an
+              inbound event.
+            </li>
+            <li>
+              No row holds credential material, the operands of the write or a
+              digest of the operands. A credential archive is not refused by an
+              outbound request that names it.
+            </li>
+            <li>
+              No process deletes an outbound request. A human delete names a
+              state with a range of <code>id</code>, or a list of exact
+              identities, and requires force. It removes <code>succeeded</code>,
+              <code>failed</code> and <code>discarded</code> requests, and it
+              never removes a <code>pending</code> request.
+            </li>
+          </ul>
+          <h3 id="mission-service">Mission Service</h3>
+          <ul>
+            <li>
+              Delivery admission writes <code>end_state</code> of a request
+              evidence and the landed-commit evidence of ERD 2. The same
+              transaction writes the node transition and the attempt closure
+              that the end state rules in the
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.md#state-transitions"
+                >state transitions</a
+              >.
+            </li>
+            <li>
+              Admission resolves the project from the inbound of the event. It
+              finds the request evidence among the requests of an open attempt
+              of the project that hold no end state, by the canonical JSON of
+              its <code>platform</code> asset, never by the newest attempt
+              alone. More than one match refuses the event with the reason
+              <code>ambiguous</code>.
+            </li>
+            <li>
+              Admission is idempotent through the write-once
+              <code>end_state</code>. A repeat that finds the end state of its
+              request set answers <code>duplicate</code> and writes nothing.
+            </li>
+            <li>
+              Admission calls the check of the Intake Service before its
+              transaction. The transaction writes <code>end_state</code> of the
+              request and the landed-commit evidence together. A failed check
+              answers a retryable failure and writes nothing.
+            </li>
+            <li>
+              A landed-commit evidence that admission writes holds
+              <code>inbound_event_id</code> in its <code>provenance</code>. A
+              human check writes the provenance without it.
+            </li>
+            <li>A refusal and a <code>none</code> result write nothing.</li>
+            <li>
+              The Mission Service deduplicates effects per project and per
+              request evidence across inbounds, redeliveries and checks. The
+              deduplication key of an unchanged state is the open item C3 of
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#mission-service-1"
+                >HANDOFF</a
+              >, so this page states no index for it.
+            </li>
+            <li>
+              An acceptance as a human act invokes the Mission operation under
+              the linked human identity.
+            </li>
+          </ul>
+          <h2 id="cross-group-references">Cross-group references</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Kind</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>intake_inbound.project_id</code></td>
+                  <td><code>project_project.id</code></td>
+                  <td>Reference, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>intake_inbound.credential</code></td>
+                  <td><code>credential.name</code></td>
+                  <td>Reference by name, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>intake_outbound_request.project_id</code></td>
+                  <td><code>project_project.id</code></td>
+                  <td>Reference, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>intake_outbound_request.credential</code></td>
+                  <td><code>credential.name</code></td>
+                  <td>Reference by name, no FK.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>mission_evidence.provenance.inbound_event_id</code>
+                  </td>
+                  <td><code>intake_inbound_event.id</code></td>
+                  <td>Reference in JSON, no FK.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+    <script type="module" src="../../assets/diagram-page.mjs"></script>
+  </body>
+</html>

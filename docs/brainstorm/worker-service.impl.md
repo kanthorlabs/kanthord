@@ -469,7 +469,7 @@ The Docker form of `Container on this host`:
 
 ### The instance record
 
-The table `worker_instance` holds one row for each revision of an instance, after the pattern of the `credential` table. [01-setup.md](../reference/erd/01-setup.md) holds the schema.
+The table `worker_instance` holds one row for each revision of an instance, after the pattern of the `credential` table. [01-setup.md](../reference/erd/01-setup.html) holds the schema.
 
 | Column        | Rule                                                                                                                                     |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |

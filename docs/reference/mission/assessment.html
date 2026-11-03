@@ -1,0 +1,1477 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read and submit assessments · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-and-submit-assessments">Read and submit assessments</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            An assessment records a conclusion about the criterion of a node for
+            one attempt.
+          </p>
+          <ul>
+            <li>
+              <code>assessment list</code> returns one page of the assessments
+              of a node. A human JWT is required.
+            </li>
+            <li>
+              <code>assessment get</code> returns one assessment. A human JWT is
+              required.
+            </li>
+            <li>
+              <code>assessment submit</code> records an execution assessment for
+              the claimed node. A machine JWT is required, and the execution
+              must hold a live evaluation claim on that node.
+            </li>
+          </ul>
+          <p>
+            An execution writes an assessment through
+            <code>assessment submit</code>. A human control, such as an
+            override, block or discard, writes a human assessment. A human
+            assessment has no execution, tested input, currency or worker
+            version.
+          </p>
+          <p>
+            Each read of an execution assessment computes its currency at read
+            time. An assessment is current when three conditions hold:
+          </p>
+          <ol>
+            <li>
+              Its context matches: the pinned revision, the named evidence and,
+              for an <code>examine</code> node, the dependency outcomes are
+              still current. The nodes of
+              <code>dependency_outcome_ids</code> equal the direct dependencies
+              of the node, and each named outcome is the current outcome of its
+              node.
+            </li>
+            <li>
+              No later human assessment in the same attempt supersedes it.
+            </li>
+            <li>
+              It is the latest execution assessment in the attempt that meets
+              conditions 1 and 2.
+            </li>
+          </ol>
+          <p>
+            A submit can cause a rework or close the attempt. When the new
+            assessment is current, these cases apply:
+          </p>
+          <ul>
+            <li>
+              The result is <code>criterion-not-met</code>, and the
+              <code>cause</code> has a category other than <code>plan</code>.
+              The attempt holds fewer reworks than
+              <code>mission.rework_limit</code> and no request evidence. This is
+              a rework. The submit ends the live claim, writes no outcome and
+              keeps the attempt open. The node moves to
+              <code>Available</code> with a job.
+            </li>
+            <li>
+              The result is <code>criterion-not-met</code>, and the
+              <code>cause</code> has the category <code>plan</code>. The submit
+              closes the attempt at each rework count, also with a request
+              evidence. The node moves to <code>Blocked</code> with the
+              transition rule <code>plan_defect</code>.
+            </li>
+            <li>
+              The result is not <code>success</code>, and no case above applies.
+              The node moves to <code>Blocked</code>.
+            </li>
+            <li>
+              The result is <code>success</code>, and the pinned revision has no
+              required external action. The node moves to
+              <code>Completed</code>.
+            </li>
+          </ul>
+          <p>
+            The reworks of an attempt are its earlier execution assessments with
+            the result <code>criterion-not-met</code>. A <code>plan</code> cause
+            marks a defect of the plan. A human corrects the plan with a
+            <a href="node-control.html#unblock">node unblock</a> that holds a
+            <code>change</code>.
+          </p>
+          <p>
+            A closure ends the live claim, closes the attempt and writes an
+            outcome. The outcome names the landed-commit evidence of the
+            attempt. A <code>success</code> result with required external
+            actions writes no outcome. The attempt stays open for those actions.
+            After each accepted submit, the server wakes the scheduler of the
+            project.
+          </p>
+          <h3 id="fix-node-proposals">Fix-node proposals</h3>
+          <p>
+            The submit of an <code>undetermined</code> execution assessment of
+            an <code>examine</code> node takes at most 10 fix-node proposals in
+            <code>proposals</code>. Each proposal names one defect inside a
+            completed direct dependency with <code>intent: implement</code>. The
+            submit closes the attempt, moves the <code>examine</code> node to
+            <code>Blocked</code> and records each proposal in the same
+            transaction.
+          </p>
+          <ul>
+            <li>
+              <code>proposal list</code> returns one page of the proposals of a
+              proposer. <code>--attempt</code> selects the proposals of one
+              attempt.
+            </li>
+            <li>
+              <code>proposal decide &lt;assessment-id&gt;</code> takes one
+              decision for every proposal of one assessment. Its body holds
+              <code>expected_mission_version</code>,
+              <code>approved_proposal_ids</code> (1 to 10 distinct proposal
+              identities of the assessment) and an optional <code>reason</code>.
+            </li>
+            <li>
+              In one transaction, the decision creates one
+              <code>implement</code> node with the one task of each approved
+              proposal and adds the dependency of the proposer on each new node.
+              It sets <code>created_node_id</code> and
+              <code>approved_at</code> of each approved proposal and
+              <code>rejected_at</code> of every other open proposal of the
+              assessment. It then unblocks the proposer once into a new attempt.
+            </li>
+            <li>
+              Each new node takes <code>bindings</code> and
+              <code>tags</code> from the current revision of its
+              <code>dependency_id</code>. The proposer routes to
+              <code>Pending</code> until every new node reaches
+              <code>Completed</code>.
+            </li>
+            <li>
+              <code>proposal decide</code> answers
+              <code>{ created, rejected_proposal_ids, proposer }</code>.
+              <code>created</code> lists one
+              <a href="node.html#node-change-result">node change result</a> for
+              each approved proposal, in the order of
+              <code>approved_proposal_ids</code>. <code>proposer</code> is the
+              <a href="node-control.html">control result</a> of the unblock.
+            </li>
+            <li>
+              An assessment with no open proposal fails with
+              <code>409 mission.proposal.decided</code>, so a repeated decision
+              fails. A proposer that is not <code>Blocked</code> in the attempt
+              of the assessment fails with
+              <code>409 mission.node.state_conflict</code>. An identity that
+              names no proposal of the assessment fails with
+              <code>400 mission.proposal.assessment_mismatch</code>. An unknown
+              assessment fails with <code>404 mission.record.not_found</code>. A
+              new unmatched pair fails with
+              <code>409 mission.node.tags_unmatched</code>. A refused decision
+              writes nothing.
+            </li>
+            <li>
+              <code>node unblock</code>, <code>node discard</code> or
+              <code>node override</code> of a <code>Blocked</code> proposer
+              rejects every open proposal of the assessment that blocked it.
+            </li>
+          </ul>
+          <p>
+            A proposal record holds <code>id</code>, <code>node_id</code> of the
+            proposer, <code>attempt</code>, <code>assessment_id</code>,
+            <code>content</code>, <code>created_node_id</code>,
+            <code>approved_at</code>, <code>rejected_at</code> and
+            <code>created_at</code>. <code>content</code> holds
+            <code>dependency_id</code>, <code>name</code>,
+            <code>requirement</code>, <code>criterion</code> and
+            <code>task</code>. <code>task</code> holds <code>name</code>,
+            <code>requirement</code>, <code>criterion</code> and a nonempty
+            <code>verifications</code> list. <code>created_node_id</code> and
+            <code>approved_at</code> are <code>null</code> until the approval.
+            <code>rejected_at</code> is <code>null</code> until the rejection. A
+            proposal with both <code>approved_at</code> and
+            <code>rejected_at</code> <code>null</code> is open.
+          </p>
+          <p>
+            The read operations change nothing. Each list call reads one page.
+            The CLI does not follow <code>next_cursor</code>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="assessment-list"><code>assessment list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "assessment_01M4C5G6BPZCGBK0EFKVT5AXH2",
+      "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+      "execution_id": "execution_01M4C5G6BP0355Z52M6JCYZCSK",
+      "attempt": 1,
+      "node_revision": 3,
+      "evidence_ids": ["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],
+      "dependency_outcome_ids": [],
+      "result": "success",
+      "rationale": "All verification commands passed on the tested commit.",
+      "tested_input": {
+        "kind": "repository",
+        "binding_id": "binding_01M4C5G6BP5EWTVTTXFH1R25MC",
+        "commit": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+      },
+      "actor": {
+        "kind": "execution",
+        "execution_id": "execution_01M4C5G6BP0355Z52M6JCYZCSK",
+        "client_id": "client_identity_01M4C5G6BPC5C40S9NFE96N5FB",
+        "name": "worker-a"
+      },
+      "created_at": 1791398400000,
+      "dependency_node_ids": [],
+      "currency": {
+        "current": true,
+        "context_matches": true,
+        "authority_admits": true,
+        "order_selected": true,
+        "reasons": []
+      },
+      "worker_version": "reviewer"
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array of <code>Assessment</code></td>
+                  <td>
+                    At most <code>limit</code> assessments, in reverse identity
+                    order.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Opaque cursor for the next page. <code>null</code> ends the
+                    traversal.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Without <code>attempt</code>, the list covers every attempt of the
+            node.
+          </p>
+          <h3 id="assessment-get"><code>assessment get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with one
+            <code>Assessment</code>. The CLI writes it as one JSON line to
+            stdout and exits <code>0</code>.
+          </p>
+          <h3 id="assessment"><code>Assessment</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>assessment_&lt;ulid&gt;</code></td>
+                  <td>Identity of the assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Assessed node.</td>
+                </tr>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td>
+                    <code>execution_&lt;ulid&gt;</code> or <code>null</code>
+                  </td>
+                  <td>
+                    Execution that submitted the assessment;
+                    <code>null</code> for a human assessment.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>nonnegative safe integer</td>
+                  <td>Attempt of the assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>node_revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Node revision that the assessment judges.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence_ids</code></td>
+                  <td>array of <code>evidence_&lt;ulid&gt;</code></td>
+                  <td>
+                    Evidence that the assessment weighs. A delete of an evidence
+                    removes its identity here.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>dependency_outcome_ids</code></td>
+                  <td>array of <code>outcome_&lt;ulid&gt;</code></td>
+                  <td>
+                    Current outcomes of the direct dependencies that an
+                    <code>examine</code> assessment weighs; <code>[]</code> for
+                    an <code>implement</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>dependency_node_ids</code></td>
+                  <td>array of <code>node_&lt;ulid&gt;</code></td>
+                  <td>Nodes of those dependency outcomes, sorted.</td>
+                </tr>
+                <tr>
+                  <td><code>result</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>success</code>, <code>criterion-not-met</code> or
+                    <code>undetermined</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>rationale</code></td>
+                  <td>string</td>
+                  <td>Reason for the result.</td>
+                </tr>
+                <tr>
+                  <td><code>tested_input</code></td>
+                  <td><code>TestedInput</code> or <code>null</code></td>
+                  <td>
+                    Input that the verification tested; <code>null</code> for a
+                    human assessment.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>actor</code></td>
+                  <td><code>Actor</code></td>
+                  <td>
+                    <code>execution</code> actor, or <code>human</code> actor
+                    for a human assessment. See
+                    <a href="attempt.html#attempt">attempts</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>Unix milliseconds</td>
+                  <td>Time of the assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>currency</code></td>
+                  <td><code>Currency</code> or <code>null</code></td>
+                  <td>
+                    Read-time currency; <code>null</code> for a human
+                    assessment.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_version</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Worker name of the execution; <code>null</code> for a human
+                    assessment.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p><code>Currency</code> holds these properties:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>current</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when the other three checks are all
+                    <code>true</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>context_matches</code></td>
+                  <td>boolean</td>
+                  <td>
+                    The pinned revision, evidence and dependency outcomes still
+                    match.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>authority_admits</code></td>
+                  <td>boolean</td>
+                  <td>
+                    No later human assessment in the attempt supersedes this
+                    assessment.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>order_selected</code></td>
+                  <td>boolean</td>
+                  <td>
+                    This assessment is the latest admitted execution assessment.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>reasons</code></td>
+                  <td>array of strings</td>
+                  <td>
+                    One fixed sentence for each failed check; empty when
+                    <code>current</code> is <code>true</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>TestedInput</code> is one <code>Address</code>, or a nonempty
+            array of repository addresses. <code>Address</code> has one of three
+            forms, selected by <code>kind</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>kind</code></th>
+                  <th>Other properties</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>
+                    <code>binding_id</code> (<code>binding_&lt;ulid&gt;</code>)
+                    and <code>commit</code> (40 or 64 lower-case hex
+                    characters).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>produced</code></td>
+                  <td><code>sha256</code> (64 lower-case hex characters).</td>
+                </tr>
+                <tr>
+                  <td><code>object</code></td>
+                  <td>
+                    <code>location</code> (<code>s3://</code> URI), optional
+                    <code>version</code>, optional <code>sha256</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="assessment-submit"><code>assessment submit</code></h3>
+          <p>The API returns HTTP <code>200</code>:</p>
+          <pre><code class="language-json">{
+  "assessment": {
+    "id": "assessment_01M4C5G6BPZCGBK0EFKVT5AXH2",
+    "result": "success"
+  },
+  "node": { "id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4", "state": "Completed" },
+  "outcome": {
+    "id": "outcome_01M4C5G6BPV831HTV1HKEXK8MT",
+    "closing_event": "assessment-passed"
+  }
+}</code></pre>
+          <p>The example abbreviates each record.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>assessment</code></td>
+                  <td><code>Assessment</code></td>
+                  <td>The new assessment with its currency.</td>
+                </tr>
+                <tr>
+                  <td><code>node</code></td>
+                  <td>node record</td>
+                  <td>
+                    The node after the submit, in the schema of
+                    <code>kanthord mission node get</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>outcome</code></td>
+                  <td>
+                    <a href="outcome.html#outcome"><code>Outcome</code></a> or
+                    <code>null</code>
+                  </td>
+                  <td>
+                    The outcome that the submit wrote; <code>null</code> when
+                    the attempt stays open.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI adds the retry key and writes one JSON line to stdout, then
+            exits <code>0</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>assessment</code>, <code>node</code>,
+                    <code>outcome</code>
+                  </td>
+                  <td>as above</td>
+                  <td>API and CLI</td>
+                  <td>As above.</td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>
+                    Key used for this request; retain it with the same machine
+                    token for retries.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>. Timestamps are
+            integer Unix milliseconds in UTC.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Absent, invalid or expired token. A machine token on
+                    <code>list</code> or <code>get</code>, or a human token on
+                    <code>submit</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid path, query or body. On <code>submit</code>, details
+                    name <code>rationale</code>, <code>evidence_ids</code>,
+                    <code>dependency_outcome_ids</code>,
+                    <code>tested_input</code>, <code>gate_files</code>,
+                    <code>proposals</code>, <code>cause</code> or
+                    <code>result</code> when a submit rule fails.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td><code>list</code>, <code>get</code></td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td><code>list</code></td>
+                  <td>The node does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td><code>get</code></td>
+                  <td>The assessment does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.registration.required</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    The machine identity holds no live worker registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>403 gateway.invocation.execution_proof_failed</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    <code>execution_id</code> is not a live claim of this
+                    registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>The body is not <code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td><code>submit</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td><code>submit</code></td>
+                  <td>Absent or malformed idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td><code>submit</code></td>
+                  <td>Conflict on the reuse of an idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 scheduler.execution.not_running</code></td>
+                  <td><code>submit</code></td>
+                  <td>The claim of the execution is no longer live.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.execution.context_mismatch</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    The route node, <code>execution_id</code>,
+                    <code>attempt</code> or <code>node_revision</code> differs
+                    from the claim. Details name the <code>field</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 mission.execution.claim_not_evaluation</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>The node is not in <code>Evaluating</code>.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 mission.assessment.evidence_unpublished</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>A named evidence holds an unpublished asset.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 mission.assessment.verification_failed</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    A <code>success</code> result does not name exactly one
+                    verification that covers and passes the required commands.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.evidence.binding_mismatch</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    A repository address in <code>tested_input</code> names a
+                    binding that does not match the node. Details hold
+                    <code>binding_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.action_unresolved</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    A <code>success</code> result that closes the attempt meets
+                    an unresolved external request. Details hold
+                    <code>requirement_keys</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>cli.mission.assessment.list.invalid_node_id</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.assessment.list.invalid_attempt</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--attempt</code> is not a nonnegative safe integer in
+                    canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.assessment.get.invalid_assessment_id</code
+                    >
+                  </td>
+                  <td><code>get</code></td>
+                  <td>
+                    <code>&lt;assessment-id&gt;</code> is not a canonical
+                    <code>assessment_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.assessment.submit.invalid_node_id</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.assessment.list.token_required</code>,
+                    <code>cli.mission.assessment.get.token_required</code>,
+                    <code>cli.mission.assessment.submit.token_required</code>
+                  </td>
+                  <td>Same command</td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.invalid_path</code>,
+                    <code>cli.file.not_found</code>,
+                    <code>cli.file.not_regular</code>,
+                    <code>cli.file.encoding_invalid</code>,
+                    <code>cli.file.not_json</code>,
+                    <code>cli.file.duplicate_key</code>,
+                    <code>cli.file.not_object</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    <code>--file</code> is <code>-</code>, absent, not a regular
+                    file, not UTF-8, not JSON, holds a duplicate key, or is not
+                    a JSON object.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.schema_invalid</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    The file does not match the
+                    <code>AssessmentSubmit</code> schema.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    The local copy of the operation schema rejects the input.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is greater than 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All with options</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. For
+            <code>submit</code>, the CLI prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead. A transport
+            failure, timeout or malformed response exits <code>1</code>:
+          </p>
+          <ul>
+            <li>
+              <code>list</code> and <code>get</code> report
+              <code>cli.mission.assessment.list.indeterminate</code> or
+              <code>cli.mission.assessment.get.indeterminate</code>. Run the
+              command again.
+            </li>
+            <li>
+              <code>submit</code> reports
+              <code>cli.mission.assessment.submit.indeterminate</code> with the
+              retry key. Reuse the same key and machine token. There is no
+              automatic retry.
+            </li>
+          </ul>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="assessment-list-1"><code>assessment list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/assessment</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.assessment.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>attempt</code> (query, optional nonnegative safe
+                    integer); <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query, optional)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="assessment-get-1"><code>assessment get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/mission/assessment/:assessment_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.assessment.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>assessment_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Both reads use one header:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/assessment?attempt=1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/assessment/assessment_01M4C5G6BPZCGBK0EFKVT5AXH2 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <p>
+            To read the next page, send the <code>next_cursor</code> value as
+            the <code>cursor</code> query parameter with the same
+            <code>limit</code> and <code>attempt</code>.
+          </p>
+          <h3 id="assessment-submit-1"><code>assessment submit</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>POST /api/mission/node/:node_id/assessment</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.assessment.submit</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live
+                    registration and a live claim on <code>execution_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code>AssessmentSubmit</code> JSON object; unknown fields
+                    are rejected
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the registered
+                    worker that holds the claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it for
+                    retries of that request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td><code>execution_&lt;ulid&gt;</code></td>
+                  <td>
+                    Required. The live execution; the Gateway proves it against
+                    the caller registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>positive safe integer</td>
+                  <td>Required. Equal to the claimed attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>node_revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Required. Equal to the pinned revision of the claim.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence_ids</code></td>
+                  <td>array of unique <code>evidence_&lt;ulid&gt;</code></td>
+                  <td>
+                    Required. Each evidence belongs to this node and attempt,
+                    with every asset published.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>dependency_outcome_ids</code></td>
+                  <td>array of unique <code>outcome_&lt;ulid&gt;</code></td>
+                  <td>
+                    Required. Empty for an <code>implement</code> node. For an
+                    <code>examine</code> node, exactly the current outcome of
+                    each direct dependency.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>result</code></td>
+                  <td>
+                    <code>success</code>, <code>criterion-not-met</code> or
+                    <code>undetermined</code>
+                  </td>
+                  <td>Required.</td>
+                </tr>
+                <tr>
+                  <td><code>rationale</code></td>
+                  <td>nonblank string</td>
+                  <td>
+                    Required. At most <code>mission.text_max_bytes</code> UTF-8
+                    bytes, 32768 by default.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tested_input</code></td>
+                  <td><code>TestedInput</code></td>
+                  <td>
+                    Required. A node with one repository binding takes one
+                    repository address of that binding, or one nonrepository
+                    address. A node with two or more repository bindings takes
+                    one repository address for each binding, in binding order. A
+                    node with no repository binding takes one nonrepository
+                    address.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gate_files</code></td>
+                  <td>array of <code>{ binding_id, paths }</code></td>
+                  <td>
+                    Optional. The changed gate files of each repository of
+                    <code>tested_input</code> under the
+                    <a
+                      href="../../how-to-guides/declare-affected-tests.html#2-write-the-declaration"
+                      >affected test declaration</a
+                    >. Each <code>binding_id</code> names a repository address
+                    of <code>tested_input</code> and appears once.
+                    <code>paths</code> is a nonempty list of unique paths. The
+                    read does not show it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>proposals</code></td>
+                  <td>array of <code>ProposalContent</code></td>
+                  <td>
+                    Optional, <code>[]</code> by default, at most 10 items. Only
+                    an <code>examine</code> node with the result
+                    <code>undetermined</code> takes a nonempty list. Each
+                    <code>dependency_id</code> names a current direct dependency
+                    with <code>intent: implement</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cause</code></td>
+                  <td><code>Cause</code></td>
+                  <td>
+                    Required with <code>criterion-not-met</code>, and absent
+                    with another result. The rework cause that the reviewer
+                    execution computes. A current assessment with a cause of the
+                    category <code>plan</code> blocks the node with no rework.
+                    It has the shape of
+                    <a href="../scheduler/execution.html#function-description"
+                      ><code>stop.cause</code></a
+                    >. The Scheduler writes it on the root span end of the
+                    execution. The assessment stores no cause.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The required verification commands are the verifications of the
+            pinned revision. For an <code>implement</code> node, they also
+            include the verifications of each task in that revision. A
+            verification covers them when its results name exactly those
+            commands. It passes when every exit code is <code>0</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>result</code></th>
+                  <th>Verification rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>success</code></td>
+                  <td>
+                    Exactly one named verification covers the required commands,
+                    and it passes. Its <code>tested_input</code> equals the body
+                    value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>undetermined</code></td>
+                  <td>
+                    At least one named verification exists, and every named
+                    verification passes. Each <code>tested_input</code> equals
+                    the body value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>criterion-not-met</code></td>
+                  <td>
+                    Each named verification has a
+                    <code>tested_input</code> equal to the body value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/assessment \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
+  -H 'Content-Type: application/json' \
+  -d '{"execution_id":"execution_01M4C5G6BP0355Z52M6JCYZCSK","attempt":1,"node_revision":3,"evidence_ids":["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],"dependency_outcome_ids":[],"result":"success","rationale":"All verification commands passed on the tested commit.","tested_input":{"kind":"repository","binding_id":"binding_01M4C5G6BP5EWTVTTXFH1R25MC","commit":"4b825dc642cb6eb9a060e54bf8d69288fbee4904"}}'</code></pre>
+          <p>
+            The Gateway keeps idempotency records in process memory for
+            <code>gateway.idempotency_ttl</code> seconds, 86400 by default. A
+            repeat of the same key, caller and body replays the recorded answer,
+            failures included.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>mission</code> group, and each leaf command accepts them.
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>
+                    Human JWT for <code>list</code> and <code>get</code>;
+                    machine JWT for <code>submit</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="assessment-list-2"><code>assessment list</code></h3>
+          <pre><code class="language-text">kanthord mission assessment list &lt;node-id&gt; [--attempt &lt;attempt&gt;] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission assessment list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --attempt 1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--attempt &lt;attempt&gt;</code></td>
+                  <td>None; every attempt</td>
+                  <td>Nonnegative attempt number that selects one attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum assessments on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="assessment-get-2"><code>assessment get</code></h3>
+          <pre><code class="language-text">kanthord mission assessment get &lt;assessment-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission assessment get assessment_01M4C5G6BPZCGBK0EFKVT5AXH2</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;assessment-id&gt;</code></td>
+                  <td>
+                    Required <code>assessment_&lt;ulid&gt;</code> to read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="assessment-submit-2"><code>assessment submit</code></h3>
+          <pre><code class="language-text">kanthord mission assessment submit &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">KANTHORD_TOKEN='&lt;machine-jwt&gt;' kanthord mission assessment submit node_01M4C5G6BNQQPFNM7M8W0GW1W4 \
+  --file assessment.json \
+  --idempotency-key idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>
+                    Required <code>node_&lt;ulid&gt;</code> of the claimed node.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required</td>
+                  <td>
+                    Regular UTF-8 file that holds the
+                    <code>AssessmentSubmit</code> JSON object. Stdin
+                    (<code>-</code>) is not accepted.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when you retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI sends the file content as the request body. The CLI help
+            labels <code>--file</code> as &quot;Node JSON file&quot;; the file
+            holds an <code>AssessmentSubmit</code> object.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

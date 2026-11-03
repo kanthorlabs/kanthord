@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Upgrade configuration and data · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html" aria-current="true">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="upgrade-configuration-and-data">
+            Upgrade configuration and data
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Bring the stored server configuration, the operational database
+            <code>kanthord.db</code> and the tracking database
+            <code>tracking.db</code> to the versions of the installed binary.
+            Run it after you install a new binary and before you start the
+            server. Stop the server first.
+          </p>
+          <p>The binary is the reference of every version:</p>
+          <ul>
+            <li>
+              The configuration version is the root field
+              <code>version</code> of <code>kanthord.yaml</code>. A file without
+              the field is version 1.
+              <a href="config/init.html"><code>config init</code></a> writes the
+              version of the binary.
+            </li>
+            <li>
+              The database version is the migration history of each service in
+              <code>kanthord.db</code> and <code>tracking.db</code>.
+            </li>
+            <li>
+              Before the first tag, each service that owns tables holds exactly
+              one migration, version 1. <code>gateway</code> and
+              <code>workbench</code> hold no migration and record no row. A
+              schema change edits that migration, and the command offers no
+              upgrade path for a database of an earlier text.
+            </li>
+          </ul>
+          <p>
+            The server refuses to start when one of them differs from the
+            binary:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Condition</th>
+                  <th>Diagnostic</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>The configuration version is older than the binary.</td>
+                  <td><code>system.config.version_behind</code></td>
+                  <td>Run <code>kanthord upgrade</code>.</td>
+                </tr>
+                <tr>
+                  <td>The configuration version is newer than the binary.</td>
+                  <td><code>system.config.version_ahead</code></td>
+                  <td>Install the newer binary, or restore the backups.</td>
+                </tr>
+                <tr>
+                  <td>The database has a pending migration.</td>
+                  <td><code>system.database.migration.pending</code></td>
+                  <td>Run <code>kanthord upgrade</code>.</td>
+                </tr>
+                <tr>
+                  <td>
+                    The database records a service that the binary does not
+                    know, a gap or a duplicate in its versions, or a version
+                    newer than the binary.
+                  </td>
+                  <td>
+                    <code>system.database.migration.incompatible_history</code>
+                  </td>
+                  <td>Install the matching binary, or restore the backups.</td>
+                </tr>
+                <tr>
+                  <td>
+                    The schema of a recorded service differs from its migration
+                    text. The <code>object</code> row names the first differing
+                    schema object, in the order of the type and then the name.
+                  </td>
+                  <td>
+                    <code>system.database.migration.schema_mismatch</code>
+                  </td>
+                  <td>
+                    Run the
+                    <a href="#reset-a-pre-release-database">reset procedure</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>master_key</code> does not match the database.</td>
+                  <td><code>system.config.master_key_mismatch</code></td>
+                  <td>Restore the matching configuration file or backup.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>config validate</code>, <code>config show</code> and
+            <code>auth jwt generate</code> refuse a configuration version other
+            than the version of the binary with the same diagnostics. A new
+            installation needs no upgrade: the first start creates both
+            databases and applies every migration.
+          </p>
+          <p>The command runs these steps in this order:</p>
+          <ol>
+            <li>
+              Read the configuration and apply each configuration step from its
+              version in memory, then validate the result.
+            </li>
+            <li>
+              Open <code>kanthord.db</code> of the data directory with its
+              exclusive lock, if the file exists. Validate its migration
+              history, then check its schema against its migration text. Do the
+              same for <code>tracking.db</code>, if the file exists. A missing
+              <code>tracking.db</code> stays missing. A running server holds the
+              lock, so the command fails with
+              <code>system.database.initialization_failed</code> (<code
+                >database is locked</code
+              >) before it writes anything. A history that the binary does not
+              hold, for example an unknown service, a gap or a newer version,
+              fails with
+              <code>system.database.migration.incompatible_history</code> before
+              it writes anything. A schema that differs fails with
+              <code>system.database.migration.schema_mismatch</code> before it
+              writes anything. Then check that <code>master_key</code> matches
+              <code>kanthord.db</code>. A mismatch fails with
+              <code>system.config.master_key_mismatch</code> before it writes
+              anything.
+            </li>
+            <li>
+              Write the configuration backup, when a configuration step applies.
+            </li>
+            <li>
+              Take <code>kanthord.db</code>, then <code>tracking.db</code>. For
+              each file with a pending migration, write its backup, then apply
+              its pending migrations.
+            </li>
+            <li>Replace the configuration file atomically.</li>
+          </ol>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Success prints one <code>name: value</code> row for each change to
+            stdout and exits <code>0</code>. Each row prints when its step
+            happens, so the backup rows print before a later failure. The backup
+            row of a database prints before the migrated rows of that database.
+            The rows of one run align, and every value starts in column 17,
+            after the longest row name <code>config_version:</code> and one
+            space:
+          </p>
+          <pre><code class="language-text">backup:         /home/user/.config/kanthord/kanthord.yaml.bak-20261010T080000
+renamed:        mission.consecutive_loss_limit -&gt; mission.consecutive_failure_limit
+removed:        agent.prompt.host_file
+upgraded:       /home/user/.config/kanthord/kanthord.yaml
+config_version: 1 -&gt; 3</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output / property</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>backup: &lt;path&gt;</code></td>
+                  <td>
+                    A private <code>0600</code> copy of the original
+                    configuration or of the database, written before any change.
+                    The command deletes none.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >migrated: &lt;service&gt; &lt;from&gt; -&gt;
+                      &lt;to&gt;</code
+                    >
+                  </td>
+                  <td>
+                    The migrations that the command applied to one service, from
+                    one version to another. A pending migration exists from the
+                    first tag.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>renamed: &lt;old&gt; -&gt; &lt;new&gt;</code></td>
+                  <td>
+                    A configuration key that a configuration step renamed.
+                    Values and comments stay.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>removed: &lt;key&gt;</code></td>
+                  <td>
+                    A configuration key that a configuration step deleted, for
+                    example <code>agent.prompt.system_file</code>. Other keys
+                    and comments stay.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>upgraded: &lt;path&gt;</code></td>
+                  <td>The configuration file that the command replaced.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>config_version: &lt;from&gt; -&gt; &lt;to&gt;</code>
+                  </td>
+                  <td>
+                    The configuration versions before and after the upgrade.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>up_to_date: &lt;path&gt;</code></td>
+                  <td>Nothing changed, and the command wrote nothing.</td>
+                </tr>
+                <tr>
+                  <td>Exit code <code>0</code></td>
+                  <td>The configuration and the databases match the binary.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Failures exit <code>1</code> with a
+            <a href="errors.html#cli-diagnostics">diagnostic</a>. A later
+            failure keeps the earlier rows on stdout, for example the backup
+            paths. A configuration that holds an old key and its new key fails
+            with <code>system.config.rename_conflict</code> and the rows
+            <code>old_key</code> and <code>new_key</code>. An existing backup
+            path fails with <code>system.database.backup_failed</code> and the
+            row <code>path</code>. A failure after the backups keeps each
+            committed migration. Run <code>kanthord upgrade</code> again to
+            complete the remaining part.
+          </p>
+          <h3 id="reset-a-pre-release-database">
+            Reset a pre-release database
+          </h3>
+          <p>
+            Before the first tag, a schema change edits the one migration of a
+            service. The command offers no upgrade path for that data. Reset the
+            data of a pre-release build:
+          </p>
+          <ol>
+            <li>Stop the server.</li>
+            <li>
+              Delete <code>kanthord.db</code> and <code>tracking.db</code> of
+              the data directory, with their <code>-wal</code> and
+              <code>-shm</code> files.
+            </li>
+            <li>Start the server. The first start creates both files.</li>
+          </ol>
+          <p>
+            The reset deletes every project, credential, binding, mission,
+            execution and trace. The configuration file stays. The first start
+            records the verifier of its <code>master_key</code> in the new
+            database, so the same <code>master_key</code> stays valid.
+          </p>
+          <p>
+            The worker instance model needs this reset. A worker binding of an
+            older build holds <code>instance_count</code> and
+            <code>placement</code>, and the new build stores each
+            <code>server</code> and <code>container</code> instance as a named
+            <a href="worker/instance.html">worker instance</a>. After the reset,
+            create one instance for each unit of each old count, and list the
+            instances in the binding. For example, a <code>coder</code> binding
+            with <code>instance_count: 2</code> at the
+            <code>server</code> placement becomes the instances
+            <code>coder-1</code> and <code>coder-2</code> at the
+            <code>server</code> placement and
+            <code
+              >&quot;worker_instances&quot;: [&quot;coder-1&quot;,
+              &quot;coder-2&quot;]</code
+            >. Run <code>kanthord upgrade</code> before the start: a
+            configuration step renames <code>worker.server_slot_limit</code> to
+            <code>worker.server_instance_limit</code>.
+          </p>
+          <h3 id="restore-the-backups">Restore the backups</h3>
+          <p>To go back to the previous binary:</p>
+          <ol>
+            <li>Stop the server.</li>
+            <li>
+              Delete <code>kanthord.db-wal</code>, <code>kanthord.db-shm</code>,
+              <code>tracking.db-wal</code> and <code>tracking.db-shm</code> in
+              the data directory, if they exist.
+            </li>
+            <li>
+              Copy each database backup to its database file and the
+              configuration backup to the configuration file. Keep mode
+              <code>0600</code> on every copied file, for example with
+              <code>cp -p</code>.
+            </li>
+            <li>Install the previous binary and start the server.</li>
+          </ol>
+          <h3 id="other-state">Other state</h3>
+          <ul>
+            <li>
+              The worker application refuses a server of another package
+              version. Upgrade each worker binary together with the server.
+            </li>
+            <li>
+              A release note states a change that invalidates every JWT and
+              client secret. Then generate new human tokens with
+              <a href="auth/jwt.html"><code>auth jwt generate</code></a
+              >. A worker instance takes new tokens itself. An instance whose
+              client secret changed exits with
+              <code>worker.instance.secret_changed</code>; start it again.
+            </li>
+            <li>
+              In a container, stop the server container, then run
+              <code>upgrade</code> as a one-off container on the same volume
+              with the same <code>XDG_*</code> variables, for example
+              <code
+                >podman run --rm -v kanthord:/var/lib/kanthord
+                kanthord:&lt;version&gt; upgrade</code
+              >.
+            </li>
+          </ul>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Not available. The upgrade is a local filesystem and database
+            operation, with no API endpoint or cURL equivalent.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord upgrade [--config &lt;path&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord upgrade --config /absolute/path/kanthord.yaml</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--config &lt;path&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_CONFIG</code> → XDG/default server
+                    configuration path
+                  </td>
+                  <td>Selects the stored server configuration to upgrade.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The data directory comes from <code>XDG_DATA_HOME</code>, as for
+            <a href="serve.html"><code>serve</code></a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

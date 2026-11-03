@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage projects · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="manage-projects">Manage projects</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A project is the named owner of a binding set and of one Mission.
+            The Project Service creates, lists, reads, renames, pauses and
+            resumes projects. No operation deletes a project.
+          </p>
+          <h3 id="project-create">project create</h3>
+          <p>
+            Create a project with the given name and an empty binding set. The
+            same transaction creates the Mission of the project. After the
+            commit, the service creates the project workspace directory
+            <code>&lt;state-directory&gt;/projects/&lt;project-id&gt;</code>.
+            The state directory is <code>$XDG_STATE_HOME/kanthord</code>, or
+            <code>~/.local/state/kanthord</code> when
+            <code>XDG_STATE_HOME</code> is not an absolute path. A failure to
+            create the directory does not fail the request.
+          </p>
+          <p>
+            A project name has 1 to 63 characters. It starts with a lower-case
+            ASCII letter and contains only lower-case letters, digits and
+            hyphens. Project names are unique.
+          </p>
+          <h3 id="project-list">project list</h3>
+          <p>
+            List projects one page at a time, highest project ID first. A page
+            holds at most <code>limit</code> projects. A
+            <code>next_cursor</code> value continues the list;
+            <code>null</code> marks the last page.
+          </p>
+          <h3 id="project-get">project get</h3>
+          <p>
+            Read one project by its <a href="../identities.html">project ID</a>.
+          </p>
+          <h3 id="project-rename">project rename</h3>
+          <p>
+            Change the name of a project. The new name follows the create rule
+            and must not belong to a different project. A rename to the current
+            name succeeds. The project ID, binding set and workspace directory
+            do not change.
+          </p>
+          <h3 id="project-pause">project pause</h3>
+          <p>
+            Stop a project from admitting new claims. A new project is active. A
+            paused project has a <code>paused_at</code> time.
+          </p>
+          <p>
+            A worker instance of a paused project stays registered. Each work
+            pull of the project waits for work and then answers
+            <code>no-work</code>. A live execution runs to its release, its
+            revocation or its loss. The pause changes no node, job or binding.
+            Mission writes, node controls, releases and Intake events proceed.
+          </p>
+          <p>
+            A pause of a paused project changes nothing. The response holds the
+            first <code>paused_at</code>. The operation takes no body and no
+            version. The last write wins.
+          </p>
+          <h3 id="project-resume">project resume</h3>
+          <p>
+            Let a paused project admit claims again. The service sets
+            <code>paused_at</code> to <code>null</code> and wakes the waiting
+            work pulls of the project. A resume of an active project changes
+            nothing. The operation takes no body and no version.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Every operation returns HTTP <code>200</code>. The CLI writes one
+            JSON line to stdout and exits <code>0</code> (shown formatted here).
+            The CLI adds <code>idempotency_key</code> to the output of
+            <code>create</code>, <code>rename</code>, <code>pause</code> and
+            <code>resume</code>.
+          </p>
+          <h3 id="project-create-1">project create</h3>
+          <pre><code class="language-json">{
+  "id": "project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
+  "name": "payments",
+  "binding_set_version": 1,
+  "created_at": 1759900000000,
+  "paused_at": null,
+  "workspace_directory": "~/.local/state/kanthord/projects/project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Project ID with the <code>project</code> prefix.</td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Project name.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_set_version</code></td>
+                  <td>positive integer</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Current binding set version. A new project has version
+                    <code>1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>integer</td>
+                  <td>API and CLI</td>
+                  <td>Creation time in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>paused_at</code></td>
+                  <td>integer or null</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Time of the pause in Unix milliseconds.
+                    <code>null</code> for an active project.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workspace_directory</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Workspace directory path on the server host. A path inside
+                    the home directory starts with <code>~</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>
+                    Key of this request. Supply it again to retry the same
+                    request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-list-1">project list</h3>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
+      "name": "payments",
+      "binding_set_version": 4,
+      "created_at": 1759900000000,
+      "paused_at": null,
+      "workspace_directory": "~/.local/state/kanthord/projects/project_01JD3W8QF4Q7J8M9N0P1R2S3T4"
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    Project records with the fields of
+                    <code>project create</code>, without
+                    <code>idempotency_key</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-get-1">project get</h3>
+          <p>
+            The response is one project record with the fields of
+            <code>project create</code>, without <code>idempotency_key</code>.
+          </p>
+          <h3 id="project-rename-1">project rename</h3>
+          <p>
+            The response is the renamed project record. The CLI adds
+            <code>idempotency_key</code>.
+          </p>
+          <h3 id="project-pause-1">project pause</h3>
+          <p>
+            The response is the project record with <code>paused_at</code> set
+            to the time of the pause. The CLI adds <code>idempotency_key</code>.
+          </p>
+          <h3 id="project-resume-1">project resume</h3>
+          <p>
+            The response is the project record with <code>paused_at</code> set
+            to <code>null</code>. The CLI adds <code>idempotency_key</code>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Absent, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    A parameter, query value or body field fails the schema, for
+                    example an invalid name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>The cursor does not decode to a project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>404 project.project.not_found</code></td>
+                  <td>
+                    <code>get</code>, <code>rename</code>, <code>pause</code>,
+                    <code>resume</code>
+                  </td>
+                  <td>No project has this ID.</td>
+                </tr>
+                <tr>
+                  <td><code>409 project.name.conflict</code></td>
+                  <td><code>create</code>, <code>rename</code></td>
+                  <td>
+                    A different project holds the name.
+                    <code>details.id</code> holds the ID of that project.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>
+                    <code>create</code>, <code>rename</code>,
+                    <code>pause</code>, <code>resume</code>
+                  </td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    <code>create</code>, <code>rename</code>,
+                    <code>pause</code>, <code>resume</code>
+                  </td>
+                  <td>
+                    The key is in use for a different request, or the first
+                    request with the key is in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td><code>create</code>, <code>rename</code></td>
+                  <td>
+                    The request body is not <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>
+                    <code>list</code>, <code>get</code>, <code>pause</code>,
+                    <code>resume</code>
+                  </td>
+                  <td>The request has a body.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>
+                    The operation exceeded 30 seconds. A mutation can still
+                    complete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Within the replay TTL, a repeated key with the same request and
+            caller returns the recorded response, success or failure.
+          </p>
+          <p>
+            The CLI checks its input before it sends a request. Each local
+            failure exits <code>1</code> and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.project.create.invalid_name</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    The <code>--name</code> value does not follow the name rule.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.rename.invalid_name</code></td>
+                  <td><code>rename</code></td>
+                  <td>
+                    The <code>--name</code> value does not follow the name rule.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.get.invalid_project_id</code></td>
+                  <td><code>get</code></td>
+                  <td>The argument is not a valid project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.rename.invalid_project_id</code></td>
+                  <td><code>rename</code></td>
+                  <td>The argument is not a valid project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.pause.invalid_project_id</code></td>
+                  <td><code>pause</code></td>
+                  <td>The argument is not a valid project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.resume.invalid_project_id</code></td>
+                  <td><code>resume</code></td>
+                  <td>The argument is not a valid project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is more than <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>create</code>, <code>rename</code>,
+                    <code>pause</code>, <code>resume</code>
+                  </td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.project.&lt;command&gt;.token_required</code>
+                  </td>
+                  <td>All</td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared server failure exits <code>1</code>. The CLI writes
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status</code>. For <code>create</code>, <code>rename</code>,
+            <code>pause</code> and <code>resume</code>, it also writes the row
+            <code>idempotency_key</code>. A transport failure, a timeout or a
+            malformed response exits <code>1</code> with
+            <code>cli.project.&lt;command&gt;.indeterminate</code>. For
+            <code>create</code>, <code>rename</code>, <code>pause</code> and
+            <code>resume</code>, the message is
+            <code
+              >the result is unknown; retry with the same idempotency key</code
+            >, and the row <code>idempotency_key</code> holds the key. For a
+            read, the message is
+            <code>the result is unknown; retry the command</code>. There is no
+            automatic retry.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th><code>project create</code></th>
+                  <th><code>project list</code></th>
+                  <th><code>project get</code></th>
+                  <th><code>project rename</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/project</code></td>
+                  <td><code>GET /api/project</code></td>
+                  <td><code>GET /api/project/:project_id</code></td>
+                  <td><code>PATCH /api/project/:project_id</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>project.create</code></td>
+                  <td><code>project.list</code></td>
+                  <td><code>project.get</code></td>
+                  <td><code>project.rename</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td><code>human</code></td>
+                  <td><code>human</code></td>
+                  <td><code>human</code></td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                  <td>30 seconds</td>
+                  <td>30 seconds</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                  <td>No</td>
+                  <td>No</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>None</td>
+                  <td>None</td>
+                  <td><code>project_id</code></td>
+                  <td><code>project_id</code></td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                  <td><code>limit</code>, <code>cursor</code></td>
+                  <td>None</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code>{ &quot;name&quot;: &quot;&lt;name&gt;&quot; }</code>
+                  </td>
+                  <td>None</td>
+                  <td>None</td>
+                  <td>
+                    <code>{ &quot;name&quot;: &quot;&lt;name&gt;&quot; }</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th><code>project pause</code></th>
+                  <th><code>project resume</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/project/:project_id/pause</code></td>
+                  <td><code>POST /api/project/:project_id/resume</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>project.pause</code></td>
+                  <td><code>project.resume</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code></td>
+                  <td><code>human</code></td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td><code>project_id</code></td>
+                  <td><code>project_id</code></td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Query parameter</th>
+                  <th>Default</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td><code>100</code></td>
+                  <td>Integer from <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>None</td>
+                  <td>Nonempty <code>next_cursor</code> value.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The body object of <code>create</code> and
+            <code>rename</code> accepts no other field. The body limit is 10
+            MiB. <code>pause</code> and <code>resume</code> accept no body.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>
+                    <code>create</code>, <code>rename</code>,
+                    <code>pause</code> and <code>resume</code>
+                  </td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    request. Keep it to retry that request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td><code>create</code> and <code>rename</code></td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/project \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"payments"}'
+
+curl -i 'http://127.0.0.1:31415/api/project?limit=50' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i -X PATCH http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PQR' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"billing"}'
+
+curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/pause \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PQS'
+
+curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/resume \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PQT'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord project create --name &lt;name&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project list [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project get &lt;project-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project rename &lt;project-id&gt; --name &lt;name&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project pause &lt;project-id&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project resume &lt;project-id&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord project create --name payments
+kanthord project list --limit 50
+kanthord project get project_01JD3W8QF4Q7J8M9N0P1R2S3T4
+kanthord project rename project_01JD3W8QF4Q7J8M9N0P1R2S3T4 --name billing
+kanthord project pause project_01JD3W8QF4Q7J8M9N0P1R2S3T4
+kanthord project resume project_01JD3W8QF4Q7J8M9N0P1R2S3T4</code></pre>
+          <p>
+            <code>kanthord project</code> without a subcommand displays help.
+          </p>
+          <h3 id="project-create-2">project create</h3>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--name &lt;name&gt;</code></td>
+                  <td>Required</td>
+                  <td>Project name.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>. Supply the same key to
+                    retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-list-2">project list</h3>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Maximum projects per page, from <code>1</code> to
+                    <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None</td>
+                  <td>
+                    Continues from the <code>next_cursor</code> of a previous
+                    page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-get-2">project get</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>Project ID to read.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>There are no command options.</p>
+          <h3 id="project-rename-2">project rename</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>Project ID to rename.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--name &lt;name&gt;</code></td>
+                  <td>Required</td>
+                  <td>New project name.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>. Supply the same key to
+                    retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-pause-2">project pause</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>Project ID to pause.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>. Supply the same key to
+                    retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-resume-2">project resume</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>Project ID to resume.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>. Supply the same key to
+                    retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="shared-options">Shared options</h3>
+          <p>Every command accepts these <code>project</code> group options.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. Each option occurs at most once. The HTTP client has a 31-second
+            deadline for these 30-second operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

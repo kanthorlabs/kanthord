@@ -1,0 +1,1973 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read, submit and delete evidence · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-submit-and-delete-evidence">
+            Read, submit and delete evidence
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Evidence records what an execution produced or observed for one
+            attempt of a node. Each evidence holds one or more assets.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Caller</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>evidence list</code></td>
+                  <td>Human JWT</td>
+                  <td>Returns one page of the evidence of a node.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence get</code></td>
+                  <td>Human JWT</td>
+                  <td>Returns one evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence submit</code></td>
+                  <td>
+                    Machine JWT; the execution holds a live claim on the node
+                  </td>
+                  <td>Records a new evidence for the claimed attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence delete</code></td>
+                  <td>Human JWT</td>
+                  <td>
+                    Deletes an evidence, its assets and its stored objects.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>evidence asset delete</code></td>
+                  <td>Human JWT</td>
+                  <td>
+                    Deletes one asset and its stored object; keeps the evidence.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>evidence asset content get</code></td>
+                  <td>Human JWT</td>
+                  <td>Returns the stored content of one asset.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>An asset has one of four kinds:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>
+                    An address: a repository binding and a commit. The server
+                    stores no repository snapshot.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>produced</code></td>
+                  <td>
+                    Inline bytes, base64 encoded, at most 5 MiB decoded. The
+                    server stores the bytes and their SHA-256.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>object</code></td>
+                  <td>
+                    A stored object of at most 5 GiB in a storage binding of the
+                    pinned revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>platform</code></td>
+                  <td>
+                    The address of an external object, such as a pull request.
+                    Only a request evidence holds this kind.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two submissions with identical content produce two evidence records.
+            A correction is a new evidence; an assessment names the evidence
+            that it weighs. Request evidence comes from the Worker action
+            performer through
+            <code>POST /api/mission/node/:node_id/evidence/request</code>. No
+            CLI command calls that route.
+          </p>
+          <p>
+            An <code>object</code> asset starts unpublished. The submit answer
+            holds a presigned PUT URL with a lifetime of 1 hour. The uploader
+            then calls
+            <code>POST /api/mission/evidence/asset/:asset_id/complete</code> to
+            publish the asset. No CLI command uploads an object or calls that
+            route, and <code>evidence submit</code> refuses an
+            <code>object</code> asset.
+          </p>
+          <h3 id="object-upload">Object upload</h3>
+          <p>
+            The storage bindings of the pinned revision form an ordered upload
+            list. The server selects the storage binding of an upload, and the
+            execution never selects one. The grant walks the list in order:
+          </p>
+          <ol>
+            <li>
+              The grant skips a binding whose latest revision holds
+              <code>available: false</code> and a binding that a tombstone
+              removed.
+            </li>
+            <li>
+              The grant skips a binding that holds a failed upload check in the
+              open attempt of the node.
+            </li>
+            <li>
+              The grant moves to the next binding when the signing call refuses
+              with <code>binding_disabled</code>,
+              <code>binding_removed</code> or
+              <code>storage.platform.s3.*</code>. Every other refusal of the
+              signing call stops the submission.
+            </li>
+            <li>
+              The grant takes the first binding that passes these checks. The
+              asset pins that binding revision in
+              <code>storage_binding_id</code>.
+            </li>
+          </ol>
+          <p>
+            The complete checks the object size and the optional checksum. A
+            check that finds a mismatch, finds no object or fails at the store
+            prevents publication. That failed upload check records the binding
+            as failed for the open attempt of the node, as
+            <code>failed_at</code> of the checked asset. The record stays after
+            the refusal. A delete of that asset, or of its evidence, removes the
+            record, and the binding is grantable again. The failed check also
+            writes a Mission span with the operation
+            <code>mission.evidence.asset.complete</code> and the status
+            <code>Error</code>. The <code>error.type</code> attribute of that
+            span holds the code of the failed call. The uploader then submits
+            again, and the server grants the next binding.
+          </p>
+          <p>
+            A failed storage check of a <code>complete</code> call answers one
+            of these errors. The check sets <code>failed_at</code> and writes
+            the span. The same code is the <code>error.type</code> of the span,
+            and the set is closed. The refusals of <code>complete</code> that
+            come before the check are in the
+            <a href="#failures">failures table</a>. They set no
+            <code>failed_at</code> and write no span.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>409 intake.storage.object_mismatch</code></td>
+                  <td>
+                    The object is absent, or its size or SHA-256 differs from
+                    the asset.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>502 storage.platform.s3.&lt;class&gt;</code> with
+                    <code>details.status</code> as the S3 status
+                  </td>
+                  <td>
+                    The store failed. <code>&lt;class&gt;</code> is
+                    <code>confirmed_failure</code>,
+                    <code>retryable_refusal</code>,
+                    <code>final_refusal</code> or <code>unknown_outcome</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            With no binding left, the submission fails with
+            <code>409 mission.evidence.storage_exhausted</code>. A new attempt
+            tries every storage binding again. A read and a delete of an asset
+            use the binding that the asset pins, and no read moves to another
+            binding.
+          </p>
+          <p>
+            A delete without <code>force</code> requires that the node of the
+            evidence and each of its direct <code>examine</code> dependents is
+            <code>Completed</code> or <code>Discarded</code>. A delete with
+            <code>force</code> skips that check and requires a nonblank
+            <code>reason</code>. The server validates <code>reason</code> and
+            stores it in no mission record. After the commit, the server writes
+            one operational log record of the delete. That record holds the
+            asset or evidence ID, the human account, <code>force</code>,
+            <code>reason</code> and the time. A delete removes stored objects
+            first, then commits the record change.
+          </p>
+          <p>
+            <code>evidence delete</code> also removes the evidence identity from
+            every assessment and outcome of the node. A request evidence
+            requires <code>force</code>. A forced delete of a request evidence
+            of the open attempt pauses the node. That delete ends the live claim
+            and moves the node to <code>Paused</code>, unless the node is
+            already <code>Paused</code>, <code>Completed</code> or
+            <code>Discarded</code>. After <code>evidence delete</code>, the
+            server wakes the scheduler of the project.
+          </p>
+          <p>
+            The list and get operations change nothing. Each list call reads one
+            page. The CLI does not follow <code>next_cursor</code>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="evidence-list"><code>evidence list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "evidence_01M4C5G6BN71J38HW3MFCKMAT6",
+      "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+      "attempt": 1,
+      "subject": "Unit test report",
+      "assets": [
+        {
+          "id": "evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR",
+          "kind": "produced",
+          "published_at": 1791398400000,
+          "expired_at": null,
+          "address": {
+            "kind": "produced",
+            "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          }
+        }
+      ],
+      "provenance": {
+        "kind": "execution",
+        "execution_id": "execution_01M4C5G6BP0355Z52M6JCYZCSK",
+        "client_id": "client_identity_01M4C5G6BPC5C40S9NFE96N5FB",
+        "name": "worker-a"
+      },
+      "created_at": 1791398400000
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array of <code>Evidence</code></td>
+                  <td>
+                    At most <code>limit</code> evidence records, in reverse
+                    identity order.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Opaque cursor for the next page. <code>null</code> ends the
+                    traversal.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Without <code>attempt</code>, the list covers every attempt of the
+            node.
+          </p>
+          <h3 id="evidence-get"><code>evidence get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with one
+            <code>Evidence</code>. The CLI writes it as one JSON line to stdout
+            and exits <code>0</code>.
+          </p>
+          <h3 id="evidence"><code>Evidence</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>evidence_&lt;ulid&gt;</code></td>
+                  <td>Identity of the evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node that owns the evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>nonnegative safe integer</td>
+                  <td>Attempt of the evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>subject</code></td>
+                  <td>string</td>
+                  <td>Short description of the evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>assets</code></td>
+                  <td>array of <code>EvidenceAsset</code></td>
+                  <td>
+                    Assets in identity order. An asset delete can leave the
+                    array empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>provenance</code></td>
+                  <td><code>Actor</code></td>
+                  <td>
+                    Actor that recorded the evidence. See
+                    <a href="attempt.html#attempt">attempts</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>Unix milliseconds</td>
+                  <td>Time of the record.</td>
+                </tr>
+                <tr>
+                  <td><code>requirement_key</code></td>
+                  <td>action key</td>
+                  <td>
+                    Present only on a request evidence: the required action that
+                    it requests.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>end_state</code></td>
+                  <td><code>expected</code> or <code>other</code></td>
+                  <td>
+                    Present only on a request evidence that reached an end
+                    state.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>verification</code></td>
+                  <td><code>Verification</code></td>
+                  <td>Present only when the submit supplied one.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p><code>EvidenceAsset</code> holds these properties:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>evidence_asset_&lt;ulid&gt;</code></td>
+                  <td>Identity of the asset.</td>
+                </tr>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>repository</code>, <code>produced</code>,
+                    <code>object</code> or <code>platform</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>published_at</code></td>
+                  <td>Unix milliseconds or <code>null</code></td>
+                  <td>
+                    Time of publication; <code>null</code> for an unpublished
+                    <code>object</code> asset.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>expired_at</code></td>
+                  <td>Unix milliseconds or <code>null</code></td>
+                  <td>
+                    Upload deadline of an unpublished <code>object</code> asset;
+                    otherwise <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>address</code></td>
+                  <td>object</td>
+                  <td>
+                    Address of the content; its <code>kind</code> equals the
+                    asset kind, or a platform kind.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>storage_binding_id</code></td>
+                  <td><code>binding_&lt;ulid&gt;</code></td>
+                  <td>
+                    <code>object</code> only: the storage binding that holds the
+                    object.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>size</code></td>
+                  <td>nonnegative safe integer</td>
+                  <td><code>object</code> only: declared size in bytes.</td>
+                </tr>
+                <tr>
+                  <td><code>media_type</code></td>
+                  <td>string</td>
+                  <td><code>object</code> only: declared media type.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The <code>address</code> forms are:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Address <code>kind</code></th>
+                  <th>Other properties</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>
+                    <code>binding_id</code> (<code>binding_&lt;ulid&gt;</code>)
+                    and <code>commit</code> (40 or 64 lower-case hex
+                    characters).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>produced</code></td>
+                  <td><code>sha256</code> of the decoded bytes.</td>
+                </tr>
+                <tr>
+                  <td><code>object</code></td>
+                  <td>
+                    <code>location</code> (<code>s3://</code> URI), optional
+                    <code>version</code>, optional <code>sha256</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>pull_request</code></td>
+                  <td>
+                    <code>resource_identity</code> string and positive
+                    <code>number</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>branch_push</code></td>
+                  <td>
+                    <code>resource_identity</code>, <code>branch</code> and
+                    <code>commit</code> strings.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>Verification</code> holds <code>tested_input</code> and
+            <code>results</code>. <code>tested_input</code> is one address of
+            kind <code>repository</code>, <code>produced</code> or
+            <code>object</code>, or a nonempty array of repository addresses.
+            Each item of <code>results</code> holds these properties:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>command</code></td>
+                  <td>nonblank string</td>
+                  <td>Verification command that ran.</td>
+                </tr>
+                <tr>
+                  <td><code>exit_code</code></td>
+                  <td>integer or <code>null</code></td>
+                  <td>
+                    Exit code; <code>null</code> when the command had none.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>signal</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>Signal that ended the command, if any.</td>
+                </tr>
+                <tr>
+                  <td><code>timed_out</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when the command hit its time limit.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-submit"><code>evidence submit</code></h3>
+          <p>The API returns HTTP <code>200</code>:</p>
+          <pre><code class="language-json">{
+  "evidence": {
+    "id": "evidence_01M4C5G6BN71J38HW3MFCKMAT6",
+    "subject": "Unit test report"
+  },
+  "uploads": []
+}</code></pre>
+          <p>The example abbreviates the evidence record.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>evidence</code></td>
+                  <td><code>Evidence</code></td>
+                  <td>The new evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>uploads</code></td>
+                  <td>array of objects</td>
+                  <td>
+                    One item for each <code>object</code> asset:
+                    <code>asset_id</code>, <code>put_url</code>,
+                    <code>headers</code> and <code>expires_at</code>. Empty for
+                    other assets.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI refuses <code>object</code> assets, so its
+            <code>uploads</code> array is always empty. The CLI adds
+            <code>idempotency_key</code>
+            (<code>idempotency_key_&lt;ulid&gt;</code>) to the object and writes
+            one JSON line to stdout, then exits <code>0</code>. Retain the key
+            with the same machine token for retries.
+          </p>
+          <h3 id="evidence-delete-and-evidence-asset-delete">
+            <code>evidence delete</code> and <code>evidence asset delete</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>204</code> with no body. The CLI writes
+            one JSON line with the retry key and exits <code>0</code>:
+          </p>
+          <pre><code class="language-json">{ "idempotency_key": "idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH" }</code></pre>
+          <h3 id="evidence-asset-content-get">
+            <code>evidence asset content get</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code> with a
+            <code>StoredContent</code> object. The CLI writes it as one JSON
+            line to stdout and exits <code>0</code>.
+          </p>
+          <p>
+            For a <code>produced</code> asset, the answer holds the inline
+            bytes:
+          </p>
+          <pre><code class="language-json">{
+  "asset_id": "evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR",
+  "address": {
+    "kind": "produced",
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+  },
+  "media_type": "text/plain",
+  "encoding": "base64",
+  "data": "dGVzdA=="
+}</code></pre>
+          <p>
+            For an <code>object</code> asset, the answer holds
+            <code>asset_id</code>, <code>address</code>,
+            <code>media_type</code>, <code>size</code>, <code>get_url</code> and
+            <code>expires_at</code>. <code>get_url</code> is a presigned GET URL
+            for the recorded object version. The human CLI writes that URL to
+            stdout. Treat stdout as a secret in that case.
+          </p>
+          <p>
+            A <code>repository</code> or <code>platform</code> asset has no
+            stored content. The read fails with <code>409</code> and names the
+            address in <code>details</code>.
+          </p>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>. Timestamps are
+            integer Unix milliseconds in UTC.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Absent, invalid or expired token. A machine token on a human
+                    command, or a human token on <code>submit</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid path, query or body. On <code>submit</code>, details
+                    also name <code>subject</code>, <code>assets</code>,
+                    <code>tested_input</code> or a verification text field. On a
+                    delete, details name <code>reason</code> when
+                    <code>force</code> has no reason or <code>reason</code> is
+                    blank or too long.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>
+                    <code>list</code>, <code>get</code>,
+                    <code>content get</code>
+                  </td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td><code>submit</code>, both deletes</td>
+                  <td>The body is not <code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td><code>submit</code>, both deletes</td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td><code>submit</code>, both deletes</td>
+                  <td>Absent or malformed idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td><code>submit</code>, both deletes</td>
+                  <td>Conflict on the reuse of an idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td><code>list</code></td>
+                  <td>The node does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td>
+                    <code>get</code>, both deletes, <code>content get</code>,
+                    <code>complete</code>
+                  </td>
+                  <td>The evidence or asset does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.registration.required</code></td>
+                  <td><code>submit</code>, <code>complete</code></td>
+                  <td>
+                    The machine identity holds no live worker registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>403 gateway.invocation.execution_proof_failed</code>
+                  </td>
+                  <td><code>submit</code>, <code>complete</code></td>
+                  <td>
+                    <code>execution_id</code> is not a live claim of this
+                    registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 scheduler.execution.not_running</code></td>
+                  <td><code>submit</code>, <code>complete</code></td>
+                  <td>The claim of the execution is no longer live.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.execution.context_mismatch</code></td>
+                  <td><code>submit</code>, <code>complete</code></td>
+                  <td>
+                    The route node, <code>execution_id</code>,
+                    <code>attempt</code> or <code>node_revision</code> differs
+                    from the claim. On <code>complete</code>, the attempt of the
+                    evidence of the asset also counts. Details name the
+                    <code>field</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.evidence.binding_mismatch</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    A repository address names a binding other than the one that
+                    its context requires, or a landed commit names an
+                    <code>examine</code> node. Details hold
+                    <code>binding_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 mission.evidence.too_large</code></td>
+                  <td><code>submit</code></td>
+                  <td>A <code>produced</code> asset exceeds 5 MiB decoded.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 mission.evidence.storage_binding_absent</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    An <code>object</code> asset meets a pinned revision without
+                    a storage binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.storage_exhausted</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    No storage binding of the pinned revision is left for the
+                    grant of an <code>object</code> asset in the open attempt.
+                    Details hold <code>node_id</code>, <code>attempt</code> and
+                    <code>bindings</code>. <code>bindings</code> lists the
+                    storage bindings with a failed upload check in the open
+                    attempt, in list order.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.upload_expired</code></td>
+                  <td><code>complete</code></td>
+                  <td>
+                    The presigned URL of the unpublished asset expired. A new
+                    upload is a new submission. The refusal sets no
+                    <code>failed_at</code> and writes no Mission span.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>403 mission.authorization.refused</code></td>
+                  <td>
+                    <code>submit</code>, <code>complete</code>, both deletes,
+                    <code>content get</code>
+                  </td>
+                  <td>
+                    The claim is not live, or the storage binding is removed or
+                    disabled. On <code>complete</code>, the attempt of the claim
+                    can also be closed. Details hold <code>reason</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.mission.not_found</code></td>
+                  <td>Both deletes</td>
+                  <td>The mission of the node does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td>Both deletes</td>
+                  <td>
+                    <code>expected_mission_version</code> is stale. Details hold
+                    <code>current</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.remove_node_live</code></td>
+                  <td>Both deletes</td>
+                  <td>
+                    Without <code>force</code>, the node or a direct
+                    <code>examine</code> dependent of the node is not
+                    <code>Completed</code> or <code>Discarded</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 mission.evidence.request_force_required</code>
+                  </td>
+                  <td><code>evidence delete</code></td>
+                  <td>
+                    The evidence is a request evidence, and
+                    <code>force</code> is <code>false</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 mission.evidence.request_asset_refused</code>
+                  </td>
+                  <td><code>evidence asset delete</code></td>
+                  <td>
+                    The asset is the <code>platform</code> asset of a request
+                    evidence.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.content_repository</code></td>
+                  <td><code>content get</code></td>
+                  <td>
+                    The asset is a <code>repository</code> address. Details hold
+                    <code>evidence_id</code> and <code>address</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.content_platform</code></td>
+                  <td><code>content get</code></td>
+                  <td>
+                    The asset is a <code>platform</code> address. Details hold
+                    <code>evidence_id</code> and <code>address</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>503 mission.evidence.storage_unavailable</code></td>
+                  <td>
+                    <code>submit</code>, both deletes, <code>content get</code>
+                  </td>
+                  <td>
+                    The operation needs object storage for an
+                    <code>object</code> asset, and no object storage is wired.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>cli.mission.evidence.list.invalid_node_id</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.evidence.list.invalid_attempt</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--attempt</code> is not a nonnegative safe integer in
+                    canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.evidence.get.invalid_evidence_id</code>
+                  </td>
+                  <td><code>get</code></td>
+                  <td>
+                    <code>&lt;evidence-id&gt;</code> is not a canonical
+                    <code>evidence_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.evidence.submit.invalid_node_id</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.evidence.submit.object_asset</code></td>
+                  <td><code>submit</code></td>
+                  <td>The file holds an <code>object</code> asset.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.evidence.delete.invalid_evidence_id</code>
+                  </td>
+                  <td><code>delete</code></td>
+                  <td>
+                    <code>&lt;evidence-id&gt;</code> is not a canonical
+                    <code>evidence_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.evidence.delete.invalid_expected_mission_version</code
+                    >
+                  </td>
+                  <td><code>delete</code></td>
+                  <td>
+                    <code>--expected-mission-version</code> is not a positive
+                    decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.evidence.asset.delete.invalid_asset_id</code
+                    >
+                  </td>
+                  <td><code>asset delete</code></td>
+                  <td>
+                    <code>&lt;asset-id&gt;</code> is not a canonical
+                    <code>evidence_asset_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.evidence.asset.delete.invalid_expected_mission_version</code
+                    >
+                  </td>
+                  <td><code>asset delete</code></td>
+                  <td>
+                    <code>--expected-mission-version</code> is not a positive
+                    decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.evidence.asset.content.get.invalid_asset_id</code
+                    >
+                  </td>
+                  <td><code>content get</code></td>
+                  <td>
+                    <code>&lt;asset-id&gt;</code> is not a canonical
+                    <code>evidence_asset_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.evidence.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>
+                    No nonblank token resolves. <code>&lt;command&gt;</code> is
+                    <code>list</code>, <code>get</code>, <code>submit</code>,
+                    <code>delete</code>, <code>asset.delete</code> or
+                    <code>asset.content.get</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td><code>submit</code>, both deletes</td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.invalid_path</code>,
+                    <code>cli.file.not_found</code>,
+                    <code>cli.file.not_regular</code>,
+                    <code>cli.file.encoding_invalid</code>,
+                    <code>cli.file.not_json</code>,
+                    <code>cli.file.duplicate_key</code>,
+                    <code>cli.file.not_object</code>
+                  </td>
+                  <td><code>submit</code></td>
+                  <td>
+                    <code>--file</code> is <code>-</code>, absent, not a regular
+                    file, not UTF-8, not JSON, holds a duplicate key, or is not
+                    a JSON object.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.schema_invalid</code></td>
+                  <td><code>submit</code></td>
+                  <td>
+                    The file does not match the
+                    <code>EvidenceSubmit</code> schema.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    The local copy of the operation schema rejects the input,
+                    for example <code>--force</code> without
+                    <code>--reason</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is greater than 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All with options</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Canonical form means decimal digits with no sign and no zero before
+            another digit. A declared failure makes the CLI exit
+            <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. For
+            <code>submit</code> and the deletes, the CLI prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead. A transport
+            failure, timeout or malformed response exits <code>1</code>:
+          </p>
+          <ul>
+            <li>
+              The reads report
+              <code>cli.mission.evidence.list.indeterminate</code>,
+              <code>cli.mission.evidence.get.indeterminate</code> or
+              <code>cli.mission.evidence.asset.content.get.indeterminate</code>.
+              Run the command again.
+            </li>
+            <li>
+              <code>submit</code> and the deletes report
+              <code>cli.mission.evidence.submit.indeterminate</code>,
+              <code>cli.mission.evidence.delete.indeterminate</code> or
+              <code>cli.mission.evidence.asset.delete.indeterminate</code> with
+              the retry key. Reuse the same key and token. There is no automatic
+              retry.
+            </li>
+          </ul>
+          <h2 id="api-shape">API shape</h2>
+          <p>Every operation has a 30-second timeout.</p>
+          <h3 id="evidence-list-1"><code>evidence list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/node/:node_id/evidence</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>attempt</code> (query, optional nonnegative safe
+                    integer); <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query, optional)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-get-1"><code>evidence get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/evidence/:evidence_id</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>evidence_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-asset-content-get-1">
+            <code>evidence asset content get</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >GET /api/mission/evidence/asset/:asset_id/content</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.asset.content.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>asset_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The three reads use one header:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/evidence?attempt=1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/evidence/evidence_01M4C5G6BN71J38HW3MFCKMAT6 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/evidence/asset/evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR/content \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <p>
+            To read the next page, send the <code>next_cursor</code> value as
+            the <code>cursor</code> query parameter with the same
+            <code>limit</code> and <code>attempt</code>.
+          </p>
+          <h3 id="evidence-submit-1"><code>evidence submit</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/mission/node/:node_id/evidence</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.submit</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live
+                    registration and a live claim on <code>execution_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code>EvidenceSubmit</code> JSON object; unknown fields are
+                    rejected
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the registered
+                    worker that holds the claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it for
+                    retries of that request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td><code>execution_&lt;ulid&gt;</code></td>
+                  <td>
+                    Required. The live execution; the Gateway proves it against
+                    the caller registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>positive safe integer</td>
+                  <td>Required. Equal to the claimed attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>node_revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Required. Equal to the pinned revision of the claim.</td>
+                </tr>
+                <tr>
+                  <td><code>subject</code></td>
+                  <td>nonblank string</td>
+                  <td>
+                    Required. At most <code>mission.text_max_bytes</code> UTF-8
+                    bytes, 32768 by default.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>assets</code></td>
+                  <td>array of <code>AssetSubmit</code></td>
+                  <td>Required, at least one item.</td>
+                </tr>
+                <tr>
+                  <td><code>verification</code></td>
+                  <td><code>Verification</code></td>
+                  <td>
+                    Optional. Each <code>command</code> and
+                    <code>signal</code> follows the <code>subject</code> text
+                    bound. <code>tested_input</code> follows the rules of
+                    <a href="assessment.html#assessment-submit-1"
+                      >assessment submit</a
+                    >.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>AssetSubmit</code> has one of three forms, selected by
+            <code>kind</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>kind</code></th>
+                  <th>Other fields</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td><code>address</code>: a repository address</td>
+                  <td>
+                    An <code>implement</code> node names its own repository
+                    binding. An <code>examine</code> node names a repository
+                    binding of its pinned revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>produced</code></td>
+                  <td>
+                    <code>content</code>: <code>media_type</code>,
+                    <code>encoding</code> (<code>base64</code>) and
+                    <code>data</code>
+                  </td>
+                  <td>
+                    <code>data</code> is canonical base64 of at most 5 MiB
+                    decoded.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>object</code></td>
+                  <td>
+                    <code>size</code> (0 to 5 GiB), <code>media_type</code>,
+                    optional <code>sha256</code>
+                  </td>
+                  <td>
+                    The pinned revision holds a storage binding. The CLI refuses
+                    this kind.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A <code>media_type</code> has the form <code>type/subtype</code> and
+            holds at most 255 characters.
+          </p>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/evidence \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
+  -H 'Content-Type: application/json' \
+  -d '{"execution_id":"execution_01M4C5G6BP0355Z52M6JCYZCSK","attempt":1,"node_revision":3,"subject":"Unit test report","assets":[{"kind":"produced","content":{"media_type":"text/plain","encoding":"base64","data":"dGVzdA=="}}],"verification":{"tested_input":{"kind":"repository","binding_id":"binding_01M4C5G6BP5EWTVTTXFH1R25MC","commit":"4b825dc642cb6eb9a060e54bf8d69288fbee4904"},"results":[{"command":"npm test","exit_code":0,"signal":null,"timed_out":false}]}}'</code></pre>
+          <h3 id="evidence-delete"><code>evidence delete</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>DELETE /api/mission/evidence/:evidence_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.delete</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>evidence_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code>EvidenceDelete</code> JSON object; unknown fields are
+                    rejected
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-asset-delete"><code>evidence asset delete</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>DELETE /api/mission/evidence/asset/:asset_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.asset.delete</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>asset_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code>EvidenceDelete</code> JSON object; unknown fields are
+                    rejected
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Both deletes use these headers and body:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it for
+                    retries of that request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>expected_mission_version</code></td>
+                  <td>positive safe integer</td>
+                  <td>
+                    Required. Equal to the current version of the mission.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>force</code></td>
+                  <td>boolean</td>
+                  <td>
+                    Required. <code>true</code> skips the terminal-chain check.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>nonblank string</td>
+                  <td>
+                    Required when <code>force</code> is <code>true</code>;
+                    otherwise optional. Follows the text bound.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X DELETE http://127.0.0.1:31415/api/mission/evidence/evidence_01M4C5G6BN71J38HW3MFCKMAT6 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_mission_version":7,"force":true,"reason":"Remove exposed material"}'</code></pre>
+          <p>
+            The Gateway keeps idempotency records in process memory for
+            <code>gateway.idempotency_ttl</code> seconds, 86400 by default. A
+            repeat of the same key, caller and body replays the recorded answer,
+            failures included.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>mission</code> group, and each leaf command accepts them:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>
+                    Machine JWT for <code>submit</code>; human JWT for every
+                    other command.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+          <h3 id="evidence-list-2"><code>evidence list</code></h3>
+          <pre><code class="language-text">kanthord mission evidence list &lt;node-id&gt; [--attempt &lt;attempt&gt;] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission evidence list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --attempt 1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--attempt &lt;attempt&gt;</code></td>
+                  <td>None; every attempt</td>
+                  <td>Nonnegative attempt number that selects one attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum evidence records on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-get-2"><code>evidence get</code></h3>
+          <pre><code class="language-text">kanthord mission evidence get &lt;evidence-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission evidence get evidence_01M4C5G6BN71J38HW3MFCKMAT6</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;evidence-id&gt;</code></td>
+                  <td>Required <code>evidence_&lt;ulid&gt;</code> to read.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-submit-2"><code>evidence submit</code></h3>
+          <pre><code class="language-text">kanthord mission evidence submit &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">KANTHORD_TOKEN='&lt;machine-jwt&gt;' kanthord mission evidence submit node_01M4C5G6BNQQPFNM7M8W0GW1W4 \
+  --file evidence.json \
+  --idempotency-key idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>
+                    Required <code>node_&lt;ulid&gt;</code> of the claimed node.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required</td>
+                  <td>
+                    Regular UTF-8 file that holds the
+                    <code>EvidenceSubmit</code> JSON object. Stdin
+                    (<code>-</code>) is not accepted.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when you retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI sends the file content as the request body. The CLI help
+            labels <code>--file</code> as &quot;Node JSON file&quot;; the file
+            holds an <code>EvidenceSubmit</code> object.
+          </p>
+          <h3 id="evidence-delete-1"><code>evidence delete</code></h3>
+          <pre><code class="language-text">kanthord mission evidence delete &lt;evidence-id&gt; --expected-mission-version &lt;version&gt; [--force] [--reason &lt;text&gt;] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission evidence delete evidence_01M4C5G6BN71J38HW3MFCKMAT6 \
+  --expected-mission-version 7 --force --reason 'Remove exposed material'</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;evidence-id&gt;</code></td>
+                  <td>
+                    Required <code>evidence_&lt;ulid&gt;</code> to delete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="evidence-asset-delete-1">
+            <code>evidence asset delete</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission evidence asset delete &lt;asset-id&gt; --expected-mission-version &lt;version&gt; [--force] [--reason &lt;text&gt;] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission evidence asset delete evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR \
+  --expected-mission-version 7</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;asset-id&gt;</code></td>
+                  <td>
+                    Required <code>evidence_asset_&lt;ulid&gt;</code> to delete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Both delete commands take these options:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>--expected-mission-version &lt;version&gt;</code>
+                  </td>
+                  <td>Required</td>
+                  <td>
+                    Positive decimal integer sent as
+                    <code>expected_mission_version</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--force</code></td>
+                  <td><code>false</code></td>
+                  <td>
+                    Sends <code>force: true</code>, which skips the
+                    terminal-chain check.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--reason &lt;text&gt;</code></td>
+                  <td>None</td>
+                  <td>
+                    Sent as <code>reason</code>. Required with
+                    <code>--force</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when you retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The CLI always sends <code>force</code> as an explicit boolean.</p>
+          <h3 id="evidence-asset-content-get-2">
+            <code>evidence asset content get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission evidence asset content get &lt;asset-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission evidence asset content get evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;asset-id&gt;</code></td>
+                  <td>
+                    Required <code>evidence_asset_&lt;ulid&gt;</code> to read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

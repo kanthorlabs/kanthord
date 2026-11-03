@@ -1,0 +1,1410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>What a worker reports to KanthorD · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#the-state-channel">The state channel</a></li>
+          <li><a href="#the-telemetry-channel">The telemetry channel</a></li>
+          <li><a href="#the-native-path">The native path</a></li>
+          <li>
+            <a href="#the-external-harness-path">The external harness path</a>
+          </li>
+          <li>
+            <a href="#example-one-tool-call-from-both-producers"
+              >Example: one tool call from both producers</a
+            >
+          </li>
+          <li><a href="#what-the-trace-answers">What the trace answers</a></li>
+          <li><a href="#limits">Limits</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="what-a-worker-reports-to-kanthord">
+            What a worker reports to KanthorD
+          </h1>
+          <p>
+            A worker reports to KanthorD on two channels. The state channel
+            changes the state of a node. The telemetry channel records what the
+            worker did, and it changes nothing. A native worker, for example
+            <code>coder@1</code>, and an external harness, for example
+            <code>claude-code@1</code>, use the same two channels with the same
+            record shapes.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Owner</th>
+                  <th>What it carries</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>State</td>
+                  <td>Scheduler and Mission</td>
+                  <td>Claim, claim check, evidence, release</td>
+                  <td>Decides the next state of the node</td>
+                </tr>
+                <tr>
+                  <td>Telemetry</td>
+                  <td>Tracking</td>
+                  <td>Spans of phases, tasks, turns, tool calls, progress</td>
+                  <td>None. No service reads it to decide</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The telemetry channel follows
+            <a href="../reference/erd/04-tracking.html">ERD 4: Telemetry</a>.
+            The native path is implemented: the Scheduler writes the root span,
+            and a native worker writes its spans with
+            <code>tracking.telemetry.write</code>. The external harness path is
+            a design.
+          </p>
+          <h2 id="the-state-channel">The state channel</h2>
+          <p>
+            Every worker calls the same operations, except the two rows marked
+            native only. A native worker calls them through the worker
+            application. An external harness calls them through the CLI with its
+            machine token.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Moment</th>
+                  <th>Operation</th>
+                  <th>Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Start of the instance</td>
+                  <td><code>worker.register</code></td>
+                  <td>
+                    <a href="../reference/worker/register.html">register</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Every 60 seconds</td>
+                  <td><code>worker.heartbeat</code></td>
+                  <td>
+                    <a href="../reference/worker/heartbeat.html">heartbeat</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Wait for work</td>
+                  <td><code>scheduler.work.pull</code></td>
+                  <td><a href="../reference/scheduler/work.html">work</a></td>
+                </tr>
+                <tr>
+                  <td>After the claim, native only</td>
+                  <td><code>worker.handover</code></td>
+                  <td>
+                    <a href="../reference/worker/handover.html">handover</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td>After the handover, native only</td>
+                  <td><code>worker.execution.setup.get</code></td>
+                  <td>No CLI leaf. The worker application reads it.</td>
+                </tr>
+                <tr>
+                  <td>Before each step</td>
+                  <td><code>scheduler.claim.get</code></td>
+                  <td><a href="../reference/scheduler/claim.html">claim</a></td>
+                </tr>
+                <tr>
+                  <td>A result to keep</td>
+                  <td><code>mission.evidence.submit</code></td>
+                  <td>
+                    <a href="../reference/mission/evidence.html">evidence</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td>A judgement of a reviewer</td>
+                  <td><code>mission.assessment.submit</code></td>
+                  <td>
+                    <a href="../reference/mission/assessment.html"
+                      >assessment</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    After a passing assessment that requires an external action
+                  </td>
+                  <td><code>worker.action.request</code></td>
+                  <td>
+                    No CLI leaf. An external harness calls the action performer
+                    tool of the MCP server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>End of the execution</td>
+                  <td><code>scheduler.execution.release</code></td>
+                  <td>
+                    <a href="../reference/scheduler/execution.html"
+                      >execution</a
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The claim answers the execution record. Its
+            <code>execution_id</code>, <code>trace_id</code> and
+            <code>root_span_id</code> are the three values that the telemetry
+            channel needs.
+          </p>
+          <p>
+            The release body holds <code>further_work</code> and an optional
+            <code>stop</code>. A <code>stop</code> requires
+            <code>further_work: true</code>. A native worker adds
+            <code>cause</code> to the <code>stop</code>. An external harness can
+            omit it, and the cause is then <code>unattributed</code> with no
+            suspects.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>stop.reason</code></th>
+                  <th><code>stop.code</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>budget_end</code></td>
+                  <td><code>turns</code> or <code>wall_time</code></td>
+                </tr>
+                <tr>
+                  <td><code>provider_failed</code></td>
+                  <td>
+                    <code>rate_limited</code>, <code>quota_exhausted</code>,
+                    <code>unauthorized</code>, <code>bad_request</code>,
+                    <code>unavailable</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>no_progress</code></td>
+                  <td><code>null</code></td>
+                </tr>
+                <tr>
+                  <td><code>environment_failed</code></td>
+                  <td>
+                    <code>setup_failed</code>, <code>command_absent</code>,
+                    <code>affected_invalid</code>, <code>affected_timeout</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>operation_failed</code>,
+                    <code>judgement_invalid</code>, <code>report_absent</code>,
+                    <code>action_unsettled</code>,
+                    <code>assessment_absent</code>
+                  </td>
+                  <td>Any text or <code>null</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A native steps execution sends <code>operation_failed</code> with
+            these codes of its own:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>stop.code</code></th>
+                  <th>Cause</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository.node_branch.missing</code></td>
+                  <td>The node branch is gone after a recorded push.</td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.branch_changed</code></td>
+                  <td>An agent turn left a checkout off the node branch.</td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.history_rewritten</code></td>
+                  <td>
+                    An agent turn moved the head to a commit that does not
+                    contain the head before the turn.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.git_in_progress</code></td>
+                  <td>
+                    An agent turn left a merge, <code>am</code>, cherry-pick or
+                    revert in progress on the node branch. An open rebase
+                    detaches <code>HEAD</code> and gives
+                    <code>worker.turn.branch_changed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.merge_missing</code></td>
+                  <td>A conflict turn ended with no open merge of the base.</td>
+                </tr>
+                <tr>
+                  <td><code>worker.merge.markers_left</code></td>
+                  <td>
+                    A conflicted file still holds a conflict marker after the
+                    conflict turn.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>worker.verification.infrastructure_failed</code>
+                  </td>
+                  <td>
+                    A verification failed because of the infrastructure on its
+                    run and on its rerun.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <a href="coder-worker.html#how-the-execution-ends"
+              >How the coder@1 worker works</a
+            >
+            explains each end. <code>reviewer@1</code> also sends
+            <code>worker.verification.infrastructure_failed</code>.
+          </p>
+          <p>
+            An external harness releases before <code>expired_at</code> of its
+            claim. The claim has no renewal.
+          </p>
+          <h2 id="the-telemetry-channel">The telemetry channel</h2>
+          <h3 id="the-trace-of-an-execution">The trace of an execution</h3>
+          <p>
+            The Scheduler opens the root span of an execution after the claim.
+            Every span of the worker names that root span or a span below it as
+            its parent. One execution is one trace.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
+flowchart TB
+    accTitle: The span tree of one execution
+    accDescr: The Scheduler opens the root span. coder@1 adds phase, task, verification and git spans, and a phase holds the release-gate verifications and the conflict turns. reviewer@1 adds evaluation and verification spans. Both a native worker and an external harness add session, turn and tool spans. An external harness adds progress spans.
+    root(["Root span&lt;br/&gt;Scheduler"])
+    root --&gt; phase["worker.phase&lt;br/&gt;native"]
+    phase --&gt; task["worker.task&lt;br/&gt;native"]
+    task --&gt; verify["worker.verification&lt;br/&gt;native"]
+    phase --&gt; git["worker.git&lt;br/&gt;native"]
+    phase --&gt; verify
+    phase --&gt; turn
+    root --&gt; evaluation["worker.evaluation&lt;br/&gt;native"]
+    evaluation --&gt; verify2["worker.verification&lt;br/&gt;native"]
+    task --&gt; turn["agent.turn&lt;br/&gt;both"]
+    root --&gt; session["agent.session&lt;br/&gt;both"]
+    session --&gt; turn2["agent.turn&lt;br/&gt;both"]
+    turn --&gt; tool["agent.tool&lt;br/&gt;both"]
+    turn2 --&gt; tool2["agent.tool&lt;br/&gt;both"]
+    session --&gt; progress["agent.progress&lt;br/&gt;harness"]
+    turn -. "gen_ai.conversation.id" .-&gt; session
+    classDef shared fill:#fbeae1,stroke:#eb6c36,color:#2d3142;
+    classDef outcome fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class session,turn,turn2,tool,tool2,progress shared;
+    class root outcome;
+</pre>
+          <h3 id="the-span-catalog">The span catalog</h3>
+          <p>
+            The span operation names are a closed set, defined as an enum in
+            code. A span holds identities and measurements in its attributes.
+            Prose of a worker step, for example a command or an output, goes
+            into a telemetry text that the span names in <code>text_ids</code>.
+            The prose of the agent, for example a reply, a tool input or a tool
+            output, goes into the
+            <a href="#the-agent-session">session entries</a> of its agent
+            session.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Producer</th>
+                  <th>Parent</th>
+                  <th>Attributes</th>
+                  <th>Texts</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>scheduler.execution</code></td>
+                  <td>Scheduler</td>
+                  <td>None</td>
+                  <td>
+                    <code>kanthord.execution.id</code>,
+                    <code>kanthord.node.id</code>,
+                    <code>kanthord.project.id</code>,
+                    <code>kanthord.attempt</code>,
+                    <code>kanthord.worker.name</code> of the claiming binding,
+                    <code>kanthord.worker.instance</code>: the instance key of
+                    the claiming registration, the instance name at every
+                    placement of kanthord and
+                    <code>&lt;binding name&gt;/&lt;name&gt;</code> for an
+                    external harness, <code>kanthord.execution.kind</code>:
+                    <code>steps</code> or <code>evaluation</code>,
+                    <code>kanthord.queue.wait_ms</code>. At the end,
+                    <code>kanthord.execution.end</code>: <code>finished</code>,
+                    <code>lost</code> or <code>revoked</code>, and
+                    <code>kanthord.revoke.cause</code>:
+                    <code>assessment</code> or <code>human</code> after a
+                    revocation. After a stop, <code>kanthord.stop.reason</code>,
+                    <code>kanthord.stop.code</code> (when the stop has a code)
+                    and <code>kanthord.stop.detail</code> (when the stop has a
+                    detail). The cause of a failure event, on the end of the
+                    root span only, adds <code>kanthord.cause.category</code>,
+                    <code>kanthord.cause.subcategory</code>,
+                    <code>kanthord.cause.assigner</code> and
+                    <code>kanthord.cause.suspects</code>. The status is
+                    <code>Error</code> after a stop, a lost claim or a
+                    revocation by a human, and <code>Ok</code> otherwise
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>scheduler.transition</code></td>
+                  <td>Scheduler</td>
+                  <td>Root</td>
+                  <td>
+                    <code>kanthord.node.state.from</code>,
+                    <code>kanthord.node.state.to</code>,
+                    <code>kanthord.transition.rule</code>: <code>none</code>,
+                    <code>failure_limit</code>, <code>further_work_limit</code>,
+                    <code>rework_limit</code> or <code>plan_defect</code>, and
+                    <code>kanthord.transition.count</code> and
+                    <code>kanthord.transition.limit</code> with
+                    <code>failure_limit</code>,
+                    <code>further_work_limit</code> or
+                    <code>rework_limit</code>.
+                    <code>kanthord.node.lead_time_ms</code> with the state
+                    <code>Completed</code>.
+                    <code>kanthord.transition.failure_count</code> after a stop
+                    other than <code>budget_end</code> or a loss, and
+                    <code>kanthord.node.available_at</code> while the stop
+                    backoff delays the job. One span at a release, a loss and a
+                    revocation by an assessment
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>worker.phase</code></td>
+                  <td>Native</td>
+                  <td>Root</td>
+                  <td>
+                    <code>kanthord.phase</code>: <code>prepare</code>,
+                    <code>start</code>, <code>tasks</code> or
+                    <code>finish</code>
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>worker.task</code></td>
+                  <td>Native</td>
+                  <td><code>worker.phase</code></td>
+                  <td>
+                    <code>kanthord.task.id</code>: the task id, or the node id
+                    for the node unit. <code>kanthord.task.result</code>:
+                    <code>complete</code> or <code>budget_end</code>. A stop
+                    ends the span with the status <code>Error</code> and no
+                    result. A <code>no_progress</code> stop adds
+                    <code>kanthord.stop.reason</code>,
+                    <code>kanthord.stop.rule</code>,
+                    <code>kanthord.stop.count</code>,
+                    <code>kanthord.stop.limit</code> and, after a verification,
+                    <code>kanthord.stop.verification.passed</code>
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>worker.verification</code></td>
+                  <td>Native</td>
+                  <td>
+                    <code>worker.task</code>, <code>worker.phase</code>,
+                    <code>worker.release_gate</code>,
+                    <code>worker.evaluation</code> or Root
+                  </td>
+                  <td>
+                    One span for each run of a command. A copied result and a
+                    memo hit write no span.
+                    <code>kanthord.verification.kind</code>:
+                    <code>listed</code> for a verification of the node,
+                    <code>affected</code> for the affected test command at the
+                    node head, <code>affected_base</code> for the same command
+                    at the base head. A <code>listed</code> span holds
+                    <code>kanthord.commit</code> (only when the tested input is
+                    one repository address),
+                    <code>kanthord.verification.index</code>,
+                    <code>kanthord.verification.run</code>,
+                    <code>kanthord.verification.context</code>:
+                    <code>task</code>, <code>node</code>,
+                    <code>release</code> or <code>evaluation</code>,
+                    <code>kanthord.verification.owner_id</code>: the task id or
+                    the node id that owns the command, when one exists. At the
+                    end, it holds <code>process.exit.code</code>,
+                    <code>kanthord.verification.signal</code>,
+                    <code>kanthord.verification.timed_out</code>,
+                    <code>kanthord.verification.class</code>: <code>pass</code>,
+                    <code>code_failure</code>, <code>infrastructure</code> or
+                    <code>budget_end</code>, and
+                    <code>kanthord.verification.flaky</code>:
+                    <code>true</code> when a rerun of
+                    <code>reviewer@1</code> passes after a code failure. An
+                    <code>affected</code> or <code>affected_base</code> span
+                    holds <code>kanthord.verification.context</code>:
+                    <code>release</code> or <code>evaluation</code>,
+                    <code>kanthord.binding.id</code>,
+                    <code>kanthord.commit</code>: the node head, or the commit
+                    of the base head for <code>affected_base</code>,
+                    <code>environment.digest</code>: the environment digests of
+                    the repository bindings, joined with a comma, when one
+                    exists. At the end, it holds
+                    <code>process.exit.code</code> when the command has one, and
+                    <code>kanthord.verification.timed_out</code>. An
+                    <code>affected</code> span also ends with
+                    <code>kanthord.affected.verdict</code>: <code>passed</code>,
+                    <code>failed</code> or <code>base_red</code>,
+                    <code>kanthord.affected.selection</code>:
+                    <code>related</code>, <code>all</code>, <code>none</code>,
+                    or <code>invalid</code> with no valid report,
+                    <code>kanthord.affected.reason</code> for <code>all</code>,
+                    <code>kanthord.affected.changed_count</code>,
+                    <code>kanthord.affected.test_count</code>,
+                    <code>kanthord.affected.failed_count</code> and
+                    <code>kanthord.affected.flaky_count</code> after the flaky
+                    rule, <code>kanthord.affected.excluded_e2e_count</code>,
+                    <code>kanthord.affected.tests</code> and
+                    <code>kanthord.affected.failed</code>: the first entries, at
+                    most 128 entries and 16384 bytes, each failed test as
+                    <code>&lt;file&gt; &gt; &lt;name&gt;</code>.
+                    <code>kanthord.affected.floor_count</code> and
+                    <code>kanthord.affected.floor_seconds</code> from
+                    <code>floor</code> of a version 2 report, and
+                    <code>kanthord.affected.total_seconds</code> when
+                    <code>floor.total_seconds</code> is not null. With no valid
+                    report, <code>kanthord.affected.changed_count</code> holds
+                    the size of the change set, and each other count is 0. The
+                    status of an <code>affected</code> span is
+                    <code>Error</code> for the verdict <code>failed</code>. The
+                    status of an <code>affected_base</code> span is
+                    <code>Error</code> for an exit code other than 0
+                  </td>
+                  <td>
+                    <code>command</code>, <code>output</code>: the last 4 KiB
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.evaluation</code></td>
+                  <td>Native</td>
+                  <td>Root</td>
+                  <td>
+                    <code>kanthord.commit</code> (only when the tested input is
+                    one repository address),
+                    <code>kanthord.evaluation.result</code>: the result of the
+                    judgement, <code>kanthord.evaluation.stage</code>:
+                    <code>setup</code>, <code>verification</code>,
+                    <code>affected</code> or <code>judgement</code>,
+                    <code>kanthord.evaluation.unmet_grounds</code>: the
+                    <code>ground</code> of each unmet item, <code>stated</code>,
+                    <code>standard</code>, <code>unstated</code> or
+                    <code>conflict</code>,
+                    <code>kanthord.evaluation.affected</code>: the affected
+                    verdict of the node after an affected test run,
+                    <code>absent</code> included
+                  </td>
+                  <td><code>rationale</code></td>
+                </tr>
+                <tr>
+                  <td><code>worker.release_gate</code></td>
+                  <td>Native</td>
+                  <td><code>worker.phase</code></td>
+                  <td>
+                    At the end, <code>kanthord.release_gate.result</code>:
+                    <code>passed</code>, <code>routed</code> or
+                    <code>budget_end</code>,
+                    <code>kanthord.release_gate.unit_id</code>: the unit that
+                    receives the revision turn, for <code>routed</code>, and
+                    <code>kanthord.release_gate.affected</code>: the affected
+                    verdict of the node after an affected test run,
+                    <code>absent</code> included
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>worker.git</code></td>
+                  <td>Native</td>
+                  <td><code>worker.phase</code></td>
+                  <td>
+                    <code>kanthord.git.step</code>: <code>fetch_base</code>,
+                    <code>merge_base</code> or <code>push</code>. A failed step
+                    ends the span with the status <code>Error</code>
+                  </td>
+                  <td>
+                    <code>error</code>: the code and the message of a failed
+                    step
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.gate</code></td>
+                  <td>Native</td>
+                  <td><code>worker.task</code> or <code>worker.phase</code></td>
+                  <td>
+                    <code>kanthord.gate.mode</code>: <code>write</code>,
+                    <code>conflict</code> or <code>checkpoint</code>.
+                    <code>kanthord.gate.changed</code>.
+                    <code>kanthord.gate.violation</code> on a violation, a
+                    restored one included. The checkpoint of a budget end is a
+                    run with the mode <code>checkpoint</code>. The commit of the
+                    gate runs inside the span. An <code>Ok</code> end adds
+                    <code>kanthord.git.changed_file_count</code>: the count of
+                    the paths that the turn changed, from the head before the
+                    turn to the head after the gate, and
+                    <code>kanthord.git.changed_files</code>: the first paths in
+                    git order, at most 128 paths and 16384 bytes. With two or
+                    more checkouts, each path starts with
+                    <code>&lt;checkout name&gt;:</code>. A failed commit ends
+                    the span with the status <code>Error</code>
+                  </td>
+                  <td>
+                    <code>error</code>: the code and the message of a failed
+                    commit
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent.prompt</code></td>
+                  <td>Worker</td>
+                  <td>Root</td>
+                  <td>
+                    <code>kanthord.agent.name</code>,
+                    <code>kanthord.prompt.parts</code>:
+                    <code>&lt;part&gt;:&lt;name&gt;:&lt;digest&gt;</code> items
+                    in reading order,
+                    <code>kanthord.prompt.templates_digest</code>. One span for
+                    each agent, written at the execution setup read
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>agent.session</code></td>
+                  <td>Both</td>
+                  <td>The enclosing worker span or Root</td>
+                  <td>
+                    <code>gen_ai.operation.name</code>:
+                    <code>invoke_agent</code>,
+                    <code>gen_ai.conversation.id</code>: the span identity,
+                    <code>gen_ai.agent.name</code>,
+                    <code>kanthord.agent.name</code>,
+                    <code>kanthord.agent.chain_position</code>,
+                    <code>kanthord.agent.chain_level</code>,
+                    <code>gen_ai.request.model</code>,
+                    <code>kanthord.session.format</code>: <code>pi</code> or
+                    <code>claude_code</code>,
+                    <code>kanthord.session.format_version</code>,
+                    <code>kanthord.harness.session_id</code> (harness only). At
+                    the end, <code>kanthord.session.entry_count</code>
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>agent.turn</code></td>
+                  <td>Both</td>
+                  <td>
+                    The enclosing worker span, Root, or
+                    <code>agent.session</code>
+                  </td>
+                  <td>
+                    <code>gen_ai.operation.name</code>: <code>chat</code>,
+                    <code>gen_ai.conversation.id</code>,
+                    <code>kanthord.agent.name</code>,
+                    <code>kanthord.turn.index</code>,
+                    <code>kanthord.agent.chain_position</code>: 0 for the head
+                    of the chain, and <code>kanthord.agent.chain_level</code>:
+                    <code>enablement</code> or <code>binding</code>, both from
+                    the execution setup (native producer only),
+                    <code>gen_ai.request.model</code>,
+                    <code>kanthord.prompt.template</code>,
+                    <code>kanthord.prompt.template.digest</code> and
+                    <code>kanthord.prompt.work.digest</code> (native producer
+                    only). At the end, <code>gen_ai.response.model</code>,
+                    <code>gen_ai.provider.name</code>,
+                    <code>gen_ai.usage.input_tokens</code>,
+                    <code>gen_ai.usage.output_tokens</code>,
+                    <code>gen_ai.usage.cache_read.input_tokens</code>,
+                    <code>gen_ai.usage.cache_creation.input_tokens</code>,
+                    <code>kanthord.usage.cost_usd</code>,
+                    <code>gen_ai.response.finish_reasons</code>,
+                    <code>error.type</code>: the provider failure code, or
+                    <code>stopped</code> at the close of the agent trace,
+                    <code>kanthord.session.entry_id</code>: the entry of the
+                    model reply, <code>kanthord.turn.model_duration_ms</code>:
+                    <code>durationMs</code> of the reply, else the measured time
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>agent.tool</code></td>
+                  <td>Both</td>
+                  <td><code>agent.turn</code></td>
+                  <td>
+                    <code>gen_ai.operation.name</code>:
+                    <code>execute_tool</code>,
+                    <code>gen_ai.conversation.id</code>,
+                    <code>gen_ai.tool.name</code>,
+                    <code>gen_ai.tool.call.id</code>,
+                    <code>kanthord.session.entry_id</code> at the start: the
+                    assistant entry that holds the call, when that entry exists
+                    (native producer only), <code>kanthord.tool.outcome</code>:
+                    <code>ok</code> or <code>error</code>,
+                    <code>kanthord.tool.duration_ms</code>,
+                    <code>error.type</code>: <code>tool_error</code> on an error
+                    end, or <code>stopped</code> at the close of the agent
+                    trace; for a bash tool call of a native agent that started
+                    its shell: <code>process.pid</code> and
+                    <code>process.group_leader.pid</code> of its shell, and
+                    <code>kanthord.tool.killed</code>: <code>true</code> when
+                    the timeout or the abort ended the call; for a bash tool
+                    call of a native agent,
+                    <code>kanthord.tool.timeout.applied_ms</code>: the timeout
+                    that the worker applied, and
+                    <code>kanthord.tool.timeout.requested_ms</code>: the timeout
+                    that the model requested, when it requested one. The worker
+                    cuts the requested timeout to whole seconds below the
+                    remaining budget and below 600000 ms. A call that the ended
+                    budget refuses holds neither attribute
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>agent.progress</code></td>
+                  <td>Harness</td>
+                  <td><code>agent.session</code></td>
+                  <td>
+                    <code>kanthord.progress.total</code>,
+                    <code>kanthord.progress.completed</code>,
+                    <code>kanthord.progress.in_progress</code>
+                  </td>
+                  <td><code>items</code>: the todo list</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A node with two or more repository bindings has a list of addresses
+            as its tested input, so these spans hold no
+            <code>kanthord.commit</code>.
+          </p>
+          <p>
+            A human act on a node opens an act trace of its own, outside the
+            trace of an execution. Its root span names the act, for example
+            <code>mission.node.pause</code>, and holds the node states before
+            and after the act. Its telemetry text <code>reason</code> holds the
+            reason of the human. An import apply opens a trace of its own with
+            the root operation <code>mission.import</code>. It holds the
+            project, the mission, the mission versions before and after, the
+            counts of the import and the actor. A refused apply ends it with the
+            status <code>Error</code> and
+            <code>kanthord.import.violation_codes</code>. A preview opens no
+            trace.
+          </p>
+          <p>
+            Every span of a worker also holds
+            <code>kanthord.execution.id</code>, <code>kanthord.node.id</code>,
+            <code>kanthord.attempt</code> and <code>kanthord.worker.name</code>.
+            The trace row holds the project. A span status is
+            <code>Error</code> when its operation failed, and
+            <code>Ok</code> otherwise. An <code>agent.turn</code> that ends with
+            a provider error has the status <code>Error</code>.
+          </p>
+          <p>
+            <code>reviewer@1</code> writes <code>agent.session</code>,
+            <code>agent.turn</code> and <code>agent.tool</code> spans below
+            <code>worker.evaluation</code>. The model reply of its last turn
+            holds the whole review, also the parts that the assessment rationale
+            leaves out.
+          </p>
+          <p>
+            A turn and a tool call have one shape for both producers. The Steps
+            tab of the trace page of the dashboard therefore shows a native run
+            and a harness run with the same view. The Conversation tab renders
+            the entries of the <code>pi</code> session format only.
+          </p>
+          <p>
+            The attributes follow the
+            <a
+              href="https://github.com/open-telemetry/semantic-conventions-genai"
+              >OpenTelemetry GenAI semantic conventions</a
+            >. <code>gen_ai.usage.input_tokens</code> counts every input token,
+            also the cached ones. <code>kanthord.usage.cost_usd</code> is the
+            cost that pi estimates from its price table.
+          </p>
+          <h3 id="the-agent-session">The agent session</h3>
+          <p>
+            An agent session is the conversation of one agent. Its entries are
+            the agent transcript. The producer sends each entry as a record of
+            the kind <code>session_entry</code> when the agent appends it, so a
+            reader sees the conversation of a running execution with a delay of
+            about one second.
+          </p>
+          <ul>
+            <li>
+              The <code>agent.session</code> span names the session. Its span
+              identity is the session identity, and
+              <code>gen_ai.conversation.id</code> of each turn and tool span
+              holds it.
+            </li>
+            <li>
+              An <code>agent.turn</code> names the entry of its model reply in
+              <code>kanthord.session.entry_id</code>. The tool calls of the turn
+              are blocks of that entry.
+            </li>
+            <li>
+              An <code>agent.tool</code> names the entry that holds its call in
+              <code>kanthord.session.entry_id</code> at its start, so a reader
+              finds the arguments of a running call.
+            </li>
+            <li>
+              An <code>agent.tool</code> finds its result entry through
+              <code>gen_ai.tool.call.id</code>: the entry with that
+              <code>tool_call_id</code>.
+            </li>
+            <li>
+              When the session opens, the native producer sends one entry of
+              type <code>custom</code> with <code>customType</code>
+              <code>kanthord.pinned_context</code> for the system prompt. Its
+              <code>data</code> holds <code>part</code>:
+              <code>system_prompt</code>, and <code>text</code>. This entry is
+              the only record of the system prompt.
+            </li>
+            <li>
+              The producer cuts an entry above 61440 bytes of JSON and sets
+              <code>truncated: true</code>. It replaces the exact secret strings
+              of the LLM credential of the agent with
+              <code>[redacted]</code> first.
+            </li>
+            <li>
+              A native <code>agent.turn</code> stays a child of the worker span
+              that encloses it: <code>worker.task</code> for a turn on a unit,
+              <code>worker.phase</code> for a conflict turn, and
+              <code>worker.evaluation</code> for <code>re@1</code>.
+              <code>gen_ai.conversation.id</code> links it to its session.
+            </li>
+            <li>
+              The agent trace closes before the release of the execution, while
+              the claim is live. The close sends the last entries and ends the
+              <code>agent.session</code> span, with <code>Error</code> after a
+              stop and <code>Ok</code> otherwise. It ends each open turn and
+              tool span with <code>Error</code> and <code>error.type</code>
+              <code>stopped</code>.
+            </li>
+            <li>
+              The host keeps a copy of the session as a pi session file. A
+              stateless container loses that copy, and the Tracking Service
+              keeps every entry that reached it.
+            </li>
+          </ul>
+          <h3 id="identities">Identities</h3>
+          <p>
+            A producer computes each identity from the execution, its run key
+            and a local key. A retry of a send therefore produces the same
+            identity, and the Tracking Service stores the record once.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Identity</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>span_id</code></td>
+                  <td>
+                    The first 16 hex characters of SHA-256 of
+                    <code
+                      >&lt;execution_id&gt;:&lt;run key&gt;:&lt;local
+                      key&gt;</code
+                    >. The run key is 8 random hex characters for each process
+                    run of the execution, so a resumed execution writes new
+                    spans
+                  </td>
+                </tr>
+                <tr>
+                  <td>Local key</td>
+                  <td>
+                    <code>phase:&lt;name&gt;</code>,
+                    <code>&lt;operation&gt;:&lt;n&gt;</code> for a task, a
+                    verification and an evaluation,
+                    <code>worker.git:&lt;step&gt;:&lt;n&gt;</code>,
+                    <code>turn:&lt;n&gt;</code>,
+                    <code>tool:&lt;turn span id&gt;:&lt;call id&gt;</code>,
+                    <code>progress:&lt;n&gt;</code>,
+                    <code>session:&lt;n&gt;</code> for the native producer and
+                    <code>session:&lt;id&gt;</code> for the harness.
+                    <code>&lt;n&gt;</code> counts from 1 in the execution
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>record_id</code></td>
+                  <td>
+                    <code>&lt;span_id&gt;:start</code> or
+                    <code>&lt;span_id&gt;:end</code> for a span record,
+                    <code>&lt;text_id&gt;</code> for a text record,
+                    <code>&lt;session_id&gt;:entry.&lt;entry_id&gt;</code> for a
+                    session entry record
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>text_id</code></td>
+                  <td>
+                    <code>&lt;span_id&gt;:&lt;text name&gt;</code>, for example
+                    <code>&lt;span_id&gt;:output</code>. A text above 15000
+                    characters splits into <code>:output.1</code>,
+                    <code>:output.2</code>, at most 8 parts
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A start record holds <code>start_time</code>, the attributes that
+            are known at the start, and the input texts. An end record holds
+            <code>end_time</code>, the status, the other attributes and the
+            output texts. No record sets a value that an earlier record set.
+          </p>
+          <p>
+            A producer writes the start record when the operation starts. It
+            does not wait for the end. A span with a start and no end is an
+            operation that still runs, so a reader sees a hung command and its
+            start time.
+          </p>
+          <h2 id="the-native-path">The native path</h2>
+          <p>
+            A native worker writes its records straight to the primary store of
+            the Tracking Service. It holds no local store and runs no import.
+            The producer is the worker.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Record</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>openNativeAgent</code></td>
+                  <td>
+                    Start of <code>agent.session</code> before the pi session
+                    opens. The span identity is the id of the pi session
+                  </td>
+                </tr>
+                <tr>
+                  <td>pi <code>turn_start</code></td>
+                  <td>Start of <code>agent.turn</code></td>
+                </tr>
+                <tr>
+                  <td>pi <code>turn_end</code></td>
+                  <td>
+                    End of <code>agent.turn</code>.
+                    <code>message.usage</code> gives the tokens and the cost,
+                    <code>message.model</code> the model,
+                    <code>message.stopReason</code> the finish reason
+                  </td>
+                </tr>
+                <tr>
+                  <td>pi <code>tool_execution_start</code></td>
+                  <td>
+                    Start of <code>agent.tool</code>. <code>toolCallId</code> is
+                    the call id
+                  </td>
+                </tr>
+                <tr>
+                  <td>pi <code>tool_execution_end</code></td>
+                  <td>
+                    End of <code>agent.tool</code>. <code>isError</code> gives
+                    the outcome
+                  </td>
+                </tr>
+                <tr>
+                  <td>A new pi session entry</td>
+                  <td>
+                    One <code>session_entry</code> record, sent after the
+                    session event that appended the entry
+                  </td>
+                </tr>
+                <tr>
+                  <td>Agent close</td>
+                  <td>
+                    The remaining entries, the end of each open
+                    <code>agent.turn</code> and <code>agent.tool</code> with
+                    <code>Error</code>, then the end of
+                    <code>agent.session</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker method</td>
+                  <td>
+                    Start and end of <code>worker.phase</code>:
+                    <code>prepare</code>, <code>start</code>,
+                    <code>tasks</code>, <code>finish</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Git step</td>
+                  <td>
+                    <code>worker.git</code> for <code>fetch_base</code>,
+                    <code>merge_base</code> and <code>push</code>. A failed step
+                    adds the <code>error</code> text
+                  </td>
+                </tr>
+                <tr>
+                  <td>Gate G</td>
+                  <td>
+                    <code>worker.gate</code> for each run of gate G. A failed
+                    commit adds the <code>error</code> text
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker unit loop</td>
+                  <td>
+                    <code>worker.task</code>, <code>worker.verification</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Release gate</td>
+                  <td>
+                    <code>worker.release_gate</code>, and one
+                    <code>worker.verification</code> for each command run and
+                    each affected test run
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>reviewer@1</code> evaluation</td>
+                  <td>
+                    <code>worker.evaluation</code>, and one
+                    <code>worker.verification</code> for each command run, each
+                    rerun and each affected test run
+                  </td>
+                </tr>
+                <tr>
+                  <td>Provider failure</td>
+                  <td>
+                    <code>error.type</code> on the end of
+                    <code>agent.turn</code> takes the
+                    <code>provider_failed</code> code. The model reply entry
+                    holds <code>errorMessage</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The worker queues its records and sends a batch each second, or at
+            once when 200 records wait. A batch holds at most 768 KiB. A write
+            that has no answer is sent at most three times. The queue holds at
+            most 5000 records. The worker drops a record beyond that limit.
+          </p>
+          <p>
+            The execution proof ends with the claim. The worker therefore
+            flushes its queue for at most 5 seconds before the release and
+            before the assessment. A record that is still queued at the end of
+            the execution is dropped, and the worker logs the count. A failed
+            telemetry write never fails the execution.
+          </p>
+          <h2 id="the-external-harness-path">The external harness path</h2>
+          <p>
+            <code>claude-code@1</code> is the first external harness. KanthorD
+            configures no agent, prompt or tool of the harness. KanthorD adds
+            hooks that capture what Claude Code exposes.
+          </p>
+          <p>
+            <code>claude-code@1</code> receives no KanthorD text: no Agent
+            prompt, no Binding prompt and no framing. Claude Code loads its own
+            <code>CLAUDE.md</code> files from its working directory and its home
+            directory. That load is behavior of the Claude Code harness. It is
+            no KanthorD support. KanthorD reads no <code>CLAUDE.md</code>,
+            <code>AGENTS.md</code> or <code>*.local.md</code> file.
+          </p>
+          <h3 id="launch">Launch</h3>
+          <ol>
+            <li>
+              The harness instance pulls work with
+              <code>kanthord scheduler work pull</code>.
+            </li>
+            <li>
+              It sets <code>KANTHORD_EXECUTION_ID</code>,
+              <code>KANTHORD_TRACE_ID</code> and
+              <code>KANTHORD_ROOT_SPAN_ID</code> from the execution record.
+            </li>
+            <li>
+              It runs <code>claude -p</code> with
+              <code>--settings &lt;file&gt;</code>. The file declares the hooks
+              below. A hook command inherits the three variables.
+            </li>
+            <li>At the end, it submits evidence and releases with the CLI.</li>
+          </ol>
+          <p>
+            Each hook runs <code>kanthord tracking capture</code>. The command
+            reads the hook JSON from standard input, maps it to records and
+            appends them to
+            <code
+              >~/.local/state/kanthord/capture/&lt;execution_id&gt;.jsonl</code
+            >. It makes no network call, so it fits the 1.5-second timeout of
+            <code>SessionEnd</code>. The log has a bound. At the bound, the
+            command discards the oldest records and counts them.
+          </p>
+          <h3 id="hook-mapping">Hook mapping</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Claude Code hook</th>
+                  <th>Record</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>SessionStart</code></td>
+                  <td>
+                    Start of <code>agent.session</code>. <code>model</code> and
+                    <code>session_id</code> are attributes
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>UserPromptSubmit</code></td>
+                  <td>Start of <code>agent.turn</code></td>
+                </tr>
+                <tr>
+                  <td><code>PreToolUse</code></td>
+                  <td>
+                    Start of <code>agent.tool</code>.
+                    <code>tool_use_id</code> is the call id
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>PostToolUse</code></td>
+                  <td>
+                    End of <code>agent.tool</code> with outcome <code>ok</code>.
+                    <code>duration_ms</code> is the duration
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>PostToolUseFailure</code></td>
+                  <td>
+                    End of <code>agent.tool</code> with outcome
+                    <code>error</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>PostToolUse</code> for <code>TaskCreate</code>,
+                    <code>TaskUpdate</code>, <code>TodoWrite</code>
+                  </td>
+                  <td>
+                    One <code>agent.progress</code> span with the counts, and
+                    the list as the <code>items</code> text
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Stop</code></td>
+                  <td>
+                    End of <code>agent.turn</code>. The usage comes from
+                    <code>message.usage</code> of the transcript entries of the
+                    turn. The new transcript entries become session entries
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>SessionEnd</code></td>
+                  <td>
+                    The remaining transcript entries, then the end of
+                    <code>agent.session</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            No hook payload holds the token usage. The capture reads it from
+            <code>transcript_path</code>. The transcript can lag the hook, so a
+            turn can end with no usage attributes.
+          </p>
+          <h3 id="ingestion">Ingestion</h3>
+          <p>
+            A human starts each ingestion with
+            <code>kanthord tracking telemetry ingest</code>. The ingestion sends
+            the records of the local log in batches of at most 1,000 records and
+            1 MiB. It deletes a local record when the record holds a
+            disposition, <code>Stored</code> or <code>Refused</code>. The
+            Tracking Service derives the producer from the claimant of the
+            execution, so the records carry no producer.
+          </p>
+          <p>
+            A revoked or ended claim still ingests its records, because the
+            authority of an ingestion comes from the human.
+          </p>
+          <h2 id="example-one-tool-call-from-both-producers">
+            Example: one tool call from both producers
+          </h2>
+          <p>
+            <code>swe@1</code> and Claude Code both run
+            <code>npm test -- healthz</code> in execution
+            <code>execution_01JZ8R2B…</code>.
+          </p>
+          <p>The native worker receives this pi event:</p>
+          <pre><code class="language-json">{
+  "type": "tool_execution_end",
+  "toolCallId": "call_7",
+  "toolName": "bash",
+  "result": { "content": [{ "type": "text", "text": "Tests: 1 passed" }] },
+  "isError": false
+}</code></pre>
+          <p>The Claude Code hook receives this payload:</p>
+          <pre><code class="language-json">{
+  "hook_event_name": "PostToolUse",
+  "session_id": "5f0c…",
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm test -- healthz" },
+  "tool_response": { "stdout": "Tests: 1 passed" },
+  "tool_use_id": "toolu_01A…",
+  "duration_ms": 4120
+}</code></pre>
+          <p>
+            Both produce the same span record, with their own call id. The tool
+            output reaches the Tracking Service as the session entry of the tool
+            result, in the session format of the producer. The pi form is:
+          </p>
+          <pre><code class="language-json">[
+  {
+    "record_id": "3b9d0c1e5a7f2264:end",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "kind": "span",
+    "span_id": "3b9d0c1e5a7f2264",
+    "operation": "agent.tool",
+    "parent_span_id": "a1c2e3f405162738",
+    "end_time": 1791734520120,
+    "status": "Ok",
+    "attributes": {
+      "kanthord.tool.outcome": "ok",
+      "kanthord.tool.duration_ms": 4120
+    }
+  },
+  {
+    "record_id": "9e8d7c6b5a493827:entry.c3d4e5f6",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "kind": "session_entry",
+    "session_id": "9e8d7c6b5a493827",
+    "entry_id": "c3d4e5f6",
+    "parent_entry_id": "b2c3d4e5",
+    "sequence": 14,
+    "entry_type": "message",
+    "entry_time": 1791734520125,
+    "tool_call_id": "call_7",
+    "truncated": false,
+    "entry": {
+      "type": "message",
+      "id": "c3d4e5f6",
+      "parentId": "b2c3d4e5",
+      "timestamp": "2026-10-11T16:02:00.125Z",
+      "message": {
+        "role": "toolResult",
+        "toolCallId": "call_7",
+        "toolName": "bash",
+        "content": [{ "type": "text", "text": "Tests: 1 passed" }],
+        "isError": false,
+        "timestamp": 1791734520125
+      }
+    }
+  }
+]</code></pre>
+          <p>
+            The start record of the span carries <code>gen_ai.tool.name</code>,
+            <code>gen_ai.tool.call.id</code> and
+            <code>gen_ai.conversation.id: &quot;9e8d7c6b5a493827&quot;</code>.
+          </p>
+          <h2 id="what-the-trace-answers">What the trace answers</h2>
+          <p>
+            The e2e runs of <code>coder@1</code> and
+            <code>reviewer@1</code> raised these questions. Each one has an
+            answer in the trace of the execution.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Question during a run</th>
+                  <th>Where the answer is</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Does the agent make progress, or is it idle?</td>
+                  <td>
+                    The newest <code>agent.turn</code> and
+                    <code>agent.tool</code> spans and their start times
+                  </td>
+                </tr>
+                <tr>
+                  <td>Which command hangs, and since when?</td>
+                  <td>
+                    An <code>agent.tool</code> or
+                    <code>worker.verification</code> span with a start and no
+                    end. The tool call block of its turn entry, or its
+                    <code>command</code> text, names the command
+                  </td>
+                </tr>
+                <tr>
+                  <td>Why does each turn fail at once?</td>
+                  <td>
+                    <code>agent.turn</code> spans with the status
+                    <code>Error</code>, their <code>error.type</code>, and the
+                    <code>errorMessage</code> of their model reply entry
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Does the task loop verify the same commit again and again?
+                  </td>
+                  <td>
+                    Consecutive <code>worker.verification</code> spans with the
+                    same <code>kanthord.commit</code> and a failed exit code
+                  </td>
+                </tr>
+                <tr>
+                  <td>Why did a verification fail?</td>
+                  <td>
+                    The <code>output</code> text of the
+                    <code>worker.verification</code> span
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Does a verification pass and then fail on the same commit?
+                  </td>
+                  <td>
+                    <code>worker.verification</code> spans of one command and
+                    one commit, across runs and executions, with different exit
+                    codes
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    How many tokens did a node use before the quota ended?
+                  </td>
+                  <td>
+                    The trace summary of each execution of the node, or the sum
+                    of <code>gen_ai.usage.*</code> over its
+                    <code>agent.turn</code> spans
+                  </td>
+                </tr>
+                <tr>
+                  <td>What did the reviewer write beyond the rationale?</td>
+                  <td>
+                    The model reply entry of the last
+                    <code>agent.turn</code> below <code>worker.evaluation</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>What did the agent read and write before a failure?</td>
+                  <td>
+                    The session entries of its agent session, in order, from the
+                    entry that the failed turn names
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The answers are for a human. No service reads them to stop an
+            execution or to move a node. The state channel does that: the claim
+            check, the <code>no_progress</code> stop and the
+            <code>provider_failed</code> stop.
+          </p>
+          <h2 id="limits">Limits</h2>
+          <ul>
+            <li>
+              <strong>Telemetry decides nothing.</strong> A missing span proves
+              no failure, and a span completes no node. Only the state channel
+              moves a node.
+            </li>
+            <li>
+              <strong>No live view of a harness.</strong> A harness record
+              reaches the server only at an ingestion that a human starts.
+            </li>
+            <li>
+              <strong>Best effort capture.</strong> A harness that exposes less
+              produces fewer spans. A full local log discards its oldest
+              records.
+            </li>
+            <li>
+              <strong
+                >No secret of the execution credentials in a record.</strong
+              >
+              The native worker removes provider keys from every command
+              environment, and it removes the secrets of the LLM credential of
+              the agent from every session entry. Another secret that a tool
+              prints, for example a value of a repository file, reaches the
+              session entry.
+            </li>
+          </ul>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>

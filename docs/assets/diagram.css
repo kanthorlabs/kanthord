@@ -1,0 +1,103 @@
+.mermaid-hint {
+  margin: var(--space-md) 0 var(--space-xs);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.mermaid-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: 12px;
+}
+
+.mermaid-controls button {
+  min-width: 40px;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.mermaid-controls button:hover {
+  background: var(--accent);
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-sm-hover);
+}
+
+.mermaid-controls button:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.mermaid-controls output {
+  min-width: 5ch;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+article > .mermaid-outer,
+article > .mermaid-controls,
+article > .mermaid-hint {
+  max-width: none;
+}
+
+.mermaid-outer {
+  margin: 0 0 var(--space-md);
+  overflow: auto;
+  background: var(--bg-surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  background-image: radial-gradient(#e4e2c4 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.mermaid-outer .mermaid {
+  width: var(--diagram-width, 100%);
+  margin: 0;
+  padding: var(--space-sm);
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--font);
+  white-space: normal;
+  cursor: grab;
+  user-select: none;
+}
+
+.mermaid-outer.is-panning .mermaid {
+  cursor: grabbing;
+}
+
+.mermaid-outer svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.mermaid-outer svg foreignObject {
+  overflow: visible;
+}
+
+.mermaid-outer pre.mermaid:not([data-processed]) {
+  color: var(--text-secondary);
+  white-space: pre;
+}
+
+.mermaid-error {
+  border-left: 8px solid var(--color-primary);
+}

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Renew a worker heartbeat · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="renew-a-worker-heartbeat">Renew a worker heartbeat</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Renew the heartbeat of the live registration that belongs to the
+            machine JWT. The request carries no runtime identity and no body.
+            Gateway finds the registration from the client identity of the
+            token.
+          </p>
+          <p>
+            Every authenticated machine request with a live registration renews
+            its heartbeat, not only this operation. This operation renews the
+            heartbeat without other effects.
+          </p>
+          <p>
+            The server checks heartbeats every 30 seconds. It ends each
+            registration whose last heartbeat is older than the
+            <code>worker.heartbeat_window</code> server setting, in seconds. The
+            default window is <code>300</code>. An ended registration frees its
+            slot. Send a heartbeat more often than the window to keep the
+            registration live.
+          </p>
+          <p>
+            Heartbeat readings are process-local. When the Server starts, it
+            starts a new window for each live registration.
+          </p>
+          <p>
+            A worker instance at the <code>worker</code> placement also sends
+            its own heartbeat, <code>worker.instance.heartbeat</code>. See
+            <a href="instance.html#workerinstanceheartbeat">worker instances</a
+            >.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>The API returns HTTP <code>204</code> with no body.</p>
+          <p>
+            The CLI writes one JSON line to stdout and exits <code>0</code>:
+          </p>
+          <pre><code class="language-json">null</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>HTTP <code>204</code></td>
+                  <td>The server renewed the heartbeat of the registration.</td>
+                </tr>
+                <tr>
+                  <td>CLI <code>null</code></td>
+                  <td>
+                    The CLI printed the empty answer; the renewal succeeded.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Missing, invalid, expired or human token; also a machine
+                    token whose worker binding does not resolve.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.registration.required</code></td>
+                  <td>
+                    The client identity of the token has no live registration.
+                    Register again with <code>worker register</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>The request has a body.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.worker.heartbeat.indeterminate</code>. Run the command
+            again after an indeterminate result.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/worker/heartbeat</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.heartbeat</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live
+                    registration
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>
+                    No; the operation takes no <code>Idempotency-Key</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the registered
+                    client.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/worker/heartbeat \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord worker heartbeat [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker heartbeat --token '&lt;machine-jwt&gt;'</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Machine JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A missing token fails with
+            <code>cli.worker.heartbeat.token_required</code>. A repeated
+            <code>--token</code> fails with <code>cli.option.duplicate</code>.
+            See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the token and endpoint precedence. The HTTP client deadline is
+            31 seconds.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

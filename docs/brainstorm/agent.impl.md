@@ -177,7 +177,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 ## The agent cooldown
 
-- The cooldown of a credential copy lives on the row of revision 1 of its `(name, holder)` group. The columns are `credential.available_at` and `credential.strikes` of [ERD 1](../reference/erd/01-setup.md). No table `agent_cooldown` exists.
+- The cooldown of a credential copy lives on the row of revision 1 of its `(name, holder)` group. The columns are `credential.available_at` and `credential.strikes` of [ERD 1](../reference/erd/01-setup.html). No table `agent_cooldown` exists.
 - `available_at` is the Unix millisecond end of the hold, and it is null while no hold exists. `strikes` is a non-negative integer, 0 while no hold exists.
 - A hold cools every model of the credential. No model identifier and no execution identity enter the hold.
 - The duration is `min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)`. `available_at` is the clock reading of the transaction plus the duration.

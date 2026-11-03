@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Feature reference · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html" aria-current="true">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#shared-contracts">Shared contracts</a></li>
+          <li><a href="#cli-conventions">CLI conventions</a></li>
+          <li><a href="#api-conventions">API conventions</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="feature-reference">Feature reference</h1>
+          <p>
+            This reference answers “What exactly does this feature do?” Each
+            feature has one page covering its API and CLI together, rather than
+            separate pages for each interface. These pages describe implemented
+            behavior. The
+            <a href="../explanation/index.html">explanation pages</a> explain
+            its guarantees and limitations.
+          </p>
+          <h2 id="features">Features</h2>
+          <p>CLI entries below follow <code>kanthord</code>.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th>Feature</th>
+                  <th>API</th>
+                  <th>CLI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Configuration</td>
+                  <td>
+                    <a href="config/init.html">Initialize configuration</a>
+                  </td>
+                  <td>Not available (local only)</td>
+                  <td><code>config init</code></td>
+                </tr>
+                <tr>
+                  <td>Configuration</td>
+                  <td>
+                    <a href="config/validate.html">Validate configuration</a>
+                  </td>
+                  <td>Not available (local only)</td>
+                  <td><code>config validate</code></td>
+                </tr>
+                <tr>
+                  <td>Configuration</td>
+                  <td>
+                    <a href="config/show.html">Show masked configuration</a>
+                  </td>
+                  <td>Not available (local only)</td>
+                  <td><code>config show</code></td>
+                </tr>
+                <tr>
+                  <td>Configuration</td>
+                  <td>
+                    <a href="upgrade.html">Upgrade configuration and data</a>
+                  </td>
+                  <td>Not available (local only)</td>
+                  <td><code>upgrade</code></td>
+                </tr>
+                <tr>
+                  <td>Application</td>
+                  <td><a href="serve.html">Run an application</a></td>
+                  <td>Not available (local process)</td>
+                  <td>
+                    <code>serve [server]</code>, <code>serve worker</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Tokens</td>
+                  <td><a href="auth/jwt.html">Generate a JWT</a></td>
+                  <td>Not available (local only)</td>
+                  <td><code>auth jwt</code></td>
+                </tr>
+                <tr>
+                  <td>Gateway</td>
+                  <td>
+                    <a href="gateway/liveness.html">Check server liveness</a>
+                  </td>
+                  <td><code>GET /api/liveness</code></td>
+                  <td><code>gateway liveness</code></td>
+                </tr>
+                <tr>
+                  <td>Gateway</td>
+                  <td>
+                    <a href="gateway/healthcheck.html">Check resource health</a>
+                  </td>
+                  <td><code>GET /api/healthcheck</code></td>
+                  <td>Not implemented; use cURL</td>
+                </tr>
+                <tr>
+                  <td>Gateway</td>
+                  <td><a href="gateway/verify.html">Verify a human JWT</a></td>
+                  <td><code>GET /api/auth/verify</code></td>
+                  <td><code>gateway verify</code></td>
+                </tr>
+                <tr>
+                  <td>Gateway</td>
+                  <td>
+                    <a href="gateway/openapi.html">Publish and read OpenAPI</a>
+                  </td>
+                  <td>
+                    <code>GET /api/openapi.yaml</code>,
+                    <code>GET /api/openapi/:service/:file</code>
+                  </td>
+                  <td>
+                    <code>gateway openapi</code> (local generation, not an API
+                    call)
+                  </td>
+                </tr>
+                <tr>
+                  <td>LLM</td>
+                  <td>
+                    <a href="llm/credential.html">Manage LLM credentials</a>
+                  </td>
+                  <td>
+                    <code>GET /api/llm/credential</code>,
+                    <code>GET /api/llm/credential/:credential_name</code>,
+                    <code>GET /api/llm/credential/platform</code>,
+                    <code>POST /api/llm/credential</code>,
+                    <code
+                      >POST /api/llm/credential/:credential_name/revision</code
+                    >,
+                    <code
+                      >PUT /api/llm/credential/:credential_name/metadata</code
+                    >,
+                    <code
+                      >POST
+                      /api/llm/credential/:credential_name/revision/:revision/revoke</code
+                    >,
+                    <code
+                      >POST /api/llm/credential/:credential_name/archive</code
+                    >, <code>POST /api/llm/credential/check</code>,
+                    <code
+                      >POST /api/llm/credential/:credential_name/verify</code
+                    >
+                  </td>
+                  <td>
+                    <code>llm credential list</code>,
+                    <code>llm credential get</code>,
+                    <code>llm credential platforms</code>,
+                    <code>llm credential create</code>,
+                    <code>llm credential rotate</code>,
+                    <code>llm credential update-metadata</code>,
+                    <code>llm credential revoke</code>,
+                    <code>llm credential archive</code>,
+                    <code>llm credential check</code>,
+                    <code>llm credential verify</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>LLM</td>
+                  <td>
+                    <a href="llm/login.html"
+                      >Log in to a subscription LLM platform</a
+                    >
+                  </td>
+                  <td>
+                    <code>POST /api/llm/credential/login</code>,
+                    <code>POST /api/llm/credential/login/:session_id/code</code
+                    >, <code>GET /api/llm/credential/login/:session_id</code>
+                  </td>
+                  <td>
+                    <code>llm credential login</code>,
+                    <code>llm credential login-code</code>,
+                    <code>llm credential login-status</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>LLM</td>
+                  <td>
+                    <a href="llm/provider.html"
+                      >Check an LLM provider connection</a
+                    >
+                  </td>
+                  <td><code>POST /api/llm/provider/check</code></td>
+                  <td><code>llm provider check</code></td>
+                </tr>
+                <tr>
+                  <td>LLM</td>
+                  <td>
+                    <a href="llm/model.html"
+                      >Check a model of an LLM credential</a
+                    >
+                  </td>
+                  <td><code>POST /api/llm/model/check</code></td>
+                  <td><code>llm model check</code></td>
+                </tr>
+                <tr>
+                  <td>Repository</td>
+                  <td>
+                    <a href="repository/credential.html"
+                      >Repository credentials</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/repository/credential</code>,
+                    <code>GET /api/repository/credential/:credential_name</code
+                    >,
+                    <code
+                      >POST
+                      /api/repository/credential/:credential_name/verify</code
+                    >, <code>GET /api/repository/credential/platform</code>,
+                    <code>POST /api/repository/credential</code>,
+                    <code
+                      >POST
+                      /api/repository/credential/:credential_name/revision</code
+                    >,
+                    <code
+                      >PUT
+                      /api/repository/credential/:credential_name/metadata</code
+                    >,
+                    <code
+                      >POST
+                      /api/repository/credential/:credential_name/revision/:revision/revoke</code
+                    >,
+                    <code
+                      >POST
+                      /api/repository/credential/:credential_name/archive</code
+                    >, <code>POST /api/repository/credential/check</code>
+                  </td>
+                  <td>
+                    <code>repository credential list</code>,
+                    <code>repository credential get</code>,
+                    <code>repository credential verify</code>,
+                    <code>repository credential platforms</code>,
+                    <code>repository credential create</code>,
+                    <code>repository credential rotate</code>,
+                    <code>repository credential update-metadata</code>,
+                    <code>repository credential revoke</code>,
+                    <code>repository credential archive</code>,
+                    <code>repository credential check</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Repository</td>
+                  <td><a href="repository/ssh-key.html">SSH keys</a></td>
+                  <td>
+                    <code>POST /api/repository/credential/ssh/key</code>,
+                    <code
+                      >POST
+                      /api/repository/credential/:credential_name/ssh/key</code
+                    >
+                  </td>
+                  <td>
+                    <code>repository credential ssh-key-create</code>,
+                    <code>repository credential ssh-key-rotate</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Repository</td>
+                  <td><a href="repository/host-key.html">SSH host keys</a></td>
+                  <td>
+                    <code>GET /api/repository/host-key</code>,
+                    <code>POST /api/repository/host-key/scan</code>,
+                    <code>PUT /api/repository/host-key/:host</code>
+                  </td>
+                  <td>
+                    <code>repository host-key list</code>,
+                    <code>repository host-key scan</code>,
+                    <code>repository host-key pin</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Storage</td>
+                  <td>
+                    <a href="storage/credential.html">Storage credentials</a>
+                  </td>
+                  <td>
+                    <code>GET /api/storage/credential</code>,
+                    <code>GET /api/storage/credential/:credential_name</code>,
+                    <code
+                      >POST
+                      /api/storage/credential/:credential_name/verify</code
+                    >, <code>GET /api/storage/credential/platform</code>,
+                    <code>POST /api/storage/credential</code>,
+                    <code
+                      >POST
+                      /api/storage/credential/:credential_name/revision</code
+                    >,
+                    <code
+                      >PUT
+                      /api/storage/credential/:credential_name/metadata</code
+                    >,
+                    <code
+                      >POST
+                      /api/storage/credential/:credential_name/revision/:revision/revoke</code
+                    >,
+                    <code
+                      >POST
+                      /api/storage/credential/:credential_name/archive</code
+                    >, <code>POST /api/storage/credential/check</code>
+                  </td>
+                  <td>
+                    <code>storage credential list</code>,
+                    <code>storage credential get</code>,
+                    <code>storage credential verify</code>,
+                    <code>storage credential platforms</code>,
+                    <code>storage credential create</code>,
+                    <code>storage credential rotate</code>,
+                    <code>storage credential update-metadata</code>,
+                    <code>storage credential revoke</code>,
+                    <code>storage credential archive</code>,
+                    <code>storage credential check</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td>
+                    <a href="agent/agent.html">Get an agent declaration</a>
+                  </td>
+                  <td><code>GET /api/agent/:agent_name</code></td>
+                  <td><code>agent get</code></td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td>
+                    <a href="agent/model.html"
+                      >List the models of a credential</a
+                    >
+                  </td>
+                  <td><code>GET /api/agent/model</code></td>
+                  <td><code>agent model list</code></td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td><a href="agent/enablement.html">Agent enablements</a></td>
+                  <td>
+                    <code>GET /api/agent/enablement</code>,
+                    <code>GET /api/agent/enablement/:agent_name</code>,
+                    <code>PUT /api/agent/enablement/:agent_name</code>,
+                    <code>POST /api/agent/enablement/:agent_name/enable</code>,
+                    <code>POST /api/agent/enablement/:agent_name/disable</code>,
+                    <code>DELETE /api/agent/enablement/:agent_name</code>
+                  </td>
+                  <td>
+                    <code>agent enablement list</code>,
+                    <code>agent enablement get</code>,
+                    <code>agent enablement put</code>,
+                    <code>agent enablement enable</code>,
+                    <code>agent enablement disable</code>,
+                    <code>agent enablement remove</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td>
+                    <a href="agent/enablement-provider.html"
+                      >Enablement providers</a
+                    >
+                  </td>
+                  <td>
+                    <code>POST /api/agent/enablement/:agent_name/provider</code
+                    >,
+                    <code
+                      >DELETE
+                      /api/agent/enablement/:agent_name/provider/:provider_name</code
+                    >,
+                    <code
+                      >GET
+                      /api/agent/enablement/:agent_name/provider/:provider_name/model</code
+                    >
+                  </td>
+                  <td>
+                    <code>agent enablement provider add</code>,
+                    <code>agent enablement provider remove</code>,
+                    <code>agent enablement provider model list</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td><a href="agent/cooldown.html">Agent cooldowns</a></td>
+                  <td>
+                    <code>GET /api/agent/cooldown</code>,
+                    <code>DELETE /api/agent/cooldown/:credential</code>
+                  </td>
+                  <td>
+                    <code>agent cooldown list</code>,
+                    <code>agent cooldown clear</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Project</td>
+                  <td><a href="project/project.html">Manage projects</a></td>
+                  <td>
+                    <code>POST /api/project</code>,
+                    <code>GET /api/project</code>,
+                    <code>GET /api/project/:project_id</code>,
+                    <code>PATCH /api/project/:project_id</code>,
+                    <code>POST /api/project/:project_id/pause</code>,
+                    <code>POST /api/project/:project_id/resume</code>
+                  </td>
+                  <td>
+                    <code>project create</code>, <code>project list</code>,
+                    <code>project get</code>, <code>project rename</code>,
+                    <code>project pause</code>, <code>project resume</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Project</td>
+                  <td>
+                    <a href="project/binding.html">Manage project bindings</a>
+                  </td>
+                  <td>
+                    <code>GET /api/project/:project_id/binding</code>,
+                    <code>GET /api/project/:project_id/binding/:binding_id</code
+                    >, <code>GET /api/project/:project_id/binding-set</code>,
+                    <code>PUT /api/project/:project_id/binding-set</code>,
+                    <code
+                      >GET
+                      /api/project/:project_id/binding/:binding_id/revision</code
+                    >,
+                    <code
+                      >POST
+                      /api/project/:project_id/binding/:binding_id/verify</code
+                    >, <code>POST /api/project/:project_id/binding/check</code>
+                  </td>
+                  <td>
+                    <code>project binding list</code>,
+                    <code>project binding get</code>,
+                    <code>project binding export</code>,
+                    <code>project binding apply</code>,
+                    <code>project binding revision list</code>,
+                    <code>project binding verify</code>,
+                    <code>project binding check</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Project</td>
+                  <td>
+                    <a href="project/agent.html">Read worker binding agents</a>
+                  </td>
+                  <td>
+                    <code
+                      >GET
+                      /api/project/:project_id/binding/:binding_id/agent</code
+                    >,
+                    <code
+                      >GET
+                      /api/project/:project_id/binding/:binding_id/agent/:agent_name</code
+                    >
+                  </td>
+                  <td>
+                    <code>project agent list</code>,
+                    <code>project agent get</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/mission.html">Read and export a mission</a>
+                  </td>
+                  <td>
+                    <code>GET /api/mission/project/:project_id</code>,
+                    <code>GET /api/mission/:mission_id/export</code>
+                  </td>
+                  <td><code>mission get</code>, <code>mission export</code></td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/import.html">Import a mission plan</a>
+                  </td>
+                  <td>
+                    <code>POST /api/mission/:mission_id/import/preview</code>,
+                    <code>POST /api/mission/:mission_id/import</code>
+                  </td>
+                  <td>
+                    <code>mission import preview</code>,
+                    <code>mission import apply</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td><a href="mission/node.html">Plan mission nodes</a></td>
+                  <td>
+                    <code>GET /api/mission/:mission_id/node</code>,
+                    <code>GET /api/mission/node/:node_id</code>,
+                    <code>POST /api/mission/:mission_id/node</code>,
+                    <code>PUT /api/mission/node/:node_id</code>,
+                    <code>GET /api/mission/node/:node_id/retire/preview</code>,
+                    <code>POST /api/mission/node/:node_id/retire</code>,
+                    <code>POST /api/mission/:mission_id/rebind</code>,
+                    <code>GET /api/mission/node/:node_id/revision</code>,
+                    <code
+                      >GET /api/mission/node/:node_id/revision/:revision</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission node list</code>,
+                    <code>mission node get</code>,
+                    <code>mission node create</code>,
+                    <code>mission node update</code>,
+                    <code>mission node retire preview</code>,
+                    <code>mission node retire</code>,
+                    <code>mission node rebind</code>,
+                    <code>mission node revision list</code>,
+                    <code>mission node revision get</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/node-control.html"
+                      >Control mission nodes</a
+                    >
+                  </td>
+                  <td>
+                    <code>POST /api/mission/node/:node_id/check</code>,
+                    <code>POST /api/mission/node/:node_id/pause</code>,
+                    <code>POST /api/mission/node/:node_id/resume</code>,
+                    <code>POST /api/mission/node/:node_id/block</code>,
+                    <code>POST /api/mission/node/:node_id/unblock</code>,
+                    <code>POST /api/mission/node/:node_id/ready</code>,
+                    <code>POST /api/mission/node/:node_id/override</code>,
+                    <code>POST /api/mission/node/:node_id/discard</code>,
+                    <code>POST /api/mission/node/:node_id/priority</code>
+                  </td>
+                  <td>
+                    <code>mission node check</code>,
+                    <code>mission node pause</code>,
+                    <code>mission node resume</code>,
+                    <code>mission node block</code>,
+                    <code>mission node unblock</code>,
+                    <code>mission node ready</code>,
+                    <code>mission node override</code>,
+                    <code>mission node discard</code>,
+                    <code>mission node priority set</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/dependency.html"
+                      >Mission edges and dependencies</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/mission/:mission_id/edge</code>,
+                    <code
+                      >PUT
+                      /api/mission/node/:node_id/dependency/:depends_on_id</code
+                    >,
+                    <code
+                      >DELETE
+                      /api/mission/node/:node_id/dependency/:depends_on_id</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission edge list</code>,
+                    <code>mission dependency add</code>,
+                    <code>mission dependency remove</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/criterion.html">Set a node criterion</a>
+                  </td>
+                  <td><code>PUT /api/mission/node/:node_id/criterion</code></td>
+                  <td><code>mission criterion set</code></td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/attempt.html"
+                      >Read attempts and external actions</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/attempt</code>,
+                    <code>GET /api/mission/node/:node_id/attempt/:attempt</code
+                    >,
+                    <code>GET /api/mission/node/:node_id/external-action</code>,
+                    <code
+                      >GET
+                      /api/mission/node/:node_id/attempt/:attempt/external-action/:action_key</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission attempt list</code>,
+                    <code>mission attempt get</code>,
+                    <code>mission external-action list</code>,
+                    <code>mission external-action get</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/assessment.html"
+                      >Read and submit assessments</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/assessment</code>,
+                    <code>GET /api/mission/assessment/:assessment_id</code>,
+                    <code>POST /api/mission/node/:node_id/assessment</code>
+                  </td>
+                  <td>
+                    <code>mission assessment list</code>,
+                    <code>mission assessment get</code>,
+                    <code>mission assessment submit</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td><a href="mission/outcome.html">Read outcomes</a></td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/outcome</code>,
+                    <code>GET /api/mission/outcome/:outcome_id</code>
+                  </td>
+                  <td>
+                    <code>mission outcome list</code>,
+                    <code>mission outcome get</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/evidence.html"
+                      >Read, submit and delete evidence</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/evidence</code>,
+                    <code>GET /api/mission/evidence/:evidence_id</code>,
+                    <code>POST /api/mission/node/:node_id/evidence</code>,
+                    <code>DELETE /api/mission/evidence/:evidence_id</code>,
+                    <code>DELETE /api/mission/evidence/asset/:asset_id</code>,
+                    <code
+                      >GET /api/mission/evidence/asset/:asset_id/content</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission evidence list</code>,
+                    <code>mission evidence get</code>,
+                    <code>mission evidence submit</code>,
+                    <code>mission evidence delete</code>,
+                    <code>mission evidence asset delete</code>,
+                    <code>mission evidence asset content get</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
+                  <td>
+                    <a href="mission/execution.html"
+                      >Execution-bound mission reads</a
+                    >
+                  </td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/pinned-revision</code
+                    >,
+                    <code
+                      >GET /api/mission/execution/:execution_id/revision</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/revision/:revision</code
+                    >,
+                    <code
+                      >GET /api/mission/execution/:execution_id/evidence</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/evidence/asset/:asset_id/content</code
+                    >,
+                    <code
+                      >GET /api/mission/execution/:execution_id/dependency</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/dependency/outcome</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/dependency/evidence</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/cleared-outcome</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission execution pinned-revision get</code>,
+                    <code>mission execution revision list</code>,
+                    <code>mission execution revision get</code>,
+                    <code>mission execution evidence list</code>,
+                    <code>mission execution evidence asset content get</code>,
+                    <code>mission execution dependency list</code>,
+                    <code>mission execution dependency outcome list</code>,
+                    <code>mission execution dependency evidence list</code>,
+                    <code>mission execution cleared-outcome get</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Scheduler</td>
+                  <td>
+                    <a href="scheduler/queue.html">Inspect the work queue</a>
+                  </td>
+                  <td>
+                    <code>GET /api/scheduler/project/:project_id/queue</code>,
+                    <code
+                      >GET /api/scheduler/project/:project_id/queue/peek</code
+                    >
+                  </td>
+                  <td>
+                    <code>scheduler queue list</code>,
+                    <code>scheduler queue peek</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Scheduler</td>
+                  <td><a href="scheduler/work.html">Pull work</a></td>
+                  <td><code>POST /api/scheduler/work/pull</code></td>
+                  <td><code>scheduler work pull</code></td>
+                </tr>
+                <tr>
+                  <td>Scheduler</td>
+                  <td><a href="scheduler/claim.html">Read an own claim</a></td>
+                  <td><code>GET /api/scheduler/claim/:execution_id</code></td>
+                  <td><code>scheduler claim get</code></td>
+                </tr>
+                <tr>
+                  <td>Scheduler</td>
+                  <td>
+                    <a href="scheduler/execution.html"
+                      >Inspect and release executions</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/scheduler/execution/:execution_id</code>,
+                    <code>GET /api/scheduler/project/:project_id/execution</code
+                    >,
+                    <code
+                      >POST /api/scheduler/execution/:execution_id/release</code
+                    >
+                  </td>
+                  <td>
+                    <code>scheduler execution get</code>,
+                    <code>scheduler execution list</code>,
+                    <code>scheduler execution release</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/register.html"
+                      >Create a worker registration</a
+                    >
+                  </td>
+                  <td><code>POST /api/worker/register</code></td>
+                  <td><code>worker register</code></td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/worker.html">Read the worker catalog</a>
+                  </td>
+                  <td>
+                    <code>GET /api/worker/catalog</code>,
+                    <code>GET /api/worker/catalog/:worker_name</code>
+                  </td>
+                  <td><code>worker list</code>, <code>worker get</code></td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/heartbeat.html">Renew a worker heartbeat</a>
+                  </td>
+                  <td><code>POST /api/worker/heartbeat</code></td>
+                  <td><code>worker heartbeat</code></td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/handover.html"
+                      >Hand over execution credentials</a
+                    >
+                  </td>
+                  <td><code>POST /api/worker/handover</code></td>
+                  <td><code>worker handover</code></td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/registration.html"
+                      >Manage worker registrations</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/worker/registration</code>,
+                    <code>GET /api/worker/registration/:runtime_identity</code>,
+                    <code
+                      >POST
+                      /api/worker/registration/:runtime_identity/resume</code
+                    >,
+                    <code
+                      >DELETE /api/worker/registration/:runtime_identity</code
+                    >
+                  </td>
+                  <td>
+                    <code>worker registration list</code>,
+                    <code>worker registration get</code>,
+                    <code>worker registration resume</code>,
+                    <code>worker registration deregister</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/placement.html"
+                      >Read the worker placements</a
+                    >
+                  </td>
+                  <td><code>GET /api/worker/placement</code></td>
+                  <td><code>worker placement list</code></td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/instance.html">Manage worker instances</a>
+                  </td>
+                  <td>
+                    <code>POST /api/worker/instance</code>,
+                    <code>GET /api/worker/instance</code>,
+                    <code>GET /api/worker/instance/:instance_name</code>,
+                    <code
+                      >POST /api/worker/instance/:instance_name/revision</code
+                    >,
+                    <code>POST /api/worker/instance/:instance_name/archive</code
+                    >, <code>POST /api/worker/instance/token</code>,
+                    <code>POST /api/worker/instance/connect</code>,
+                    <code>POST /api/worker/instance/heartbeat</code>
+                  </td>
+                  <td>
+                    <code>worker instance create</code>,
+                    <code>worker instance list</code>,
+                    <code>worker instance get</code>,
+                    <code>worker instance rotate</code>,
+                    <code>worker instance archive</code>,
+                    <code>worker join</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Workbench</td>
+                  <td>
+                    <a href="workbench/tools.html"
+                      >Operation tools of an agent</a
+                    >
+                  </td>
+                  <td>Not available (agent tools)</td>
+                  <td>Not available</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="page-structure">Page structure</h3>
+          <p>
+            Organize feature pages by service or command group
+            (<code>config/</code>, <code>gateway/</code>, <code>worker/</code>),
+            with standalone commands at the reference root. Every feature page
+            uses these sections in order:
+          </p>
+          <ol>
+            <li>
+              <strong>Function description</strong> — what the feature does, its
+              effects, and current limitations.
+            </li>
+            <li>
+              <strong>Expected response</strong> — success output, a table of
+              properties and their purposes, and failures. Identify API/CLI
+              output differences explicitly; for local commands, describe text
+              output, generated files, and exit codes instead of inventing a
+              JSON response.
+            </li>
+            <li>
+              <strong>API shape</strong> — method, path, access, headers,
+              parameters, request body, timeout, and a cURL request. State when
+              no API exists.
+            </li>
+            <li>
+              <strong>CLI shape</strong> — command syntax, examples, positional
+              arguments, options, defaults, and configuration precedence. State
+              when no CLI command exists or when it performs a different local
+              action.
+            </li>
+          </ol>
+          <p>
+            Shared contracts, such as errors and identities, remain standalone
+            references rather than feature pages.
+          </p>
+          <h2 id="shared-contracts">Shared contracts</h2>
+          <p>
+            The <a href="errors.html">error-code reference</a> defines the
+            shared naming rule, failure envelope, and CLI diagnostics. The
+            <a href="identities.html">identity reference</a> defines prefixed
+            ULIDs and request-ID handling. For help interpreting component
+            reports, see
+            <a href="../explanation/healthchecks.html">how healthchecks work</a
+            >.
+          </p>
+          <h2 id="cli-conventions">CLI conventions</h2>
+          <p>
+            Run <code>kanthord</code> from an installed package, or
+            <code>node bin/kanthord.mjs</code> from <code>engine/</code> after
+            <code>pnpm run build</code>. The launcher requires Node.js
+            <code>&gt;=24.15.0 &lt;25</code>. Commands declare their arguments
+            and options and read no interactive input.
+          </p>
+          <p>
+            <code>--help</code> describes each command. Invoking a group
+            displays its help. The <code>tracking</code> group reads a trace,
+            its spans and its telemetry texts. Human and machine tokens come
+            from <code>kanthord auth jwt generate</code>, and
+            <code>kanthord auth jwt inspect</code> decodes one; startup and
+            registration issue none, and there are no kanthord login or logout
+            commands. <code>llm credential login</code> signs in to an LLM
+            platform, not to kanthord.
+          </p>
+          <h3 id="client-configuration">Client configuration</h3>
+          <p>
+            Commands that call the server resolve their client settings as
+            follows:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Setting</th>
+                  <th>Precedence, highest first</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Token</td>
+                  <td>
+                    <code>--token</code> → <code>KANTHORD_TOKEN</code> →
+                    client-file <code>token</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Endpoint</td>
+                  <td>
+                    <code>--endpoint</code> → <code>KANTHORD_ENDPOINT</code> →
+                    client-file <code>endpoint</code> →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The optional operator-supplied client file is
+            <code>$XDG_CONFIG_HOME/kanthord/cli.yaml</code>. Without
+            <code>XDG_CONFIG_HOME</code>, the file is
+            <code>~/.config/kanthord/cli.yaml</code>. The file must have mode
+            <code>0600</code>. Its optional fields are <code>token</code> and
+            <code>endpoint</code>. Any other field, for example
+            <code>client_secret</code> or <code>master_key</code>, fails with
+            <code>cli.config.invalid</code>. <code>serve worker</code> does not
+            read this file; it reads the instance configuration of
+            <a href="serve.html#worker">Run an application</a>. Endpoints must
+            be absolute HTTP(S) URLs without credentials, query, or fragment.
+            <code>kanthord auth jwt generate --output</code> creates this file
+            for a human token and replaces no existing file. No command updates
+            or deletes it. Prefer an environment variable or private client file
+            over literal tokens in shell history.
+          </p>
+          <p>
+            Local server configuration uses a separate
+            <code>kanthord.yaml</code>; see
+            <a href="config/init.html#cli-shape">initialize configuration</a>.
+          </p>
+          <h2 id="api-conventions">API conventions</h2>
+          <p>
+            The default endpoint is <code>http://127.0.0.1:31415</code>. The
+            operation registry owns the unversioned routes listed above.
+          </p>
+          <p>
+            All routes pass through request-ID assignment, request logging, the
+            host allowlist, readiness checks, and CORS middleware. Request IDs
+            follow the
+            <a href="identities.html#request-ids">prefixed identity contract</a
+            >. Each operation adds a timeout, body limit, and the shared
+            invocation chain for schema validation and its access policy.
+            Failures use the shared JSON error envelope with a
+            <code>request_id</code>. Public access still requires an allowed
+            host and a ready server.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

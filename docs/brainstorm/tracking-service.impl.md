@@ -101,7 +101,7 @@ It uses its own database file, `tracking.db` of the data directory that [archite
 `node:sqlite` `DatabaseSync` opens that file in WAL mode, and the file holds its own migration record.
 The server opens that file at every start and runs `trackingMigrations` on it.
 Its migration record follows the runner contract of [architecture.impl.md](architecture.impl.md).
-`kanthord upgrade` also plans and migrates `tracking.db`, as [upgrade.md](../reference/upgrade.md) states.
+`kanthord upgrade` also plans and migrates `tracking.db`, as [upgrade.md](../reference/upgrade.html) states.
 The schema holds the trace with its summary, the span, the record, the telemetry text and the session entry.
 The span row holds no copy of a column of its trace row and no column that an attribute derives.
 A read joins the trace row and reads the attributes of the span.

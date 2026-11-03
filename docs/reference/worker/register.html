@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create a worker registration · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="create-a-worker-registration">
+            Create a worker registration
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Create a worker registration with an existing machine bearer JWT and
+            receive its runtime identity, not another JWT. The API and
+            <code>kanthord worker register</code> create no human account,
+            client identity, or worker definition.
+          </p>
+          <p>
+            Generate the credential locally with
+            <a href="../auth/jwt.html"
+              ><code
+                >kanthord auth jwt generate --project &lt;project id&gt;
+                --binding &lt;binding name&gt;</code
+              ></a
+            >. Its business claims are <code>kind: &quot;client&quot;</code>,
+            <code>sub</code>, <code>name</code>, <code>project_id</code>, and
+            <code>resource_identity</code>. Gateway verifies the token and
+            resolves the worker binding in its project. Registration adds no
+            claim to the JWT and issues no token.
+          </p>
+          <p>
+            A client identity holds at most one live registration. A client
+            identity with a live registration receives that runtime identity
+            with any idempotency key. Within the process-local replay TTL, a
+            repeated key after that registration ends fails with
+            <code>409 gateway.registration.stale</code>. Cancelling after
+            registration commits does not deregister it.
+          </p>
+          <p>
+            The Project service resolves the worker binding from the
+            <code>project_id</code> and <code>resource_identity</code> claims on
+            each request. Local JWT issuance and this operation do not provision
+            bindings.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>The API returns HTTP <code>200</code> with only:</p>
+          <pre><code class="language-json">{
+  "runtime_identity": "&lt;runtime-identity&gt;",
+  "resource_identity": "worker:kanthord:&lt;binding-name&gt;",
+  "worker_name": "&lt;worker-name&gt;"
+}</code></pre>
+          <p>
+            The CLI adds the retry key, writes one JSON line to stdout, and
+            exits <code>0</code> (shown formatted here). Redirected stdout is
+            allowed.
+          </p>
+          <pre><code class="language-json">{
+  "runtime_identity": "&lt;runtime-identity&gt;",
+  "resource_identity": "worker:kanthord:&lt;binding-name&gt;",
+  "worker_name": "&lt;worker-name&gt;",
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>runtime_identity</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Runtime identity of the worker registration; not a JWT.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Worker binding of the registration, as
+                    <code>worker:kanthord:&lt;binding name&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_name</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Name of the worker definition that the binding selects.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>
+                    Key used for this request; retain it with the same machine
+                    token for retries.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Neither response contains a token or expiry. The CLI saves no
+            credential or endpoint.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Missing, invalid, or expired token, a human token, or a
+                    token with a <code>binding</code> claim. Also a machine
+                    token whose binding is absent, removed, set to zero
+                    instances, or removed after token issuance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>
+                    Missing or malformed idempotency key, checked after
+                    authentication.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>Conflicting reuse of an idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.registration.stale</code></td>
+                  <td>
+                    The recorded registration has ended; replay does not
+                    recreate the registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 worker.registration.placement_mismatch</code>
+                  </td>
+                  <td>
+                    The binding is a binding of a worker that kanthord hosts,
+                    and the client identity is not the derived identity of a
+                    live <a href="instance.html">worker instance</a> that the
+                    binding lists. A client identity that holds a live
+                    registration resumes it, also after a removal of its
+                    instance from the list.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.registration.slot_unavailable</code></td>
+                  <td>
+                    The binding is absent or removed, or its live registrations
+                    reach its instance count.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: worker register: request failed</code> and the
+            rows <code>status</code> and <code>idempotency_key</code>, without
+            credentials. A transport failure, timeout, or malformed response
+            exits <code>1</code> with
+            <code>cli.worker.register.indeterminate</code>, the message
+            <code
+              >worker register: the result is unknown; retry with the same
+              idempotency key</code
+            >
+            and the row <code>idempotency_key</code>. Reuse the same key and
+            machine token after an indeterminate result; there is no automatic
+            retry.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/worker/register</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.register</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT), without requiring
+                    an existing registration
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>10 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None; even JSON <code>{}</code> is rejected</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> containing the
+                    existing machine credential.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    registration request; retain it for retries of that request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/worker/register \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'</code></pre>
+          <p>
+            The 40 KiB body limit does not permit a registration payload. Worker
+            runtimes can call this API directly with their existing machine JWT.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord worker register [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;] [--idempotency-key &lt;key&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker register \
+  --token '&lt;machine-jwt&gt;' \
+  --endpoint http://127.0.0.1:31415 \
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PST</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Machine JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when retrying.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence. Prefer
+            <code>KANTHORD_TOKEN</code> or a private <code>cli.yaml</code> over
+            literal tokens in shell history; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The command sends no request body, reads no server configuration,
+            rejects <code>--config</code>, and accepts no client-ID or
+            client-secret options. The HTTP client has an 11-second deadline for
+            this 10-second operation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

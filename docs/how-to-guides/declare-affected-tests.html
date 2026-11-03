@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Declare the affected tests of a repository · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li>
+            <a href="#1-write-the-selector-command"
+              >1. Write the selector command</a
+            >
+          </li>
+          <li>
+            <a href="#2-write-the-declaration">2. Write the declaration</a>
+          </li>
+          <li>
+            <a href="#3-commit-the-declaration-to-the-base-branch"
+              >3. Commit the declaration to the base branch</a
+            >
+          </li>
+          <li>
+            <a href="#4-check-the-command-outside-kanthord"
+              >4. Check the command outside KanthorD</a
+            >
+          </li>
+          <li><a href="#result">Result</a></li>
+          <li><a href="#examples">Examples</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="declare-the-affected-tests-of-a-repository">
+            Declare the affected tests of a repository
+          </h1>
+          <p>
+            Declare one command that selects and runs the tests that a change of
+            the node reaches. KanthorD runs that command for each
+            <code>implement</code> node, at the release gate of
+            <code>coder@1</code> and at the evaluation of
+            <code>reviewer@1</code>. A test that the change breaks then fails
+            the node, also when no verification of the node lists it.
+          </p>
+          <p>
+            The repository owns the map from changed files to tests, the
+            selection and the test run. KanthorD owns the change set, the run,
+            the verdict, the evidence and the spans.
+            <a href="../explanation/coder-worker.html#the-affected-test-run"
+              >The affected test run</a
+            >
+            explains how KanthorD uses the result.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>
+              A repository binding of a project, with its base branch. See
+              <a href="../reference/project/binding.html">project bindings</a>.
+            </li>
+            <li>
+              A test runner that runs a list of test files and reports each
+              failed test.
+            </li>
+            <li>
+              A way to map a changed file to the tests that it reaches, for
+              example <code>vitest related</code> or an import graph of your
+              own.
+            </li>
+          </ul>
+          <h2 id="1-write-the-selector-command">
+            1. Write the selector command
+          </h2>
+          <p>
+            Write one command that does these steps in the root of the
+            repository:
+          </p>
+          <ol>
+            <li>
+              Read the change set from the file that
+              <code>KANTHORD_CHANGES</code> names.
+            </li>
+            <li>Select the test files that the change set reaches.</li>
+            <li>
+              Run the selected test files. Run each failed test file once more.
+              Set a limit on the reruns. The KanthorD selectors rerun the failed
+              files only when 8 or fewer files hold a failed test. With more
+              files, they report each failed test in <code>failed</code> and an
+              empty <code>flaky</code>.
+            </li>
+            <li>
+              Write one JSON report to the path that
+              <code>KANTHORD_AFFECTED_REPORT</code> names.
+            </li>
+            <li>
+              When the report lists no failed test, exit with code 0. When it
+              lists one or more, exit with code 1.
+            </li>
+          </ol>
+          <p>
+            Do not exit with code 127 or with a code from 129 to 192. KanthorD
+            reads exit code 127 as an absent command, and it can stop the
+            execution with <code>command_absent</code>. KanthorD reads a code
+            from 129 to 192 as a signal end. It runs the command once more. When
+            the rerun also ends with a signal, KanthorD stops the execution with
+            <code>worker.verification.infrastructure_failed</code>.
+          </p>
+          <p>
+            KanthorD runs the command with <code>bash -c</code> in the checkout
+            of the repository, at the node head. The command thus runs the
+            selector code of the node head. The environment of the command is
+            the environment of a verification, plus three variables:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>KANTHORD_CHANGES</code></td>
+                  <td>The absolute path of the changes file.</td>
+                </tr>
+                <tr>
+                  <td><code>KANTHORD_AFFECTED_REPORT</code></td>
+                  <td>
+                    The absolute path of the report file. The file does not
+                    exist when the command starts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>KANTHORD_BASE_COMMIT</code></td>
+                  <td>
+                    The merge base of
+                    <code>origin/&lt;base_branch&gt;</code> and the node head.
+                    The changes file uses this commit.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            KanthorD writes the changes file in the workspace, outside every
+            checkout. It removes the changes file and the report file after the
+            run.
+          </p>
+          <p>
+            After a failure at the node head, KanthorD runs the command of the
+            base-branch declaration on the base head, with the same changes
+            file. A path of the changes file can thus be absent from that
+            checkout, for example an added file. The command must accept such a
+            path.
+          </p>
+          <h3 id="the-changes-file">The changes file</h3>
+          <p>
+            KanthorD computes <code>files</code> with
+            <code
+              >git diff --name-status -z --find-renames &lt;base_commit&gt;
+              &lt;head_commit&gt;</code
+            >.
+          </p>
+          <pre><code class="language-json">{
+  "version": 1,
+  "binding_id": "binding_01M5SQ3VMP6H1MR49ZHN0EKBDC",
+  "repository": "api",
+  "base_commit": "f0d09a0cbb8f53f69a21d3163c4bd626b00026cf",
+  "head_commit": "88e07e90b2f48caaeebcc7b010b5d6e3f5aed770",
+  "files": [
+    { "path": "src/server.ts", "status": "modified" },
+    {
+      "path": "src/health/route.ts",
+      "status": "renamed",
+      "previous_path": "src/health.ts"
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>version</code></td>
+                  <td><code>1</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_id</code></td>
+                  <td>The repository binding of the checkout.</td>
+                </tr>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>The name of the repository binding.</td>
+                </tr>
+                <tr>
+                  <td><code>base_commit</code></td>
+                  <td>
+                    The merge base. It equals <code>KANTHORD_BASE_COMMIT</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>head_commit</code></td>
+                  <td>The node head that KanthorD tests.</td>
+                </tr>
+                <tr>
+                  <td><code>files</code></td>
+                  <td>
+                    One entry for each changed path. <code>path</code> is
+                    relative to the root of the repository and uses
+                    <code>/</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>status</code></td>
+                  <td>
+                    <code>added</code>, <code>modified</code>,
+                    <code>deleted</code> or <code>renamed</code>. A type change
+                    is <code>modified</code>. A <code>renamed</code> entry also
+                    holds <code>previous_path</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="the-report">The report</h3>
+          <pre><code class="language-json">{
+  "version": 1,
+  "selection": "related",
+  "reason": null,
+  "tests": ["src/health/route.test.ts", "src/server.test.ts"],
+  "failed": [
+    {
+      "file": "src/server.test.ts",
+      "name": "server &gt; answers 200 on GET /healthz"
+    }
+  ],
+  "flaky": [],
+  "excluded_e2e": ["test/e2e/health.test.ts"]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>
+                    <code>1</code> or <code>2</code>. Version 2 adds the
+                    optional <code>floor</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>selection</code></td>
+                  <td>
+                    <code>related</code> for the tests that the change set
+                    reaches, <code>all</code> for every test,
+                    <code>none</code> for no test.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>
+                    A nonblank text of at most 256 bytes for <code>all</code>.
+                    <code>null</code> for <code>related</code> and
+                    <code>none</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tests</code></td>
+                  <td>
+                    Each selected test file, relative to the root of the
+                    repository. <code>none</code> requires an empty list.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>failed</code></td>
+                  <td>The test id of each test that failed.</td>
+                </tr>
+                <tr>
+                  <td><code>flaky</code></td>
+                  <td>
+                    The test id of each test that failed and then passed in the
+                    second run of its file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>excluded_e2e</code></td>
+                  <td>
+                    Each end-to-end test file that the change set reaches and
+                    that the selection leaves out.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>floor</code></td>
+                  <td>
+                    Version 2 only. <code>tests</code>: the count of test files
+                    whose import closure holds every production file.
+                    <code>seconds</code>: the test time of those files that ran.
+                    <code>total_seconds</code>: the test time of every test
+                    file, or null unless <code>selection</code> is
+                    <code>all</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A test id is
+            <code
+              >{ &quot;file&quot;: &quot;&lt;test file&gt;&quot;,
+              &quot;name&quot;: &quot;&lt;full name&gt;&quot; }</code
+            >. Join the suite names and the test name with a space,
+            <code>&gt;</code> and a space. An example full name is
+            <code>server &gt; answers 200</code>. A test file that fails to load
+            gives one id with the file path as its name.
+          </p>
+          <p>
+            KanthorD checks the report with a strict schema. These rules apply:
+          </p>
+          <ul>
+            <li>The report holds no other key.</li>
+            <li>
+              Each <code>file</code> of <code>failed</code> and
+              <code>flaky</code> is an entry of <code>tests</code>.
+            </li>
+            <li>
+              <code>failed</code> and <code>flaky</code> hold no common test id.
+            </li>
+            <li>
+              The report holds at most 1 MiB. Each list holds at most 10000
+              entries. Each text holds at most 1024 bytes.
+            </li>
+            <li>
+              The exit code is 0 exactly when <code>failed</code> is empty.
+            </li>
+            <li>
+              A <code>floor</code> key in a version 1 report gives an invalid
+              report.
+            </li>
+          </ul>
+          <p>
+            An absent report, a report that breaks a rule, or an exit code that
+            does not match <code>failed</code> is an invalid report.
+          </p>
+          <p>
+            When the map from a changed file to its tests is not certain, select
+            every test in the scope of the selector. Set
+            <code>selection</code> to <code>all</code>, and write the cause in
+            <code>reason</code>.
+          </p>
+          <h2 id="2-write-the-declaration">2. Write the declaration</h2>
+          <p>
+            Write the file <code>.kanthord/affected-tests.json</code> in the
+            root of the repository:
+          </p>
+          <pre><code class="language-json">{
+  "version": 1,
+  "command": "npm run --silent test:affected",
+  "time_limit_s": 600,
+  "gate_files": ["package.json", "scripts/affected-tests.mjs"]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>Required. <code>1</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>command</code></td>
+                  <td>
+                    Required. The selector command, as one nonblank string.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>time_limit_s</code></td>
+                  <td>
+                    Optional. The time limit of one run of the command in
+                    seconds, from 60 to 3600. The default is 600.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gate_files</code></td>
+                  <td>
+                    Optional. The repository paths, with <code>/</code>, of the
+                    files that the command depends on, for example the selector
+                    and the test runner configuration. The default is
+                    <code>[]</code>. KanthorD compares each path with the change
+                    set as an exact string, with no glob.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The file holds no other key. A file that is not valid JSON, that
+            holds another key or that holds a wrong type is an invalid
+            declaration.
+          </p>
+          <p>
+            When <code>.gitignore</code> ignores <code>.kanthord/</code>, add an
+            exception for the file:
+          </p>
+          <pre><code class="language-gitignore">!/.kanthord/
+/.kanthord/*
+!/.kanthord/affected-tests.json</code></pre>
+          <h2 id="3-commit-the-declaration-to-the-base-branch">
+            3. Commit the declaration to the base branch
+          </h2>
+          <p>
+            Merge the declaration into the base branch of the repository
+            binding. The worker reads the file at
+            <code>origin/&lt;base_branch&gt;</code>, not at the node head. A
+            node thus cannot change the command that judges it. A declaration on
+            a node branch has no effect until it reaches the base branch.
+          </p>
+          <p>
+            The worker reads the file at every placement: <code>server</code>,
+            <code>container</code> and <code>worker</code>.
+          </p>
+          <h2 id="4-check-the-command-outside-kanthord">
+            4. Check the command outside KanthorD
+          </h2>
+          <p>
+            Write <code>/tmp/changes.json</code> in the form of
+            <a href="#the-changes-file">the changes file</a>, with the changes
+            of your branch. Write your base branch in place of
+            <code>&lt;base_branch&gt;</code>. This command uses <code>jq</code>:
+          </p>
+          <pre><code class="language-sh">base=$(git merge-base origin/&lt;base_branch&gt; HEAD)
+git diff --name-status --find-renames "$base" HEAD |
+  jq -R -s --arg base "$base" --arg head "$(git rev-parse HEAD)" '
+    split("\n") | map(select(length &gt; 0) | split("\t") |
+      if .[0][0:1] == "R" then {path: .[2], status: "renamed", previous_path: .[1]}
+      elif .[0] == "A" then {path: .[1], status: "added"}
+      elif .[0] == "D" then {path: .[1], status: "deleted"}
+      else {path: .[1], status: "modified"} end)
+    | {version: 1, binding_id: "local", repository: "local",
+       base_commit: $base, head_commit: $head, files: .}' &gt;/tmp/changes.json</code></pre>
+          <p>Then run the command with the three variables:</p>
+          <pre><code class="language-sh">KANTHORD_CHANGES=/tmp/changes.json \
+KANTHORD_AFFECTED_REPORT=/tmp/report.json \
+KANTHORD_BASE_COMMIT="$base" \
+npm run --silent test:affected
+echo "exit $?"</code></pre>
+          <p>
+            Check that <code>/tmp/report.json</code> exists, that it follows the
+            rules of <a href="#the-report">the report</a>, and that the exit
+            code matches <code>failed</code>.
+          </p>
+          <h2 id="result">Result</h2>
+          <p>
+            The next release gate and the next evaluation of each
+            <code>implement</code> node of the repository run the command after
+            every verification of the node passes. The work prompt of
+            <code>coder@1</code> names the command under
+            <code>## Affected tests</code>, and tells <code>swe@1</code> not to
+            run it. When the declaration lists gate files, the prompt names them
+            and tells <code>swe@1</code> to change a gate file only when the
+            requirement names it.
+          </p>
+          <p>
+            When a test fails on the node head, KanthorD runs the command on the
+            base head. When each failed test of the node head also fails on the
+            base head, the verdict is <code>base_red</code>, and the node
+            passes. Otherwise the node fails. A flaky test counts as failed only
+            when its file is in the change set.
+          </p>
+          <p>
+            When the change set of a node changes a gate file, a human merges
+            the pull request of the node, also with the landing
+            <code>kanthord</code>. The pull request text names each changed gate
+            file. KanthorD pushes nothing for a <code>merge_push</code> action
+            of that node. The node waits in
+            <code>External.Requested</code> until a human lands the node branch
+            with a merge commit or a fast-forward. See
+            <a href="../reference/project/binding.html#gate-files">gate files</a
+            >.
+          </p>
+          <h2 id="examples">Examples</h2>
+          <p>The KanthorD repositories declare their own affected tests:</p>
+          <ul>
+            <li>
+              <a
+                href="https://github.com/kanthorlabs/kanthord-engine/blob/main/scripts/affected-tests.mjs"
+                >kanthord-engine</a
+              >
+              maps each changed file to its tests through the import graph and
+              runs them with <code>pnpm --silent run test:files</code>. Its
+              declaration runs <code>pnpm --silent run test:affected</code>. It
+              runs each reached test that does not import
+              <code>startTestSshd</code>, the
+              <code>src/apps/server/e2e-*.test.ts</code> files included.
+              <code>excluded_e2e</code> lists the reached tests that import
+              <code>startTestSshd</code>, or each such test when the selection
+              is <code>all</code>.
+            </li>
+            <li>
+              <a
+                href="https://github.com/kanthorlabs/kanthord-apps/blob/main/scripts/affected-tests.mjs"
+                >kanthord-apps</a
+              >
+              selects the tests with <code>vitest related</code> and runs them
+              with vitest.
+            </li>
+          </ul>
+          <p>
+            Each declaration lists its gate files in <code>gate_files</code>:
+          </p>
+          <ul>
+            <li>
+              kanthord-engine: <code>.kanthord/affected-tests.json</code>,
+              <code>package.json</code>,
+              <code>scripts/affected-tests.mjs</code>,
+              <code>scripts/affected-reporter.mjs</code>,
+              <code>scripts/test-reporter.mjs</code>,
+              <code>scripts/test-path.mjs</code> and
+              <code>scripts/pi-tools.mjs</code>.
+            </li>
+            <li>
+              kanthord-apps: <code>.kanthord/affected-tests.json</code>,
+              <code>package.json</code>,
+              <code>scripts/affected-tests.mjs</code>,
+              <code>vite.config.ts</code> and <code>test/setup.ts</code>.
+            </li>
+          </ul>
+          <p>
+            Both scripts compute the change set from
+            <code>origin/main</code> and the working tree when
+            <code>KANTHORD_CHANGES</code> is not set. They also print the report
+            on standard output.
+          </p>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    The execution stops with <code>environment_failed</code> and
+                    the code <code>affected_invalid</code>.
+                  </td>
+                  <td>
+                    The declaration is invalid. Or the command gives no valid
+                    report on the node head, and writes no valid report on the
+                    base head. Fix the file or the selector on the base branch.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The execution stops with <code>environment_failed</code> and
+                    the code <code>affected_timeout</code>.
+                  </td>
+                  <td>
+                    The command reaches <code>time_limit_s</code> on the node
+                    head. Or the command gives no valid report on the node head,
+                    and reaches <code>time_limit_s</code> on the base head.
+                    Raise <code>time_limit_s</code>, or select fewer tests.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The execution stops with <code>environment_failed</code> and
+                    the code <code>command_absent</code>.
+                  </td>
+                  <td>
+                    The command gives no valid report on the node head, and
+                    exits with code 127 on the base head. Add the tool to the
+                    environment of the repository binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The work prompt holds no
+                    <code>## Affected tests</code> section.
+                  </td>
+                  <td>
+                    The base branch holds no declaration, or the declaration is
+                    invalid.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

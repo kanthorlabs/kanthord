@@ -25,7 +25,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ## The inbound store
 
-- `intake_inbound` of [ERD 3](../reference/erd/03-integration.md) holds the inbounds. `id` is `inbound_` and a ULID.
+- `intake_inbound` of [ERD 3](../reference/erd/03-integration.html) holds the inbounds. `id` is `inbound_` and a ULID.
 - `configuration` is JSON text. The Intake Service validates it per `(kind, platform)` with a `zod` schema in code before the write. It holds `resource` and the options of the kind and the platform. Every property name is snake_case.
 - `checkpoint` is JSON text whose shape the platform implementation validates.
 - The table holds no unique index other than its key.
@@ -214,7 +214,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 ## The outbound record
 
-- `intake_outbound_request` of [ERD 3](../reference/erd/03-integration.md) holds the outbound requests. `id` is `outbound_request_` and a ULID.
+- `intake_outbound_request` of [ERD 3](../reference/erd/03-integration.html) holds the outbound requests. `id` is `outbound_request_` and a ULID.
 - `project_id` names the project of the binding that the caller resolved. `operation` holds a value of the closed set of outbound operations in code. `request_key` holds the key that the caller derives. `credential` holds the name of the credential that custody released for the write, and `git.merge_push` holds null. A credential removal is not refused by an outbound request that names it.
 - A unique index covers `(operation, request_key)`.
 - `result` is JSON text that holds the bounded body of the 2xx answer, for example the `PlatformAddress`, or null. `error` holds the shape and the byte bound of `error` of an inbound event. Every property name is snake_case.

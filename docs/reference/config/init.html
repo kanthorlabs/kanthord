@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Initialize server configuration · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="initialize-server-configuration">
+            Initialize server configuration
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Create a validated server configuration with a fresh 32-byte base64
+            master key and the configured defaults. The command creates an owned
+            <code>0700</code> parent directory and publishes a
+            <code>0600</code> file atomically. An existing destination causes
+            failure; initialization never overwrites it.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Success prints a confirmation to stdout and exits <code>0</code>:
+          </p>
+          <pre><code class="language-text">created: &lt;path&gt;</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output / property</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>created: &lt;path&gt;</code></td>
+                  <td>
+                    Confirms creation and identifies the resolved configuration
+                    file path.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Configuration file</td>
+                  <td>
+                    Contains the generated <code>master_key</code> and defaults;
+                    see
+                    <a href="show.html#expected-response"
+                      >configuration properties</a
+                    >. Unlike <code>config show</code>, the stored key is not
+                    masked.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Exit code <code>0</code></td>
+                  <td>Configuration was created successfully.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Failures exit <code>1</code> with a
+            <a href="../errors.html#cli-diagnostics">diagnostic</a>. The
+            confirmation does not print the master key.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Not available. Configuration initialization is a local filesystem
+            operation, with no API endpoint or cURL equivalent.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord config init [--gateway-allowed-host &lt;host&gt;]... [--gateway-bind &lt;address&gt;] [--gateway-base-path &lt;path&gt;] [--config &lt;path&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord config init
+kanthord config init --config /absolute/path/kanthord.yaml
+kanthord config init --gateway-allowed-host mac.tailnet.ts.net
+kanthord config init --gateway-allowed-host kanthord.example.com --gateway-allowed-host 203.0.113.7
+kanthord config init --gateway-bind 0.0.0.0
+kanthord config init --gateway-allowed-host homelab.example.com --gateway-base-path /s/kanthord</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--config &lt;path&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_CONFIG</code> →
+                    <code>$XDG_CONFIG_HOME/kanthord/kanthord.yaml</code> →
+                    <code>~/.config/kanthord/kanthord.yaml</code> when XDG is
+                    unset
+                  </td>
+                  <td>Destination for the private server configuration.</td>
+                </tr>
+                <tr>
+                  <td><code>--gateway-allowed-host &lt;host&gt;</code></td>
+                  <td>None; repeatable</td>
+                  <td>
+                    Appends a lowercased <code>&lt;name&gt;</code> or
+                    <code>&lt;name&gt;:&lt;port&gt;</code> to the default
+                    <code>gateway.allowed_hosts</code>. Use the name that a
+                    reverse proxy or <code>tailscale serve</code> forwards.
+                    Another form fails with
+                    <code>cli.config.invalid_allowed_host</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--gateway-bind &lt;address&gt;</code></td>
+                  <td><code>127.0.0.1</code></td>
+                  <td>
+                    Sets <code>gateway.bind</code> to an IPv4 or IPv6 address.
+                    Another value fails with
+                    <code>system.config.invalid_field</code>. Use
+                    <code>0.0.0.0</code> or <code>::</code> to accept
+                    connections from other hosts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--gateway-base-path &lt;path&gt;</code></td>
+                  <td><code>/</code></td>
+                  <td>
+                    Sets <code>gateway.base_path</code>, the path prefix of the
+                    whole HTTP surface, for example <code>/s/kanthord</code>.
+                    The value is <code>/</code> or segments of
+                    <code>[A-Za-z0-9._~-]</code>, each after a <code>/</code>,
+                    with no trailing slash. Another value fails with
+                    <code>system.config.invalid_field</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An explicit <code>--config</code> wins over environment and default
+            paths. The command reads no interactive input.
+          </p>
+          <p>
+            Next: <a href="validate.html">validate configuration</a>,
+            <a href="../serve.html">serve</a>.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

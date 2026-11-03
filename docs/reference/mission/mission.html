@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read and export a mission · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-and-export-a-mission">Read and export a mission</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            One project has exactly one mission. The Project service creates the
+            mission with the project, empty and at mission version
+            <code>1</code>. No operation creates or deletes a mission.
+          </p>
+          <p>
+            A mission is a graph of nodes and dependency edges. Each node holds
+            an <code>intent</code>: <code>implement</code> or
+            <code>examine</code>. A task is content of an
+            <code>implement</code> node. Dependency is the only edge kind.
+          </p>
+          <p>
+            The mission version increases by one on each accepted plan write.
+            Plan writes include a node create, a content change, a retirement, a
+            rebind and a dependency edit. A write that changes nothing keeps the
+            version. Plan writes require the current version as
+            <code>expected_mission_version</code>.
+          </p>
+          <ul>
+            <li>
+              <code>mission get</code> returns the mission of a project. Use it
+              to find the mission ID from a project ID.
+            </li>
+            <li>
+              <code>mission export</code> returns the current plan as JSON
+              entries or as Markdown plan files. The answer is a payload that
+              <code>mission import</code> of the same format accepts. The export
+              excludes retired nodes.
+            </li>
+          </ul>
+          <p>
+            Each Markdown plan file is a node file or a task file. It has a YAML
+            front matter and a body. A node file:
+          </p>
+          <pre><code class="language-markdown">---
+id: node_01M4C5J3SAMS4Z4KZD8DQ9GFTB
+intent: implement
+depends_on: []
+tags: []
+bindings:
+  - main-repository
+verifications:
+  - pnpm test
+---
+
+# Add the login page
+
+## Requirement
+
+The application shows a login form.
+
+## Criterion
+
+A user with valid credentials reaches the dashboard.</code></pre>
+          <p>A task file:</p>
+          <pre><code class="language-markdown">---
+id: task_01M4C5J3SACNE2WP46QAMA4Q4F
+node: login.md
+bindings: []
+verifications:
+  - pnpm test
+---
+
+# Show the login form
+
+## Requirement
+
+The login page shows a form with a user name and a password field.
+
+## Criterion
+
+The form submits the user name and the password.</code></pre>
+          <p>
+            The front matter of a node file holds <code>id</code>,
+            <code>intent</code>, <code>depends_on</code>, <code>tags</code>,
+            <code>bindings</code> and <code>verifications</code>. The front
+            matter of a task file holds <code>id</code>, <code>node</code>,
+            <code>bindings</code> and <code>verifications</code>.
+            <code>node</code> and <code>depends_on</code> name plan files, and
+            <code>bindings</code> holds binding names. A node file names every
+            binding of the node under
+            <a href="import.html#bindings-of-a-node">bindings of a node</a>. A
+            task file holds <code>bindings: []</code>. The export writes
+            <code>tags</code> on every node file, also <code>tags: []</code>.
+            The <a href="import.html#plan-files">import</a> page states the
+            complete grammar.
+          </p>
+          <p>
+            <strong>Authority:</strong> every authenticated human holds the same
+            authority under the server-owner ruling. Any verified human token
+            reads any mission.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="mission-get">mission get</h3>
+          <p>The API returns HTTP <code>200</code> with the mission:</p>
+          <pre><code class="language-json">{
+  "id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
+  "project_id": "project_01M4C5J3S9YN8E5S7T2JFNBG0B",
+  "version": 1
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>mission_&lt;ulid&gt;</code></td>
+                  <td>Mission ID for every mission command.</td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td><code>project_&lt;ulid&gt;</code></td>
+                  <td>Project that owns the mission.</td>
+                </tr>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>positive integer</td>
+                  <td>Current mission version for optimistic writes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI writes the same JSON object as one line to stdout and exits
+            <code>0</code>.
+          </p>
+          <h3 id="mission-export">mission export</h3>
+          <p>
+            The API returns HTTP <code>200</code>. With
+            <code>format=json</code>, the answer holds plan entries:
+          </p>
+          <pre><code class="language-json">{
+  "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
+  "mission_version": 7,
+  "entries": [
+    {
+      "filename": "login.md",
+      "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+      "intent": "implement",
+      "name": "Add the login page",
+      "requirement": "The application shows a login form.",
+      "criterion": "A user with valid credentials reaches the dashboard.",
+      "verifications": ["pnpm test"],
+      "bindings": ["main-repository"],
+      "tags": [],
+      "depends_on": []
+    },
+    {
+      "filename": "login-form.md",
+      "id": "task_01M4C5J3SACNE2WP46QAMA4Q4F",
+      "node": "login.md",
+      "name": "Show the login form",
+      "requirement": "The login page shows a form with a user name and a password field.",
+      "criterion": "The form submits the user name and the password.",
+      "verifications": ["pnpm test"],
+      "bindings": []
+    }
+  ]
+}</code></pre>
+          <p>With <code>format=markdown</code>, the answer holds plan files:</p>
+          <pre><code class="language-json">{
+  "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
+  "mission_version": 7,
+  "files": [
+    {
+      "filename": "login.md",
+      "content": "---\nid: node_01M4C5J3SAMS4Z4KZD8DQ9GFTB\n..."
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission_id</code></td>
+                  <td><code>mission_&lt;ulid&gt;</code></td>
+                  <td>Exported mission.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Mission version of the snapshot; use it as the import
+                    <code>mission_version</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entries[]</code></td>
+                  <td>array (JSON format)</td>
+                  <td>
+                    One entry for each current node and task, sorted by
+                    <code>filename</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entries[].filename</code></td>
+                  <td>plan file name</td>
+                  <td>
+                    Name that matches <code>^[a-z][a-z0-9_-]*\.md$</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entries[].id</code></td>
+                  <td>
+                    <code>node_&lt;ulid&gt;</code> or
+                    <code>task_&lt;ulid&gt;</code>
+                  </td>
+                  <td>Node ID or task ID.</td>
+                </tr>
+                <tr>
+                  <td><code>entries[].intent</code></td>
+                  <td><code>implement</code> or <code>examine</code></td>
+                  <td>Intent of the node. Absent for a task.</td>
+                </tr>
+                <tr>
+                  <td><code>entries[].node</code></td>
+                  <td>plan file name</td>
+                  <td>
+                    Plan file of the <code>implement</code> node of a task.
+                    Absent for a node.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>entries[].name</code>, <code>requirement</code>,
+                    <code>criterion</code>
+                  </td>
+                  <td>string</td>
+                  <td>Node content text.</td>
+                </tr>
+                <tr>
+                  <td><code>entries[].verifications</code></td>
+                  <td>array of strings</td>
+                  <td>Verification commands; at least one.</td>
+                </tr>
+                <tr>
+                  <td><code>entries[].bindings</code></td>
+                  <td>array of strings</td>
+                  <td>
+                    Binding names, not binding IDs. <code>[]</code> for a task.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entries[].tags</code></td>
+                  <td>array of tags</td>
+                  <td>Tags of the node. Absent for a task.</td>
+                </tr>
+                <tr>
+                  <td><code>entries[].depends_on</code></td>
+                  <td>array of plan file names</td>
+                  <td>Sorted dependency targets. Absent for a task.</td>
+                </tr>
+                <tr>
+                  <td><code>files[]</code></td>
+                  <td>array (Markdown format)</td>
+                  <td>
+                    <code>{ filename, content }</code> for each current node and
+                    task, sorted by <code>filename</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI writes the answer to <code>--out</code> and writes one JSON
+            line to stdout:
+          </p>
+          <pre><code class="language-json">{ "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS", "mission_version": 7 }</code></pre>
+          <p>
+            For Markdown, the CLI writes each <code>content</code> to
+            <code>&lt;out&gt;/&lt;filename&gt;</code>. For JSON, the CLI writes
+            the complete answer to the <code>--out</code> file. Each file has
+            mode <code>0600</code>. The CLI does not parse Markdown.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Operation</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Both</td>
+                  <td>
+                    A path or query value fails the schema, for example a bad ID
+                    or format.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>Both</td>
+                  <td>The request has a body.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.mission.not_found</code></td>
+                  <td>Both</td>
+                  <td>
+                    No mission exists for the project, or the mission ID is
+                    unknown.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 mission.export.too_large</code></td>
+                  <td>Export</td>
+                  <td>The serialized answer exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>Both</td>
+                  <td>The operation exceeded 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI exits <code>1</code> on every failure and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr. A declared
+            remote failure prints <code>&lt;code&gt;: request failed</code> and
+            the row <code>status: &lt;status&gt;</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.mission.get.invalid_project_id</code></td>
+                  <td>
+                    <code>&lt;project-id&gt;</code> is not a
+                    <code>project_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.export.invalid_mission_id</code></td>
+                  <td>
+                    <code>&lt;mission-id&gt;</code> is not a
+                    <code>mission_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.export.invalid_format</code></td>
+                  <td>
+                    <code>--format</code> is not <code>markdown</code> or
+                    <code>json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.export.out_not_empty</code></td>
+                  <td>
+                    For Markdown, <code>--out</code> exists and is not an empty
+                    directory.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.get.token_required</code>,
+                    <code>cli.mission.export.token_required</code>
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.get.indeterminate</code>,
+                    <code>cli.mission.export.indeterminate</code>
+                  </td>
+                  <td>
+                    A transport failure, a timeout or a malformed answer. Run
+                    the command again.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.files.create_failed</code></td>
+                  <td>
+                    The CLI cannot create the Markdown
+                    <code>--out</code> directory.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.files.publish_failed</code></td>
+                  <td>
+                    A destination file exists, or the CLI cannot write a file.
+                    The CLI overwrites no file.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="mission-get-1">mission get</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/project/:project_id</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>project_id</code>: <code>project_&lt;ulid&gt;</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/mission/project/project_01M4C5J3S9YN8E5S7T2JFNBG0B \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="mission-export-1">mission export</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/:mission_id/export</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.export</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>mission_id</code>: <code>mission_&lt;ulid&gt;</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>
+                    <code>format</code>: required, <code>markdown</code> or
+                    <code>json</code>; no default
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/export?format=json' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <h3 id="mission-get-2">mission get</h3>
+          <pre><code class="language-text">kanthord mission get &lt;project-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission get project_01M4C5J3S9YN8E5S7T2JFNBG0B</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>
+                    Required <code>project_&lt;ulid&gt;</code> of the project.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="mission-export-2">mission export</h3>
+          <pre><code class="language-text">kanthord mission export &lt;mission-id&gt; --format &lt;markdown|json&gt; --out &lt;path&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission export mission_01M4C5J3SA6W8RBBC92HA9SSDS --format markdown --out ./plan</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;mission-id&gt;</code></td>
+                  <td>
+                    Required <code>mission_&lt;ulid&gt;</code> of the mission.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--format &lt;markdown|json&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>Sets the <code>format</code> query value.</td>
+                </tr>
+                <tr>
+                  <td><code>--out &lt;path&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>
+                    For Markdown, an absent or empty directory. For JSON, an
+                    absent file. The CLI creates absent directories with mode
+                    <code>0700</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="shared-options">Shared options</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>mission</code> group declares <code>--token</code> and
+            <code>--endpoint</code>, and every <code>mission</code> subcommand
+            accepts them. Each option is accepted once. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline for these 30-second
+            operations.
+          </p>
+          <p>
+            For Markdown, the CLI checks <code>--out</code> before the request
+            and again before it writes. The CLI accepts an existing directory of
+            any mode that it can write. It never overwrites a file.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

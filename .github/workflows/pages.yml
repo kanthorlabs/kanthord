@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - name: Test documentation navigation and diagram controls
+      - name: Test documentation diagram controls
         run: node --test scripts/docs/*.test.mjs
       - name: Test publication boundary
         run: python3 scripts/docs/build.test.py

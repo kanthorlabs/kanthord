@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read worker binding agents · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-worker-binding-agents">Read worker binding agents</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A worker binding selects a worker. A worker declares zero or more
+            agents. For each declared agent, the Project Service shows the
+            effective agent configuration of the binding. The view combines the
+            agent defaults from the Agent Service with the
+            <code>entries</code> override of the binding. These operations read
+            only; they change nothing.
+          </p>
+          <p>
+            The binding ID can identify any revision of a worker binding in the
+            project. A tombstone is also valid. The view uses the configuration
+            of that revision and the current agent enablement.
+          </p>
+          <h3 id="project-agent-list">project agent list</h3>
+          <p>
+            List the agents that the worker of the binding declares, sorted by
+            agent name, lowest first. A worker that declares no agent gives an
+            empty list.
+          </p>
+          <h3 id="project-agent-get">project agent get</h3>
+          <p>Read the view of one declared agent by its name.</p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Both operations return HTTP <code>200</code>. The CLI writes the API
+            body as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <h3 id="project-agent-get-1">project agent get</h3>
+          <pre><code class="language-json">{
+  "agent": "&lt;agent-name&gt;",
+  "worker": "&lt;worker-name&gt;",
+  "worker_binding_id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4",
+  "binding_set_version": 5,
+  "defaults": {
+    "agent_provider": "&lt;agent-provider-name&gt;",
+    "model_identifier": "&lt;model-identifier&gt;",
+    "reasoning_effort": "&lt;reasoning-effort&gt;"
+  },
+  "entry": { "reasoning_effort": "&lt;reasoning-effort&gt;" },
+  "effective": {
+    "agent_provider": "&lt;agent-provider-name&gt;",
+    "provider": "&lt;provider&gt;",
+    "credential": "&lt;credential-name&gt;",
+    "model_identifier": "&lt;model-identifier&gt;",
+    "reasoning_effort": "&lt;reasoning-effort&gt;"
+  },
+  "chain": [
+    {
+      "position": 0,
+      "level": "enablement",
+      "agent_provider": "&lt;agent-provider-name&gt;",
+      "provider": "&lt;provider&gt;",
+      "credential": "&lt;credential-name&gt;",
+      "model_identifier": "&lt;model-identifier&gt;",
+      "reasoning_effort": "&lt;reasoning-effort&gt;",
+      "cooldown": null
+    }
+  ],
+  "active_position": 0,
+  "cooling": null,
+  "valid": true,
+  "issues": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>agent</code></td>
+                  <td>string</td>
+                  <td>Agent name.</td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td>string</td>
+                  <td>Worker name from the binding configuration.</td>
+                </tr>
+                <tr>
+                  <td><code>worker_binding_id</code></td>
+                  <td>string</td>
+                  <td>Binding ID from the request.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_set_version</code></td>
+                  <td>positive integer</td>
+                  <td>Current binding set version of the project.</td>
+                </tr>
+                <tr>
+                  <td><code>defaults</code></td>
+                  <td>object or null</td>
+                  <td>
+                    Default <code>agent_provider</code>,
+                    <code>model_identifier</code> and
+                    <code>reasoning_effort</code> of the agent.
+                    <code>null</code> when the agent is not enabled or is
+                    disabled.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entry</code></td>
+                  <td>object or null</td>
+                  <td>
+                    Override fields of the binding entry for this agent, without
+                    <code>agent</code>,
+                    <code>fallback_configurations</code> included.
+                    <code>null</code> when the binding has no entry for the
+                    agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>effective</code></td>
+                  <td>object or null</td>
+                  <td>
+                    Defaults merged with the entry, plus the
+                    <code>provider</code> and <code>credential</code> of the
+                    agent provider. <code>null</code> when the view is not
+                    valid.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>chain</code></td>
+                  <td>array</td>
+                  <td>
+                    Fallback chain of the effective configuration. Each item
+                    holds <code>position</code>, <code>level</code>,
+                    <code>agent_provider</code>, <code>provider</code>,
+                    <code>credential</code>, <code>model_identifier</code>,
+                    <code>reasoning_effort</code> and <code>cooldown</code>.
+                    <code>level</code> is <code>enablement</code> or
+                    <code>binding</code>. <code>cooldown</code> is
+                    <code>null</code> or
+                    <code>{ strikes, available_at }</code> of the
+                    <a href="../agent/cooldown.html">cooldown</a> of the
+                    <code>server</code> copy of the credential. At the
+                    <code>worker</code> placement, <code>cooldown</code> is the
+                    cooldown with the latest <code>available_at</code> over the
+                    copies of the listed instances. <code>position</code>
+                    <code>0</code> is the head. <code>[]</code> when the view is
+                    not valid.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>active_position</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    The <code>position</code> that the next claim selects.
+                    <code>null</code> when every chain entry has a live
+                    cooldown, and when <code>chain</code> is empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cooling</code></td>
+                  <td>object or null</td>
+                  <td>
+                    <code>{ code, available_at }</code> with <code>code</code>
+                    <code>agent.configuration.chain_cooling</code> and the
+                    earliest <code>available_at</code>, when every chain entry
+                    has a live cooldown. Otherwise <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>valid</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when the effective configuration passes
+                    validation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>issues</code></td>
+                  <td>array</td>
+                  <td>
+                    Validation issues as
+                    <code
+                      >{ &quot;path&quot;: [...], &quot;code&quot;:
+                      &quot;&lt;error-code&gt;&quot; }</code
+                    >. An agent that is not enabled gives the code
+                    <code>agent.enablement.unavailable</code>. A chain
+                    credential that a holder of the binding holds in no live
+                    copy sealed to its current key gives
+                    <code>agent.configuration.credential_holder_mismatch</code>.
+                    The holders are <code>server</code>, or the instances of a
+                    <code>worker</code> placement.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-agent-list-1">project agent list</h3>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "agent": "&lt;agent-name&gt;",
+      "worker": "&lt;worker-name&gt;",
+      "worker_binding_id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4",
+      "binding_set_version": 5,
+      "defaults": null,
+      "entry": null,
+      "effective": null,
+      "chain": [],
+      "active_position": null,
+      "cooling": null,
+      "valid": false,
+      "issues": [{ "path": [], "code": "agent.enablement.unavailable" }]
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    Agent views with the fields of
+                    <code>project agent get</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>
+                    Absent, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Both</td>
+                  <td>A parameter or query value fails the schema.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>The cursor does not decode to an agent name.</td>
+                </tr>
+                <tr>
+                  <td><code>404 project.project.not_found</code></td>
+                  <td>Both</td>
+                  <td>No project has this ID.</td>
+                </tr>
+                <tr>
+                  <td><code>404 project.binding.not_found</code></td>
+                  <td>Both</td>
+                  <td>
+                    No revision with this ID belongs to the project, or the
+                    binding is not a worker binding. For <code>get</code>, also
+                    an agent that the worker does not declare.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>Both</td>
+                  <td>The request has a body.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>Both</td>
+                  <td>The operation exceeded 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks its input before it sends a request. Each local
+            failure exits <code>1</code> and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.project.agent.&lt;command&gt;.invalid_project_id</code
+                    >
+                  </td>
+                  <td>Both</td>
+                  <td>The project argument is not a valid project ID.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.project.agent.&lt;command&gt;.invalid_binding_id</code
+                    >
+                  </td>
+                  <td>Both</td>
+                  <td>The binding argument is not a valid binding ID.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is more than <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>Both</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.project.agent.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>Both</td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared server failure exits <code>1</code>. The CLI writes the
+            server code, then the error object as JSON. A transport failure, a
+            timeout or a malformed response exits <code>1</code> with
+            <code>cli.project.agent.&lt;command&gt;.indeterminate</code>. Retry
+            the command; there is no automatic retry.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th><code>project agent list</code></th>
+                  <th><code>project agent get</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >GET
+                      /api/project/:project_id/binding/:binding_id/agent</code
+                    >
+                  </td>
+                  <td>
+                    <code
+                      >GET
+                      /api/project/:project_id/binding/:binding_id/agent/:agent_name</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>project.agentConfiguration.list</code></td>
+                  <td><code>project.agentConfiguration.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td><code>project_id</code>, <code>binding_id</code></td>
+                  <td>
+                    <code>project_id</code>, <code>binding_id</code>,
+                    <code>agent_name</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td><code>limit</code>, <code>cursor</code></td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Default</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>path</td>
+                  <td>None</td>
+                  <td>Project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_id</code></td>
+                  <td>path</td>
+                  <td>None</td>
+                  <td>Binding ID of a worker binding revision.</td>
+                </tr>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>path</td>
+                  <td>None</td>
+                  <td>Nonempty agent name.</td>
+                </tr>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>query</td>
+                  <td><code>100</code></td>
+                  <td>Integer from <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>query</td>
+                  <td>None</td>
+                  <td>Nonempty <code>next_cursor</code> value.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4/agent?limit=20' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4/agent/&lt;agent-name&gt; \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord project agent list &lt;project-id&gt; &lt;worker-binding-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project agent get &lt;project-id&gt; &lt;worker-binding-id&gt; &lt;agent-name&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord project agent list project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4
+kanthord project agent get project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4 &lt;agent-name&gt;</code></pre>
+          <p>
+            <code>kanthord project agent</code> without a subcommand displays
+            help.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>Both</td>
+                  <td>Project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;worker-binding-id&gt;</code></td>
+                  <td>Both</td>
+                  <td>Binding ID of a worker binding revision.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;agent-name&gt;</code></td>
+                  <td><code>get</code></td>
+                  <td>
+                    Agent name. The CLI does not validate it and encodes it in
+                    the path.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-agent-list-2">project agent list</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Maximum agents per page, from <code>1</code> to
+                    <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None</td>
+                  <td>
+                    Continues from the <code>next_cursor</code> of a previous
+                    page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-agent-get-2">project agent get</h3>
+          <p>There are no command options.</p>
+          <h3 id="shared-options">Shared options</h3>
+          <p>Both commands accept these <code>project</code> group options.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline for these 30-second
+            operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

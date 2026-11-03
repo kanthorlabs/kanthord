@@ -15,9 +15,9 @@
 
 ## Run KanthorD
 
-Run in a container: follow [Run kanthord in a container](docs/how-to-guides/run-in-a-container.md).
+Run in a container: follow [Run kanthord in a container](docs/how-to-guides/run-in-a-container.html).
 
-First task: follow [From a fresh install to the first task](docs/tutorials/first-task.md).
+First task: follow [From a fresh install to the first task](docs/tutorials/first-task.html).
 
 ## Contribute
 

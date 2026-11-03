@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read outcomes · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-outcomes">Read outcomes</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            An outcome records how an attempt of a node closed. Clients cannot
+            write an outcome directly; an
+            <a href="assessment.html">assessment submit</a> or a human control
+            writes it.
+          </p>
+          <ul>
+            <li>
+              <code>outcome list</code> returns one page of the outcomes of a
+              node.
+            </li>
+            <li><code>outcome get</code> returns one outcome.</li>
+          </ul>
+          <p>
+            Every outcome names one assessment. A human assessment does not mean
+            that an evaluation ran. The <code>evidence_ids</code> of an outcome
+            are the union of its own evidence and the evidence of its
+            assessment.
+          </p>
+          <p>
+            The server derives <code>closing_event</code> at read time from the
+            assessment, the outcome result and the node:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>closing_event</code></th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>success-override</code></td>
+                  <td>A human assessment with result <code>success</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>human-discard</code></td>
+                  <td>
+                    A human assessment with result <code>undetermined</code>, on
+                    a <code>Discarded</code> node whose current outcome is this
+                    one.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>human-block</code></td>
+                  <td>Any other human assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>assessment-not-passed</code></td>
+                  <td>
+                    An execution assessment with a result other than
+                    <code>success</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>external-failed</code></td>
+                  <td>
+                    An execution assessment with result <code>success</code>,
+                    and an outcome result of <code>undetermined</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>assessment-passed</code></td>
+                  <td>
+                    An execution assessment with result <code>success</code>,
+                    and no required external action on the attempt.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>external-success</code></td>
+                  <td>
+                    An execution assessment with result <code>success</code>,
+                    and required external actions on the attempt.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            These operations change nothing. Each list call reads one page. The
+            CLI does not follow <code>next_cursor</code>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="outcome-list"><code>outcome list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "outcome_01M4C5G6BPV831HTV1HKEXK8MT",
+      "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+      "attempt": 1,
+      "node_revision": 3,
+      "closing_event": "assessment-passed",
+      "result": "success",
+      "assessment_id": "assessment_01M4C5G6BPZCGBK0EFKVT5AXH2",
+      "evidence_ids": ["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],
+      "created_at": 1791398400000
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array of <code>Outcome</code></td>
+                  <td>
+                    At most <code>limit</code> outcomes, in reverse identity
+                    order.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Opaque cursor for the next page. <code>null</code> ends the
+                    traversal.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Without <code>attempt</code>, the list covers every attempt of the
+            node. With <code>attempt</code>, the list selects outcomes whose
+            assessment belongs to that attempt.
+          </p>
+          <h3 id="outcome-get"><code>outcome get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with one <code>Outcome</code>.
+            The CLI writes it as one JSON line to stdout and exits
+            <code>0</code>.
+          </p>
+          <h3 id="outcome"><code>Outcome</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>outcome_&lt;ulid&gt;</code></td>
+                  <td>Identity of the outcome.</td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node that owns the outcome.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>nonnegative safe integer</td>
+                  <td>Attempt of the assessment that the outcome names.</td>
+                </tr>
+                <tr>
+                  <td><code>node_revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Node revision of that assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>closing_event</code></td>
+                  <td>string</td>
+                  <td>Event that closed the attempt; see the table above.</td>
+                </tr>
+                <tr>
+                  <td><code>result</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>success</code>, <code>criterion-not-met</code> or
+                    <code>undetermined</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>assessment_id</code></td>
+                  <td><code>assessment_&lt;ulid&gt;</code></td>
+                  <td>Assessment that the outcome names.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence_ids</code></td>
+                  <td>array of <code>evidence_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sorted union of the outcome evidence and the assessment
+                    evidence. A delete of an evidence removes its identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>Unix milliseconds</td>
+                  <td>Time of the outcome.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>. Timestamps are
+            integer Unix milliseconds in UTC.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Both</td>
+                  <td>
+                    Invalid path parameter, <code>limit</code> outside 1 to
+                    1000, invalid <code>attempt</code>, or an unknown query
+                    field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>Both</td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td><code>list</code></td>
+                  <td>The node does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td><code>get</code></td>
+                  <td>The outcome does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>Both</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.mission.outcome.list.invalid_node_id</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.outcome.list.invalid_attempt</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--attempt</code> is not a nonnegative safe integer in
+                    canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.outcome.get.invalid_outcome_id</code>
+                  </td>
+                  <td><code>get</code></td>
+                  <td>
+                    <code>&lt;outcome-id&gt;</code> is not a canonical
+                    <code>outcome_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.outcome.list.token_required</code></td>
+                  <td><code>list</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.outcome.get.token_required</code></td>
+                  <td><code>get</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is greater than 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td><code>list</code></td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Canonical form means decimal digits with no sign and no zero before
+            another digit. A declared failure makes the CLI exit
+            <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.mission.outcome.list.indeterminate</code> or
+            <code>cli.mission.outcome.get.indeterminate</code>. These reads
+            change nothing, so run the command again.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="outcome-list-1"><code>outcome list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/node/:node_id/outcome</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.outcome.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>attempt</code> (query, optional nonnegative safe
+                    integer); <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query, optional)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="outcome-get-1"><code>outcome get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/outcome/:outcome_id</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.outcome.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>outcome_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Both operations use one header:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/outcome?limit=20' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/outcome/outcome_01M4C5G6BPV831HTV1HKEXK8MT \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <p>
+            To read the next page, send the <code>next_cursor</code> value as
+            the <code>cursor</code> query parameter with the same
+            <code>limit</code> and <code>attempt</code>.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>mission</code> group, and each leaf command accepts them:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+          <h3 id="outcome-list-2"><code>outcome list</code></h3>
+          <pre><code class="language-text">kanthord mission outcome list &lt;node-id&gt; [--attempt &lt;attempt&gt;] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission outcome list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --limit 20</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--attempt &lt;attempt&gt;</code></td>
+                  <td>None; every attempt</td>
+                  <td>Nonnegative attempt number that selects one attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum outcomes on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="outcome-get-2"><code>outcome get</code></h3>
+          <pre><code class="language-text">kanthord mission outcome get &lt;outcome-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission outcome get outcome_01M4C5G6BPV831HTV1HKEXK8MT</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;outcome-id&gt;</code></td>
+                  <td>Required <code>outcome_&lt;ulid&gt;</code> to read.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

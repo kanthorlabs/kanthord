@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Get an agent declaration · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="get-an-agent-declaration">Get an agent declaration</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Read the catalog declaration of one agent, its composed prompt, its
+            permitted tools, its global enablement and the fallback chain of
+            that enablement. The API and <code>kanthord agent get</code> perform
+            the same read and change no state.
+          </p>
+          <p>
+            The catalog holds the agents <code>swe@1</code>,
+            <code>re@1</code> and <code>env@1</code>. An agent name outside the
+            catalog fails. The answer contains
+            <code>enablement: null</code> when the agent has no live
+            <a href="enablement.html">enablement</a>.
+          </p>
+          <p>
+            The server composes the prompt at read time from the Agent prompt
+            and the Binding prompt. The Agent prompt holds the files
+            <code>base.md</code>, <code>&lt;agent_name&gt;.md</code> and, for a
+            Workbench agent, <code>workbench.md</code>. The Binding prompt holds
+            the text of <code>prompts[&lt;agent_name&gt;]</code> of each
+            repository binding. The framing is KanthorD protocol and no part of
+            either prompt.
+          </p>
+          <p>
+            A file of the same name in the directory
+            <code>agent.prompt.agent_directory</code> of the server host
+            replaces the shipped text. The default directory is
+            <code>&lt;data&gt;/agents</code>. An empty value selects the shipped
+            texts only. A file <code>&lt;name&gt;.md</code> in the subdirectory
+            <code>prompts</code> of the agent directory replaces the shipped
+            prompt template of that name, for example
+            <code>prompts/framing-worker.md</code>.
+          </p>
+          <p>
+            An override file or a template file that is not a regular UTF-8
+            file, exceeds 32768 bytes or holds a control character other than a
+            tab and a newline answers
+            <code>409 agent.prompt.template_invalid</code> with
+            <code>details.file</code>. No reader falls back to the shipped text.
+            The execution setup, the Workbench session open and the
+            <code>env@1</code> run refuse in the same way.
+          </p>
+          <p>
+            Without a binding, a Workbench agent answers the Workbench system
+            prompt, and <code>env@1</code> answers the worker system prompt.
+            With a project and a repository binding, <code>final</code> is the
+            worker system prompt with the binding prompt of that binding.
+            KanthorD reads no <code>AGENTS.md</code>, <code>CLAUDE.md</code> or
+            <code>*.local.md</code> file of a repository or of a home directory.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with the declaration. The CLI
+            writes the same object as one JSON line to stdout and exits
+            <code>0</code>. The example below is shortened.
+          </p>
+          <pre><code class="language-json">{
+  "agent_name": "re@1",
+  "configuration_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agent_provider": { "type": "string", "minLength": 1 },
+      "provider": {
+        "type": "string",
+        "enum": ["openai-compatible", "anthropic", "..."]
+      },
+      "credential": { "type": "string", "minLength": 1 },
+      "model_identifier": { "type": "string", "minLength": 1 },
+      "reasoning_effort": {
+        "type": "string",
+        "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+      }
+    },
+    "required": [
+      "agent_provider",
+      "provider",
+      "credential",
+      "model_identifier",
+      "reasoning_effort"
+    ],
+    "additionalProperties": false,
+    "description": "The Agent component validates the whole configuration. ..."
+  },
+  "overridable_fields": [
+    "agent_provider",
+    "model_identifier",
+    "reasoning_effort"
+  ],
+  "prompt": {
+    "parts": [
+      {
+        "part": "standard",
+        "name": "base.md",
+        "origin": "binary",
+        "path": "/home/kanthord/.local/share/kanthord/agents/base.md",
+        "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
+        "text": "This text is the shared standard of every agent. ..."
+      }
+    ],
+    "final": "This text is the shared standard of every agent. ..."
+  },
+  "tools": [{ "name": "read", "source": "builtin", "input_schema": {} }],
+  "enablement": null,
+  "chain": [],
+  "active_position": null,
+  "cooling": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>string</td>
+                  <td>Catalog key of the agent.</td>
+                </tr>
+                <tr>
+                  <td><code>configuration_schema</code></td>
+                  <td>object</td>
+                  <td>
+                    JSON Schema draft 2020-12 of the effective configuration.
+                    JSON Schema does not check that the model belongs to the
+                    provider or that the model supports the reasoning effort.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>overridable_fields</code></td>
+                  <td>string array</td>
+                  <td>
+                    Fields that a binding entry can override. For
+                    <code>swe@1</code> and <code>re@1</code> the value is
+                    <code>agent_provider</code>, <code>model_identifier</code>,
+                    <code>reasoning_effort</code> and
+                    <code>fallback_configurations</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>prompt.parts</code></td>
+                  <td>array</td>
+                  <td>
+                    The parts of the system prompt in reading order. Absent with
+                    <code>view=final</code>. See the part table below.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>prompt.final</code></td>
+                  <td>string</td>
+                  <td>
+                    The composed system prompt: every part, then the framing. A
+                    <code>binding</code> part reads
+                    <code>Instructions of repository &lt;name&gt;:</code> and
+                    its text.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tools</code></td>
+                  <td>array</td>
+                  <td>
+                    Permitted tools. Each item holds <code>name</code>,
+                    <code>source</code> (<code>host</code>,
+                    <code>builtin</code> or <code>kanthord-mcp</code>) and
+                    <code>input_schema</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>enablement</code></td>
+                  <td>object or null</td>
+                  <td>
+                    The live
+                    <a href="enablement.html#expected-response"
+                      >enablement record</a
+                    >, or <code>null</code> when no live record exists.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>chain</code></td>
+                  <td>array</td>
+                  <td>
+                    The fallback chain of the enablement: the default
+                    configuration, then its
+                    <code>fallback_configurations</code>. <code>[]</code> when
+                    the enablement is absent, disabled or invalid. See the chain
+                    table below.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>active_position</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    The <code>position</code> of the first chain entry whose
+                    <code>cooldown</code> is <code>null</code> or ended.
+                    <code>null</code> when every chain entry has a live
+                    cooldown, and when <code>chain</code> is empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cooling</code></td>
+                  <td>object or null</td>
+                  <td>
+                    <code>{ code, available_at }</code> with <code>code</code>
+                    <code>agent.configuration.chain_cooling</code> and the
+                    earliest <code>available_at</code> of the chain, when every
+                    chain entry has a live cooldown. Otherwise
+                    <code>null</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Each <code>chain</code> item holds these fields:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>position</code></td>
+                  <td>integer</td>
+                  <td>Position in the chain. <code>0</code> is the head.</td>
+                </tr>
+                <tr>
+                  <td><code>level</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>enablement</code> or <code>binding</code>. This view
+                    holds only <code>enablement</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_provider</code></td>
+                  <td>string</td>
+                  <td>Name of the agent provider.</td>
+                </tr>
+                <tr>
+                  <td><code>provider</code></td>
+                  <td>string</td>
+                  <td>Provider kind of the agent provider.</td>
+                </tr>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>string</td>
+                  <td>Credential name of the agent provider.</td>
+                </tr>
+                <tr>
+                  <td><code>model_identifier</code></td>
+                  <td>string</td>
+                  <td>Model of the chain entry.</td>
+                </tr>
+                <tr>
+                  <td><code>reasoning_effort</code></td>
+                  <td>string</td>
+                  <td>Reasoning effort of the chain entry.</td>
+                </tr>
+                <tr>
+                  <td><code>cooldown</code></td>
+                  <td>object or null</td>
+                  <td>
+                    <code>null</code>, or
+                    <code>{ strikes, available_at }</code> of the
+                    <a href="cooldown.html">cooldown</a> of the
+                    <code>server</code> copy of the credential. Every model of a
+                    credential shows the same value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A hold that expired still shows in <code>cooldown</code> with its
+            <code>strikes</code> and a past <code>available_at</code> until a
+            success or a clear. Selection treats an expired hold as free.
+          </p>
+          <p>
+            <code>prompt.parts</code> holds
+            <code>standard</code> (<code>base.md</code>),
+            <code>role</code> (<code>&lt;agent_name&gt;.md</code>),
+            <code>workbench</code> (<code>workbench.md</code>, only in the
+            Workbench system prompt) and one <code>binding</code> part for each
+            repository binding with a nonblank prompt of the agent. Each part
+            holds these fields:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>part</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>standard</code>, <code>role</code>,
+                    <code>workbench</code> or <code>binding</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>
+                    The file name, for example <code>base.md</code>, or the
+                    repository name for a <code>binding</code> part.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>origin</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>binary</code> for a shipped text,
+                    <code>file</code> for an override file,
+                    <code>database</code> for a binding prompt.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>path</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The override path that the server looked up, also for
+                    <code>binary</code>. <code>null</code> for
+                    <code>binding</code> and for an empty directory.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>digest</code></td>
+                  <td>string</td>
+                  <td>SHA-256 hex digest of <code>text</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>text</code></td>
+                  <td>string</td>
+                  <td>Text of the part.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The precedence of the system prompt is the framing, then the binding
+            parts, then <code>workbench.md</code>, then the role, then the
+            standard. A later message governs an earlier one.
+          </p>
+          <h3 id="selection">Selection</h3>
+          <ul>
+            <li>
+              The claim selects the first chain entry whose credential is not
+              cooling. It records each selection as the agent name, the
+              enablement revision and the chain position.
+            </li>
+            <li>
+              The execution record and the release rebuild the pinned selection
+              from these pins.
+            </li>
+            <li>
+              The pinned selection fixes the agent provider, the provider, the
+              credential, the model and the reasoning effort. The authorization
+              of custody and the execution setup of the Worker Service read them
+              from it.
+            </li>
+            <li>
+              An enablement edit during a live execution changes none of them. A
+              disabled or removed current enablement still stops both with 400
+              <code>agent.enablement.unavailable</code>.
+            </li>
+          </ul>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    <code>view</code> is not <code>final</code>, or only one of
+                    <code>project_id</code> and <code>binding_id</code> is
+                    present.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.catalog.not_found</code></td>
+                  <td>The agent name is not in the catalog.</td>
+                </tr>
+                <tr>
+                  <td><code>404 project.binding.not_found</code></td>
+                  <td>
+                    <code>binding_id</code> names no repository binding of the
+                    project <code>project_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 agent.prompt.template_invalid</code></td>
+                  <td>
+                    An override file or a template file of the agent directory
+                    is invalid. <code>details</code> holds <code>file</code>,
+                    <code>path</code> and <code>reason</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The CLI checks some input before it sends the request:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.agent.get.invalid_view</code></td>
+                  <td>
+                    The <code>--view</code> value is not <code>final</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.agent.get.project_binding_pair_required</code>
+                  </td>
+                  <td>
+                    Only one of <code>--project</code> and
+                    <code>--binding-id</code> is present.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.agent.get.token_required</code></td>
+                  <td>
+                    No option, environment variable or client file supplies a
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.agent.get.indeterminate</code></td>
+                  <td>
+                    A transport failure, timeout or malformed response. Retry
+                    the command.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/agent/:agent_name</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>agent.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    None; a nonempty body fails with
+                    <code>400 gateway.request.unexpected_body</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>path</td>
+                  <td>Yes</td>
+                  <td>Catalog key, for example <code>swe@1</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>view</code></td>
+                  <td>query</td>
+                  <td>No</td>
+                  <td>
+                    The only value is <code>final</code>. The answer then omits
+                    <code>prompt.parts</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>query</td>
+                  <td>Only together with <code>binding_id</code></td>
+                  <td>Project of the repository binding.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_id</code></td>
+                  <td>query</td>
+                  <td>Only together with <code>project_id</code></td>
+                  <td>
+                    Repository binding whose binding prompt joins
+                    <code>final</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -s 'http://127.0.0.1:31415/api/agent/swe@1?view=final' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord agent get &lt;agent-name&gt; [--view final] [--project &lt;project-id&gt; --binding-id &lt;binding-id&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord agent get swe@1 --view final
+kanthord agent get swe@1 --project &lt;project-id&gt; --binding-id &lt;binding-id&gt;</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;agent-name&gt;</code></td>
+                  <td>Yes</td>
+                  <td>Catalog key; maps to <code>agent_name</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--view &lt;view&gt;</code></td>
+                  <td>None; the only value is <code>final</code></td>
+                  <td>
+                    Answer <code>prompt.final</code> without
+                    <code>prompt.parts</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--project &lt;project-id&gt;</code></td>
+                  <td>None; requires <code>--binding-id</code></td>
+                  <td>Sets <code>project_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--binding-id &lt;binding-id&gt;</code></td>
+                  <td>None; requires <code>--project</code></td>
+                  <td>Sets <code>binding_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>agent</code> group declares <code>--token</code> and
+            <code>--endpoint</code>. Put them before or after the leaf command.
+            Each option except <code>--endpoint</code> accepts one occurrence
+            only; a repeat fails with <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline for this 30-second
+            operation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

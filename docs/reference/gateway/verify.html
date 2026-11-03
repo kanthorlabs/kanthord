@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Verify a human JWT · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="verify-a-human-jwt">Verify a human JWT</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Verify a human bearer JWT and return its business properties under
+            their original claim names. The API and
+            <code>kanthord gateway verify</code> perform the same read
+            operation; neither creates an idempotency record.
+          </p>
+          <p>
+            Authentication checks the signature, expiry, claim types, username
+            and display-name validity, and session bans. Human tokens cannot
+            carry <code>binding</code> or <code>reg</code>. Generate a token
+            locally with <a href="../auth/jwt.html">JWT generation</a>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with JSON. The CLI writes the
+            same object as one JSON line to stdout and exits <code>0</code>;
+            redirected stdout is allowed.
+          </p>
+          <pre><code class="language-json">{ "kind": "human", "sub": "ulrich", "name": "ulrich" }</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td><code>&quot;human&quot;</code></td>
+                  <td>Identifies the verified token as a human identity.</td>
+                </tr>
+                <tr>
+                  <td><code>sub</code></td>
+                  <td>string</td>
+                  <td>
+                    Signed username, preserved exactly without trimming or
+                    renaming.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>
+                    Signed display name, preserved exactly; grants no authority.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            There are no aliases such as <code>account_id</code>, raw token,
+            signing key, or token metadata (<code>iat</code>, <code>exp</code>,
+            <code>jti</code>) in the response.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            Missing, malformed, tampered, expired, banned, or wrong-key tokens
+            receive HTTP <code>401 gateway.authentication.unauthorized</code>; a
+            valid machine identity also fails the human access policy. API
+            failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <p>
+            A declared API failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: gateway verify: request failed</code> and the
+            row <code>status</code>. A transport failure, timeout, or invalid
+            response exits <code>1</code> with
+            <code>cli.gateway.verify.indeterminate</code> and the message
+            <code>gateway verify: the result is unknown; retry the command</code
+            >.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/auth/verify</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>gateway.verify</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>Human bearer JWT</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>10 seconds</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;jwt&gt;</code> containing the human
+                    credential.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/auth/verify \
+  -H 'Authorization: Bearer &lt;jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord gateway verify [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord gateway verify --token '&lt;jwt&gt;' --endpoint http://127.0.0.1:31415
+kanthord gateway verify</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td><code>KANTHORD_TOKEN</code> → client-file token</td>
+                  <td>
+                    Human JWT sent in the <code>Authorization</code> header.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence. See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the private <code>cli.yaml</code> file. There is no login or
+            credential-saving command. Missing credentials are submitted without
+            an Authorization header and receive HTTP <code>401</code> from a
+            ready server. The HTTP client has an 11-second deadline for this
+            10-second operation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

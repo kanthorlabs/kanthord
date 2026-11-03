@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent cooldowns · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="agent-cooldowns">Agent cooldowns</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A cooldown excludes every model of one copy of a credential from the
+            claim selection until its end time <code>available_at</code>. A
+            release with the stop reason <code>provider_failed</code> and the
+            code <code>rate_limited</code>, <code>quota_exhausted</code> or
+            <code>unavailable</code> writes it. The claim then selects the next
+            entry of the fallback chain of each agent whose credential copy is
+            not cooling. The codes <code>bad_request</code> and
+            <code>unauthorized</code> write no cooldown.
+          </p>
+          <p>
+            The key of a cooldown is the credential name and its holder. The
+            holder is <code>server</code> or a worker instance; see
+            <a href="../llm/credential.html#instance-copies">instance copies</a
+            >. A claim writes and reads the copy of its claimant: the instance
+            of the registration at the <code>worker</code> placement, else
+            <code>server</code>. <code>swe@1</code>, <code>re@1</code> and every
+            project share a key. An advance is such a release: it moves the
+            agent to the next chain entry. A repeated advance on the same copy
+            adds one strike. The duration is the base of the code, doubled for
+            each strike after the first, up to the maximum. An expired cooldown
+            keeps its strikes until a release with no
+            <code>provider_failed</code> stop releases the copy. Any release
+            without a <code>provider_failed</code> stop on any model of the copy
+            releases every model of the copy, a <code>budget_end</code> stop or
+            another failure stop included. A <code>provider_failed</code> stop
+            with <code>unauthorized</code> or <code>bad_request</code> neither
+            adds a strike nor releases the copy. A human can also clear a copy.
+            The server log records three events at level <code>info</code>, each
+            after its write commits.
+            <code>agent.fallback.cooldown_started</code> carries
+            <code>execution_id</code>, <code>credential_name</code>,
+            <code>holder</code>, <code>code</code>, <code>strikes</code> and
+            <code>available_at</code>.
+            <code>agent.fallback.cooldown_cleared</code> appears only when a
+            release or a human clear resets strikes above 0, also for an expired
+            cooldown, and it carries <code>credential_name</code> and
+            <code>holder</code>, with <code>execution_id</code> for a release.
+            The log names the credential <code>credential_name</code>, because
+            the log redacts a field named <code>credential</code>. After a new
+            claim commits, <code>agent.fallback.selected</code> logs each
+            selection.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Server configuration key</th>
+                  <th>Default</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>agent.cooldown.rate_limited_ms</code></td>
+                  <td><code>60000</code></td>
+                  <td>Base duration for the code <code>rate_limited</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>agent.cooldown.unavailable_ms</code></td>
+                  <td><code>60000</code></td>
+                  <td>Base duration for the code <code>unavailable</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>agent.cooldown.quota_exhausted_ms</code></td>
+                  <td><code>3600000</code></td>
+                  <td>
+                    Base duration for the code <code>quota_exhausted</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent.cooldown.max_ms</code></td>
+                  <td><code>86400000</code></td>
+                  <td>Maximum duration after the doubling.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            When the claimant copy of the credential of every entry of the chain
+            of an agent has a live cooldown, a work pull answers
+            <code>no-work</code>. That answer creates no block, no pause and no
+            failed execution. The agent views report <code>cooling</code> with
+            the code <code>agent.configuration.chain_cooling</code>; see
+            <a href="agent.html#expected-response">the agent view</a> and
+            <a href="../project/agent.html#expected-response"
+              >the worker binding agent view</a
+            >. That code is a view code and has no HTTP status. At the
+            <code>worker</code> placement, each instance holds its own copy. The
+            worker binding agent view shows the cooldown with the latest
+            <code>available_at</code> over the instances of the binding.
+          </p>
+          <p>
+            The <strong>Cooldown</strong> section of the LLM credential page
+            reads <code>cooldown list</code>. It shows the strike and the end
+            time of a live cooldown, and the strikes of an expired cooldown. The
+            <strong>Details</strong> tab of an <code>Available</code> node and
+            the muted cooling line under the <strong>Overview</strong> summary
+            read <code>cooling</code> of the
+            <a href="../project/agent.html#expected-response"
+              >worker binding agent view</a
+            >.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>list</code></td>
+                  <td>
+                    Read every credential copy that holds a cooldown, live and
+                    expired.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>clear</code></td>
+                  <td>
+                    Release one credential copy, so that its entries return at
+                    the next claim of that holder.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="cooldown-list"><code>cooldown list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code>.
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "credential": "&lt;credential-name&gt;",
+      "holder": "server",
+      "strikes": 2,
+      "available_at": 1791447720000
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    Every credential copy with <code>strikes</code> above 0,
+                    ordered by credential name, then by holder. The list has no
+                    pagination.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].credential</code></td>
+                  <td>string</td>
+                  <td>Credential name.</td>
+                </tr>
+                <tr>
+                  <td><code>items[].holder</code></td>
+                  <td>string</td>
+                  <td>
+                    Holder of the copy: <code>server</code> or a worker instance
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].strikes</code></td>
+                  <td>positive integer</td>
+                  <td>Count of advances since the last release of the copy.</td>
+                </tr>
+                <tr>
+                  <td><code>items[].available_at</code></td>
+                  <td>timestamp</td>
+                  <td>
+                    Unix epoch milliseconds when the cooldown ends. A past
+                    <code>available_at</code> marks an expired cooldown.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="cooldown-clear"><code>cooldown clear</code></h3>
+          <p>
+            The API returns HTTP <code>204</code> with no body. The CLI writes
+            one JSON line with the retry key and exits <code>0</code>:
+          </p>
+          <pre><code class="language-json">{ "idempotency_key": "idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH" }</code></pre>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>A path parameter or the query fails the schema.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>All</td>
+                  <td>The request has a body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>clear</td>
+                  <td>Missing or malformed idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>clear</td>
+                  <td>
+                    The key belongs to a different request of the same caller.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.cooldown.not_found</code></td>
+                  <td>clear</td>
+                  <td>
+                    The copy holds no cooldown. <code>details</code> holds
+                    <code>{ credential, holder }</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation exceeded 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The CLI checks some input before it sends the request.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.agent.cooldown.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>
+                    No option, environment variable or client file supplies a
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>clear</td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.agent.cooldown.&lt;command&gt;.indeterminate</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>A transport failure, timeout or malformed response.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A
+            <code>clear</code> prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead. Retry an
+            indeterminate <code>clear</code> with the same key.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            All operations use <code>human</code> access, a 30-second timeout,
+            and the header <code>Authorization: Bearer &lt;human-jwt&gt;</code>.
+            The <code>clear</code> operation also requires an
+            <code>Idempotency-Key</code> header with a fresh
+            <code>idempotency_key_&lt;ulid&gt;</code>. The HTTP client of the
+            CLI has a 31-second deadline.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Mutation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>list</code></td>
+                  <td><code>GET /api/agent/cooldown</code></td>
+                  <td><code>agent.cooldown.list</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>clear</code></td>
+                  <td><code>DELETE /api/agent/cooldown/:credential</code></td>
+                  <td><code>agent.cooldown.clear</code></td>
+                  <td>Yes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The static path <code>/api/agent/cooldown</code> does not match
+            <code>GET /api/agent/:agent_name</code>. Neither request has a body.
+            <code>clear</code> takes the optional query <code>holder</code>, and
+            its default is <code>server</code>.
+          </p>
+          <pre><code class="language-sh">curl -s http://127.0.0.1:31415/api/agent/cooldown \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -s -X DELETE 'http://127.0.0.1:31415/api/agent/cooldown/&lt;credential-name&gt;?holder=builder-1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord agent cooldown list
+kanthord agent cooldown clear &lt;credential&gt; [--holder &lt;name&gt;] [--idempotency-key &lt;key&gt;]</code></pre>
+          <p>
+            Each command also accepts <code>--token &lt;jwt&gt;</code> and
+            <code>--endpoint &lt;url&gt;</code>.
+          </p>
+          <pre><code class="language-sh">kanthord agent cooldown list
+kanthord agent cooldown clear &lt;credential-name&gt;
+kanthord agent cooldown clear &lt;credential-name&gt; --holder builder-1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;credential&gt;</code></td>
+                  <td>clear</td>
+                  <td>Yes</td>
+                  <td>Credential name; maps to <code>credential</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--holder &lt;name&gt;</code></td>
+                  <td>clear</td>
+                  <td><code>server</code></td>
+                  <td>
+                    Holder of the copy: <code>server</code> or a worker instance
+                    name; maps to <code>holder</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>clear</td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key on a retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>agent</code> group declares <code>--token</code> and
+            <code>--endpoint</code>. Each option except
+            <code>--endpoint</code> accepts one occurrence only; a repeat fails
+            with <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

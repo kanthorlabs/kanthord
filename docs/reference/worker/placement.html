@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read the worker placements · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-the-worker-placements">Read the worker placements</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            List the three worker placements and tell whether this server can
+            host a <a href="instance.html">worker instance</a> at each one. Each
+            instance holds one placement, set at its create. The read starts no
+            container and writes no state.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Placement</th>
+                  <th>Where an instance runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server</code></td>
+                  <td>The server runs the instance as a thread.</td>
+                </tr>
+                <tr>
+                  <td><code>container</code></td>
+                  <td>
+                    The server runs the instance in its own container on the
+                    server host.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td>
+                    The instance runs as one
+                    <code>kanthord serve worker</code> process.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>server</code> and <code>worker</code> placements are
+            always available. The <code>container</code> placement depends on a
+            runtime check of the server. The check reads the container runtime
+            of the server user, Podman first, then Docker. The server reuses the
+            newest answer for 10 seconds.
+          </p>
+          <p>
+            The dashboard reads this list when the
+            <strong>Add instance</strong> sheet opens. The sheet preselects
+            <code>server</code>.
+            <a
+              href="instance.html#worker-instance-create-and-worker-instance-rotate"
+              ><code>worker instance create</code></a
+            >
+            reads the same check and refuses a new
+            <code>container</code> instance with
+            <code>409 worker.instance.placement_unavailable</code> for three
+            reasons. The sheet turns <code>container</code> off for the same
+            three reasons.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "placement": "server",
+      "available": true,
+      "reason": null,
+      "detail": null,
+      "container_runtime": null
+    },
+    {
+      "placement": "container",
+      "available": false,
+      "reason": "runtime_failed",
+      "detail": "Cannot connect to Podman. Please verify your connection to the Linux system.",
+      "container_runtime": "podman"
+    },
+    {
+      "placement": "worker",
+      "available": true,
+      "reason": null,
+      "detail": null,
+      "container_runtime": null
+    }
+  ]
+}</code></pre>
+          <p>
+            The list holds one item for each placement, in the order
+            <code>server</code>, <code>container</code>, <code>worker</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items[].placement</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>server</code>, <code>container</code> or
+                    <code>worker</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].available</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when the server can host an instance at
+                    this placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].reason</code></td>
+                  <td>string or null</td>
+                  <td>
+                    A reason of the table below when <code>available</code> is
+                    <code>false</code>; otherwise <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].detail</code></td>
+                  <td>string or null</td>
+                  <td>
+                    First line of the answer of the container runtime, at most
+                    200 bytes, when the runtime states one; else
+                    <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].container_runtime</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code>podman</code> or <code>docker</code> when the server
+                    found a container runtime; otherwise <code>null</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The items <code>server</code> and <code>worker</code> always answer
+            <code>available: true</code> and <code>null</code> in the three
+            other properties. The item <code>container</code> answers the
+            runtime check:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>reason</code></th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server_in_container</code></td>
+                  <td>
+                    The server runs inside a container, so it cannot start a
+                    container for each instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>runtime_absent</code></td>
+                  <td>
+                    Neither <code>podman</code> nor <code>docker</code> resolves
+                    on the <code>PATH</code> of the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>runtime_failed</code></td>
+                  <td>
+                    The runtime does not answer, or it fails a check.
+                    <code>detail</code> states why. A stopped Podman machine
+                    gives it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>runtime_rootful</code></td>
+                  <td>
+                    The host is Linux, the runtime is rootful and the server
+                    user is not root. Docker Desktop is exempt.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The reason <code>runtime_failed</code> is transient. The
+            <code>container</code> instances start again with a backoff when the
+            runtime recovers. The other reasons stay until a human changes the
+            host.
+          </p>
+          <p>
+            The check runs with the full environment of the server. A server
+            with a custom <code>XDG_CONFIG_HOME</code> or
+            <code>XDG_DATA_HOME</code> loses the Podman machine connection and
+            answers <code>runtime_failed</code>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>. The answer
+            has no error code of its own.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Absent, invalid, expired or banned token, or a machine
+                    token. The read needs a human token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>The request carries a query value.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>The request has a body.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.worker.placement.list.indeterminate</code>. Run the
+            command again.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/worker/placement</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.placement.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/worker/placement \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord worker placement list [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker placement list</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A missing token fails with
+            <code>cli.worker.placement.list.token_required</code>. A repeated
+            <code>--token</code> fails with <code>cli.option.duplicate</code>.
+            See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the token and endpoint precedence. The HTTP client deadline is
+            31 seconds.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

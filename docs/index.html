@@ -3,183 +3,212 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>kanthord · Documentation</title>
-    <link rel="stylesheet" href="assets/style.css" />
-    <style>
-      .hero {
-        padding: 2.5rem 0 1.5rem;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 2rem;
-      }
-
-      .hero h1 {
-        font-size: 2rem;
-        margin: 0 0 0.5rem;
-      }
-
-      .hero p {
-        color: var(--text-muted);
-        font-size: 1.05rem;
-        margin: 0;
-        max-width: 56ch;
-      }
-
-      .scope-note {
-        font-size: 0.85rem;
-        color: var(--text-muted);
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 0.6rem 1rem;
-        margin-bottom: 2rem;
-      }
-
-      .meta-links {
-        display: flex;
-        gap: 1.5rem;
-        margin-bottom: 2.5rem;
-        flex-wrap: wrap;
-        align-items: center;
-      }
-
-      .meta-links a {
-        font-size: 0.9rem;
-      }
-
-      .meta-links .primary {
-        font-weight: 600;
-      }
-
-      .meta-links .separator {
-        color: var(--border);
-      }
-    </style>
+    <title>KanthorD documentation</title>
+    <meta
+      name="description"
+      content="Public documentation of KanthorD for users, operators and API consumers."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="assets/base.css" />
+    <link rel="stylesheet" href="assets/home.css" />
   </head>
-
-  <body>
+  <body class="home">
     <header class="site-header">
-      <a class="brand" href="index.html">kanthord</a>
-      <nav>
-        <a href="index.html" aria-current="page">Index</a>
-        <a href="viewer.html?p=README.md">Documentation</a>
-        <a href="viewer.html?p=reference/README.md">CLI &amp; API reference</a>
-        <a href="viewer.html?p=tutorials/README.md">Tutorials</a>
-        <a href="viewer.html?p=how-to-guides/README.md">How-to guides</a>
-        <a href="viewer.html?p=explanation/README.md">Explanations</a>
+      <a class="brand" href="index.html"
+        ><img
+          src="assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="tutorials/index.html">Tutorials</a>
+        <a href="how-to-guides/index.html">How-to guides</a>
+        <a href="reference/index.html">Reference</a>
+        <a href="explanation/index.html">Explanation</a>
       </nav>
     </header>
-
-    <main>
-      <div class="hero">
-        <h1>Kanthord documentation</h1>
-        <p>
-          Public documentation for users, operators, and API consumers:
-          configure the daemon, use the CLI, integrate with the HTTP API, and
-          understand its behavior.
+    <main class="page">
+      <section class="hero">
+        <p class="tag">Public documentation</p>
+        <h1>organize goals, execute steps, evaluate results.</h1>
+        <p class="lead">
+          KanthorD is a work orchestration system. These pages help users,
+          operators and API consumers configure the daemon, use the CLI,
+          integrate with the HTTP API and understand its behavior.
         </p>
-      </div>
+        <p class="actions">
+          <a class="btn" href="tutorials/first-task.html"
+            >Start the first task</a
+          >
+          <a class="btn btn-ghost" href="reference/index.html"
+            >Browse the reference</a
+          >
+        </p>
+      </section>
 
-      <p class="scope-note">
-        Start with the
-        <a href="viewer.html?p=README.md"
-          ><strong>documentation guide</strong></a
-        >
-        for the current scope and available features.
-      </p>
+      <section aria-labelledby="sections">
+        <h2 id="sections">documentation types</h2>
+        <p>
+          The site follows <a href="https://diataxis.fr/">Diátaxis</a>. Each
+          page answers one question of its reader.
+        </p>
+        <ul class="cards">
+          <li class="card tutorials">
+            <span class="icon" aria-hidden="true">1</span>
+            <h3><a href="tutorials/index.html">tutorials</a></h3>
+            <p>
+              Learn through a guided experience, from a fresh install to the
+              first task.
+            </p>
+          </li>
+          <li class="card guides">
+            <span class="icon" aria-hidden="true">2</span>
+            <h3><a href="how-to-guides/index.html">how-to guides</a></h3>
+            <p>
+              Do one specific task: run in a container, on a VPS, on a Mac with
+              Tailscale.
+            </p>
+          </li>
+          <li class="card reference">
+            <span class="icon" aria-hidden="true">3</span>
+            <h3><a href="reference/index.html">reference</a></h3>
+            <p>
+              One page per implemented feature: function, response, API shape
+              with cURL, CLI shape.
+            </p>
+          </li>
+          <li class="card explanation">
+            <span class="icon" aria-hidden="true">4</span>
+            <h3><a href="explanation/index.html">explanation</a></h3>
+            <p>
+              Understand the behavior, the guarantees and the limitations of the
+              system.
+            </p>
+          </li>
+        </ul>
+      </section>
 
-      <h2>Operate Kanthord</h2>
-      <ul>
-        <li>
-          <a href="viewer.html?p=tutorials/first-task.md"
-            >From a fresh install to the first task</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/config/init.md"
-            >Create server configuration</a
-          >
-        </li>
-        <li><a href="viewer.html?p=reference/serve.md">Run the server</a></li>
-        <li>
-          <a href="viewer.html?p=reference/upgrade.md"
-            >Upgrade configuration and data</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/auth/jwt.md"
-            >Generate a human token</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=how-to-guides/run-in-a-container.md"
-            >Run in a container</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=how-to-guides/run-on-a-mac-with-tailscale.md"
-            >Run on a Mac with Tailscale</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=how-to-guides/run-on-a-vps.md">Run on a VPS</a>
-        </li>
-      </ul>
-      <h2>Understand the system</h2>
-      <ul>
-        <li>
-          <a href="viewer.html?p=explanation/architecture.md"
-            >Service architecture and components</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=explanation/worker.md">How a worker works</a>
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/erd/README.md"
-            >Database schema design and ERD map</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/erd/01-setup.md"
-            >ERD 1: Environment and planning</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/erd/02-execution.md"
-            >ERD 2: Execution</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/erd/03-integration.md"
-            >ERD 3: External integration</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/erd/04-tracking.md"
-            >ERD 4: Telemetry</a
-          >
-        </li>
-      </ul>
-      <h2>Integrate and troubleshoot</h2>
-      <ul>
-        <li>
-          <a href="viewer.html?p=reference/README.md"
-            >Browse CLI commands and API endpoints</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=explanation/healthchecks.md"
-            >Understand health reports</a
-          >
-        </li>
-        <li>
-          <a href="viewer.html?p=reference/errors.md">Interpret errors</a>
-        </li>
-      </ul>
+      <section aria-labelledby="find">
+        <h2 id="find">find what you need</h2>
+        <dl class="questions">
+          <div>
+            <dt>How do I go from a fresh install to a first task?</dt>
+            <dd>
+              <a href="tutorials/first-task.html"
+                >From a fresh install to the first task</a
+              >
+            </dd>
+          </div>
+          <div>
+            <dt>What commands and endpoints are available?</dt>
+            <dd>
+              <a href="reference/index.html">Feature reference (API and CLI)</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How do I create or check server configuration?</dt>
+            <dd>
+              <a href="reference/config/init.html">config init</a>,
+              <a href="reference/config/validate.html">config validate</a>,
+              <a href="reference/config/show.html">config show</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How do I run or upgrade the server?</dt>
+            <dd>
+              <a href="reference/serve.html">serve</a>,
+              <a href="reference/upgrade.html">upgrade</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How do I run it in a container?</dt>
+            <dd>
+              <a href="how-to-guides/run-in-a-container.html"
+                >Run in a container</a
+              >
+            </dd>
+          </div>
+          <div>
+            <dt>How do I reach it from a phone or a domain?</dt>
+            <dd>
+              <a href="how-to-guides/run-on-a-mac-with-tailscale.html"
+                >Mac with Tailscale</a
+              >, <a href="how-to-guides/run-on-a-vps.html">VPS</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How do I run the tests that a change reaches?</dt>
+            <dd>
+              <a href="how-to-guides/declare-affected-tests.html"
+                >Declare the affected tests of a repository</a
+              >
+            </dd>
+          </div>
+          <div>
+            <dt>How do I authenticate?</dt>
+            <dd>
+              <a href="reference/auth/jwt.html">Human JWT generation</a> and
+              <a href="reference/gateway/verify.html">verification</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How does the system work?</dt>
+            <dd>
+              <a href="explanation/architecture.html">Service architecture</a>,
+              <a href="reference/erd/index.html">database schema</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How does a worker do the work of a node?</dt>
+            <dd>
+              <a href="explanation/worker.html">Workers</a>,
+              <a href="explanation/coder-worker.html">coder@1</a>,
+              <a href="explanation/native-agent.html">native agent</a>
+            </dd>
+          </div>
+          <div>
+            <dt>How do I interpret health reports?</dt>
+            <dd>
+              <a href="explanation/healthchecks.html">Healthchecks explained</a>
+            </dd>
+          </div>
+          <div>
+            <dt>What do errors and IDs mean?</dt>
+            <dd>
+              <a href="reference/errors.html">Errors</a> and
+              <a href="reference/identities.html">identities</a>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="scope" aria-labelledby="scope">
+        <h2 id="scope">current scope</h2>
+        <p>
+          The reference describes implemented behavior, not the full proposed
+          product. The CLI and the API cover configuration, tokens, the Gateway,
+          the LLM, repository and storage credentials, agents, projects,
+          missions, the Scheduler and workers. The Tracking CLI group exposes
+          help only. <code>serve server</code> runs the server;
+          <code>serve worker</code> registers a worker instance, pulls work and
+          executes it.
+        </p>
+        <p>
+          Internal design discussions and source-level implementation notes are
+          not part of this site.
+        </p>
+      </section>
     </main>
-
     <footer class="site-footer">
-      Kanthord · public documentation · kanthord.kanthorlabs.com
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
     </footer>
   </body>
 </html>

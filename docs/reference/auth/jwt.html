@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Generate or inspect a JWT · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="generate-or-inspect-a-jwt">Generate or inspect a JWT</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            <code>kanthord auth jwt generate</code> generates a human or machine
+            JWT locally from the validated server configuration.
+            <code>kanthord auth jwt inspect</code> decodes a JWT locally and
+            prints its claims. <code>auth jwt generate</code> is the only
+            token-issuance command; server startup and worker registration issue
+            no token, and there is no human login flow.
+          </p>
+          <p>
+            Human mode preserves the supplied username as <code>sub</code>;
+            reissuing for the same username generates a fresh
+            <code>jti</code> without creating an account or password record.
+            Machine mode generates a fresh client identity and
+            <code>jti</code> on every issuance. Local issuance cannot check
+            whether a worker binding exists or is available; Gateway checks it
+            when the token is used.
+          </p>
+          <p>
+            A machine presents its JWT to
+            <a href="../worker/register.html">worker registration</a>, which
+            returns a runtime identity. It issues and changes no JWT.
+            Registration state is not a <code>reg</code> claim in the token. A
+            machine token serves a worker of an external harness.
+            <code>kanthord serve worker</code> uses no machine token: a
+            <a href="../worker/instance.html">worker instance</a> takes its
+            tokens with its instance key. The Gateway refuses a machine token of
+            a binding of a worker that kanthord hosts with
+            <code>401 gateway.jwt.instance_required</code>, because such a
+            binding registers only the worker instances that it lists.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            In human mode, <code>auth jwt generate</code> prints the row
+            <code>token: &lt;jwt&gt;</code> to <strong>terminal stdout</strong>,
+            then exits <code>0</code>. In machine mode, it prints the same row
+            <code>token: &lt;jwt&gt;</code>. It prints no client secret. With
+            <code>--verbose</code> it prints the claim list after that output.
+            The output is a row, not a JSON response. Its decoded claims have
+            these properties:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td>
+                    <code>&quot;human&quot;</code> or
+                    <code>&quot;client&quot;</code>
+                  </td>
+                  <td>Distinguishes human and machine identities.</td>
+                </tr>
+                <tr>
+                  <td><code>sub</code></td>
+                  <td>string</td>
+                  <td>
+                    Exact human username, or a fresh
+                    <code>client_identity_&lt;ulid&gt;</code> for a machine.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>
+                    Display name, preserved exactly; defaults to
+                    <code>sub</code> and grants no authority.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>string, machine only</td>
+                  <td>
+                    Project identity supplied with <code>--project</code>;
+                    absent for human tokens.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>string, machine only</td>
+                  <td>
+                    <code>worker:kanthord:&lt;binding name&gt;</code>, built
+                    from <code>--binding</code>; absent for human tokens.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>iat</code></td>
+                  <td>integer</td>
+                  <td>Issued-at time in Unix seconds.</td>
+                </tr>
+                <tr>
+                  <td><code>exp</code></td>
+                  <td>integer</td>
+                  <td>
+                    Expiry in Unix seconds, using
+                    <code>gateway.auth.token_lifetime</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>jti</code></td>
+                  <td>canonical ULID string</td>
+                  <td>Fresh bare ULID identifying this token issuance.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Invalid inputs, configuration failures, or redirected stdout fail
+            with exit <code>1</code> and a
+            <a href="../errors.html#cli-diagnostics">diagnostic</a>. Without
+            <code>--output</code>, the command saves no client file. It never
+            calls the server.
+          </p>
+          <p>
+            The claim list holds one
+            <code>&lt;claim&gt;: &lt;value&gt;</code> line per claim, in signed
+            order, between two <code>---</code> lines. <code>iat</code> and
+            <code>exp</code> carry their UTC time as a YAML comment:
+          </p>
+          <pre><code class="language-text">---
+sub: ulrich
+name: ulrich
+kind: human
+iat: 1790586463 # 2026-09-28T09:07:43Z
+exp: 1822122463 # 2027-09-28T09:07:43Z
+jti: 01M3KMA9EGF0NY6W2TNP4BTTQ5
+---</code></pre>
+          <p>
+            <code>auth jwt inspect</code> prints the claim list alone, to any
+            stdout, and exits <code>0</code>. It verifies no signature, checks
+            no expiry, reads no server configuration and calls no server. A
+            missing token fails with
+            <code>cli.auth.jwt.inspect.token_required</code>. A malformed token
+            fails with <code>cli.auth.jwt.inspect.malformed_token</code>, and
+            the diagnostic never prints the token.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Not available. JWT issuance is a local operation using the server
+            configuration, with no token-issuance endpoint or cURL equivalent.
+            To verify an existing human token, use
+            <a href="../gateway/verify.html#api-shape">verification</a>.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord auth jwt generate [username] [--name &lt;display&gt;] [--output [path]] [--endpoint &lt;url&gt;] [--config &lt;path&gt;]
+kanthord auth jwt generate --project &lt;project id&gt; --binding &lt;binding name&gt; [--name &lt;display&gt;] [--output [path]] [--endpoint &lt;url&gt;] [--config &lt;path&gt;]
+kanthord auth jwt inspect [token]</code></pre>
+          <p>
+            Add the root option <code>--verbose</code> to
+            <code>auth jwt generate</code> to print the claim list.
+            <code>kanthord auth jwt</code> alone prints the help of the group.
+          </p>
+          <h3 id="human-token">Human token</h3>
+          <pre><code class="language-sh">kanthord auth jwt generate
+kanthord auth jwt generate ulrich --name 'Ulrich' --config /absolute/path/kanthord.yaml
+kanthord auth jwt generate ulrich --verbose</code></pre>
+          <h3 id="write-a-client-file">Write a client file</h3>
+          <pre><code class="language-sh">kanthord auth jwt generate --output
+kanthord auth jwt generate ulrich --output ./ulrich.cli.yaml --endpoint https://tunnel.example</code></pre>
+          <p>
+            <code>--output</code> writes the human JWT into a new private
+            <code>cli.yaml</code> instead of stdout. Without a value it writes
+            the default path; with a value it writes that path. The file holds
+            <code>token</code>, and <code>endpoint</code> only when
+            <code>--endpoint</code> is given. The command prints only the row
+            <code>created: &lt;absolute path&gt;</code>, so stdout need not be a
+            terminal.
+          </p>
+          <p>
+            The command creates an absent file only. An existing file fails with
+            <code>system.files.publish_failed</code> and stays unchanged; delete
+            it first to replace it. A file at another path is an export:
+            commands read the default path only, so copy it there as a regular
+            file with mode <code>0600</code> that the running user owns.
+          </p>
+          <p>
+            With <code>--binding</code>, <code>--output</code> writes the
+            machine token into the same file form: <code>token</code>, and
+            <code>endpoint</code> only when <code>--endpoint</code> is given.
+            The command prints no token. <code>--endpoint</code> without
+            <code>--output</code> fails with
+            <code>cli.auth.jwt.endpoint_without_output</code>.
+          </p>
+          <h3 id="machine-token">Machine token</h3>
+          <pre><code class="language-sh">kanthord auth jwt generate --project '&lt;project-id&gt;' --binding '&lt;binding-name&gt;' \
+  --name 'Worker display name' --config /absolute/path/kanthord.yaml</code></pre>
+          <p>
+            <code>--binding</code> without <code>--project</code> fails with
+            <code>cli.auth.jwt.binding_without_project</code>.
+            <code>--project</code> without <code>--binding</code> fails with
+            <code>cli.auth.jwt.project_without_binding</code>.
+          </p>
+          <p>
+            The server derives the client secret of a machine token as
+            <code
+              >HKDF-SHA256(master_key, &quot;worker/client-secret/v1/&quot; +
+              sub)</code
+            >. The server stores it nowhere and derives it again from the
+            verified <code>sub</code>. Each machine JWT has its own secret, and
+            a human JWT has none. The command prints no client secret.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument / option</th>
+                  <th>Default / constraints</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>[username]</code></td>
+                  <td>
+                    <code>kanthorlabs</code>; explicit values must be nonblank
+                    and at most 64 JavaScript string code units
+                  </td>
+                  <td>
+                    Human subject; cannot be combined with
+                    <code>--binding</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--name &lt;display&gt;</code></td>
+                  <td>
+                    Subject (<code>sub</code>); nonblank and at most 64
+                    JavaScript string code units
+                  </td>
+                  <td>Display name for either token kind.</td>
+                </tr>
+                <tr>
+                  <td><code>--binding &lt;binding name&gt;</code></td>
+                  <td>
+                    Omitted in human mode; 1–63 characters: a lower-case letter,
+                    then lower-case letters, digits or hyphens
+                  </td>
+                  <td>
+                    Selects machine mode and supplies the worker binding name;
+                    requires <code>--project</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--project &lt;project id&gt;</code></td>
+                  <td>
+                    Omitted in human mode; canonical project identity:
+                    <code>project_</code> and a canonical 26-character ULID
+                  </td>
+                  <td>
+                    Supplies the project of the worker binding; requires
+                    <code>--binding</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--config &lt;path&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_CONFIG</code> → XDG/default server
+                    configuration path
+                  </td>
+                  <td>
+                    Selects the server configuration used for signing and token
+                    lifetime.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Username and display-name values are preserved exactly, not trimmed.
+            Binding and project values must match their formats exactly. The
+            default username is the constant <code>kanthorlabs</code>, not an
+            environment-variable override. See
+            <a href="../config/init.html#cli-shape">initialize configuration</a>
+            for server configuration path precedence.
+          </p>
+          <h3 id="inspect-a-token">Inspect a token</h3>
+          <pre><code class="language-sh">kanthord auth jwt inspect "$KANTHORD_TOKEN"
+kanthord auth jwt inspect | grep exp</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Default / constraints</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>[token]</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code>, then the
+                    <code>token</code> field of <code>cli.yaml</code>
+                  </td>
+                  <td>The JWT to decode.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Supply the issued token through <code>--token</code>,
+            <code>KANTHORD_TOKEN</code>, or an operator-managed private
+            <code>cli.yaml</code> when using it; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >.
+          </p>
+          <p>
+            Next: <a href="../gateway/verify.html">human verification</a>,
+            <a href="../worker/register.html">worker registration</a>.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

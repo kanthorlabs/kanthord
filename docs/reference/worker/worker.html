@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read the worker catalog · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-the-worker-catalog">Read the worker catalog</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Read the catalog of supplied workers. The catalog is fixed in the
+            server binary. The API and the CLI do not change it.
+          </p>
+          <p>The catalog contains these workers:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Worker</th>
+                  <th>Host</th>
+                  <th>Method or harness</th>
+                  <th>Declared node states</th>
+                  <th>Declared intents</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>claude-code@1</code></td>
+                  <td><code>external-harness</code></td>
+                  <td>harness <code>claude-code</code></td>
+                  <td>
+                    <code>Available</code>, <code>Waiting</code>,
+                    <code>External.Requested</code>
+                  </td>
+                  <td><code>implement</code>, <code>examine</code></td>
+                </tr>
+                <tr>
+                  <td><code>coder@1</code></td>
+                  <td><code>kanthord</code></td>
+                  <td>method <code>steps</code></td>
+                  <td><code>Available</code></td>
+                  <td><code>implement</code>, <code>examine</code></td>
+                </tr>
+                <tr>
+                  <td><code>reviewer@1</code></td>
+                  <td><code>kanthord</code></td>
+                  <td>method <code>evaluation</code></td>
+                  <td><code>Waiting</code>, <code>External.Requested</code></td>
+                  <td><code>implement</code>, <code>examine</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The Scheduler Service admits a node for a worker only when two
+            conditions hold. The declared node states hold the state of the
+            node. The declared intents hold the intent of the node.
+          </p>
+          <p>
+            <code>worker list</code> returns a page of summaries in ascending
+            worker-name order. <code>worker get</code> returns the full
+            declaration of one worker. Both operations are read-only.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="worker-list"><code>worker list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "name": "claude-code@1",
+      "host": "external-harness",
+      "declared_node_states": ["Available", "Waiting", "External.Requested"],
+      "declared_intents": ["implement", "examine"]
+    }
+  ],
+  "next_cursor": "Y2xhdWRlQDE"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items[].name</code></td>
+                  <td>string</td>
+                  <td>Exact worker name, for example <code>coder@1</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>items[].host</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>kanthord</code> for a native worker,
+                    <code>external-harness</code> for a harness.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].declared_node_states</code></td>
+                  <td>string array</td>
+                  <td>Node states that the worker accepts.</td>
+                </tr>
+                <tr>
+                  <td><code>items[].declared_intents</code></td>
+                  <td>string array</td>
+                  <td>
+                    The intents that the worker takes: <code>implement</code>,
+                    <code>examine</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="worker-get"><code>worker get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with the declaration. The CLI
+            writes the same object as one JSON line to stdout and exits
+            <code>0</code>. A native worker has <code>method</code>,
+            <code>agent_name</code> and a <code>resource_budget</code> with
+            <code>turns</code>:
+          </p>
+          <pre><code class="language-json">{
+  "name": "coder@1",
+  "host": "kanthord",
+  "method": "steps",
+  "agent_name": "swe@1",
+  "resource_budget": { "turns": 200, "wall_time_ms": 7200000 },
+  "declared_node_states": ["Available"],
+  "declared_intents": ["implement", "examine"]
+}</code></pre>
+          <p>
+            An external harness has <code>harness</code> in place of
+            <code>method</code> and <code>agent_name</code>, and its
+            <code>resource_budget</code> has no <code>turns</code>:
+          </p>
+          <pre><code class="language-json">{
+  "name": "claude-code@1",
+  "host": "external-harness",
+  "harness": "claude-code",
+  "resource_budget": { "wall_time_ms": 7200000 },
+  "declared_node_states": ["Available", "Waiting", "External.Requested"],
+  "declared_intents": ["implement", "examine"]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>All workers</td>
+                  <td>Exact worker name.</td>
+                </tr>
+                <tr>
+                  <td><code>host</code></td>
+                  <td>string</td>
+                  <td>All workers</td>
+                  <td>
+                    <code>kanthord</code> or <code>external-harness</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>method</code></td>
+                  <td>string</td>
+                  <td><code>kanthord</code> only</td>
+                  <td><code>steps</code> or <code>evaluation</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>string</td>
+                  <td><code>kanthord</code> only</td>
+                  <td>Agent that the native worker runs.</td>
+                </tr>
+                <tr>
+                  <td><code>harness</code></td>
+                  <td>string</td>
+                  <td><code>external-harness</code></td>
+                  <td>
+                    External harness name, for example <code>claude-code</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resource_budget.wall_time_ms</code></td>
+                  <td>integer</td>
+                  <td>All workers</td>
+                  <td>Wall-time budget of one execution, in milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>resource_budget.turns</code></td>
+                  <td>integer</td>
+                  <td><code>kanthord</code> only</td>
+                  <td>Turn budget of one execution.</td>
+                </tr>
+                <tr>
+                  <td><code>declared_node_states</code></td>
+                  <td>string array</td>
+                  <td>All workers</td>
+                  <td>Node states that the worker accepts.</td>
+                </tr>
+                <tr>
+                  <td><code>declared_intents</code></td>
+                  <td>string array</td>
+                  <td>All workers</td>
+                  <td>
+                    The intents that the worker takes: <code>implement</code>,
+                    <code>examine</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>
+                    Missing, invalid or expired token, or a machine token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>limit</code> is not an integer from 1 to 1000, or
+                    <code>cursor</code> is empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The cursor is not a cursor that this operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 worker.catalog.not_found</code></td>
+                  <td><code>get</code></td>
+                  <td>No supplied worker has this exact name.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.worker.list.indeterminate</code> or
+            <code>cli.worker.get.indeterminate</code>. Run the command again
+            after an indeterminate result.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="worker-list-1"><code>worker list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/worker/catalog</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.catalog.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>
+                    <code>limit</code>: integer from 1 to 1000, default 100.
+                    <code>cursor</code>: <code>next_cursor</code> of the
+                    previous page.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/worker/catalog?limit=2' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="worker-get-1"><code>worker get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/worker/catalog/:worker_name</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.catalog.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>worker_name</code>: exact worker name, nonempty.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/worker/catalog/coder@1 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <h3 id="worker-list-2"><code>worker list</code></h3>
+          <pre><code class="language-text">kanthord worker list [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker list --limit 2
+kanthord worker list --limit 2 --cursor '&lt;next-cursor&gt;'</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Page size; a positive integer up to <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None (first page)</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks <code>--limit</code> before the request. A value that
+            is not a positive decimal integer fails with
+            <code>cli.pagination.limit_invalid</code>. A value above
+            <code>1000</code> fails with
+            <code>cli.pagination.limit_out_of_range</code>. A missing token
+            fails with <code>cli.worker.list.token_required</code>.
+          </p>
+          <h3 id="worker-get-2"><code>worker get</code></h3>
+          <pre><code class="language-text">kanthord worker get &lt;worker-name&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker get coder@1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;worker-name&gt;</code></td>
+                  <td>Exact worker name, for example <code>coder@1</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A missing token fails with
+            <code>cli.worker.get.token_required</code>.
+          </p>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>worker</code> group, and every <code>worker</code> subcommand
+            accepts them. A repeated <code>--token</code> fails with
+            <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the token and endpoint precedence. The HTTP client deadline is
+            one second longer than the operation timeout.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

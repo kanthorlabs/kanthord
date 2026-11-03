@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Execution-bound mission reads · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="execution-bound-mission-reads">
+            Execution-bound mission reads
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A worker execution reads the mission records of its own claim
+            through these operations. Each operation takes the execution
+            identity as its first path parameter. The server derives the node,
+            the attempt and the pinned revision from the live claim. An
+            execution cannot select another node, and no read returns a revision
+            newer than the pin.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Answer</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution pinned-revision get</code></td>
+                  <td>The pinned revision of the claimed node.</td>
+                </tr>
+                <tr>
+                  <td><code>execution revision list</code></td>
+                  <td>
+                    One page of the revisions of the claimed node, at or below
+                    the pin.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution revision get</code></td>
+                  <td>One revision at or below the pin.</td>
+                </tr>
+                <tr>
+                  <td><code>execution evidence list</code></td>
+                  <td>
+                    One page of the evidence of the claimed node and attempt.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution evidence asset content get</code></td>
+                  <td>
+                    The stored content of one asset inside the execution bound.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution dependency list</code></td>
+                  <td>
+                    One page of the direct dependencies of a claimed
+                    <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution dependency outcome list</code></td>
+                  <td>
+                    One page of the current outcomes of those dependencies.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution dependency evidence list</code></td>
+                  <td>One page of the evidence that those outcomes name.</td>
+                </tr>
+                <tr>
+                  <td><code>execution cleared-outcome get</code></td>
+                  <td>
+                    The outcome of the previous attempt, which an unblock
+                    cleared.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution cleared-assessment get</code></td>
+                  <td>The assessment that the cleared outcome names.</td>
+                </tr>
+                <tr>
+                  <td><code>execution rework-assessment get</code></td>
+                  <td>
+                    The assessment that caused the latest rework of the claimed
+                    attempt.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every operation requires a machine JWT of a registered worker. The
+            Gateway proves that <code>execution_id</code> is a live claim of
+            that registration before the handler runs.
+          </p>
+          <p>
+            The execution bound for asset content covers two sets of evidence:
+          </p>
+          <ul>
+            <li>The evidence of the claimed node and attempt.</li>
+            <li>
+              For a claimed <code>examine</code> node, the evidence that the
+              current outcome of a direct dependency names.
+            </li>
+          </ul>
+          <p>
+            The three dependency reads cover the direct dependencies of the
+            claimed node that are not retired. No read follows the dependencies
+            of a dependency. The three dependency reads return empty pages for a
+            claimed <code>implement</code> node.
+          </p>
+          <p>
+            Only an unblock opens an attempt after attempt 1.
+            <code>execution cleared-outcome get</code> returns the last outcome
+            of the attempt before the claimed attempt. For a claim on attempt 1,
+            it fails with <code>404 mission.record.not_found</code>.
+            <code>execution cleared-assessment get</code> returns the assessment
+            that this outcome names, with the same failure.
+          </p>
+          <p>
+            <code>execution rework-assessment get</code> returns the
+            <code>criterion-not-met</code> execution assessment with the
+            greatest <code>sequence</code> of the claimed attempt. When the
+            attempt holds none, it fails with
+            <code>404 mission.record.not_found</code>.
+          </p>
+          <p>
+            These operations change nothing. Each list call reads one page. The
+            CLI does not follow <code>next_cursor</code>. Each read takes its
+            own snapshot.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            All operations return HTTP <code>200</code>. The CLI writes the same
+            JSON value as one line to stdout and exits <code>0</code>, except
+            for an <code>object</code> asset content answer.
+          </p>
+          <h3 id="execution-pinned-revision-get-and-execution-revision-get">
+            <code>execution pinned-revision get</code> and
+            <code>execution revision get</code>
+          </h3>
+          <p>The answer is one <code>Revision</code>:</p>
+          <pre><code class="language-json">{
+  "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+  "filename": "checkout.md",
+  "revision": 3,
+  "reason": "Clarify the criterion",
+  "actor": { "kind": "human", "account": "ulrich", "name": "Ulrich" },
+  "created_at": 1791398400000,
+  "content": {
+    "name": "Checkout flow",
+    "requirement": "Add a checkout page.",
+    "criterion": "The checkout page submits an order.",
+    "verifications": ["npm test"],
+    "bindings": ["binding_01M4C5G6BP5EWTVTTXFH1R25MC"],
+    "intent": "implement",
+    "tags": []
+  },
+  "tasks": [],
+  "change": {
+    "write": "criterion.set",
+    "previous_revision": 2,
+    "changed_fields": ["criterion"]
+  },
+  "pinned_by_attempts": [1]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node of the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>filename</code></td>
+                  <td>string</td>
+                  <td>Plan file name at this revision.</td>
+                </tr>
+                <tr>
+                  <td><code>revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Revision number.</td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>string</td>
+                  <td>Reason of the write that made the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>actor</code></td>
+                  <td><code>Actor</code></td>
+                  <td>
+                    Actor of that write. See
+                    <a href="attempt.html#attempt">attempts</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>Unix milliseconds</td>
+                  <td>Time of the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>content</code></td>
+                  <td>object</td>
+                  <td>
+                    <code>name</code>, <code>requirement</code>,
+                    <code>criterion</code>, <code>verifications</code>,
+                    <code>bindings</code>, <code>intent</code> and
+                    <code>tags</code> of the node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tasks</code></td>
+                  <td>array</td>
+                  <td>
+                    Each task with <code>id</code>, <code>filename</code> and
+                    <code>content</code>; <code>[]</code> for an
+                    <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>change</code></td>
+                  <td>object</td>
+                  <td>
+                    <code>write</code> kind, <code>previous_revision</code> (or
+                    <code>null</code>), <code>changed_fields</code>, and
+                    optional <code>tasks</code> changes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>pinned_by_attempts</code></td>
+                  <td>array of positive safe integers</td>
+                  <td>Attempts that pin this revision.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-revision-list">
+            <code>execution revision list</code>
+          </h3>
+          <p>
+            The answer is a page: <code>items</code> holds
+            <code>Revision</code> records highest revision first, at or below
+            the pin. <code>next_cursor</code> is an opaque string, or
+            <code>null</code> at the end.
+          </p>
+          <h3
+            id="execution-evidence-list-and-execution-dependency-evidence-list"
+          >
+            <code>execution evidence list</code> and
+            <code>execution dependency evidence list</code>
+          </h3>
+          <p>
+            The answer is a page: <code>items</code> holds
+            <a href="evidence.html#evidence"><code>Evidence</code></a> records
+            in reverse identity order, and <code>next_cursor</code> is a string
+            or <code>null</code>.
+          </p>
+          <h3 id="execution-dependency-outcome-list">
+            <code>execution dependency outcome list</code>
+          </h3>
+          <p>
+            The answer is a page: <code>items</code> holds
+            <a href="outcome.html#outcome"><code>Outcome</code></a> records in
+            reverse identity order, and <code>next_cursor</code> is a string or
+            <code>null</code>.
+          </p>
+          <h3 id="execution-dependency-list">
+            <code>execution dependency list</code>
+          </h3>
+          <p>
+            The answer is a page in reverse node identity order. Each item has
+            one of two forms:
+          </p>
+          <pre><code class="language-json">{
+  "items": [{ "id": "node_01M4C5G6BNJGY6SEGYRDETDPK7", "state": "Executing" }],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Form</th>
+                  <th>When</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Dependency node record</td>
+                  <td>The dependency holds a current outcome.</td>
+                  <td>
+                    The node record, as
+                    <code>kanthord mission node get</code> returns it.
+                    <code>filename</code>, <code>content</code>,
+                    <code>visible_revision</code> and
+                    <code>pinned_by_attempts</code> come from the revision of
+                    that outcome.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>{ id, state }</code></td>
+                  <td>The dependency holds no current outcome.</td>
+                  <td>
+                    The <code>node_&lt;ulid&gt;</code> identity and the current
+                    state only.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-cleared-outcome-get">
+            <code>execution cleared-outcome get</code>
+          </h3>
+          <p>
+            The answer is one
+            <a href="outcome.html#outcome"><code>Outcome</code></a
+            >.
+          </p>
+          <h3
+            id="execution-cleared-assessment-get-and-execution-rework-assessment-get"
+          >
+            <code>execution cleared-assessment get</code> and
+            <code>execution rework-assessment get</code>
+          </h3>
+          <p>
+            The answer is one
+            <a href="assessment.html#assessment"><code>Assessment</code></a
+            >.
+          </p>
+          <h3 id="execution-evidence-asset-content-get">
+            <code>execution evidence asset content get</code>
+          </h3>
+          <p>
+            The answer is a <code>StoredContent</code> object, as for
+            <a href="evidence.html#evidence-asset-content-get"
+              ><code>evidence asset content get</code></a
+            >. A <code>produced</code> asset returns <code>asset_id</code>,
+            <code>address</code>, <code>media_type</code>,
+            <code>encoding</code> (<code>base64</code>) and <code>data</code>.
+            An <code>object</code> asset returns <code>asset_id</code>,
+            <code>address</code>, <code>media_type</code>, <code>size</code>, a
+            presigned <code>get_url</code> and <code>expires_at</code>.
+          </p>
+          <p>
+            The CLI writes a <code>produced</code> answer to stdout. For an
+            <code>object</code> answer, the CLI writes no URL and exits
+            <code>1</code> with
+            <code
+              >cli.mission.execution.evidence.asset.content.get.object_content</code
+            >. The reader component of kanthord owns object downloads.
+          </p>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>. Timestamps are
+            integer Unix milliseconds in UTC.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>Absent, invalid or expired token, or a human token.</td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.registration.required</code></td>
+                  <td>All</td>
+                  <td>
+                    The machine identity holds no live worker registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid path parameter, <code>limit</code> outside 1 to
+                    1000, or an unknown query field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>All</td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>403 gateway.invocation.execution_proof_failed</code>
+                  </td>
+                  <td>All</td>
+                  <td>
+                    <code>execution_id</code> is not a live claim of this
+                    registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 scheduler.execution.not_running</code></td>
+                  <td>All</td>
+                  <td>The claim of the execution is no longer live.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td>All <code>list</code> commands</td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.execution.revision_above_pin</code></td>
+                  <td><code>revision get</code>, <code>revision list</code></td>
+                  <td>
+                    The revision, or the cursor revision, is above the pinned
+                    revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td>
+                    <code>cleared-outcome get</code>,
+                    <code>cleared-assessment get</code>,
+                    <code>rework-assessment get</code>, <code>content get</code>
+                  </td>
+                  <td>
+                    The claimed attempt is attempt 1; the claimed attempt holds
+                    no <code>criterion-not-met</code> execution assessment; or
+                    the asset does not exist or lies outside the execution
+                    bound.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>403 mission.authorization.refused</code></td>
+                  <td><code>content get</code></td>
+                  <td>
+                    The claim is not live for the node and attempt, or the
+                    storage binding is removed or disabled. Details hold
+                    <code>reason</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.content_repository</code></td>
+                  <td><code>content get</code></td>
+                  <td>
+                    The asset is a <code>repository</code> address. Details hold
+                    <code>evidence_id</code> and <code>address</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.evidence.content_platform</code></td>
+                  <td><code>content get</code></td>
+                  <td>
+                    The asset is a <code>platform</code> address. Details hold
+                    <code>evidence_id</code> and <code>address</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>503 mission.evidence.storage_unavailable</code></td>
+                  <td><code>content get</code></td>
+                  <td>
+                    An <code>object</code> asset needs object storage, and the
+                    Server wires none.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.pinned_revision.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>pinned-revision get</code></td>
+                  <td>
+                    <code>&lt;execution-id&gt;</code> is not a canonical
+                    <code>execution_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.revision.list.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>revision list</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.revision.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>revision get</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.revision.get.invalid_revision</code
+                    >
+                  </td>
+                  <td><code>revision get</code></td>
+                  <td>
+                    <code>&lt;revision&gt;</code> is not a positive decimal
+                    integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.evidence.list.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>evidence list</code></td>
+                  <td>
+                    <code>&lt;execution-id&gt;</code> is not a canonical
+                    <code>execution_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.evidence.asset.content.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>content get</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.evidence.asset.content.get.invalid_asset_id</code
+                    >
+                  </td>
+                  <td><code>content get</code></td>
+                  <td>
+                    <code>&lt;asset-id&gt;</code> is not a canonical
+                    <code>evidence_asset_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.dependency.list.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>dependency list</code></td>
+                  <td>
+                    <code>&lt;execution-id&gt;</code> is not a canonical
+                    <code>execution_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.dependency.outcome.list.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>dependency outcome list</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.dependency.evidence.list.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>dependency evidence list</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.cleared_assessment.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>cleared-assessment get</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.rework_assessment.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>rework-assessment get</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.cleared_outcome.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>cleared-outcome get</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.execution.&lt;operation&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>
+                    No nonblank token resolves.
+                    <code>&lt;operation&gt;</code> is
+                    <code>pinned_revision.get</code>,
+                    <code>revision.list</code>, <code>revision.get</code>,
+                    <code>evidence.list</code>,
+                    <code>evidence.asset.content.get</code>,
+                    <code>dependency.list</code>,
+                    <code>dependency.outcome.list</code>,
+                    <code>dependency.evidence.list</code>,
+                    <code>cleared_outcome.get</code>,
+                    <code>cleared_assessment.get</code> or
+                    <code>rework_assessment.get</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td>All <code>list</code> commands</td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td>All <code>list</code> commands</td>
+                  <td><code>--limit</code> is greater than 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All <code>list</code> commands</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.mission.execution.&lt;operation&gt;.indeterminate</code>,
+            with <code>&lt;operation&gt;</code> as above. These reads change
+            nothing, so run the command again.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>All operations share these properties:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live
+                    registration and a live claim on <code>execution_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the registered
+                    worker that holds the claim.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Parameters besides <code>execution_id</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution pinned-revision get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/pinned-revision</code
+                    >
+                  </td>
+                  <td><code>mission.execution.pinnedRevision.get</code></td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>execution revision list</code></td>
+                  <td>
+                    <code
+                      >GET /api/mission/execution/:execution_id/revision</code
+                    >
+                  </td>
+                  <td><code>mission.execution.revision.list</code></td>
+                  <td>
+                    <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution revision get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/revision/:revision</code
+                    >
+                  </td>
+                  <td><code>mission.execution.revision.get</code></td>
+                  <td><code>revision</code> (path, positive integer)</td>
+                </tr>
+                <tr>
+                  <td><code>execution evidence list</code></td>
+                  <td>
+                    <code
+                      >GET /api/mission/execution/:execution_id/evidence</code
+                    >
+                  </td>
+                  <td><code>mission.execution.evidence.list</code></td>
+                  <td><code>limit</code>; <code>cursor</code></td>
+                </tr>
+                <tr>
+                  <td><code>execution evidence asset content get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/evidence/asset/:asset_id/content</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission.execution.evidence.asset.content.get</code>
+                  </td>
+                  <td>
+                    <code>asset_id</code> (path,
+                    <code>evidence_asset_&lt;ulid&gt;</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution dependency list</code></td>
+                  <td>
+                    <code
+                      >GET /api/mission/execution/:execution_id/dependency</code
+                    >
+                  </td>
+                  <td><code>mission.execution.dependency.list</code></td>
+                  <td><code>limit</code>; <code>cursor</code></td>
+                </tr>
+                <tr>
+                  <td><code>execution dependency outcome list</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/dependency/outcome</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission.execution.dependency.outcome.list</code>
+                  </td>
+                  <td><code>limit</code>; <code>cursor</code></td>
+                </tr>
+                <tr>
+                  <td><code>execution dependency evidence list</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/dependency/evidence</code
+                    >
+                  </td>
+                  <td>
+                    <code>mission.execution.dependency.evidence.list</code>
+                  </td>
+                  <td><code>limit</code>; <code>cursor</code></td>
+                </tr>
+                <tr>
+                  <td><code>execution cleared-outcome get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/cleared-outcome</code
+                    >
+                  </td>
+                  <td><code>mission.execution.clearedOutcome.get</code></td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>execution cleared-assessment get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/cleared-assessment</code
+                    >
+                  </td>
+                  <td><code>mission.execution.cleared_assessment.get</code></td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td><code>execution rework-assessment get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/rework-assessment</code
+                    >
+                  </td>
+                  <td><code>mission.execution.rework_assessment.get</code></td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>execution_id</code> is a required
+            <code>execution_&lt;ulid&gt;</code> path parameter. Operations
+            without <code>limit</code> and <code>cursor</code> accept no query
+            fields.
+          </p>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/mission/execution/execution_01M4C5G6BP0355Z52M6JCYZCSK/pinned-revision \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;'
+
+curl -i 'http://127.0.0.1:31415/api/mission/execution/execution_01M4C5G6BP0355Z52M6JCYZCSK/revision?limit=10' \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/execution/execution_01M4C5G6BP0355Z52M6JCYZCSK/evidence/asset/evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR/content \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;'</code></pre>
+          <p>
+            To read the next page, send the <code>next_cursor</code> value as
+            the <code>cursor</code> query parameter with the same
+            <code>limit</code>.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>mission</code> group, and each leaf command accepts them:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>
+                    Machine JWT of the registered worker that holds the claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+          <p>Every list command takes these options:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum items on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Every command takes this positional argument first:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;execution-id&gt;</code></td>
+                  <td>
+                    Required <code>execution_&lt;ulid&gt;</code> of the live
+                    execution.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-pinned-revision-get">
+            <code>execution pinned-revision get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution pinned-revision get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">KANTHORD_TOKEN='&lt;machine-jwt&gt;' kanthord mission execution pinned-revision get execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-revision-list-1">
+            <code>execution revision list</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution revision list &lt;execution-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution revision list execution_01M4C5G6BP0355Z52M6JCYZCSK --limit 10</code></pre>
+          <h3 id="execution-revision-get">
+            <code>execution revision get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution revision get &lt;execution-id&gt; &lt;revision&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution revision get execution_01M4C5G6BP0355Z52M6JCYZCSK 2</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;revision&gt;</code></td>
+                  <td>
+                    Required positive revision number at or below the pin.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-evidence-list">
+            <code>execution evidence list</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution evidence list &lt;execution-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution evidence list execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-evidence-asset-content-get-1">
+            <code>execution evidence asset content get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution evidence asset content get &lt;execution-id&gt; &lt;asset-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution evidence asset content get execution_01M4C5G6BP0355Z52M6JCYZCSK \
+  evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;asset-id&gt;</code></td>
+                  <td>
+                    Required <code>evidence_asset_&lt;ulid&gt;</code> inside the
+                    execution bound.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-dependency-list-1">
+            <code>execution dependency list</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution dependency list &lt;execution-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution dependency list execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-dependency-outcome-list-1">
+            <code>execution dependency outcome list</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution dependency outcome list &lt;execution-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution dependency outcome list execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-dependency-evidence-list">
+            <code>execution dependency evidence list</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution dependency evidence list &lt;execution-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution dependency evidence list execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-cleared-outcome-get-1">
+            <code>execution cleared-outcome get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution cleared-outcome get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution cleared-outcome get execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-cleared-assessment-get">
+            <code>execution cleared-assessment get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution cleared-assessment get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution cleared-assessment get execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-rework-assessment-get">
+            <code>execution rework-assessment get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution rework-assessment get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution rework-assessment get execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

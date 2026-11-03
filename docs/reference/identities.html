@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entity identities · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html" aria-current="true">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#request-ids">Request IDs</a></li>
+          <li><a href="#idempotency-keys">Idempotency keys</a></li>
+          <li><a href="#exceptions">Exceptions</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="entity-identities">Entity identities</h1>
+          <p>
+            Server-generated opaque entity IDs use
+            <code>&lt;prefix&gt;_&lt;ulid&gt;</code>.
+          </p>
+          <ul>
+            <li>
+              The prefix names the entity kind in singular, lower-case ASCII
+              words separated by single underscores. Each kind has one stable
+              prefix; different kinds do not share a prefix.
+            </li>
+            <li>
+              The ULID portion has exactly 26 uppercase Crockford Base32
+              characters. Its first character is <code>0</code>–<code>7</code>;
+              the remaining characters are <code>0</code>–<code>9</code>,
+              <code>A</code>–<code>H</code>, <code>J</code>, <code>K</code>,
+              <code>M</code>, <code>N</code>, <code>P</code>–<code>T</code>, or
+              <code>V</code>–<code>Z</code>.
+            </li>
+            <li>
+              Store and transmit the full prefixed string, including in
+              references, API fields and logs. Do not strip or change the
+              prefix.
+            </li>
+            <li>
+              Validation requires the expected entity prefix and a canonical
+              ULID. Bare ULIDs, wrong-kind prefixes, lowercase ULIDs, overflow
+              values and trailing whitespace are invalid entity IDs.
+            </li>
+          </ul>
+          <p>
+            Examples of the rule are <code>request_&lt;ulid&gt;</code>,
+            <code>project_&lt;ulid&gt;</code> and
+            <code>mission_&lt;ulid&gt;</code>.
+            <code>project create</code> creates a project and its mission in one
+            transaction.
+          </p>
+          <h2 id="request-ids">Request IDs</h2>
+          <p>
+            Gateway request IDs use <code>request_&lt;ulid&gt;</code>, for
+            example <code>request_01ARZ3NDEKTSV4RRFFQ69G5FAV</code>.
+          </p>
+          <ul>
+            <li>
+              An HTTP request may supply <code>X-Request-Id</code>. The Gateway
+              preserves a valid request ID and generates a fresh one when the
+              header is absent or invalid. An invalid correlation ID does not
+              reject the operation.
+            </li>
+            <li>
+              Validation happens before request logging and dispatch. The
+              response header, handler context and newly produced failure
+              envelope carry the same full ID.
+            </li>
+            <li>
+              Client-side input validation also generates a prefixed request ID
+              for its local failure.
+            </li>
+            <li>
+              The shared failure schema validates request IDs. Clients treat
+              malformed failure envelopes as indeterminate results.
+            </li>
+            <li>
+              An idempotent replay retains the recorded answer, including its
+              original request ID. Its HTTP response header identifies the
+              current request.
+            </li>
+          </ul>
+          <h2 id="idempotency-keys">Idempotency keys</h2>
+          <p>
+            A client-generated <code>Idempotency-Key</code> value uses
+            <code>idempotency_key_&lt;ulid&gt;</code>, for example
+            <code>idempotency_key_01ARZ3NDEKTSV4RRFFQ69G5FAV</code>.
+          </p>
+          <ul>
+            <li>
+              The same value appears in the <code>idempotency_key</code> field
+              of a CLI output.
+            </li>
+            <li>
+              The Gateway refuses a bare ULID or any other form with
+              <code>gateway.idempotency.invalid_key</code>.
+            </li>
+            <li>
+              The CLI refuses an invalid <code>--idempotency-key</code> value
+              before it sends the request.
+            </li>
+          </ul>
+          <h2 id="exceptions">Exceptions</h2>
+          <p>
+            Protocol-defined identities, natural keys and composite keys retain
+            their declared representations. Human usernames and operation names
+            are not generated opaque entity IDs. JWT <code>jti</code> values
+            remain bare canonical ULIDs under their existing contract. Temporary
+            filesystem names are not entity identities.
+          </p>
+          <p>
+            A ULID does not establish causal order. Use the owning service&#39;s
+            revision or ordering contract when causal order is required.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

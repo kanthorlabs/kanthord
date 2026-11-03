@@ -1,0 +1,1308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ERD 1: Environment and planning · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+    <link rel="stylesheet" href="../../assets/diagram.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#scope">Scope</a></li>
+          <li><a href="#capability-limits">Capability limits</a></li>
+          <li><a href="#owners-without-a-table">Owners without a table</a></li>
+          <li><a href="#diagram">Diagram</a></li>
+          <li><a href="#tables">Tables</a></li>
+          <li>
+            <a href="#keys-and-relationship-notation"
+              >Keys and relationship notation</a
+            >
+          </li>
+          <li><a href="#constraints">Constraints</a></li>
+          <li><a href="#cross-group-references">Cross-group references</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="erd-1-environment-and-planning">
+            ERD 1: Environment and planning
+          </h1>
+          <h2 id="scope">Scope</h2>
+          <p>
+            This view holds the tables that set up an environment and write a
+            plan. After this group, a human creates a project, stores
+            credentials and pins SSH host keys. The human also adds worker
+            instances, binds repositories, a storage bucket and workers, enables
+            agents and imports the mission plan. No execution runs yet.
+          </p>
+          <p>
+            The <a href="index.html">README</a> holds the conventions, the
+            colors and the map of every group.
+          </p>
+          <h2 id="capability-limits">Capability limits</h2>
+          <ul>
+            <li>
+              A project binds the kinds <code>repository</code>,
+              <code>storage</code> and <code>worker</code>.
+            </li>
+            <li>
+              A worker binding of a native worker needs an enabled
+              <a href="#agent-component">agent enablement</a>, because
+              <code>validateEntry</code> refuses a binding whose agent has no
+              enabled enablement.
+            </li>
+            <li>
+              A worker binding of an externally hosted worker needs no agent
+              enablement.
+            </li>
+            <li>
+              A delivery source is no binding. The Intake Service designs it
+              under
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#intake-service"
+                >HANDOFF</a
+              >.
+            </li>
+            <li>
+              The Mission Service accepts the import, the export, the node API,
+              the dependency edits, the criterion set and the priority.
+            </li>
+            <li>
+              The human controls (pause, resume, block, unblock, ready, override
+              and discard) come with <a href="02-execution.html">ERD 2</a>,
+              because most of them write an attempt or an outcome.
+            </li>
+            <li>
+              The Scheduler work queue is in this group, although the Scheduler
+              Service owns it. A Mission write that makes a node claimable
+              inserts its job in the same transaction. A Scheduler migration
+              cannot read a Mission table, so no later migration can back-fill
+              the queue.
+            </li>
+          </ul>
+          <h2 id="owners-without-a-table">Owners without a table</h2>
+          <ul>
+            <li>
+              The Gateway Service owns no table. It holds idempotency records in
+              memory. It stores no human account and no client identity. A human
+              <code>sub</code> and a
+              <code>client_identity_&lt;ulid&gt;</code> appear only as values
+              inside an <code>actor</code> column.
+            </li>
+            <li>
+              The worker catalog and the agent catalog are static server
+              modules. A worker name and an agent name are keys of those
+              modules, not rows.
+            </li>
+          </ul>
+          <h2 id="diagram">Diagram</h2>
+          <pre class="mermaid">
+erDiagram
+    credential {
+        text id PK "credential_ + ULID, one revision"
+        text name "group key, 1-63 chars, never changes"
+        text platform "closed platform set of the owning component"
+        integer revision "unique with name, starts at 1"
+        blob nonce "12 bytes, AES-256-GCM"
+        blob ciphertext "secret material + 16-byte tag"
+        text metadata "canonical JSON, platform schema, or null"
+        integer created_at "Unix ms"
+        integer ended_at "Unix ms, null while live"
+        integer available_at "Unix ms, end of the cooldown of the name, revision 1 only, else null"
+        integer strikes "failures of the name in a row, revision 1 only, default 0"
+        text holder "server or a worker instance name, group key with name"
+        text sealed_to "fingerprint of the instance key, null for server"
+    }
+
+    worker_instance {
+        text id PK "worker_instance_ + ULID, one revision"
+        text name "binding-name form, group key, never changes"
+        text worker "catalog worker that kanthord hosts, never changes"
+        text placement "server, container or worker, never changes"
+        integer revision "unique with name, starts at 1"
+        text public_key "base64url, 32-byte X25519 public key, null at server and container"
+        text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key, null at server and container"
+        integer created_at "Unix ms"
+        integer ended_at "Unix ms, null while live"
+    }
+
+    repository_host_key {
+        text id PK "host_key_ + ULID"
+        text host UK "member of an SSH host set"
+        text public_key "ssh-ed25519 and base64"
+        integer created_at "Unix ms"
+    }
+
+    project_project {
+        text id PK "project_ + ULID"
+        text name UK "binding-name form"
+        integer created_at "Unix ms"
+        integer paused_at "Unix ms, null while active"
+    }
+
+    project_binding {
+        text id PK "binding_ + ULID, one revision"
+        text project_id FK
+        text name "unique among current bindings"
+        text resource_identity "kind:platform:identifier, group key"
+        integer revision "unique with project_id and resource_identity"
+        text config "canonical JSON of the kind"
+        integer created_at "Unix ms"
+        integer removed_at "Unix ms, set on a tombstone"
+    }
+
+    agent_enablement {
+        text id PK "agent_enablement_ + ULID, one revision"
+        text agent_name "catalog agent, for example swe@1, group key"
+        integer revision "unique with agent_name, starts at 1"
+        text state "enabled | disabled"
+        text agent_providers "JSON list of name, provider, credential"
+        text default_configuration "JSON agent_provider, model_identifier, reasoning_effort"
+        text fallback_configurations "JSON list of agent_provider, model_identifier, reasoning_effort, default []"
+        integer created_at "Unix ms"
+        integer removed_at "Unix ms, set on a tombstone"
+    }
+
+    mission_mission {
+        text id PK "mission_ + ULID"
+        text project_id UK "one mission per project"
+        integer version "mission version, starts at 1"
+        integer created_at "Unix ms"
+    }
+
+    mission_node {
+        text id PK "node_ + ULID"
+        text mission_id FK
+        text filename "plan file name, *.md"
+        text state "12 states"
+        integer attempt "latest attempt, 0 before the first"
+        integer priority "signed, null reads 0"
+        integer retired_at "Unix ms, null while not retired, final"
+        integer created_at "Unix ms"
+    }
+
+    mission_node_revision {
+        text node_id PK, FK "node"
+        integer revision PK "starts at 1"
+        text filename
+        text name
+        text requirement
+        text criterion
+        text verifications "JSON list of bash commands"
+        text bindings "JSON list of binding identities"
+        text intent "implement | examine"
+        text tags "JSON set of tags"
+        text commit_type "feat | fix | docs | style | refactor | test | chore, or null"
+        text tasks "JSON task content, [] for an examine node"
+        text change "JSON: write, previous_revision, changed_fields, tasks"
+        text reason
+        text actor "JSON Actor"
+        integer created_at "Unix ms"
+    }
+
+    mission_dependency {
+        text dependent_id PK, FK
+        text depends_on_id PK, FK
+        text mission_id FK
+    }
+
+    scheduler_job {
+        text id PK "job_ + ULID, ULID orders"
+        text project_id
+        text node_id UK "node"
+        integer priority "copy of the Mission priority"
+        integer available_at "end of the stop backoff, or null"
+        integer queued_at "time of the insert of this job"
+    }
+
+    scheduler_queue_place {
+        text node_id PK "node"
+        text job_id "job_ + ULID of the first job of the node"
+    }
+
+    project_project ||..o{ project_binding : "FK project_id"
+    project_binding }o..o| credential : "ref in config JSON, no FK"
+    project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
+    agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
+    project_binding }o..o{ worker_instance : "ref by name in config.worker_instances JSON, no FK"
+    credential }o..o| worker_instance : "ref holder by name, no FK"
+
+    project_project ||..|| mission_mission : "ref, no FK, createMission"
+    mission_mission ||..o{ mission_node : "FK mission_id"
+    mission_node ||--o{ mission_node_revision : "FK node_id"
+    mission_node ||--o{ mission_dependency : "FK dependent_id"
+    mission_node ||--o{ mission_dependency : "FK depends_on_id"
+    mission_mission ||..o{ mission_dependency : "FK mission_id"
+    mission_node_revision }o..o| project_binding : "ref in bindings JSON, no FK"
+
+    mission_node ||..o| scheduler_job : "ref, no FK"
+    project_project ||..o{ scheduler_job : "ref, no FK"
+    mission_node ||..o| scheduler_queue_place : "ref, no FK"
+    scheduler_queue_place ||..o| scheduler_job : "job_id = id, no FK"
+
+    classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
+    classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
+    classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
+    classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
+    classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
+    classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
+    classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
+
+    class credential custody
+    class repository_host_key repository
+    class project_project,project_binding project
+    class agent_enablement agent
+    class worker_instance worker
+    class mission_mission,mission_node,mission_node_revision,mission_dependency mission
+    class scheduler_job,scheduler_queue_place scheduler
+</pre>
+          <h2 id="tables">Tables</h2>
+          <p>
+            The basis column states the source of each table. A ruled table has
+            its name and its columns in a design page. A derived table maps a
+            ruled record to rows, and this page proposes that mapping.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>Owner</th>
+                  <th>Basis</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>Custody</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record"
+                      >custody.impl.md</a
+                    >,
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table"
+                      >the credential table</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repository_host_key</code></td>
+                  <td>Repository component</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#host-keys"
+                      >host keys</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_project</code></td>
+                  <td>Project Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store"
+                      >the binding store</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_binding</code></td>
+                  <td>Project Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store"
+                      >the binding store</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_instance</code></td>
+                  <td>Worker Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/worker-service.impl.md#worker-instances"
+                      >worker instances</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_enablement</code></td>
+                  <td>Agent component</td>
+                  <td>
+                    Derived from the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration"
+                      >agent enablement</a
+                    >
+                    record and the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record"
+                      >agent enablement record</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission_mission</code></td>
+                  <td>Mission Service</td>
+                  <td>
+                    Derived from the <code>Mission</code> record of the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas"
+                      >Mission CLI</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission_node</code></td>
+                  <td>Mission Service</td>
+                  <td>
+                    Derived; the unique index on
+                    <code>(mission_id, filename)</code> is ruled in
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name"
+                      >the plan file name</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission_node_revision</code></td>
+                  <td>Mission Service</td>
+                  <td>
+                    Derived from
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions"
+                      >the revisions</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission_dependency</code></td>
+                  <td>Mission Service</td>
+                  <td>
+                    Derived from the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#dependency"
+                      >dependency</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>scheduler_job</code></td>
+                  <td>Scheduler Service</td>
+                  <td>
+                    Derived from the <code>Job</code> record of
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts"
+                      >the Scheduler operation contracts</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>scheduler_queue_place</code></td>
+                  <td>Scheduler Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service"
+                      >the identities of the Scheduler Service</a
+                    >; the columns are derived.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="keys-and-relationship-notation">
+            Keys and relationship notation
+          </h2>
+          <ul>
+            <li>
+              A solid line is an identifying relationship: the primary key of
+              the child contains the primary key of the parent. A dashed line is
+              a non-identifying relationship.
+            </li>
+            <li>
+              <code>project_binding</code> holds one row for each revision. The
+              group <code>(project_id, resource_identity)</code> is one binding,
+              and its latest row states the binding. A record pins one row by
+              <code>id</code>.
+            </li>
+            <li>
+              <code>agent_enablement</code> holds one row for each revision. The
+              group <code>agent_name</code> is one enablement, and its latest
+              row states the enablement.
+            </li>
+            <li>
+              <code>credential</code> holds one row for each revision. The group
+              <code>(name, holder)</code> is one copy of a credential, and each
+              copy keeps its own revisions.
+            </li>
+            <li>
+              <code>worker_instance</code> holds one row for each revision. The
+              group <code>name</code> is one worker instance, and its live
+              revision states the instance.
+            </li>
+            <li>
+              <code>mission_node_revision</code> holds one row for each content
+              revision of a node. The current revision of a node is its row with
+              the greatest <code>revision</code>, and the primary key
+              <code>(node_id, revision)</code> serves that lookup. A task has no
+              row of its own.
+            </li>
+            <li>
+              No pair of tables references each other, so no key is deferred.
+              <code>foreign_keys</code> is <code>ON</code>, as
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-connection-and-the-transaction"
+                >architecture.impl.md</a
+              >
+              rules.
+            </li>
+          </ul>
+          <h2 id="constraints">Constraints</h2>
+          <p>
+            The owning service enforces every rule below in the transaction of
+            its write. A rule that SQL can hold is a unique index or a key.
+            Every other rule is a validation of the owner.
+          </p>
+          <h3 id="custody">Custody</h3>
+          <ul>
+            <li>
+              <code>credential</code> holds one row for each revision.
+              <code>(name, holder, revision)</code> has a unique index, and a
+              create of a taken <code>(name, holder)</code> group answers 409
+              <code>credential.name.conflict</code>.
+            </li>
+            <li>
+              <code>holder</code> is never null. It holds <code>server</code> or
+              the name of a live worker instance. <code>sealed_to</code> is null
+              for <code>server</code> and holds the fingerprint of the instance
+              key that sealed the secret otherwise. Custody validates the
+              fingerprint form, and the LLM component validates the instance.
+            </li>
+            <li>
+              Only an LLM platform takes a holder other than
+              <code>server</code>. Another platform with an instance holder
+              answers 400 <code>credential.sealed.invalid</code>.
+            </li>
+            <li>
+              The write keeps one <code>platform</code> for every row of a name
+              over every holder. A create of an existing name with another
+              platform answers 409
+              <code>credential.name.platform_conflict</code>. The newest live
+              revision of a group is the greatest <code>revision</code> of
+              <code>(name, holder)</code> with a null <code>ended_at</code>.
+            </li>
+            <li>
+              The plaintext under the envelope of an instance row is the sealed
+              object <code>{ alg, enc, ciphertext }</code>: HPKE base mode to
+              the instance key. The server cannot open it. A row sealed to a
+              fingerprint that is no live revision of its instance has no
+              holder.
+            </li>
+            <li>
+              A rotation inserts the next revision and, in the same transaction,
+              drains every older live revision that no live execution pins. A
+              drain or a revoke sets <code>ended_at</code>. Custody refuses a
+              revoke of the newest live revision.
+            </li>
+            <li>
+              The secret shape and the <code>metadata</code> schema depend on
+              <code>platform</code>, as the platform validators of the
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/llm.impl.md#platform-validators"
+                >LLM</a
+              >,
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#platform-validators"
+                >Repository</a
+              >
+              and
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/storage.impl.md#platform-validators"
+                >Storage</a
+              >
+              components state.
+            </li>
+            <li>
+              Each revision holds its own <code>metadata</code>. A rotation
+              copies the metadata of the newest live revision unless the request
+              replaces it. A metadata edit inserts the next revision in one
+              transaction, with the secret of the newest live revision and the
+              new metadata, and the older revisions stay live until custody
+              drains them or a human revokes them.
+            </li>
+            <li>
+              The <code>base_url</code> of an
+              <code>openai-compatible</code> revision is fixed for the life of
+              the revision and changes only at a rotation. A removal of an
+              approved model is refused while a default configuration or an
+              entry names it. The check and the metadata update commit in one
+              transaction.
+            </li>
+            <li>
+              The additional authenticated data of the envelope is the row
+              identity and the platform.
+            </li>
+            <li>
+              Revision 1 of a <code>(name, holder)</code> group holds the
+              cooldown of that copy in <code>available_at</code> and
+              <code>strikes</code>. A rotation inserts the next revision with no
+              hold and copies none. The Agent component reads and writes the
+              hold through the Custody port <code>CredentialHolds</code>.
+            </li>
+            <li>
+              An archive is refused while a dependent names the credential. The
+              dependents are an agent provider and a
+              <code>project_binding</code> row. A binding row is a dependent
+              when it is the latest row of its group and no tombstone. It is
+              also a dependent when no tombstone follows it and a node that is
+              not terminal and not retired pins it. The node pins it through its
+              current revision or its open attempt. The check and the archive
+              are atomic. An archive sets <code>ended_at</code> on every live
+              revision of the group and keeps the rows. A group with no live
+              revision is archived, and an archive is final. The archive of a
+              worker instance archives every live group of that holder in its
+              transaction.
+            </li>
+            <li>
+              The dependents above apply to a group of the holder
+              <code>server</code>. The dependents of a group of an instance
+              holder are the worker bindings that list the instance and whose
+              agent configuration names the credential. The Project Service
+              answers them through <code>bindingsListingInstance</code>.
+            </li>
+            <li>
+              A login session is a runtime record of the LLM component, and no
+              table holds it. A failed or expired session stores nothing.
+            </li>
+          </ul>
+          <h3 id="repository-component">Repository component</h3>
+          <ul>
+            <li>
+              <code>repository_host_key</code> holds one row for each pinned SSH
+              host. <code>host</code> has the unique index
+              <code>repository_host_key_host</code>, and the table declares no
+              other index.
+            </li>
+            <li>
+              <code>host</code> is a member of an SSH host set of a platform.
+              The Repository component validates it before the write.
+            </li>
+            <li>
+              A pin replaces the row of its host: one transaction deletes the
+              row and inserts the new one. No operation deletes a pin.
+            </li>
+            <li>
+              <code>source</code> and the fingerprint are derived on read, and
+              no column stores them.
+            </li>
+          </ul>
+          <h3 id="project-service">Project Service</h3>
+          <ul>
+            <li><code>project_project.name</code> has a unique index.</li>
+            <li>
+              <code>project_binding</code> has a unique index on
+              <code>(project_id, resource_identity, revision)</code>.
+            </li>
+            <li>
+              Every kind holds a <code>resource_identity</code>:
+              <code>repository:github:&lt;owner&gt;/&lt;name&gt;</code>,
+              <code>worker:kanthord:&lt;binding name&gt;</code> and
+              <code>storage:s3:&lt;endpoint host&gt;/&lt;bucket&gt;</code>. Its
+              first part is the binding kind, and no column holds the kind. A
+              read derives the kind from that part.
+            </li>
+            <li>
+              The write refuses a name that another current binding of the
+              project holds. A partial index cannot select the latest row of a
+              group, so the write checks this rule.
+            </li>
+            <li>
+              A row is immutable. A configuration change inserts the next
+              revision of its group.
+            </li>
+            <li>
+              A tombstone is the next row of a group with
+              <code>removed_at</code> set and the last
+              <code>config</code> copied. A disablement is the next row with
+              <code>available: false</code>, or
+              <code>worker_instances: []</code> for a native worker binding, or
+              <code>instance_count: 0</code> for an external-harness binding.
+            </li>
+            <li>
+              A use reads the <code>config</code> of its pinned row. A disabled
+              latest row of the group refuses the use, except that a native
+              worker binding with <code>worker_instances: []</code> admits the
+              live claim of a draining registration. A tombstone after the
+              pinned row refuses the use.
+            </li>
+            <li>
+              Every Project table holds <code>id</code> as its first column.
+              <code>project_binding</code> belongs to a project, so it holds
+              <code>project_id</code> as its second column, as
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store"
+                >the binding store</a
+              >
+              rules.
+            </li>
+            <li>
+              The binding-set version is 1 plus the number of
+              <code>project_binding</code> rows of the project. A write that
+              names another version is refused. A write equal to the stored set
+              inserts no row and keeps the version.
+            </li>
+            <li>No sweep deletes a removed binding or a revision.</li>
+            <li>
+              A write derives <code>resource_identity</code> from the
+              configuration of the binding. A human never enters it.
+            </li>
+            <li>
+              A write compares each submitted binding with the current binding
+              of the same name. An unchanged configuration inserts no row. A
+              changed configuration of the same resource inserts the next
+              revision of the group. A changed resource inserts a tombstone in
+              the old group and revision 1 of the new group. A new name inserts
+              revision 1 of its group, or the next revision after the tombstone
+              of a group that it binds again. A name that the submission omits
+              takes a tombstone, and its rows stay.
+            </li>
+            <li>
+              A write refuses a change of the worker of an existing worker
+              binding under the same name.
+            </li>
+            <li>
+              The <code>config</code> of a native worker binding holds
+              <code>worker_instances</code>, and no <code>placement</code> and
+              no <code>instance_count</code>. <code>worker_instances</code> is a
+              list of 0 to 64 unique names of live instances of its worker, at
+              any placement. The length of <code>worker_instances</code> is the
+              instance count of the binding. The <code>config</code> of an
+              external-harness binding holds <code>instance_count</code> and no
+              <code>worker_instances</code>.
+            </li>
+            <li>
+              A <code>container</code> instance is listed by at most one live
+              worker binding. A second listing is refused with 409
+              <code>project.bindings.worker.instance_shared</code>.
+            </li>
+            <li>
+              <code>config</code> holds the configuration of its kind:
+              <a
+                href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#repository-configuration--proposed-fields"
+                >repository</a
+              >,
+              <a
+                href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#worker-and-agent-configuration--proposed-fields"
+                >worker</a
+              >
+              and
+              <a
+                href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#storage-configuration"
+                >storage</a
+              >. Every credential reference inside <code>config</code> holds a
+              credential name. A worker binding also holds the worker name and,
+              in an entry, an agent name and an agent provider name. SQLite
+              enforces no foreign key inside JSON, so the write validates each
+              reference.
+            </li>
+          </ul>
+          <h3 id="worker-service">Worker Service</h3>
+          <ul>
+            <li>
+              <code>worker_instance</code> holds one row for each revision.
+              <code>id</code> is the primary key,
+              <code>(name, revision)</code> has a unique index, and
+              <code>fingerprint</code> has a unique index over every row. SQLite
+              admits many null values in that unique index.
+            </li>
+            <li>
+              <code>placement</code> is <code>server</code>,
+              <code>container</code> or <code>worker</code>. No
+              <code>CHECK</code> holds the set. The Worker Service validates the
+              value before the write. It never changes.
+            </li>
+            <li>
+              <code>public_key</code> and <code>fingerprint</code> are required
+              at the <code>worker</code> placement and null at the
+              <code>server</code> and the <code>container</code> placements.
+            </li>
+            <li>
+              <code>name</code> takes the binding-name form. A taken name
+              answers 409 <code>worker.instance.name_conflict</code>, an
+              archived name included. The names <code>server</code>,
+              <code>token</code>, <code>connect</code> and
+              <code>heartbeat</code> are reserved and answer 400
+              <code>worker.instance.name_invalid</code>.
+            </li>
+            <li>
+              <code>worker</code> names a catalog worker that kanthord hosts.
+              The Worker Service validates the name form, the worker and the key
+              form before the write. <code>name</code>, <code>worker</code> and
+              <code>placement</code> never change.
+            </li>
+            <li>
+              The live revision of a name is its row with the greatest
+              <code>revision</code> and a null <code>ended_at</code>. A name
+              with no live revision is archived, and an archive is final.
+            </li>
+            <li>
+              Only a Reset key inserts a revision, and only at the
+              <code>worker</code> placement. It inserts the next revision with a
+              new public key and ends the old revision in one transaction. It
+              names <code>expected_revision</code>, and a stale value answers
+              409 <code>worker.instance.revision_conflict</code>.
+            </li>
+            <li>
+              An archive ends the live revision and every live registration of
+              the instance. It is refused with 409
+              <code>worker.instance.in_use</code> while a worker binding that is
+              no tombstone lists the instance. Without <code>force</code>, it is
+              also refused while a registration of the instance holds a live
+              execution. With <code>force: true</code>, it revokes that
+              execution in its transaction.
+            </li>
+          </ul>
+          <h3 id="agent-component">Agent component</h3>
+          <ul>
+            <li>
+              An enablement belongs to no project. <code>agent_name</code> is
+              its group key.
+            </li>
+            <li>
+              <code>agent_enablement</code> has a unique index on
+              <code>(agent_name, revision)</code>.
+            </li>
+            <li>
+              A row is immutable. Every change of an enablement, including a
+              change of <code>state</code> and a change of a provider
+              credential, inserts the next revision of its group.
+            </li>
+            <li>
+              A removal inserts a tombstone: the next row of the group with
+              <code>removed_at</code> set and the last content copied. A later
+              write of the same agent inserts the next revision after the
+              tombstone.
+            </li>
+            <li>
+              <code>agent_providers</code> holds one or more items. Each item
+              holds <code>name</code>, <code>provider</code> and
+              <code>credential</code>. <code>name</code> is unique inside the
+              row, and <code>credential</code> holds a credential name.
+            </li>
+            <li>
+              <code>default_configuration</code> holds
+              <code>agent_provider</code>, <code>model_identifier</code> and
+              <code>reasoning_effort</code>. <code>agent_provider</code> names
+              an item of <code>agent_providers</code> of the same row.
+            </li>
+            <li>
+              <code>fallback_configurations</code> is
+              <code>TEXT NOT NULL DEFAULT &#39;[]&#39;</code>. It holds at most
+              7 items. Each item holds <code>agent_provider</code>,
+              <code>model_identifier</code> and <code>reasoning_effort</code>,
+              and <code>agent_provider</code> names an item of
+              <code>agent_providers</code> of the same row.
+            </li>
+            <li>
+              A pair of <code>agent_provider</code> and
+              <code>model_identifier</code> is unique inside
+              <code>fallback_configurations</code>, and no item repeats the pair
+              of <code>default_configuration</code>. A repeat answers 400
+              <code>agent.configuration.fallback_duplicate</code>.
+            </li>
+            <li>
+              SQLite enforces no key inside JSON, so the write validates each
+              reference.
+            </li>
+            <li>
+              An enablement write validates its own providers and default
+              configuration first: the suitability of each credential platform,
+              the model catalog or the credential metadata, and the reasoning
+              effort that the model supports. Then it validates every dependent
+              worker binding.
+            </li>
+            <li>
+              A retained provider name keeps its <code>provider</code> in every
+              later revision.
+            </li>
+            <li>
+              A worker binding depends on every agent that the catalog declares
+              for its worker, whether or not the binding holds an entry for that
+              agent. The catalog is static, so this dependency is no column.
+            </li>
+            <li>
+              A binding write is refused when an agent of a native worker has no
+              enabled enablement. <code>validateEntry</code> runs for every
+              agent inside the binding write transaction.
+            </li>
+            <li>
+              The <code>config</code> JSON of a repository binding holds
+              <code>prompts</code>, a map from an agent name to a text of at
+              most 32768 UTF-8 bytes. A change of a text inserts the next
+              binding revision.
+            </li>
+            <li>
+              An enablement change validates every dependent worker binding
+              through <code>entriesOfAgent</code> in the transaction of its
+              commit, and a change that invalidates one is refused.
+            </li>
+            <li>
+              A disablement is always permitted, and it refuses every later
+              resolution.
+            </li>
+            <li>
+              The Agent component owns no cooldown table. The cooldown of a
+              credential copy is the hold on revision 1 of its
+              <code>(name, holder)</code> group, and the hold covers every model
+              of that copy. A claim reads and writes the copy of its claimant
+              holder: the instance of the registration at the
+              <code>worker</code> placement, else <code>server</code>.
+            </li>
+            <li>
+              <code>available_at</code> of a hold is the clock plus
+              <code
+                >min(base(code) × 2^(strikes − 1), agent.cooldown.max_ms)</code
+              >. A hold is live while <code>available_at</code> is later than
+              the clock.
+            </li>
+            <li>
+              A hold stays after its <code>available_at</code>, with its
+              <code>strikes</code>. A release with no
+              <code>provider_failed</code> stop and an operator clear set
+              <code>available_at</code> to null and <code>strikes</code> to 0.
+            </li>
+            <li>
+              The release transaction writes the hold through the port, and the
+              claim transaction reads it. An operator clear releases it.
+            </li>
+            <li>
+              A resolution reads the latest row of the enablement. A latest row
+              with <code>state</code> <code>disabled</code> or with
+              <code>removed_at</code> set refuses the resolution.
+            </li>
+            <li>
+              The credential dependents of an enablement are the items of
+              <code>agent_providers</code> of its latest row, unless that row is
+              a tombstone. An older row is no dependent, because no resolution
+              reads it.
+            </li>
+            <li>
+              An <code>agent_provider</code> of a complete entry names an item
+              of <code>agent_providers</code> of the latest row of the
+              enablement of its own agent. A provider name is unique only inside
+              one enablement, so the lookup reads the latest row of that
+              <code>agent_name</code>.
+            </li>
+            <li>
+              A removal of an enablement is refused while a worker binding of a
+              worker that uses the agent exists. A write that omits a provider
+              of the latest row is refused while an entry of a dependent worker
+              binding names it. The write checks the new row, so a replacement
+              that moves the default configuration to another provider and omits
+              the old provider is valid.
+            </li>
+          </ul>
+          <h3 id="mission-service">Mission Service</h3>
+          <ul>
+            <li>
+              <p>
+                <code>mission_mission.project_id</code> has a unique index.
+                <code>project.create</code> inserts the project row and calls
+                <code>createMission</code> in one transaction.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>mission_node</code> has a partial unique index on
+                <code>(mission_id, filename)</code> where
+                <code>retired_at</code> is null.
+              </p>
+            </li>
+            <li>
+              <p>
+                Every node holds one <code>intent</code>:
+                <code>implement</code> or <code>examine</code>. The Mission
+                Service validates the value before the write.
+              </p>
+            </li>
+            <li>
+              <p>
+                A task is content of an <code>implement</code> node. It holds a
+                <code>task_&lt;ulid&gt;</code> identity, and no task identity
+                takes the prefix <code>node_</code>.
+              </p>
+            </li>
+            <li><p>A dependency names a node of the same mission.</p></li>
+            <li>
+              <p>
+                A binding in <code>bindings</code> belongs to the project of the
+                mission.
+              </p>
+            </li>
+            <li>
+              <p>
+                A task holds no row, no revision, no state, no attempt and no
+                priority. Its content is in the <code>tasks</code> column of the
+                revision of its node. An <code>examine</code> node holds
+                <code>[]</code>, and an <code>implement</code> node with
+                <code>[]</code> is its own single work unit.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>tasks</code> holds one <code>TaskContent</code> item for
+                each current task, as the
+                <a
+                  href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#human-actions"
+                  >Mission CLI</a
+                >
+                proposes: the task identity, its plan file name and its complete
+                content. A revision keeps that content for its moment, so a
+                later move or rename changes no stored revision.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>name</code>, <code>requirement</code> and
+                <code>criterion</code> are nonblank text.
+                <code>verifications</code> is a nonempty ordered list of
+                nonblank bash commands.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>tags</code> holds unique tags under the
+                <a
+                  href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.vocabulary.md#tag"
+                  >tag</a
+                >
+                form. An absent list reads <code>[]</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>commit_type</code> holds the commit type of the node, or
+                <code>null</code> when the node sets none. The owning service
+                validates the closed set before the write. The worker reads
+                <code>null</code> as <code>feat</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>bindings</code> obeys the rule table of
+                <a
+                  href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-node-content"
+                  >the node content</a
+                >. A node names every binding that it uses, and no node takes a
+                binding from the project. The storage bindings of
+                <code>bindings</code> form an ordered upload list in the order
+                of the write. An <code>implement</code> node names one or more
+                repository bindings, and the convention is one binding. An
+                <code>implement</code> node with no repository binding answers
+                <code>mission.node.bindings_invalid</code>. A task names no
+                binding.
+              </p>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Binding kind</th>
+                      <th><code>implement</code></th>
+                      <th><code>examine</code></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Repository</td>
+                      <td>1 or more</td>
+                      <td>0 or more</td>
+                    </tr>
+                    <tr>
+                      <td>Worker</td>
+                      <td>0</td>
+                      <td>0</td>
+                    </tr>
+                    <tr>
+                      <td>Storage</td>
+                      <td>0 or more</td>
+                      <td>0 or more</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </li>
+            <li>
+              <p>
+                A write that changes <code>intent</code> of a node whose attempt
+                reads 1 or more answers 409
+                <code>mission.node.intent_locked</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                A node write that adds an unmatched pair of a node and a
+                claimable state answers 409
+                <code>mission.node.tags_unmatched</code>. The
+                <a
+                  href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.md#match"
+                  >match</a
+                >
+                of the Scheduler Service defines the pair.
+              </p>
+            </li>
+            <li>
+              <p>
+                A content change of a node inserts the next
+                <code>mission_node_revision</code> row of that node in the same
+                transaction. <code>mission_node.filename</code> equals the
+                <code>filename</code> of the current revision.
+              </p>
+            </li>
+            <li>
+              <p>
+                A task change inserts the next revision of its node. An import
+                that moves a task to another node inserts the next revision of
+                both nodes.
+              </p>
+            </li>
+            <li>
+              <p>
+                A retired node keeps its row, its <code>filename</code>, its
+                revisions and its last state. A retirement is final.
+              </p>
+            </li>
+            <li>
+              <p>
+                A node API retirement retires the named node alone, and its
+                tasks leave the work of the mission with it. A retirement
+                inserts no revision. A retired node accepts no write. A node API
+                write or a human control on it answers 409
+                <code>mission.node.retired</code>. An import entry with its
+                identity or with the identity of one of its tasks answers 400
+                <code>mission.import.retired_id</code>. No write names a retired
+                node as a dependency.
+              </p>
+            </li>
+            <li><p>A node in a terminal state takes no new revision.</p></li>
+            <li>
+              <p>
+                A dependency on a retiring node from a nonterminal dependent
+                outside the retirement set refuses the retirement, unless the
+                human forces it. A forced retirement deletes that dependency
+                row. A dependency from a terminal dependent stays.
+              </p>
+            </li>
+            <li>
+              <p>
+                A retirement deletes the job of every retired node in its
+                transaction.
+              </p>
+            </li>
+            <li>
+              <p>
+                A dependency edit and a retirement reroute every claim-free node
+                whose dependency closure changes between
+                <code>Pending</code> and <code>Available</code>. The dependency
+                closure of a node is its direct dependencies. The same
+                transaction inserts or deletes their jobs.
+              </p>
+            </li>
+            <li>
+              <p>
+                A dependency relates two nodes of one mission, whatever their
+                intent. A write that creates a cycle in a dependency closure is
+                refused.
+              </p>
+            </li>
+            <li>
+              <p>
+                A write that changes the structure or the content of the mission
+                increments <code>mission_mission.version</code> once. A write
+                with no change does not.
+              </p>
+            </li>
+            <li>
+              <p>
+                <code>mission_node.priority</code> holds the authoritative
+                priority. A priority act overwrites it, and no Mission row keeps
+                the earlier value. <code>scheduler_job.priority</code> holds a
+                copy for the selection order.
+              </p>
+            </li>
+            <li>
+              <p>
+                An <code>actor</code> column holds one of three JSON forms: a
+                human, an execution or a service. In this group only the human
+                form occurs.
+              </p>
+            </li>
+          </ul>
+          <h3 id="scheduler-service">Scheduler Service</h3>
+          <ul>
+            <li>
+              <code>scheduler_job.node_id</code> has a unique index, because the
+              queue holds one job for each claimable node.
+            </li>
+            <li>
+              <code>project_id</code> equals the project of the mission of the
+              node. The Mission Service supplies both values at the insert.
+            </li>
+            <li>
+              The selection order is <code>priority</code> descending, then
+              <code>id</code> ascending.
+            </li>
+            <li>
+              A priority change keeps the <code>id</code> of the job, so the job
+              keeps its age.
+            </li>
+            <li>
+              <code>scheduler_queue_place</code> holds the <code>id</code> of
+              the first job of each node. Each later job of the node keeps that
+              <code>id</code> and thus the queue place of the node.
+            </li>
+            <li>
+              <code>queued_at</code> holds the time of the insert of the current
+              job, and not the time of the first job.
+            </li>
+            <li>
+              The Mission Service inserts and deletes the rows through the
+              public insert and delete of the work queue, in the transaction of
+              its accepted fact.
+            </li>
+            <li>
+              In this group every job is for a node in <code>Available</code>.
+              An evaluation job comes with
+              <a href="02-execution.html">ERD 2</a>.
+            </li>
+          </ul>
+          <h2 id="cross-group-references">Cross-group references</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Kind</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission_mission.project_id</code></td>
+                  <td><code>project_project.id</code></td>
+                  <td>Reference, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_node_revision.bindings</code></td>
+                  <td><code>project_binding.id</code></td>
+                  <td>
+                    Reference in JSON, no FK. Each item pins one row. The
+                    <a href="#mission-service">Mission Service</a> rules state
+                    the count of each binding kind by intent.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_binding.config</code></td>
+                  <td><code>credential.name</code></td>
+                  <td>Reference in JSON by name, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>project_binding.config</code></td>
+                  <td><code>agent_enablement.agent_name</code></td>
+                  <td>
+                    Reference through the catalog agents of the worker, no FK.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_binding.config</code></td>
+                  <td><code>agent_enablement.agent_providers</code></td>
+                  <td>Reference to an item name in a complete entry, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>agent_enablement.agent_providers</code></td>
+                  <td><code>credential.name</code></td>
+                  <td>Reference in JSON by name, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>project_binding.config</code></td>
+                  <td><code>worker_instance.name</code></td>
+                  <td>
+                    Reference in <code>worker_instances</code> JSON by name, no
+                    FK.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credential.holder</code></td>
+                  <td><code>worker_instance.name</code></td>
+                  <td>
+                    Reference by name, no FK. <code>server</code> names no row.
+                    A holder names only an instance at the
+                    <code>worker</code> placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>scheduler_job.node_id</code></td>
+                  <td><code>mission_node.id</code></td>
+                  <td>Reference, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>scheduler_job.project_id</code></td>
+                  <td><code>project_project.id</code></td>
+                  <td>Reference, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>scheduler_queue_place.node_id</code></td>
+                  <td><code>mission_node.id</code></td>
+                  <td>Reference, no FK.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+    <script type="module" src="../../assets/diagram-page.mjs"></script>
+  </body>
+</html>

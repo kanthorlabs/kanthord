@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Publish and read the OpenAPI contract · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="publish-and-read-the-openapi-contract">
+            Publish and read the OpenAPI contract
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Generate and serve the package&#39;s scoped OpenAPI YAML contract.
+            The root document is a <code>$ref</code> index pointing to
+            service-scoped path-item files and shared components. Methods
+            sharing a path belong to one service and share one path-item file.
+          </p>
+          <p>
+            The two API routes <strong>read packaged assets</strong>. The CLI
+            <strong>generates local assets</strong>; it does not call either
+            route or download the server&#39;s contract. The writer updates
+            generated files and removes obsolete files only when they carry its
+            generated-file header.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Both API routes return HTTP <code>200</code> with
+            <code>Content-Type: application/yaml</code>, not a JSON envelope.
+          </p>
+          <h3 id="root-document">Root document</h3>
+          <p>
+            The root contains fields such as these (path entries are omitted
+            here):
+          </p>
+          <pre><code class="language-yaml">openapi: 3.1.0
+info:
+  title: kanthord
+  version: &lt;package-version&gt;
+paths:
+  /api/auth/verify:
+    $ref: ./openapi/gateway/verify.yaml#/pathItem
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./openapi/shared/components.yaml#/components/securitySchemes/bearerAuth</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>openapi</code></td>
+                  <td>string</td>
+                  <td>OpenAPI specification version (<code>3.1.0</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>info.title</code></td>
+                  <td>string</td>
+                  <td>Package API name (<code>kanthord</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>info.version</code></td>
+                  <td>string</td>
+                  <td>
+                    Package version, also used by the worker application&#39;s
+                    version check.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>paths.&lt;path&gt;.$ref</code></td>
+                  <td>string</td>
+                  <td>Relative reference to a service-scoped path item.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>components.securitySchemes.bearerAuth.$ref</code>
+                  </td>
+                  <td>string</td>
+                  <td>
+                    Relative reference to the shared bearer authentication
+                    scheme.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="fragment-documents">Fragment documents</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Present in</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>pathItem</code></td>
+                  <td>Service path-item files</td>
+                  <td>
+                    HTTP methods, operation metadata, parameters, and response
+                    definitions for a path.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>components.schemas</code></td>
+                  <td>Service files and shared components</td>
+                  <td>
+                    Input/output schemas for operations or shared error schemas.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>components.securitySchemes</code></td>
+                  <td>Shared components</td>
+                  <td>Bearer JWT authentication definition.</td>
+                </tr>
+                <tr>
+                  <td><code>components.parameters</code></td>
+                  <td>Shared components</td>
+                  <td>
+                    Reusable parameters, including <code>Idempotency-Key</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>components.responses</code></td>
+                  <td>Shared components</td>
+                  <td>Reusable error response definitions.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="cli-output">CLI output</h3>
+          <p>
+            Success prints the row
+            <code>openapi: &lt;absolute root YAML path&gt;</code> and exits
+            <code>0</code>:
+          </p>
+          <pre><code class="language-text">openapi: &lt;package-directory&gt;/static/openapi.yaml</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>openapi</code> row</td>
+                  <td>
+                    Location of the generated root document,
+                    <code>static/openapi.yaml</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>static/openapi/&lt;service&gt;/*.yaml</code></td>
+                  <td>Generated service-scoped path-item files.</td>
+                </tr>
+                <tr>
+                  <td><code>static/openapi/shared/components.yaml</code></td>
+                  <td>Generated shared components.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">JSON error envelope</a>, even
+            though successful responses are YAML.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Invalid fragment path parameters.</td>
+                </tr>
+                <tr>
+                  <td><code>404 gateway.openapi.not_found</code></td>
+                  <td>Well-formed but unlisted fragment path.</td>
+                </tr>
+                <tr>
+                  <td><code>503 gateway.openapi.unavailable</code></td>
+                  <td>
+                    Missing or unreadable root asset or allowlisted fragment.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            CLI scope, schema, or filesystem failures exit <code>1</code> with a
+            diagnostic.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Both routes are public, have a 30-second timeout, and accept no
+            query parameters or request body. Public access still requires an
+            allowed host and a ready server.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>GET /api/openapi.yaml</code></td>
+                  <td><code>gateway.openapi</code></td>
+                  <td>
+                    Read the packaged root reference index; no path parameters.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>GET /api/openapi/:service/:file</code></td>
+                  <td><code>gateway.openapiFile</code></td>
+                  <td>
+                    Read one allowlisted service-scoped or shared fragment.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Path parameter</th>
+                  <th>Required</th>
+                  <th>Constraints / purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>service</code></td>
+                  <td>Fragment route only</td>
+                  <td>
+                    Matches <code>^[a-z][a-z0-9-]*$</code>; selects a service
+                    directory or <code>shared</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>file</code></td>
+                  <td>Fragment route only</td>
+                  <td>
+                    Matches <code>^[A-Za-z][A-Za-z0-9._-]*\.yaml$</code>;
+                    selects the YAML fragment.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The assembled fragment path must occur in the allowlist derived from
+            all registered operations. This includes shared components and
+            per-service path-item files referenced by the root contract.
+          </p>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/openapi.yaml
+curl -i http://127.0.0.1:31415/api/openapi/gateway/verify.yaml
+curl -i http://127.0.0.1:31415/api/openapi/shared/components.yaml</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-sh">kanthord gateway openapi</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument / option</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Positional arguments</td>
+                  <td>None.</td>
+                </tr>
+                <tr>
+                  <td>Command-specific options</td>
+                  <td>None; output locations are fixed within the package.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    Inherited from the Gateway group but unused; generation is
+                    local.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            No running server or server configuration is required. To read the
+            published contract instead, use the cURL requests above.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

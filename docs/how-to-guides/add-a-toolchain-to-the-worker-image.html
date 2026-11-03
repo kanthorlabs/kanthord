@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Add a toolchain to the worker image · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li>
+            <a href="#1-write-the-containerfile">1. Write the Containerfile</a>
+          </li>
+          <li><a href="#2-build-the-image">2. Build the image</a></li>
+          <li>
+            <a href="#3-use-the-image-for-the-server-container"
+              >3. Use the image for the server container</a
+            >
+          </li>
+          <li>
+            <a href="#4-add-a-toolchain-at-the-container-placement"
+              >4. Add a toolchain at the <code>container</code> placement</a
+            >
+          </li>
+          <li><a href="#after-an-upgrade">After an upgrade</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="add-a-toolchain-to-the-worker-image">
+            Add a toolchain to the worker image
+          </h1>
+          <p>
+            Build an image that adds a toolchain, for example Node.js, to the
+            kanthord image. The agent commands and the verifications of a node
+            then find <code>node</code> and <code>npm</code>.
+          </p>
+          <p>
+            The kanthord image holds <code>bash</code>, <code>git</code>, the
+            OpenSSH client and <code>kanthord</code>. It holds no language
+            toolchain. A verification such as <code>npm test</code> fails in it.
+          </p>
+          <p>
+            Use the new image as the image of the server container of
+            <a href="run-in-a-container.html">Run kanthord in a container</a>.
+            Worker instances at the <code>server</code> placement then run their
+            commands with the toolchain.
+          </p>
+          <p>
+            At the <code>container</code> placement, this image does not apply.
+            Follow
+            <a href="#4-add-a-toolchain-at-the-container-placement">step 4</a>
+            instead.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>
+              Podman or Docker on the host that builds the image. The commands
+              use Podman. With Docker, write <code>docker</code> in place of
+              <code>podman</code>.
+            </li>
+            <li>
+              The kanthord version of the server, for example
+              <code>28.0.1</code>: the tag of the server image, or the release
+              of the server binary.
+            </li>
+          </ul>
+          <h2 id="1-write-the-containerfile">1. Write the Containerfile</h2>
+          <p>
+            Make an empty directory, and write this file as
+            <code>Containerfile</code> in it:
+          </p>
+          <pre><code class="language-Containerfile">ARG NODE_VERSION=24.15.0
+ARG VERSION
+
+FROM docker.io/library/node:${NODE_VERSION}-trixie-slim AS node
+
+FROM docker.io/kanthorlabs/kanthord:${VERSION}
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+USER root
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ &amp;&amp; ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+USER kanthord</code></pre>
+          <p>
+            The file starts from the kanthord image of your version, so the
+            image keeps the <code>kanthord</code> binary, the user
+            <code>kanthord</code> and its home <code>/var/lib/kanthord</code>.
+            The last line makes <code>kanthord</code> the user again.
+          </p>
+          <p>
+            For another toolchain, add its packages in the same way. Run each
+            install step as <code>root</code>, and end with
+            <code>USER kanthord</code>.
+          </p>
+          <h2 id="2-build-the-image">2. Build the image</h2>
+          <p>
+            In that directory, write your kanthord version in place of
+            <code>&lt;version&gt;</code>:
+          </p>
+          <pre><code class="language-sh">podman build --build-arg VERSION=&lt;version&gt; -t localhost/kanthord-node:&lt;version&gt; .</code></pre>
+          <p>
+            The tag of the new image must be the kanthord version. The server
+            finds the image by that tag.
+          </p>
+          <p>Check the toolchain:</p>
+          <pre><code class="language-sh">podman run --rm --entrypoint node localhost/kanthord-node:&lt;version&gt; --version</code></pre>
+          <p>
+            The command prints the Node.js version, for example
+            <code>v24.15.0</code>.
+          </p>
+          <h2 id="3-use-the-image-for-the-server-container">
+            3. Use the image for the server container
+          </h2>
+          <ol>
+            <li>
+              <p>
+                Remove the server container. The volume keeps the configuration
+                and the data.
+              </p>
+              <pre><code class="language-sh">podman rm -f kanthord</code></pre>
+            </li>
+            <li>
+              <p>
+                Run the command of
+                <a href="run-in-a-container.html#3-start-the-server"
+                  >step 3 of Run kanthord in a container</a
+                >
+                again. Write
+                <code>localhost/kanthord-node:&lt;version&gt;</code> in place of
+                <code>docker.io/kanthorlabs/kanthord:&lt;version&gt;</code>.
+              </p>
+            </li>
+          </ol>
+          <h2 id="4-add-a-toolchain-at-the-container-placement">
+            4. Add a toolchain at the <code>container</code> placement
+          </h2>
+          <p>
+            At the <code>container</code> placement, the image of this guide
+            does not apply. Each container runs the image of the
+            <a
+              href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment"
+              >environment</a
+            >
+            of its repository binding. You build no image. The server builds the
+            environment image, and takes only <code>kanthord</code> and
+            <code>tini</code> from <code>worker.container_image</code>.
+          </p>
+          <p>The commands of this step use these placeholders:</p>
+          <ul>
+            <li>
+              <code>&lt;project-id&gt;</code>: the
+              <strong>Identity</strong> value under <strong>Details</strong> on
+              the project page, for example <code>project_01M5…</code>.
+            </li>
+            <li>
+              <code>&lt;binding-id&gt;</code>: the <code>id</code> of the
+              repository binding that
+              <code
+                >kanthord project binding list &lt;project-id&gt; --kind
+                repository --token &#39;&lt;human token&gt;&#39;</code
+              >
+              prints.
+            </li>
+            <li>
+              <code>&lt;human token&gt;</code>: the token of
+              <a href="../reference/auth/jwt.html">auth jwt generate</a>.
+            </li>
+          </ul>
+          <p>
+            By default, KanthorD selects the toolchain from the repository at
+            the head of the base branch:
+          </p>
+          <ul>
+            <li>
+              A repository with a manifest, such as <code>package.json</code>,
+              <code>pyproject.toml</code>, <code>requirements.txt</code>,
+              <code>go.mod</code>, <code>Cargo.toml</code>,
+              <code>pom.xml</code> or <code>build.gradle</code>, gets the
+              <code>detected</code> environment. A repository with one stack
+              gets the image of that stack. A repository with several stacks
+              gets a base image with one feature for each stack. The document
+              holds the dependency install command of each stack. Node.js gets
+              it only with a lock file. Python gets it only with
+              <code>uv.lock</code>, <code>poetry.lock</code> or
+              <code>requirements.txt</code>.
+            </li>
+            <li>
+              A repository with no manifest gets the
+              <code>universal</code> environment. It holds Node.js 24, Python
+              3.12, Go 1.25 and Java 21, and installs no project dependency.
+            </li>
+          </ul>
+          <p>
+            To use another toolchain, write a devcontainer document, for
+            example:
+          </p>
+          <pre><code class="language-json">{
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "updateContentCommand": "npm ci",
+  "customizations": {
+    "kanthord": {
+      "checks": ["node --version", "npm --version"]
+    }
+  }
+}</code></pre>
+          <p>
+            The image needs <code>bash</code>, glibc, git 2.40 or later and
+            OpenSSH 9.0 or later. The Debian bookworm images under
+            <code>mcr.microsoft.com/devcontainers</code> hold them. An Alpine or
+            a bullseye image fails with <code>image_invalid</code>. Then do one
+            of these steps:
+          </p>
+          <ul>
+            <li>
+              <p>
+                Commit the document as
+                <code>.devcontainer/devcontainer.json</code> to the base branch
+                of the repository.
+              </p>
+            </li>
+            <li>
+              <p>Store the document in the repository binding. Run:</p>
+              <pre><code class="language-sh">kanthord project environment set &lt;project-id&gt; &lt;binding-id&gt; --file devcontainer.json --token '&lt;human token&gt;'</code></pre>
+            </li>
+          </ul>
+          <p>
+            A stored document comes before the repository file, and the
+            repository file comes before the <code>detected</code> environment.
+          </p>
+          <p>
+            The server then builds and proves the environment. Read the status
+            of each repository binding:
+          </p>
+          <pre><code class="language-sh">kanthord project environment list &lt;project-id&gt; --token '&lt;human token&gt;'</code></pre>
+          <p>
+            Wait until <code>status</code> is <code>ready</code>. A container
+            starts only on a <code>ready</code> environment, and no node of the
+            repository starts before it. The status <code>failed</code> holds
+            the cause in <code>failure</code>. See
+            <a
+              href="isolate-worker-instances-in-containers.html#troubleshooting"
+              >Troubleshooting of Isolate worker instances in containers</a
+            >.
+          </p>
+          <h2 id="after-an-upgrade">After an upgrade</h2>
+          <p>
+            Build the image of the new version before you start the new server.
+            Run step 2 with the new version. The configuration stays the same.
+          </p>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    A verification still fails with
+                    <code>npm: command not found</code>
+                  </td>
+                  <td>
+                    The server runs another image. Run
+                    <code
+                      >podman inspect --format &#39;{{.Config.Image}}&#39;
+                      kanthord</code
+                    >.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

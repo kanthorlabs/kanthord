@@ -1,0 +1,29 @@
+:root {
+  --accent: var(--color-teal);
+  --measure: 84ch;
+}
+
+article h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+article h2::before {
+  content: "";
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border: var(--border);
+  border-radius: 4px;
+  transform: rotate(45deg);
+}
+
+article table {
+  font-size: 0.88rem;
+}
+
+article td:first-child > code:only-child {
+  white-space: nowrap;
+}

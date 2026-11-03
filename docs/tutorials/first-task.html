@@ -1,0 +1,1602 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>From a fresh install to the first task · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html" aria-current="true">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../tutorials/index.html">Tutorials</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#what-you-need">What you need</a></li>
+          <li><a href="#the-path-at-a-glance">The path at a glance</a></li>
+          <li><a href="#1-start-kanthord">1. Start KanthorD</a></li>
+          <li>
+            <a href="#2-read-the-onboarding-page"
+              >2. Read the Onboarding page</a
+            >
+          </li>
+          <li>
+            <a href="#3-add-the-llm-credential">3. Add the LLM credential</a>
+          </li>
+          <li><a href="#4-enable-the-agents">4. Enable the agents</a></li>
+          <li><a href="#5-create-the-ssh-key">5. Create the SSH key</a></li>
+          <li><a href="#6-create-the-project">6. Create the project</a></li>
+          <li><a href="#7-bind-the-repository">7. Bind the repository</a></li>
+          <li><a href="#8-bind-the-workers">8. Bind the workers</a></li>
+          <li>
+            <a href="#9-check-the-readiness-panel"
+              >9. Check the readiness panel</a
+            >
+          </li>
+          <li><a href="#10-import-the-plan">10. Import the plan</a></li>
+          <li>
+            <a href="#11-watch-the-first-task">11. Watch the first task</a>
+          </li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+          <li><a href="#read-next">Read next</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="from-a-fresh-install-to-the-first-task">
+            From a fresh install to the first task
+          </h1>
+          <p>
+            This tutorial starts with the install of KanthorD on your machine
+            and ends with the first task of a mission complete. You follow the
+            Onboarding page of the dashboard. The dashboard leads you through
+            each setup step and returns to Onboarding after each save.
+          </p>
+          <p>
+            KanthorD runs on the machine where you already build and test your
+            project. The workers of this tutorial use the
+            <code>server</code> placement: the server runs each worker instance
+            as a thread of the server process. The agent commands and the
+            verifications therefore use the tools of your machine, for example
+            <code>git</code>, <code>node</code> or <code>pytest</code>. You
+            write no environment configuration.
+          </p>
+          <p>At the end, you have these results:</p>
+          <ul>
+            <li>
+              KanthorD runs on your machine, from the npm package or the single
+              binary.
+            </li>
+            <li>
+              Two agents are enabled: <code>swe@1</code> writes the code, and
+              <code>re@1</code> reviews it.
+            </li>
+            <li>
+              A project binds your GitHub repository and two workers:
+              <code>coder@1</code> and <code>reviewer@1</code>.
+            </li>
+            <li>
+              A plan of one node is imported. <code>coder@1</code> pushed a
+              commit to the branch <code>kanthord/&lt;node_id&gt;</code> of your
+              repository, and <code>reviewer@1</code> passed it. The node is
+              <code>Completed</code>.
+            </li>
+          </ul>
+          <p>
+            <strong>Status today:</strong> KanthorD has no public release yet.
+            Until the first release, only a contributor who builds the single
+            binary can do step 1. Steps 2 to 11 are the same for every install.
+          </p>
+          <p>
+            In KanthorD, a <strong>node</strong> is one unit of work of a
+            mission. A <strong>task</strong> is one step of a node. The plan of
+            this tutorial has one <code>implement</code> node with no task file.
+            Such a node is its own single work unit, so &quot;the first
+            task&quot; of this tutorial is that node.
+          </p>
+          <h2 id="what-you-need">What you need</h2>
+          <ul>
+            <li>
+              A Mac with Apple silicon, or a Linux machine with an x64 or arm64
+              CPU. KanthorD supports no Mac with an Intel CPU, with the npm
+              package or with the single binary. A browser on the same machine.
+            </li>
+            <li>
+              For the npm package: Node.js 24, version 24.15.0 or later, with
+              <code>npm</code>. Node.js 25 and later do not run KanthorD. Check
+              it with <code>node --version</code>.
+              <a href="#install-the-single-binary-instead">The single binary</a>
+              needs no Node.js.
+            </li>
+            <li>
+              On that machine: <code>bash</code>, <code>git</code> 2.40 or
+              later, and OpenSSH 9.0 or later with <code>ssh</code>,
+              <code>ssh-agent</code>, <code>ssh-add</code> and
+              <code>ssh-keyscan</code>. The server does not start without them.
+              Check them with <code>git --version</code> and
+              <code>ssh -V</code>. On a Mac, an older Apple git fails the check.
+              Install a newer git, for example with Homebrew.
+            </li>
+            <li>
+              The tools that your project needs to build and test, on the
+              <code>PATH</code> of the terminal that starts the server. The
+              sample plan of step 10 needs only <code>head</code> and
+              <code>grep</code>.
+            </li>
+            <li>
+              A GitHub repository that you can administer. Use a test
+              repository: the agent pushes a branch to it. The repository needs
+              a default branch, for example <code>main</code>.
+            </li>
+            <li>
+              An account at an LLM provider of one of these platforms:
+              <code>anthropic</code>, <code>openrouter</code>,
+              <code>openai-compatible</code>, <code>openai-codex</code>,
+              <code>anthropic-subscription</code> or
+              <code>github-copilot</code>. The dashboard enables an agent only
+              with a credential of these six platforms.
+            </li>
+            <li>
+              Port <code>31415</code> free on <code>127.0.0.1</code>. The server
+              listens there.
+            </li>
+            <li>
+              For the <strong>Browser</strong> mode of the
+              <code>openai-codex</code> sign-in only: port
+              <code>1455</code> free on <code>127.0.0.1</code>. The other
+              sign-ins and the API key platforms do not use it.
+            </li>
+          </ul>
+          <h2 id="the-path-at-a-glance">The path at a glance</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Where</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><a href="#1-start-kanthord">1. Start KanthorD</a></td>
+                  <td>Terminal and browser</td>
+                  <td>The server runs, and the dashboard shows Onboarding.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#2-read-the-onboarding-page"
+                      >2. Read the Onboarding page</a
+                    >
+                  </td>
+                  <td>Dashboard <code>/</code></td>
+                  <td>You know the six setup steps.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#3-add-the-llm-credential"
+                      >3. Add the LLM credential</a
+                    >
+                  </td>
+                  <td>Onboarding step 1</td>
+                  <td>
+                    The server holds the key or the sign-in of the provider.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#4-enable-the-agents">4. Enable the agents</a>
+                  </td>
+                  <td>Onboarding step 2</td>
+                  <td><code>swe@1</code> and <code>re@1</code> are enabled.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#5-create-the-ssh-key">5. Create the SSH key</a>
+                  </td>
+                  <td>Onboarding step 3, GitHub</td>
+                  <td>The repository holds the public key as a deploy key.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#6-create-the-project">6. Create the project</a>
+                  </td>
+                  <td>Onboarding step 4</td>
+                  <td>A project exists.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#7-bind-the-repository">7. Bind the repository</a>
+                  </td>
+                  <td>Onboarding step 5</td>
+                  <td>The project binds the repository.</td>
+                </tr>
+                <tr>
+                  <td><a href="#8-bind-the-workers">8. Bind the workers</a></td>
+                  <td>Onboarding step 6</td>
+                  <td>
+                    The project binds <code>coder</code> and
+                    <code>reviewer</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#9-check-the-readiness-panel"
+                      >9. Check the readiness panel</a
+                    >
+                  </td>
+                  <td>Project page</td>
+                  <td>
+                    Every readiness item is <code>Done</code>, except
+                    <strong>Plan import</strong>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><a href="#10-import-the-plan">10. Import the plan</a></td>
+                  <td>Project page, Mission tab</td>
+                  <td>The mission holds one node.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="#11-watch-the-first-task"
+                      >11. Watch the first task</a
+                    >
+                  </td>
+                  <td>Project page, GitHub</td>
+                  <td>
+                    The node is <code>Completed</code>, and the branch holds the
+                    change.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="1-start-kanthord">1. Start KanthorD</h2>
+          <p>
+            The npm package and the single binary contain the server, the CLI
+            and the dashboard. Neither needs a container runtime.
+          </p>
+          <h3 id="11-install-kanthord">1.1 Install KanthorD</h3>
+          <p>
+            Today the package is not published. Until the first release, use the
+            single binary below.
+          </p>
+          <p>After the first release, install the npm package:</p>
+          <pre><code class="language-sh">npm i -g @kanthorlabs/kanthord
+kanthord --help</code></pre>
+          <p>
+            The package installs the command <code>kanthord</code>. The first
+            release of the package holds the dashboard and the pinned
+            <code>rg</code> and <code>fd</code> tools of your platform.
+          </p>
+          <h4 id="install-the-single-binary-instead">
+            Install the single binary instead
+          </h4>
+          <p>
+            The single binary needs no Node.js. Get the binary for your machine
+            and <code>SHA256SUMS</code> from the
+            <a href="https://github.com/kanthorlabs/kanthord/releases"
+              >releases page</a
+            >: <code>kanthord-darwin-arm64</code>,
+            <code>kanthord-linux-x64</code> or
+            <code>kanthord-linux-arm64</code>.
+          </p>
+          <p>
+            Today the releases page holds no release. Until the first release,
+            only a contributor can build the binary from a checkout of this
+            repository. See
+            <a href="https://github.com/kanthorlabs/kanthord#contribute"
+              >Contribute</a
+            >.
+          </p>
+          <p>A contributor build works as follows:</p>
+          <ul>
+            <li>
+              Run <code>make bootstrap</code>, then
+              <code>make release-build</code>.
+            </li>
+            <li>
+              The build needs an official Node.js 24 build, 24.15 or later, and
+              <code>pnpm</code>. On a Mac, it also needs <code>codesign</code>,
+              and it refuses a Node.js of Homebrew.
+            </li>
+            <li>
+              The file is then
+              <code>dist/kanthord-&lt;os&gt;-&lt;arch&gt;</code> of the
+              checkout, for example <code>dist/kanthord-darwin-arm64</code>. Run
+              the install commands below in <code>dist/</code>.
+            </li>
+          </ul>
+          <p>
+            If you downloaded the file, check it against
+            <code>SHA256SUMS</code> and unlock it. A file that you built needs
+            neither step. On a Mac:
+          </p>
+          <pre><code class="language-sh">shasum -a 256 --ignore-missing -c SHA256SUMS
+xattr -d com.apple.quarantine kanthord-darwin-arm64</code></pre>
+          <p>
+            The <code>xattr</code> command removes the macOS quarantine flag.
+            Otherwise macOS refuses to start the binary. A file with no
+            quarantine flag, for example a download with <code>curl</code>,
+            makes <code>xattr</code> print <code>No such xattr</code>. That
+            message is harmless. On Linux, run
+            <code>sha256sum --ignore-missing -c SHA256SUMS</code>.
+          </p>
+          <p>
+            Copy the binary to a directory on your <code>PATH</code>. On a Mac:
+          </p>
+          <pre><code class="language-sh">sudo mkdir -p /usr/local/bin
+sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord
+kanthord --help</code></pre>
+          <p>
+            On Linux, use the name of your file, for example
+            <code>kanthord-linux-x64</code>.
+          </p>
+          <h3 id="12-create-the-configuration">1.2 Create the configuration</h3>
+          <pre><code class="language-sh">kanthord config init</code></pre>
+          <p>
+            The command writes <code>~/.config/kanthord/kanthord.yaml</code>.
+            The default configuration listens on
+            <code>127.0.0.1:31415</code> and accepts the
+            <code>Host</code> values <code>127.0.0.1:31415</code> and
+            <code>localhost:31415</code>. <code>config init</code> does not
+            replace an existing file. See
+            <a href="../reference/config/init.html">config init</a>.
+          </p>
+          <h3 id="13-start-the-server">1.3 Start the server</h3>
+          <p>
+            Start the server from a terminal whose <code>PATH</code> holds the
+            tools of your project. For example, activate the virtualenv of a
+            Python project first, then start the server in that terminal. The
+            worker instances of the <code>server</code> placement inherit the
+            <code>PATH</code> of the server.
+          </p>
+          <p>
+            The worker passes only these variables of the server to a command:
+            <code>PATH</code>, <code>HOME</code>, <code>USER</code>,
+            <code>LOGNAME</code>, <code>SHELL</code>, <code>LANG</code>,
+            <code>LC_ALL</code>, <code>LC_CTYPE</code>, <code>TZ</code>,
+            <code>TMPDIR</code>, <code>GIT_AUTHOR_NAME</code>,
+            <code>GIT_AUTHOR_EMAIL</code>, <code>GIT_COMMITTER_NAME</code> and
+            <code>GIT_COMMITTER_EMAIL</code>. A tool that needs another
+            variable, for example <code>JAVA_HOME</code>, does not get it. The
+            worker sets <code>XDG_CONFIG_HOME</code>,
+            <code>XDG_STATE_HOME</code>, <code>XDG_DATA_HOME</code> and
+            <code>XDG_CACHE_HOME</code> to directories of the instance. A tool
+            that reads its configuration through these variables therefore does
+            not find your configuration.
+          </p>
+          <pre><code class="language-sh">GIT_AUTHOR_NAME="&lt;git name&gt;" GIT_AUTHOR_EMAIL="&lt;git email&gt;" GIT_COMMITTER_NAME="&lt;git name&gt;" GIT_COMMITTER_EMAIL="&lt;git email&gt;" kanthord serve</code></pre>
+          <ul>
+            <li>
+              The <code>GIT_*</code> variables set the identity of the commits
+              that the agents make. The worker reads no git configuration of
+              your machine. Without the variables, a commit has the author and
+              the committer <code>kanthord &lt;kanthord@localhost&gt;</code>.
+              The worker makes every commit of the node branch, so your
+              <code>~/.gitconfig</code> does not set the identity. A
+              <code>git</code> command that an agent runs itself can still read
+              <code>~/.gitconfig</code>, because the command gets your
+              <code>HOME</code>. An agent commit does not stay on the branch:
+              after each turn, the worker folds it into the worker commit, with
+              the identity of the <code>GIT_*</code> variables.
+            </li>
+            <li>
+              Keep this terminal open. The server writes its log records to this
+              terminal. To stop the server, press <code>Ctrl+C</code>.
+            </li>
+          </ul>
+          <p>
+            The record
+            <code
+              >&quot;msg&quot;:&quot;Gateway Service started. A loopback bind
+              accepts connections from this host only.&quot;</code
+            >
+            has the level <code>info</code>, that is
+            <code>&quot;level&quot;:30</code>, and the fields
+            <code>bind</code> and <code>port</code>. On your machine,
+            <code>bind</code> is <code>127.0.0.1</code> and <code>port</code> is
+            <code>31415</code>.
+          </p>
+          <h3 id="14-sign-in">1.4 Sign in</h3>
+          <p>In a second terminal, get a human token:</p>
+          <pre><code class="language-sh">kanthord auth jwt generate &lt;your username&gt;</code></pre>
+          <p>
+            The command prints <code>token: &lt;jwt&gt;</code>. It prints a
+            token only to a terminal. See
+            <a href="../reference/auth/jwt.html">auth jwt generate</a>.
+          </p>
+          <ol>
+            <li>Open <code>http://localhost:31415/</code>.</li>
+            <li>
+              Keep the Endpoint value. The dashboard fills it with the address
+              of the page.
+            </li>
+            <li>
+              Paste the token into <strong>JWT token</strong>, then select
+              <strong>Login</strong>.
+            </li>
+          </ol>
+          <p>
+            After the sign-in, the dashboard opens <code>/</code>. A fresh
+            install has no setup, so <code>/</code> shows the
+            <strong>Onboarding</strong> page.
+          </p>
+          <h2 id="2-read-the-onboarding-page">2. Read the Onboarding page</h2>
+          <p>
+            The Onboarding page lists six setup steps in a fixed order. Each
+            step shows a badge and one action button:
+          </p>
+          <ul>
+            <li>
+              <code>Done</code>: the setup of the step exists. A credential
+              counts only while it is live, that is, not archived.
+            </li>
+            <li>
+              <code>Next</code>: the first step that is not done. Do this step
+              now.
+            </li>
+            <li><code>Open</code>: a later step that is not done.</li>
+          </ul>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Action button</th>
+                  <th>The step is <code>Done</code> when</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1. LLM credential</td>
+                  <td><strong>New LLM credential</strong></td>
+                  <td>A live LLM credential exists.</td>
+                </tr>
+                <tr>
+                  <td>2. Enabled agents</td>
+                  <td>
+                    <strong>Enable agents</strong>;
+                    <strong>Enable re@1</strong> on a fresh install, until a
+                    live LLM credential of an agent platform exists
+                  </td>
+                  <td>At least one agent is enabled.</td>
+                </tr>
+                <tr>
+                  <td>3. SSH key</td>
+                  <td><strong>Create SSH key</strong></td>
+                  <td>
+                    A live Git credential of platform <code>ssh</code> exists.
+                  </td>
+                </tr>
+                <tr>
+                  <td>4. Project</td>
+                  <td><strong>New project</strong></td>
+                  <td>A project exists.</td>
+                </tr>
+                <tr>
+                  <td>5. Repository binding</td>
+                  <td>
+                    <strong>Open bindings</strong>, or
+                    <strong>New project</strong> while no project exists
+                  </td>
+                  <td>The project holds a repository binding.</td>
+                </tr>
+                <tr>
+                  <td>6. Worker bindings</td>
+                  <td>
+                    <strong>Open bindings</strong>, or
+                    <strong>New project</strong> while no project exists
+                  </td>
+                  <td>The project holds a worker binding.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each action opens the screen or the sheet of the step. After a
+            successful save, the dashboard returns to <code>/</code>. While a
+            step is not done, <code>/</code> shows Onboarding. When every step
+            is <code>Done</code>, <code>/</code> shows
+            <strong>Overview</strong>.
+          </p>
+          <p>
+            <strong>Skip onboarding</strong> shows Overview in this browser
+            only. The browser keeps the choice until you select
+            <strong>Resume onboarding</strong>. While a step is not done,
+            Overview then shows the link <strong>Resume onboarding</strong>. The
+            link shows Onboarding again.
+          </p>
+          <h2 id="3-add-the-llm-credential">3. Add the LLM credential</h2>
+          <p>The agents call a model with this credential.</p>
+          <ol>
+            <li>
+              On step 1, select <strong>New LLM credential</strong>. The
+              <strong>New credential</strong> form opens.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>claude</code>.
+              Start with a lowercase letter. Use only lowercase letters, digits
+              and hyphens.
+            </li>
+            <li>
+              Choose the <strong>Platform</strong>. The list has three groups:
+              <ul>
+                <li>
+                  <strong>Checked before save</strong>: an API key platform. The
+                  form can check the key before the create. Of this group, only
+                  <code>anthropic</code>, <code>openrouter</code> and
+                  <code>openai-compatible</code> serve an agent.
+                  <code>openai</code> and <code>opencode-go</code> do not. A
+                  credential of another platform makes step 1 <code>Done</code>,
+                  but
+                  <a href="#4-enable-the-agents">4. Enable the agents</a> cannot
+                  use it.
+                </li>
+                <li>
+                  <strong>Sign in with an account</strong>:
+                  <code>openai-codex</code>,
+                  <code>anthropic-subscription</code> and
+                  <code>github-copilot</code>. The server stores the credential
+                  when the sign-in completes.
+                </li>
+                <li>
+                  <strong>Not checked before save</strong>: the other platforms.
+                  An agent cannot use them.
+                </li>
+              </ul>
+            </li>
+          </ol>
+          <p>For an API key platform, for example <code>anthropic</code>:</p>
+          <ol>
+            <li>Paste the key into <strong>API Key</strong>.</li>
+            <li>
+              Select <strong>Verify</strong>. The badge shows
+              <code>Healthy</code> for a key that the provider accepts.
+            </li>
+            <li>
+              Select <strong>Create credential</strong>. The dashboard shows
+              &quot;Created claude.&quot; and returns to Onboarding. Step 1 is
+              <code>Done</code>.
+            </li>
+          </ol>
+          <p>
+            When the badge shows <code>Unhealthy</code>, the form shows a hint
+            below it. For a refused key, the hint is &quot;The provider refused
+            the API key or the access token. Correct the key, or sign in again
+            for a new token. Then verify again.&quot;
+            <strong>Create credential</strong> then asks &quot;Create the
+            credential with an unhealthy secret?&quot;. Select
+            <strong>Keep editing</strong>, correct the key and select
+            <strong>Verify</strong> again. With <strong>Create anyway</strong>,
+            every agent session that uses the credential fails.
+          </p>
+          <p>For <code>openai-codex</code>:</p>
+          <ol>
+            <li>
+              In <strong>Sign-in Mode</strong>, choose the mode, then select
+              <strong>Start sign-in</strong>. The mode cannot change after the
+              sign-in starts.
+              <ul>
+                <li>
+                  <strong>Browser</strong>: the server listens on
+                  <code>127.0.0.1:1455</code> of your machine. The provider
+                  sends the browser back to
+                  <code>http://localhost:1455/auth/callback</code>. The provider
+                  fixes the port, so the mode needs port 1455 free. A Codex CLI
+                  sign-in on the same machine uses the same port, so do not run
+                  both at the same time.
+                </li>
+                <li>
+                  <strong>Headless (device code)</strong>: the mode needs no
+                  port 1455. Use it when port 1455 is not free.
+                </li>
+              </ul>
+            </li>
+            <li>
+              Select <strong>Open sign-in page</strong>, and sign in at the
+              provider.
+            </li>
+            <li>
+              When the sign-in completes, the dashboard shows &quot;Signed in.
+              Custody stored &lt;name&gt;.&quot; and returns to Onboarding.
+            </li>
+          </ol>
+          <p>
+            When the callback page does not load, copy the address of that page.
+            In the sign-in panel, select <strong>The callback failed?</strong>.
+            Paste the address into <strong>Code or Redirect URL</strong>, then
+            select <strong>Send code</strong>.
+          </p>
+          <p>
+            For <code>anthropic-subscription</code>, the sign-in has one mode:
+            you copy a code from the provider page. It needs no port 1455.
+          </p>
+          <ol>
+            <li>
+              Select <strong>Start sign-in</strong>. The sign-in panel shows the
+              address and the field <strong>Paste code</strong>.
+            </li>
+            <li>
+              Select <strong>Open sign-in page</strong>. Sign in to the
+              Anthropic account, then approve the access.
+            </li>
+            <li>
+              The provider page shows a code of the form
+              <code>code#state</code>. Copy the whole value.
+            </li>
+            <li>
+              Paste the value into <strong>Paste code</strong>, then select
+              <strong>Send code</strong>.
+            </li>
+            <li>
+              The dashboard shows &quot;Signed in. Custody stored
+              &lt;name&gt;.&quot; and returns to Onboarding.
+            </li>
+          </ol>
+          <p>
+            Do steps 1 to 4 within 15 minutes of <strong>Start sign-in</strong>.
+            After 15 minutes, the session expires, and the panel shows
+            <strong>Start again</strong>.
+          </p>
+          <p>
+            For <code>github-copilot</code>, select
+            <strong>Start sign-in</strong> and follow the steps of the sign-in
+            panel. When the sign-in completes, the dashboard shows &quot;Signed
+            in. Custody stored &lt;name&gt;.&quot; and returns to Onboarding.
+          </p>
+          <h2 id="4-enable-the-agents">4. Enable the agents</h2>
+          <p>
+            <code>coder@1</code> uses the agent <code>swe@1</code>, and
+            <code>reviewer@1</code> uses the agent <code>re@1</code>. The server
+            refuses a worker binding whose agent is not enabled, so enable both
+            agents now.
+          </p>
+          <ol>
+            <li>
+              On step 2, select <strong>Enable agents</strong>. The page of the
+              LLM credential opens with the sheet
+              <strong>Enable agents with claude</strong>.
+            </li>
+            <li>
+              The sheet lists each agent that is not enabled:
+              <code>re@1</code> and <code>swe@1</code>. Keep both switches on.
+            </li>
+            <li>
+              <strong>Model identifier</strong> shows the first model of the
+              credential. To use another model, choose it.
+            </li>
+            <li>
+              <strong>Reasoning effort</strong> shows <code>medium</code> when
+              the model supports it. Otherwise choose a value. The list holds
+              the effort levels of the model.
+            </li>
+            <li>
+              Select <strong>Enable agents</strong>. The dashboard shows
+              &quot;Enabled re@1 at revision 1. Enabled swe@1 at revision
+              1.&quot; and returns to Onboarding.
+            </li>
+          </ol>
+          <p>
+            The sheet gives each agent an agent provider for the credential and
+            a default configuration with that model and effort. A worker binding
+            uses this default configuration.
+          </p>
+          <p>
+            When the credential check answers <code>unhealthy</code>,
+            <strong>Enable agents</strong> asks &quot;Enable re@1 and swe@1 with
+            an unhealthy credential?&quot;. Select
+            <strong>Keep editing</strong> and close the sheet. Select
+            <strong>Rotate secret</strong> on the credential page, then select
+            <strong>Enable agents</strong> again.
+          </p>
+          <p>
+            Step 2 can show <strong>Enable re@1</strong> or
+            <strong>Enable swe@1</strong> in place of
+            <strong>Enable agents</strong>. Then no live LLM credential has one
+            of the six agent platforms. Before the worker bindings exist, the
+            button names <code>re@1</code>, the first agent in name order. It
+            opens the page of the agent, not the sheet. Add a credential of one
+            of those platforms. The other credential can stay. See
+            <a href="#what-you-need">What you need</a>.
+          </p>
+          <h2 id="5-create-the-ssh-key">5. Create the SSH key</h2>
+          <p>
+            The server reads and pushes the repository over SSH. The server
+            creates the SSH key and keeps the private key encrypted. You copy
+            only the public key.
+          </p>
+          <ol>
+            <li>
+              On step 3, select <strong>Create SSH key</strong>. The
+              <strong>Git</strong> credentials screen opens with the sheet
+              <strong>Create SSH key</strong>.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>app</code>, and
+              select <strong>Create SSH key</strong>.
+            </li>
+            <li>
+              The sheet shows the <strong>Public key</strong> and its
+              <strong>Fingerprint</strong>. Select <strong>Copy</strong>.
+            </li>
+            <li>
+              Add the public key to the GitHub repository as a deploy key with
+              <strong>Allow write access</strong>.
+              <a
+                href="../how-to-guides/run-in-a-container.html#5-connect-a-repository"
+                >Connect a repository</a
+              >
+              shows the GitHub screens.
+            </li>
+            <li>
+              In the dashboard, select <strong>Done</strong>. The dashboard
+              returns to Onboarding.
+            </li>
+          </ol>
+          <p>
+            Add the deploy key before step 7. Without it, the check of the
+            binding answers &quot;The repository host refused the SSH key.&quot;
+          </p>
+          <h2 id="6-create-the-project">6. Create the project</h2>
+          <ol>
+            <li>On step 4, select <strong>New project</strong>.</li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>first</code>, and
+              select <strong>Create project</strong>.
+            </li>
+          </ol>
+          <p>
+            The dashboard returns to Onboarding. A new project is active: it
+            runs its nodes as soon as they are ready.
+          </p>
+          <h2 id="7-bind-the-repository">7. Bind the repository</h2>
+          <p>
+            A repository binding connects the project to the repository under a
+            name. The plan of step 10 names this binding.
+          </p>
+          <ol>
+            <li>
+              On step 5, select <strong>Open bindings</strong>. The project page
+              opens on the <strong>Bindings</strong> tab.
+            </li>
+            <li>
+              Select <strong>Add</strong> in the
+              <strong>Repositories</strong> section.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>app</code>. Keep
+              the <strong>Platform</strong> <code>GitHub</code>.
+            </li>
+            <li>
+              Complete <strong>Address</strong> as
+              <code>git@github.com:&lt;owner&gt;/&lt;repository&gt;.git</code>.
+            </li>
+            <li>
+              The sheet pins the host key of <code>github.com</code>. Compare
+              the fingerprint as
+              <a
+                href="../how-to-guides/run-in-a-container.html#5-connect-a-repository"
+                >Connect a repository</a
+              >
+              shows.
+            </li>
+            <li>
+              Choose the <strong>SSH credential</strong> of step 5, for example
+              <code>app</code>.
+            </li>
+            <li>
+              Keep <strong>Base branch</strong> <code>main</code>, or enter the
+              default branch of the repository.
+            </li>
+            <li>
+              Keep <strong>External action</strong>
+              <code>No external action</code>.
+            </li>
+            <li>
+              Select <strong>Verify</strong>. Both lines show
+              <strong>Healthy</strong>: <strong>Address · Healthy</strong> and
+              <strong>SSH credential · Healthy</strong>.
+            </li>
+            <li>
+              Select <strong>Save binding</strong>. The dashboard returns to
+              Onboarding.
+            </li>
+          </ol>
+          <p>
+            With <code>No external action</code>, a passing review completes the
+            node. The change stays on the node branch, and you merge it
+            yourself.
+          </p>
+          <h2 id="8-bind-the-workers">8. Bind the workers</h2>
+          <p>
+            A worker binding turns on one worker for the project. The project
+            needs two: <code>coder@1</code> does the work, and
+            <code>reviewer@1</code> judges it. Each binding lists its worker
+            instances. A worker instance runs one execution at a time, so one
+            instance of each worker is enough for this tutorial.
+          </p>
+          <p>Add the <code>coder</code> binding from Onboarding:</p>
+          <ol>
+            <li>
+              On step 6, select <strong>Open bindings</strong>. The project page
+              opens on the <strong>Bindings</strong> tab.
+            </li>
+            <li>
+              Select <strong>Add</strong> in the
+              <strong>Workers</strong> section.
+            </li>
+            <li>Enter a <strong>Name</strong>: <code>coder</code>.</li>
+            <li>Choose the <strong>Worker</strong> <code>coder@1</code>.</li>
+            <li>
+              Wait until the <strong>Agents</strong> section shows
+              <code>swe@1</code> with the badge <code>Enabled</code>.
+              <strong>Save binding</strong> stays off until the agents load.
+            </li>
+            <li>
+              Beside <strong>Instances</strong>, select
+              <strong>Add instance</strong>. Enter the name
+              <code>coder-1</code>, keep <strong>Placement</strong>
+              <code>Server</code>, and select <strong>Create instance</strong>.
+              The <strong>Container</strong> option is on when rootless Podman
+              or Docker runs on your machine. Otherwise it shows the cause. Keep
+              <code>Server</code> in both cases.
+            </li>
+            <li>
+              Check that <strong>Instances</strong> shows
+              <code>coder-1 · server</code> selected.
+            </li>
+            <li>Select <strong>Save binding</strong>.</li>
+          </ol>
+          <p>
+            Every Onboarding step is now <code>Done</code>, so the dashboard
+            returns to <code>/</code> and shows <strong>Overview</strong>.
+            Onboarding counts one worker binding as enough, but the first task
+            needs both. Add the <code>reviewer</code> binding now.
+          </p>
+          <p>Add the <code>reviewer</code> binding on the project page:</p>
+          <ol>
+            <li>
+              Open <strong>Projects</strong>, then the project
+              <code>first</code>, then the <strong>Bindings</strong> tab.
+            </li>
+            <li>
+              Select <strong>Add</strong> in the
+              <strong>Workers</strong> section.
+            </li>
+            <li>
+              Enter the <strong>Name</strong> <code>reviewer</code>, and choose
+              the <strong>Worker</strong> <code>reviewer@1</code>.
+            </li>
+            <li>
+              Beside <strong>Instances</strong>, select
+              <strong>Add instance</strong>. Enter the name
+              <code>reviewer-1</code>, keep <strong>Placement</strong>
+              <code>Server</code>, and select <strong>Create instance</strong>.
+            </li>
+            <li>
+              Select <strong>Save binding</strong>. The sheet closes, and the
+              project page stays open.
+            </li>
+          </ol>
+          <p>
+            At the <code>server</code> placement, the server runs each instance
+            as a thread from its create until its archive. You start no process
+            and generate no token. To run more work at once later, add another
+            instance, for example <code>coder-2</code>, and list it in the
+            binding. The agent commands and the verifications run as your OS
+            user, with the tools on the <code>PATH</code> of the server.
+          </p>
+          <p>
+            At the <code>server</code> placement, an agent command can read
+            every file that your OS user can read. That includes the database
+            and the configuration of the server, and the keys under
+            <code>~/.ssh</code>. The configuration holds the
+            <code>master_key</code>, so a command can read every credential of
+            the server. A command can also stop the server process. KanthorD
+            removes <code>SSH_AUTH_SOCK</code> and
+            <code>SSH_AGENT_PID</code> from each command, so a command does not
+            find the SSH agent of your user through its environment. A command
+            can still open the agent socket by its path. Use a test repository,
+            and bind only a repository that you trust. See
+            <a href="../explanation/worker.html#where-a-worker-runs"
+              >Where a worker runs</a
+            >.
+          </p>
+          <p>
+            The placement belongs to the instance, and it never changes. The
+            other placements:
+          </p>
+          <ul>
+            <li>
+              <code>container</code>: the instance runs in its own container on
+              this machine, with Podman or Docker. The container holds no file
+              of your machine, and its image holds only the tools of the image.
+              Use it when an agent command must not read the files of your user.
+              See
+              <a
+                href="../how-to-guides/isolate-worker-instances-in-containers.html"
+                >Isolate worker instances in containers</a
+              >.
+            </li>
+            <li>
+              <code>worker</code>: the instance is a
+              <code>kanthord serve worker</code> process on this or another
+              host. Use it to run the instance on another machine, for example
+              one with the toolchain of the project. See
+              <a
+                href="../how-to-guides/run-in-a-container.html#8-run-a-worker-on-another-host"
+                >Run a worker on another host</a
+              >. To move <code>coder</code> or <code>reviewer</code> to that
+              placement later, see
+              <a
+                href="../how-to-guides/run-in-a-container.html#move-a-binding-to-a-worker-instance"
+                >Move a binding to a worker instance</a
+              >.
+            </li>
+          </ul>
+          <p>
+            That guide starts from a server in a container. With the binary, two
+            steps differ:
+          </p>
+          <ul>
+            <li>Read the version with <code>kanthord --version</code>.</li>
+            <li>
+              For an instance on another host, set <code>gateway.bind</code> in
+              <code>~/.config/kanthord/kanthord.yaml</code> to an address of
+              your network. Then start the server again.
+            </li>
+          </ul>
+          <p>
+            Add both bindings before the import. The import refuses a node when
+            no worker binding can claim one of its states.
+            <code>coder@1</code> claims a node in <code>Available</code>.
+            <code>reviewer@1</code> claims it in <code>Waiting</code>, and in
+            <code>External.Requested</code> after an external action such as a
+            pull request.
+          </p>
+          <h2 id="9-check-the-readiness-panel">9. Check the readiness panel</h2>
+          <p>
+            The project page shows the <strong>Readiness</strong> panel above
+            the tabs. The panel lists each <code>Open</code> item with a link to
+            its fix. The badge beside the heading shows the count of open items,
+            or <code>Ready</code> when no item is open. Select
+            <strong>&lt;n&gt; done steps</strong> to show the
+            <code>Done</code> items.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th><code>Done</code> when</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Repository binding</td>
+                  <td>The project holds a repository binding.</td>
+                </tr>
+                <tr>
+                  <td>Worker bindings</td>
+                  <td>The project holds a worker binding.</td>
+                </tr>
+                <tr>
+                  <td>Live registrations</td>
+                  <td>
+                    Each worker binding with an instance count above 0 has a
+                    live registration. The instance count is the count of listed
+                    instances.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Enabled agents</td>
+                  <td>Every agent of the worker bindings is enabled.</td>
+                </tr>
+                <tr>
+                  <td>Plan import</td>
+                  <td>The mission holds a node.</td>
+                </tr>
+                <tr>
+                  <td>Project active</td>
+                  <td>The project is not paused.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every item is now <code>Done</code>, except
+            <strong>Plan import</strong>. The server starts the instances after
+            the save of each binding. When
+            <strong>Live registrations</strong> shows <code>Open</code>, reload
+            the page after a few seconds.
+          </p>
+          <h2 id="10-import-the-plan">10. Import the plan</h2>
+          <p>
+            A plan file describes one node: what to build, how to judge it and
+            which commands check it.
+          </p>
+          <ol>
+            <li>
+              Open the <strong>Mission</strong> tab. The tab shows &quot;The
+              mission holds no nodes.&quot;
+            </li>
+            <li>
+              Select <strong>Download a sample plan</strong>. The browser saves
+              <code>sample-plan.md</code>.
+            </li>
+          </ol>
+          <p>
+            With exactly one repository binding, the sample names it. Import the
+            file unchanged. With the binding <code>app</code>, the file is:
+          </p>
+          <pre><code class="language-text">---
+intent: implement
+depends_on: []
+tags: []
+bindings:
+  - app
+verifications:
+  - "head -n 1 HEALTH.md | grep -qx 'status: ok'"
+---
+# Add a HEALTH.md file
+
+## Requirement
+
+Add a file HEALTH.md at the root of the repository that reports the status of the project.
+
+## Criterion
+
+The first line of HEALTH.md is exactly `status: ok`, with no trailing spaces.</code></pre>
+          <p>
+            The verification exits <code>0</code> only when the first line of
+            <code>HEALTH.md</code> is exactly <code>status: ok</code>. At the
+            <code>server</code> placement, the worker runs each verification
+            with <code>bash -c</code> on your machine, with the
+            <code>PATH</code> of the server. macOS and Linux hold
+            <code>head</code> and <code>grep</code>, so the verification runs
+            there. A plan for your own project can use the commands that you run
+            in your terminal, for example <code>npm test</code> or
+            <code>pytest</code>.
+          </p>
+          <p>Import the file:</p>
+          <ol>
+            <li>
+              On the <strong>Mission</strong> tab, select
+              <strong>Import</strong>. The sheet
+              <strong>Import mission</strong> opens.
+            </li>
+            <li>
+              In <strong>Plan files</strong>, choose
+              <code>sample-plan.md</code>.
+            </li>
+            <li>
+              Enter a <strong>Reason</strong>, for example
+              <code>First task</code>. Every node revision records it.
+            </li>
+            <li>
+              Select <strong>Preview</strong>. <strong>Creates</strong> lists
+              <code>sample-plan.md</code>, and no violation shows.
+            </li>
+            <li>Select <strong>Apply import</strong>.</li>
+          </ol>
+          <p>
+            The mission graph shows the node
+            <strong>Add a HEALTH.md file</strong> with the intent
+            <code>implement</code>. The readiness panel does not refresh after
+            the import. Reload the page. The <strong>Plan import</strong> item
+            then shows &quot;The mission holds 1 node.&quot;
+          </p>
+          <p>
+            An import replaces the whole mission. A later import retires each
+            current node that it does not name by its <code>id</code>. A retired
+            node leaves the mission, and a later import cannot name its
+            <code>id</code> again. To keep the current nodes and add new ones:
+          </p>
+          <ol>
+            <li>
+              On the <strong>Mission</strong> tab, select
+              <strong>Export Markdown</strong>. The browser saves a zip file.
+              Each file in it holds the <code>id</code> of its node or task.
+            </li>
+            <li>
+              Unpack the zip file. <strong>Plan files</strong> accepts
+              <code>.md</code> files, or one <code>.json</code> mission export,
+              not a zip file.
+            </li>
+            <li>
+              Select <strong>Import</strong>. In <strong>Plan files</strong>,
+              choose the exported files and the new plan files together.
+            </li>
+            <li>
+              Enter a <strong>Reason</strong>, then select
+              <strong>Preview</strong>.
+            </li>
+            <li>
+              Check that <strong>Retirements</strong> shows &quot;No node
+              retires.&quot; Then select <strong>Apply import</strong>.
+            </li>
+          </ol>
+          <h2 id="11-watch-the-first-task">11. Watch the first task</h2>
+          <p>
+            The node has no dependency, so it is <code>Available</code> at once.
+            A worker claims the node in one state, and the node then moves to
+            the state of the work. The Mission Service sets every state, from
+            the claim, the release or the assessment of a worker:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>What happens</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Available</code></td>
+                  <td>The node waits for <code>coder@1</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Executing</code></td>
+                  <td>
+                    <code>coder@1</code> claimed the node in
+                    <code>Available</code>. <code>swe@1</code> edits the files,
+                    and <code>coder@1</code> commits and runs the verification.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Waiting</code></td>
+                  <td>
+                    <code>coder@1</code> pushed the branch
+                    <code>kanthord/&lt;node_id&gt;</code> and recorded its head
+                    commit. The node waits for <code>reviewer@1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Evaluating</code></td>
+                  <td>
+                    <code>reviewer@1</code> claimed the node in
+                    <code>Waiting</code>. It checks out the commit, runs the
+                    verification again, and <code>re@1</code> judges the
+                    criterion.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Completed</code></td>
+                  <td>
+                    The assessment of <code>reviewer@1</code> is
+                    <code>success</code>. With no external action, the Mission
+                    Service completes the node.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <strong>Mission</strong> tab does not refresh by itself. Reload
+            the page to see the current state. Select the node to open its
+            sheet. The <strong>Attempts</strong> tab shows the executions, the
+            assessments and the outcomes of each attempt.
+          </p>
+          <p>
+            When the node is <code>Completed</code>, open the repository on
+            GitHub. The branch <code>kanthord/&lt;node_id&gt;</code> holds the
+            commit that adds <code>HEALTH.md</code>. Merge it into the base
+            branch yourself, for example with a pull request.
+          </p>
+          <p>A node can also stop in two other states:</p>
+          <ul>
+            <li>
+              <code>Blocked</code>: the assessment is <code>undetermined</code>,
+              or the attempt got its third <code>criterion-not-met</code>. The
+              <strong>Attempts</strong> tab shows the rationale of each
+              assessment. Fix the cause, then select <strong>Unblock</strong> on
+              the <strong>Details</strong> tab of the node sheet.
+            </li>
+            <li>
+              <code>Paused</code>: three executions in a row failed, or three
+              executions in a row ended at their budget with no task done. A
+              provider failure with the code <code>rate_limited</code>,
+              <code>quota_exhausted</code> or <code>unavailable</code> does not
+              count as a failed execution. See
+              <a href="#provider-failures">Provider failures</a>. On the
+              <strong>Attempts</strong> tab, select <strong>Records</strong> on
+              the attempt. The <strong>Executions</strong> list shows the stop
+              of each execution, and a <strong>Cause:</strong> line when the
+              stop holds a cause. Fix the cause, then select
+              <strong>Resume</strong> on the <strong>Details</strong> tab of the
+              node sheet.
+            </li>
+          </ul>
+          <p>
+            <a href="../explanation/worker.html#the-life-of-an-implement-node"
+              >How a worker works</a
+            >
+            explains every state and the limits.
+          </p>
+          <h3 id="provider-failures">Provider failures</h3>
+          <p>
+            When the provider of the model fails a call, the execution ends with
+            a provider failure. Each attempt on the
+            <strong>Attempts</strong> tab shows the end of its last execution,
+            for example
+            <strong
+              >Last execution ended 2026-10-20 03:28 UTC: Provider failed:
+              unavailable</strong
+            >. The label writes the code in words, for example
+            <code>rate_limited</code> as <strong>rate limited</strong>. When the
+            last execution was lost, the line shows its deadline
+            <code>expired_at</code>, for example
+            <strong>Last execution ended 2026-10-20 03:28 UTC: lost</strong>.
+            When it ended with no stop, the line is, for example,
+            <strong>Last execution ended 2026-10-20 03:28 UTC: no stop</strong>,
+            with no <strong>Cause:</strong> line. The line
+            <strong>Cause:</strong> below it holds the provider error text, for
+            example
+            <code
+              >OAuth auth derivation failed for anthropic: Cannot find module
+              &#39;...&#39;</code
+            >
+            for the code <code>unavailable</code>. The worker removes the
+            secrets and cuts the text to 300 characters. Select
+            <strong>Records</strong> on the attempt. The
+            <strong>Executions</strong> list shows the stop of each execution,
+            the earlier ones included, and a <strong>Cause:</strong> line when
+            the stop holds a cause. The <strong>Failed</strong> and
+            <strong>History</strong> tabs of the <strong>Scheduler</strong> page
+            and the What section of the <strong>Overview</strong> detail of a
+            <code>Paused</code> node in the tab <strong>Resume</strong> show the
+            same cause. An error that the agent session throws before the
+            provider answers, for example <code>No API key found</code>, is no
+            provider failure. It shows as <strong>Operation failed</strong> with
+            a <strong>Cause:</strong> line.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>rate_limited</code></td>
+                  <td>
+                    Starts a cooldown of the LLM credential. The first cooldown
+                    lasts 60 s.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unavailable</code></td>
+                  <td>
+                    Starts a cooldown of the LLM credential. The first cooldown
+                    lasts 60 s.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>quota_exhausted</code></td>
+                  <td>
+                    Starts a cooldown of the LLM credential. The first cooldown
+                    lasts 1 hour.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unauthorized</code></td>
+                  <td>
+                    Starts no cooldown. The execution counts as a failed
+                    execution.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>bad_request</code></td>
+                  <td>
+                    Starts no cooldown. The execution counts as a failed
+                    execution.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A cooldown does not pause the node. The node returns to
+            <code>Available</code>, or to <code>Waiting</code> for a review. No
+            agent selects a model of the credential until the cooldown ends. The
+            tutorial has one LLM credential, so the node waits for the end of
+            the cooldown.
+          </p>
+          <p>
+            Each further cooldown of the same credential doubles the duration,
+            up to 24 hours. For <code>rate_limited</code>, the durations are 60,
+            120, 240, 480 and 960 s. The doubling counts every cooldown of the
+            credential, whatever its code. A release with no provider failure on
+            the credential resets the doubling. A
+            <code>provider_failed</code> stop with <code>unauthorized</code> or
+            <code>bad_request</code> neither starts nor resets a cooldown.
+          </p>
+          <p>
+            An <code>unauthorized</code> or <code>bad_request</code> failure
+            counts as a failed execution. Three failed executions in a row pause
+            the node. A <code>rate_limited</code>,
+            <code>quota_exhausted</code> or <code>unavailable</code> failure
+            between them does not reset the count. For a refused API key, select
+            <strong>Rotate secret</strong> on the credential page.
+          </p>
+          <p>The dashboard shows a cooldown in three places:</p>
+          <ul>
+            <li>
+              The <strong>Cooldown</strong> section of the LLM credential page
+              shows &quot;Strike &lt;n&gt;. Claims skip this credential until
+              &lt;time&gt;.&quot; After the end, it shows &quot;No live
+              cooldown. Strike &lt;n&gt; stays until a release without a
+              provider failure.&quot; After a clear, or after a release without
+              a provider failure, it shows &quot;No cooldown. Claims can use
+              this credential.&quot; The page does not refresh by itself, so
+              reload it to see the current hold.
+            </li>
+            <li>
+              The <strong>Details</strong> tab of an <code>Available</code> node
+              shows &quot;An agent chain of this project cools down.&quot; with
+              each agent whose every model cools down, and the end time.
+            </li>
+            <li>
+              While every model of an agent cools down,
+              <strong>Overview</strong> shows &quot;&lt;agent&gt; in
+              &lt;binding&gt; of &lt;project&gt;: every model cools down until
+              &lt;time&gt;.&quot; With a project chosen in the project filter,
+              the sentence has no &quot;of &lt;project&gt;&quot;.
+            </li>
+          </ul>
+          <p>
+            The dashboard does not clear a cooldown. To list or clear a
+            cooldown, use the CLI with the human token of
+            <a href="#14-sign-in">1.4 Sign in</a>:
+          </p>
+          <pre><code class="language-sh">kanthord agent cooldown list --token '&lt;human token&gt;'
+kanthord agent cooldown clear &lt;credential name&gt; --token '&lt;human token&gt;'</code></pre>
+          <p>
+            See <a href="../reference/agent/cooldown.html">Agent cooldowns</a>.
+          </p>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    Step 2 of Onboarding shows <strong>Enable swe@1</strong> or
+                    <strong>Enable re@1</strong>, not
+                    <strong>Enable agents</strong>
+                  </td>
+                  <td>
+                    No live LLM credential has an agent platform. Create a
+                    credential of <code>anthropic</code>,
+                    <code>openrouter</code>, <code>openai-compatible</code>,
+                    <code>openai-codex</code>,
+                    <code>anthropic-subscription</code> or
+                    <code>github-copilot</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The credential page shows &quot;An agent cannot use a
+                    credential of platform &lt;platform&gt;.&quot;
+                  </td>
+                  <td>
+                    The same cause. An agent uses only a credential of the six
+                    agent platforms.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> of the repository binding shows
+                    &quot;The repository host refused the SSH key.&quot;
+                  </td>
+                  <td>
+                    The repository does not hold the public key. Add it as a
+                    deploy key with write access, as step 5 shows. The
+                    <a
+                      href="../how-to-guides/run-in-a-container.html#troubleshooting"
+                      >container guide troubleshooting</a
+                    >
+                    lists every other hint.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The worker binding sheet shows <code>swe@1</code> or
+                    <code>re@1</code> with the badge <code>Not enabled</code> or
+                    <code>Disabled</code>
+                  </td>
+                  <td>
+                    Do step 4, or select <strong>Enable swe@1</strong> or
+                    <strong>Enable re@1</strong> in the sheet. The server
+                    refuses a worker binding with an agent that is not enabled.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The preview shows &quot;The node write adds a node and
+                    claimable state pair that no worker binding covers.&quot;
+                  </td>
+                  <td>
+                    A state of the node has no worker binding that can claim it.
+                    Add the <code>coder</code> and the
+                    <code>reviewer</code> bindings of step 8, then select
+                    <strong>Preview</strong> again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The preview shows &quot;No binding named &lt;name&gt;.
+                    Current bindings: …&quot;
+                  </td>
+                  <td>
+                    The plan names a binding that the project does not hold.
+                    Write the name of your repository binding under
+                    <code>bindings</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The node returns to <code>Available</code> again and again,
+                    then moves to <code>Paused</code>
+                  </td>
+                  <td>
+                    A verification fails on every run. Run the verification
+                    command in a checkout of the repository, in a terminal with
+                    the same <code>PATH</code> as the server. Exit code
+                    <code>127</code> means that the command is not on that
+                    <code>PATH</code>. Install the tool, stop the server with
+                    <code>Ctrl+C</code>, and start it again from a terminal
+                    whose <code>PATH</code> holds the tool. At the
+                    <code>container</code> placement, add the tool with
+                    <a
+                      href="../how-to-guides/add-a-toolchain-to-the-worker-image.html#4-add-a-toolchain-at-the-container-placement"
+                      >step 4 of Add a toolchain to the worker image</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The <strong>Attempts</strong> tab shows
+                    <strong>Provider failed: rate limited</strong>,
+                    <strong>quota exhausted</strong> or
+                    <strong>unavailable</strong>, and the node stays
+                    <code>Available</code> or <code>Waiting</code>
+                  </td>
+                  <td>
+                    The LLM credential has a cooldown. The
+                    <strong>Cooldown</strong> section of the credential page
+                    shows its end time. The node does not pause. It runs again
+                    when the cooldown ends. The <strong>Cause:</strong> line
+                    names the provider error. See
+                    <a href="#provider-failures">Provider failures</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The <strong>Attempts</strong> tab shows
+                    <strong>Provider failed: unauthorized</strong> or
+                    <strong>bad request</strong>
+                  </td>
+                  <td>
+                    The provider refused the call. The
+                    <strong>Cause:</strong> line names the refusal. Each such
+                    execution counts as a failed execution, and three in a row
+                    pause the node. For a refused API key, select
+                    <strong>Rotate secret</strong> on the credential page.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>kanthord serve</code> exits with
+                    <code>repository.connector.tool_missing</code> or
+                    <code>repository.connector.tool_version</code>
+                  </td>
+                  <td>
+                    A required tool is missing or older than its minimum. The
+                    <code>tool</code> field names it. Install the tool on the
+                    <code>PATH</code> of the terminal, then start the server
+                    again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Live registrations</strong> stays <code>Open</code>
+                  </td>
+                  <td>
+                    Select <strong>Open workers</strong> on the item. The
+                    Workers page shows the live registrations of the project.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="read-next">Read next</h2>
+          <ul>
+            <li>
+              <a href="../explanation/worker.html">How a worker works</a>: the
+              life of a node, the claim, the execution and the review.
+            </li>
+            <li>
+              <a href="../explanation/coder-worker.html"
+                >How the coder@1 worker works</a
+              >: every step of one execution.
+            </li>
+            <li>
+              <a
+                href="../how-to-guides/isolate-worker-instances-in-containers.html"
+                >Isolate worker instances in containers</a
+              >: the <code>container</code> placement on this machine.
+            </li>
+            <li>
+              <a href="../how-to-guides/run-in-a-container.html"
+                >Run kanthord in a container</a
+              >
+              and
+              <a href="../how-to-guides/run-on-a-vps.html"
+                >Run kanthord on a VPS</a
+              >: a server on a shared host.
+            </li>
+            <li>
+              <a
+                href="../how-to-guides/run-in-a-container.html#8-run-a-worker-on-another-host"
+                >Run a worker on another host</a
+              >: the <code>worker</code> placement.
+            </li>
+            <li>
+              <a href="#10-import-the-plan">Import the plan</a>: a later import
+              must name the current nodes by their <code>id</code>, or it
+              retires them.
+            </li>
+            <li>
+              Reference:
+              <a href="../reference/project/binding.html">project bindings</a>,
+              <a href="../reference/repository/credential.html"
+                >Git credentials</a
+              >, <a href="../reference/mission/import.html">mission import</a>.
+            </li>
+          </ul>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>
