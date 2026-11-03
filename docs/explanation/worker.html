@@ -825,9 +825,14 @@ sequenceDiagram
             only when the head holds new work after the judged commit, when the
             checkout still holds that commit.
             <a href="coder-worker.html#the-verdict-unit">The verdict unit</a>
-            explains the rule. A later round reviews only the patch since the
-            latest round with a judgement, and the reviewer lists each finding
-            that the patch fixes.
+            explains the rule.
+            <a href="../reference/mission/finding.html#review-rounds"
+              >A later round</a
+            >
+            of an <code>implement</code> node reviews only the patch since the
+            tested commit of the latest base round. A base round has the result
+            <code>success</code>, holds a reviewer finding or holds a fix-node
+            proposal. The reviewer lists each finding that the patch fixes.
           </p>
           <p>
             The round after the last permitted rework is the

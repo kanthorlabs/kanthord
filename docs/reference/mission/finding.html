@@ -219,10 +219,19 @@
           </p>
           <ul>
             <li>
-              <code>assessment_id</code> names an assessment of the node, the
-              assessment that missed the defect. The finding takes the attempt
-              of that assessment. A node with no assessment takes no human
-              finding.
+              <code>assessment_id</code> names the assessment that missed the
+              defect: an assessment of the attempt that delivered the code.
+              Today the service accepts any assessment of the node. Read the
+              assessment identities with
+              <a href="assessment.html#assessment-list"
+                ><code>assessment list</code></a
+              >. The finding takes the attempt of that assessment. A node with
+              no assessment takes no human finding.
+            </li>
+            <li>
+              <code>expected_mission_version</code> is the
+              <code>version</code> that
+              <a href="mission.html#mission-get"><code>mission get</code></a> returns.
             </li>
             <li>
               <code>task_id</code> names a task of the node revision of that
@@ -306,11 +315,16 @@
   ],
   "next_cursor": null
 }</code></pre>
+          <p>The list orders the findings by these keys, in this order:</p>
+          <ol>
+            <li>The attempt.</li>
+            <li>The round. The human findings come last.</li>
+            <li>The kind. <code>blocker</code> comes first.</li>
+            <li>The number of the label.</li>
+            <li>The identity.</li>
+          </ol>
           <p>
-            The list orders the findings by the attempt, then by the round with
-            the human findings last, then by the kind with
-            <code>blocker</code> first, then by the number of the label, then by
-            the identity. The cursor follows the same order. Without
+            The cursor follows the same order. Without
             <code>attempt</code>, the list covers every attempt of the node.
             With <code>round</code>, the list holds only reviewer findings of
             that round.
@@ -553,12 +567,14 @@
                   <td><code>400 gateway.request.validation_failed</code></td>
                   <td>All</td>
                   <td>
-                    Invalid path, query or body. On <code>create</code>, details
+                    Invalid path, query or body. On <code>create</code> and
+                    <code>update</code>, details name <code>task_id</code> when
+                    it names no task of the revision of the assessment. On
+                    <code>update</code>, that assessment is the stored
+                    assessment of the finding. On <code>create</code>, details
                     name <code>assessment_id</code> when it names no assessment
-                    of the node, and <code>task_id</code> when it names no task
-                    of the revision of that assessment. A blank or oversized
-                    text names its field. An <code>update</code> with no field
-                    to change fails here.
+                    of the node. A blank or oversized text names its field. An
+                    <code>update</code> with no field to change fails here.
                   </td>
                 </tr>
                 <tr>
@@ -670,7 +686,8 @@
                   <td><code>create</code>, <code>update</code></td>
                   <td>
                     <code>expected_mission_version</code> differs from the
-                    mission version.
+                    mission version. <code>details.current</code> holds the
+                    current version.
                   </td>
                 </tr>
                 <tr>
@@ -1058,15 +1075,35 @@
           <p>
             A submit fails with
             <code>400 gateway.request.validation_failed</code> and an issue at
-            <code>findings</code> for a bad or repeated label, a blocker with
-            <code>action: no</code> or with no ground, a suggestion with a
-            ground, an unknown <code>task_id</code>, a blank or oversized text,
-            more than 100 items, or a <code>success</code> with a blocker. It
-            fails with an issue at <code>fixed_finding_ids</code> for a repeated
-            identity, an identity that names no open <code>fix</code> finding of
-            the attempt, or a <code>success</code> that leaves out an open
-            blocker of the attempt. The check runs for every submit, also for a
-            submit that is not current.
+            <code>findings</code> for each of these cases:
+          </p>
+          <ul>
+            <li>A bad or repeated label.</li>
+            <li>A blocker with <code>action: no</code> or with no ground.</li>
+            <li>A suggestion with a ground.</li>
+            <li>An unknown <code>task_id</code>.</li>
+            <li>A blank or oversized text.</li>
+            <li>More than 100 items.</li>
+            <li>A <code>success</code> with a blocker.</li>
+          </ul>
+          <p>
+            A submit fails with an issue at <code>fixed_finding_ids</code> for
+            each of these cases:
+          </p>
+          <ul>
+            <li>A repeated identity.</li>
+            <li>
+              An identity that names no open <code>fix</code> finding of the
+              attempt.
+            </li>
+            <li>
+              A <code>success</code> that leaves out an open blocker of the
+              attempt.
+            </li>
+          </ul>
+          <p>
+            The check runs for every submit, also for a submit that is not
+            current.
           </p>
           <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/finding?attempt=1' \
   -H 'Authorization: Bearer &lt;human-jwt&gt;'
