@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Isolate worker instances in containers · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li>
+            <a href="#1-prepare-the-container-runtime"
+              >1. Prepare the container runtime</a
+            >
+          </li>
+          <li><a href="#2-pull-the-image">2. Pull the image</a></li>
+          <li><a href="#3-check-the-placement">3. Check the placement</a></li>
+          <li>
+            <a href="#4-add-the-instances-and-the-worker-binding"
+              >4. Add the instances and the worker binding</a
+            >
+          </li>
+          <li>
+            <a href="#read-the-files-of-an-instance"
+              >Read the files of an instance</a
+            >
+          </li>
+          <li><a href="#limits">Limits</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="isolate-worker-instances-in-containers">
+            Isolate worker instances in containers
+          </h1>
+          <p>
+            Run worker instances at the <code>container</code> placement. The
+            server starts one container for each such instance on its own host,
+            with Podman or Docker. It runs the container from the create of the
+            instance until its archive.
+          </p>
+          <p>
+            At the <code>server</code> placement, an agent command runs as the
+            server user. It can read every credential of the server,
+            <code>master_key</code> and the database. At the
+            <code>container</code> placement, an agent command runs in the
+            container of its instance. It reads no file of the server and cannot
+            signal the server process. Each instance runs in the container
+            <code>kanthord_slot_&lt;name&gt;</code> and keeps its state in its
+            own volume <code>kanthord_slot_&lt;name&gt;</code>.
+            <code>&lt;name&gt;</code> is the instance name.
+          </p>
+          <p>
+            The server must run as the kanthord binary on the host. A server
+            inside a container cannot start containers, so
+            <code>container</code> is off there. To install the binary, use
+            <a href="run-on-a-mac-with-tailscale.html"
+              >Run kanthord on a Mac with Tailscale</a
+            >
+            or <a href="run-on-a-vps.html">Run kanthord on a VPS</a>.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>
+              The kanthord server binary, installed and started on the host.
+            </li>
+            <li>
+              One container runtime on the same host, for the user that runs the
+              server:
+              <ul>
+                <li>On a Mac: a Podman machine or Docker Desktop.</li>
+                <li>
+                  On Linux: rootless Podman or rootless Docker. The server
+                  refuses a rootful runtime when the server user is not root.
+                </li>
+              </ul>
+            </li>
+            <li>
+              The image of the server version. The default is
+              <code>docker.io/kanthorlabs/kanthord:&lt;version&gt;</code>. For a
+              toolchain such as Node.js, follow
+              <a
+                href="add-a-toolchain-to-the-worker-image.html#4-add-a-toolchain-at-the-container-placement"
+                >step 4 of Add a toolchain to the worker image</a
+              >.
+            </li>
+          </ul>
+          <p>Replace each placeholder with your value:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Placeholder</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;version&gt;</code></td>
+                  <td>
+                    The version of the server, for example <code>28.0.1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>
+                    The <strong>Identity</strong> value under
+                    <strong>Details</strong> on the project page, for example
+                    <code>project_01M5…</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;binding-id&gt;</code></td>
+                  <td>
+                    The <code>id</code> of the repository binding that
+                    <code
+                      >kanthord project binding list &lt;project-id&gt; --kind
+                      repository --token &#39;&lt;human token&gt;&#39;</code
+                    >
+                    prints.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;human token&gt;</code></td>
+                  <td>
+                    The token of
+                    <a href="../reference/auth/jwt.html">auth jwt generate</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;name&gt;</code></td>
+                  <td>
+                    The name of a <code>container</code> instance, for example
+                    <code>coder-box-1</code>.
+                    <code
+                      >podman ps --filter label=io.kanthord.owner --format
+                      &#39;{{.Names}}&#39;</code
+                    >
+                    prints it after <code>kanthord_slot_</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;execution_id&gt;</code></td>
+                  <td>
+                    The identity of an execution, for example
+                    <code>execution_01M5…</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The commands use Podman. With Docker, write <code>docker</code> in
+            place of <code>podman</code>.
+          </p>
+          <h2 id="1-prepare-the-container-runtime">
+            1. Prepare the container runtime
+          </h2>
+          <h3 id="on-a-mac-with-podman">On a Mac with Podman</h3>
+          <pre><code class="language-sh">brew install podman
+podman machine init --memory 8192
+podman machine start</code></pre>
+          <p>
+            The default machine holds 2 GiB of memory, and every container
+            shares it. Two or more instances that run <code>npm</code> need 8
+            GiB. To change an existing machine, stop it first:
+          </p>
+          <pre><code class="language-sh">podman machine stop
+podman machine set --memory 8192
+podman machine start</code></pre>
+          <p>
+            Start the machine again after each restart of the Mac. While the
+            machine is stopped, the instances do not start. They start by
+            themselves after <code>podman machine start</code>.
+          </p>
+          <h3 id="on-linux-as-a-desktop-user">On Linux, as a desktop user</h3>
+          <p>
+            Install Podman with the package manager of the distribution, for
+            example <code>sudo apt install podman</code>. Rootless Podman then
+            works with no other step.
+          </p>
+          <p>
+            Install the binary <code>kanthord-linux-x64</code> or
+            <code>kanthord-linux-arm64</code> as
+            <a href="run-on-a-vps.html#1-install-the-binary"
+              >step 1 of Run kanthord on a VPS</a
+            >
+            shows. Then run <code>kanthord config init</code> and
+            <code>kanthord serve</code> in a terminal as your user.
+          </p>
+          <h3 id="on-a-vps-with-the-service-user">
+            On a VPS with the service user
+          </h3>
+          <p>
+            The service user <code>kanthord</code> of
+            <a href="run-on-a-vps.html">Run kanthord on a VPS</a> is a system
+            user. It has no subordinate uid range and no user session, so Podman
+            needs these four steps:
+          </p>
+          <ol>
+            <li>
+              <p>Install Podman and the uid map tools:</p>
+              <pre><code class="language-sh">sudo apt install podman uidmap</code></pre>
+              <p>
+                Read <code>/etc/subuid</code> and <code>/etc/subgid</code>.
+                Choose a free range of 65536 ids, for example
+                <code>1000000-1065535</code>. Give that range to the user:
+              </p>
+              <pre><code class="language-sh">sudo usermod --add-subuids 1000000-1065535 --add-subgids 1000000-1065535 kanthord</code></pre>
+            </li>
+            <li>
+              <p>
+                Write
+                <code
+                  >/var/lib/kanthord/.config/containers/containers.conf</code
+                >
+                as the user <code>kanthord</code>. The file replaces the systemd
+                user session that the user lacks:
+              </p>
+              <pre><code class="language-sh">sudo -u kanthord -H mkdir -p /var/lib/kanthord/.config/containers
+printf '[engine]\ncgroup_manager = "cgroupfs"\nevents_logger = "file"\n' | sudo -u kanthord -H tee /var/lib/kanthord/.config/containers/containers.conf</code></pre>
+            </li>
+            <li>
+              <p>
+                Add these lines to the <code>[Service]</code> section of
+                <code>/etc/systemd/system/kanthord.service</code>.
+                <code>XDG_RUNTIME_DIR</code> gives Podman the runtime directory
+                that a user session gives otherwise:
+              </p>
+              <pre><code class="language-ini">RuntimeDirectory=kanthord
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/kanthord
+KillMode=mixed</code></pre>
+            </li>
+            <li>
+              <p>Restart the server:</p>
+              <pre><code class="language-sh">sudo systemctl daemon-reload
+sudo systemctl restart kanthord</code></pre>
+            </li>
+          </ol>
+          <p>
+            <code>KillMode=mixed</code> sends the stop signal to the server
+            process only. The server then stops each instance itself, and a live
+            execution ends cleanly.
+          </p>
+          <p>
+            On the VPS, run every <code>podman</code> command of this guide as
+            <code
+              >sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman
+              …</code
+            >.
+          </p>
+          <h2 id="2-pull-the-image">2. Pull the image</h2>
+          <p>
+            Pull the image as the user that runs the server. The first start of
+            an instance pulls it too, but that pull can take minutes.
+          </p>
+          <pre><code class="language-sh">podman pull docker.io/kanthorlabs/kanthord:&lt;version&gt;</code></pre>
+          <p>
+            On the VPS, run
+            <code
+              >sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman pull
+              docker.io/kanthorlabs/kanthord:&lt;version&gt;</code
+            >.
+          </p>
+          <p>
+            The server adds its own version as the tag to the name in
+            <code>worker.container_image</code>. The server builds an image from
+            the
+            <a
+              href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment"
+              >environment</a
+            >
+            of each repository binding, and copies <code>kanthord</code> and
+            <code>tini</code> from this image into it. A container waits until
+            that environment is <code>ready</code>, then runs the environment
+            image. Put a toolchain into the environment, not into this image.
+            See
+            <a
+              href="add-a-toolchain-to-the-worker-image.html#4-add-a-toolchain-at-the-container-placement"
+              >step 4 of Add a toolchain to the worker image</a
+            >.
+          </p>
+          <h2 id="3-check-the-placement">3. Check the placement</h2>
+          <p>
+            Open <strong>Workers</strong>, then the worker, for example
+            <code>coder@1</code>, and select <strong>Add instance</strong>.
+            <strong>Placement</strong> shows the <code>Container</code> option
+            on, with the runtime that the server uses, for example &quot;with
+            Podman&quot;. When the option is off, it shows the reason. Under
+            <code>runtime_failed</code>, the option stays on and shows the
+            detail, because a create passes and the instance starts after the
+            runtime recovers. See
+            <a href="#troubleshooting">Troubleshooting</a>.
+          </p>
+          <h2 id="4-add-the-instances-and-the-worker-binding">
+            4. Add the instances and the worker binding
+          </h2>
+          <ol>
+            <li>
+              In the <strong>Add instance</strong> sheet, enter a
+              <strong>Name</strong>, for example <code>coder-box-1</code>.
+            </li>
+            <li>
+              Select the <strong>Placement</strong> <code>Container</code>.
+            </li>
+            <li>
+              Select <strong>Create instance</strong>. Repeat steps 1 to 3 for
+              each execution that runs at once, for example
+              <code>coder-box-2</code>.
+            </li>
+            <li>
+              In the project, open the <strong>Bindings</strong> tab. Select
+              <strong>Add</strong> in the <strong>Workers</strong> section, or
+              open the existing binding of the worker.
+            </li>
+            <li>
+              Choose the <strong>Worker</strong>, for example
+              <code>coder@1</code>.
+            </li>
+            <li>
+              In <strong>Instances</strong>, select the
+              <code>container</code> instances. With two repository bindings or
+              more, choose the <strong>Environment</strong>.
+            </li>
+            <li>Select <strong>Save binding</strong>.</li>
+          </ol>
+          <p>
+            The placement belongs to the instance and never changes. To move a
+            binding to containers, list the new <code>container</code> instances
+            and remove the old instances from the binding. Each removed instance
+            finishes its execution first. A <code>container</code> instance
+            serves one live binding at most. A second binding that lists it
+            fails with <code>project.bindings.worker.instance_shared</code>,
+            because one container runs the image of one environment.
+          </p>
+          <p>
+            The first container of the binding starts its work only after the
+            environment of its repository binding is <code>ready</code>. The
+            first build pulls a devcontainer image, and it can take several
+            minutes. Read the status of each repository binding:
+          </p>
+          <pre><code class="language-sh">kanthord project environment list &lt;project-id&gt; --token '&lt;human token&gt;'</code></pre>
+          <p>
+            Wait until <code>status</code> is <code>ready</code>. Then the
+            <strong>Workers</strong> page shows each instance with
+            <code>· container</code>. The runtime lists the containers of the
+            server:
+          </p>
+          <pre><code class="language-sh">podman ps --filter label=io.kanthord.owner</code></pre>
+          <p>
+            On the VPS, run
+            <code
+              >sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord podman ps
+              --filter label=io.kanthord.owner</code
+            >.
+          </p>
+          <h2 id="read-the-files-of-an-instance">
+            Read the files of an instance
+          </h2>
+          <p>
+            The server writes the output of each instance to
+            <code>workers/&lt;name&gt;/stderr.log</code> of its state directory,
+            for example
+            <code>~/.local/state/kanthord/workers/coder-box-1/stderr.log</code>.
+            On the VPS, the state directory is
+            <code>/var/lib/kanthord/.local/state/kanthord</code>.
+          </p>
+          <p>
+            The Conversation tab of the trace page of the dashboard shows the
+            session entries of each execution. The pi session files also stay in
+            the volume of the instance. To list the files of one execution:
+          </p>
+          <pre><code class="language-sh">podman run --rm -v kanthord_slot_&lt;name&gt;:/v:ro --entrypoint ls docker.io/kanthorlabs/kanthord:&lt;version&gt; /v/state/kanthord/pi/sessions/execution/&lt;execution_id&gt;</code></pre>
+          <p>
+            On the VPS, write
+            <code
+              >sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord
+              podman</code
+            >
+            in place of <code>podman</code>.
+          </p>
+          <h2 id="limits">Limits</h2>
+          <ul>
+            <li>
+              An instance reaches the network through the default network of the
+              runtime. It cannot reach <code>127.0.0.1</code> of the host. A
+              provider, an OAuth endpoint or an S3 endpoint on the host loopback
+              address, for example a local Ollama or MinIO, fails at the
+              <code>container</code> placement. Use instances at the
+              <code>server</code> placement for such a binding.
+            </li>
+            <li>
+              An agent command still reaches the memory of its own instance and
+              every network that the container reaches.
+            </li>
+            <li>
+              An agent command at the <code>server</code> placement on the same
+              server reaches every container of the server through the runtime.
+              Do not mix <code>server</code> instances for untrusted
+              repositories with <code>container</code> instances on one server.
+            </li>
+            <li>
+              The server removes the container and the volume
+              <code>kanthord_slot_&lt;name&gt;</code> at the archive of the
+              instance. A removal of the instance from a binding keeps both, and
+              the container keeps running with no binding.
+            </li>
+          </ul>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>Create instance</strong> fails with
+                    <code>worker.instance.placement_unavailable</code>
+                  </td>
+                  <td>
+                    The server cannot run containers.
+                    <code>error.details.reason</code> names the cause:
+                    <code>server_in_container</code>,
+                    <code>runtime_absent</code> or <code>runtime_rootful</code>.
+                    The reason <code>runtime_failed</code> never refuses a
+                    create, because a stopped runtime recovers. See the rows
+                    below.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet shows &quot;Off. This server runs in a
+                    container…&quot;, or
+                    <code>reason: server_in_container</code>
+                  </td>
+                  <td>
+                    The server runs in a container. Install the binary on the
+                    host, or keep the <code>server</code> placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet shows &quot;Install Podman or Docker on the server
+                    host…&quot;, or <code>reason: runtime_absent</code>
+                  </td>
+                  <td>
+                    No <code>podman</code> and no <code>docker</code> is on the
+                    <code>PATH</code> of the server. Do step 1, then restart the
+                    server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet shows &quot;Cannot connect to Podman…&quot;, or
+                    <code>reason: runtime_failed</code> with that text
+                  </td>
+                  <td>
+                    The Podman machine is stopped. Run
+                    <code>podman machine start</code>. The instances start by
+                    themselves.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet or <code>reason: runtime_failed</code> names the
+                    server user and the uid map
+                  </td>
+                  <td>
+                    The user has no subordinate uid range that covers uid 10001
+                    of the container. Do item 1 of
+                    <a href="#on-a-vps-with-the-service-user"
+                      >On a VPS with the service user</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet shows &quot;… runs as root on this host…&quot;, or
+                    <code>reason: runtime_rootful</code>
+                  </td>
+                  <td>
+                    The runtime runs as root on this Linux host. Use rootless
+                    Podman or rootless Docker. A Linux VM runtime other than
+                    Docker Desktop, for example Rancher Desktop, gets this
+                    refusal too. Use Podman there.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>reason: runtime_failed</code> stays while
+                    <code>podman machine list</code> shows a running machine
+                  </td>
+                  <td>
+                    The server runs with a custom
+                    <code>XDG_CONFIG_HOME</code> or <code>XDG_DATA_HOME</code>.
+                    The check runs with the full server environment and loses
+                    the Podman machine connection. Remove both variables from
+                    the server environment, then restart the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    An instance never shows on the <strong>Workers</strong> page
+                  </td>
+                  <td>
+                    Read <code>workers/&lt;client_id&gt;/stderr.log</code>. A
+                    failed pull shows there. Pull the image as the user of the
+                    server, then wait for the next start of the instance. The
+                    server tries again after a pause of up to 30 s.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    An instance never starts, and
+                    <code>environment list</code> shows
+                    <code>status: failed</code>
+                  </td>
+                  <td>
+                    The build or the proof of the environment failed.
+                    <code>failure</code> holds the class and the last output.
+                    Run
+                    <code
+                      >kanthord project environment show &lt;project-id&gt;
+                      &lt;binding-id&gt; --token &#39;&lt;human
+                      token&gt;&#39;</code
+                    >
+                    to read the source and the document. Fix the stored document
+                    with <code>kanthord project environment set</code>. Push a
+                    fix in the repository to the base branch. The server reads
+                    the commit of the base branch every 60 s and runs the
+                    environment again at a new commit. To force a run at the
+                    same commit, run
+                    <code
+                      >kanthord project environment rebuild &lt;project-id&gt;
+                      &lt;binding-id&gt; --token &#39;&lt;human
+                      token&gt;&#39;</code
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A node fails with a provider or storage error that names
+                    <code>127.0.0.1</code> or <code>localhost</code>
+                  </td>
+                  <td>
+                    The endpoint is on the host loopback address. See
+                    <a href="#limits">Limits</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    On a Mac, nodes fail at random during <code>npm ci</code>
+                  </td>
+                  <td>
+                    The Podman machine has too little memory. Set 8 GiB with the
+                    commands of
+                    <a href="#on-a-mac-with-podman">On a Mac with Podman</a>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

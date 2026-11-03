@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Validate server configuration · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="validate-server-configuration">
+            Validate server configuration
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Read and validate the stored server configuration, including
+            ownership, permissions, YAML structure, and every declared field.
+            Defaults apply only to absent fields; explicit
+            <code>null</code> values are invalid and appear in the field
+            diagnostics.
+          </p>
+          <h3 id="yaml-constraints">YAML constraints</h3>
+          <ul>
+            <li>
+              The document must be one mapping with unique scalar string keys.
+              Dotted keys such as <code>gateway.port</code> are not substitutes
+              for nested mappings and are rejected.
+            </li>
+            <li>
+              Ordinary aliases are supported; cyclic aliases, unresolved
+              aliases, unsupported value types, and parser warnings fail
+              validation without exposing source text.
+            </li>
+            <li>
+              YAML input is limited to 1 MiB of UTF-8 text, 4,096 expanded
+              values (including mappings and arrays), and 32 nested collections.
+              Shared alias values count on each traversal.
+            </li>
+          </ul>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Success prints a confirmation to stdout and exits <code>0</code>:
+          </p>
+          <pre><code class="language-text">valid: &lt;path&gt;</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output / property</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>valid: &lt;path&gt;</code></td>
+                  <td>
+                    Confirms validation and identifies the resolved
+                    configuration file path.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Exit code <code>0</code></td>
+                  <td>
+                    File safety, YAML structure, and declared fields passed
+                    validation.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Missing files, unsafe permissions, duplicate YAML keys, unknown
+            fields, and invalid values produce a
+            <a href="../errors.html#cli-diagnostics">diagnostic</a> on stderr
+            and exit <code>1</code>. Diagnostics identify fields without echoing
+            their values:
+            <code
+              >system.config.invalid_field: invalid configuration fields</code
+            >
+            lists the issues as a JSON list in the <code>details</code> row. The
+            command does not rewrite the file or print its properties; use
+            <a href="show.html">show configuration</a> to inspect masked
+            effective values.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Not available. Configuration validation is a local filesystem
+            operation, with no API endpoint or cURL equivalent.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord config validate [--config &lt;path&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord config validate --config /absolute/path/kanthord.yaml</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--config &lt;path&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_CONFIG</code> → XDG/default server
+                    configuration path
+                  </td>
+                  <td>Selects the stored server configuration to validate.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An explicit <code>--config</code> wins. See
+            <a href="init.html#cli-shape">initialize configuration</a> for the
+            full path precedence.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

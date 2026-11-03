@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Import a mission plan · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="import-a-mission-plan">Import a mission plan</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            An import replaces the whole plan of a mission in one transaction.
+            The import set holds one node file for each node and one task file
+            for each task that the plan keeps:
+          </p>
+          <ul>
+            <li>An entry without <code>id</code> creates a node or a task.</li>
+            <li>
+              An entry with the <code>id</code> of a current node or task
+              updates it.
+            </li>
+            <li>
+              A current node that no entry names is retired. A current task that
+              no entry names is retired from its node.
+            </li>
+          </ul>
+          <p>
+            <code>mission import preview</code> validates an import set and
+            reports its effect. It writes nothing and stores no receipt.
+            <code>mission import apply</code> validates the same set again,
+            checks the preview digest and the confirmed retirements, and then
+            writes all changes atomically.
+          </p>
+          <p>
+            An entry with the <code>id</code> of a retired node, of a task of a
+            retired node, or of a task that an earlier write removed fails with
+            <code>mission.import.retired_id</code>.
+          </p>
+          <p>The import set has one of two formats:</p>
+          <ul>
+            <li>
+              <code>markdown</code>: plan files
+              <code>{ filename, content }</code>. The Mission service parses
+              each file. The
+              <a href="mission.html#function-description">mission export</a>
+              page shows the plan file format.
+            </li>
+            <li>
+              <code>json</code>: plan entries with the fields of a JSON
+              <a href="mission.html#mission-export">mission export</a> entry.
+            </li>
+          </ul>
+          <p>
+            <code>node</code> and <code>depends_on</code> name plan files inside
+            the import set, never node IDs or paths. <code>bindings</code> holds
+            binding names of the project. The service resolves each name to the
+            current binding revision.
+          </p>
+          <h3 id="plan-files">Plan files</h3>
+          <p>
+            A plan file is a node file or a task file. It holds exactly one of
+            <code>intent</code> and <code>node</code>.
+          </p>
+          <ul>
+            <li>
+              A node file holds <code>intent</code>: <code>implement</code> or
+              <code>examine</code>. It takes the optional
+              <code>id</code> (<code>node_&lt;ulid&gt;</code>),
+              <code>depends_on</code>, <code>tags</code>,
+              <code>commit_type</code>, <code>bindings</code> and
+              <code>verifications</code>.
+            </li>
+            <li>
+              A task file holds <code>node</code>: the plan file name of a node
+              file of the import set with <code>intent: implement</code>. It
+              takes the optional
+              <code>id</code> (<code>task_&lt;ulid&gt;</code>),
+              <code>bindings: []</code> and <code>verifications</code>.
+            </li>
+            <li>
+              A task file refuses <code>depends_on</code>, <code>tags</code>,
+              <code>intent</code> and <code>commit_type</code> with
+              <code>mission.import.plan_invalid</code>.
+              <code>details.reason</code> names the key:
+              <code>depends_on_forbidden</code> for <code>depends_on</code>,
+              <code>tags_forbidden</code> for <code>tags</code>,
+              <code>form_invalid</code> for <code>intent</code>, because the
+              file then holds both <code>intent</code> and <code>node</code>,
+              and <code>unknown_key</code> for <code>commit_type</code> and
+              every other key outside the task file keys. An
+              <code>id</code> with the prefix of the other file form fails with
+              <code>mission.import.plan_invalid</code>.
+            </li>
+            <li>
+              After the front matter, one H1 supplies <code>name</code>, one
+              <code>## Requirement</code> section supplies
+              <code>requirement</code>, and one
+              <code>## Criterion</code> section supplies <code>criterion</code>.
+            </li>
+            <li>An absent <code>tags</code> reads <code>[]</code>.</li>
+            <li>
+              <code>commit_type</code> names the type of every worker commit of
+              the node and of its pull request title: <code>feat</code>,
+              <code>fix</code>, <code>docs</code>, <code>style</code>,
+              <code>refactor</code>, <code>test</code> or <code>chore</code>. An
+              absent <code>commit_type</code> stays absent, and the worker uses
+              <code>feat</code>. Another value fails with
+              <code>mission.node.content_invalid</code>.
+              <a href="../../explanation/coder-worker.html#the-commit-names"
+                >The commit names</a
+              >
+              shows the headers.
+            </li>
+            <li>
+              <code>name</code> becomes the commit subject of the node or the
+              task. A <code>name</code> that leaves no subject after the final
+              full stops and spaces are removed, for example <code>.</code>,
+              fails with <code>mission.node.content_invalid</code>.
+            </li>
+          </ul>
+          <p>
+            An <code>implement</code> node with no task file is its own single
+            work unit. An <code>implement</code> node with one or more task
+            files covers its verifications with its tasks. Each verification of
+            such a node equals a verification of one of its tasks in the import
+            set. Another verification fails with
+            <code>mission.import.verification_uncovered</code>.
+          </p>
+          <h3 id="bindings-of-a-node">Bindings of a node</h3>
+          <p>
+            A node names every binding that it uses. No node takes a binding
+            from the project. The service resolves each binding name at write
+            time and stores the resolved binding revision. A later change of the
+            project moves no stored binding of a node. A node update or a
+            <a href="node.html#node-rebind">rebind</a> changes the stored
+            bindings explicitly.
+          </p>
+          <p>
+            The intent of a node sets the count of each binding kind. A count
+            outside the rule refuses the write with
+            <code>mission.node.bindings_invalid</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Intent</th>
+                  <th>Repository</th>
+                  <th>Storage</th>
+                  <th>Worker</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>implement</code></td>
+                  <td>1 or more</td>
+                  <td>0 or more, in order</td>
+                  <td>0</td>
+                </tr>
+                <tr>
+                  <td><code>examine</code></td>
+                  <td>0 or more</td>
+                  <td>0 or more, in order</td>
+                  <td>0</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li>
+              An <code>implement</code> node names one or more repository
+              bindings, and the convention is one binding. An
+              <code>implement</code> node with no repository binding fails with
+              <code>mission.node.bindings_invalid</code>.
+            </li>
+            <li>
+              An <code>examine</code> node changes none of its repository
+              bindings. Its execution checks out the base-branch head of each
+              one read-only.
+            </li>
+            <li>
+              The storage bindings of a node form an ordered upload list. An
+              upload uses the first storage binding of that list that accepts
+              the grant, under
+              <a href="evidence.html#object-upload">evidence</a>.
+            </li>
+            <li>
+              A task names no binding. A task acts on every repository that its
+              node names.
+            </li>
+            <li>
+              A <a href="mission.html#mission-export">mission export</a> writes
+              the binding names of each node, so an exported plan names every
+              binding explicitly.
+            </li>
+          </ul>
+          <h3 id="import-condition">Import condition</h3>
+          <p>
+            The import condition is state <code>Pending</code> or
+            <code>Available</code> with attempt <code>0</code>. The import
+            applies it to these current nodes:
+          </p>
+          <ul>
+            <li>
+              Each node with changed content. For a task with changed content,
+              the condition applies to its node.
+            </li>
+            <li>Each node that gains or loses a task.</li>
+            <li>Each retired node.</li>
+          </ul>
+          <p>These additional rules apply:</p>
+          <ul>
+            <li>
+              An import compares no content of a terminal node (<code
+                >Completed</code
+              >
+              or <code>Discarded</code>). A terminal node with an unchanged
+              <code>filename</code> is a no-op. The import resolves no binding
+              name and no <code>depends_on</code> name of that node.
+            </li>
+            <li>
+              The import fails with
+              <code>mission.import.terminal_change</code> for a new
+              <code>filename</code> of a terminal node. It also fails for a task
+              that enters, leaves or changes its <code>filename</code> in that
+              node, and for a retirement of that node. The message of a
+              retirement is &quot;Import cannot retire a terminal node. Keep its
+              unchanged file in the plan.&quot;.
+            </li>
+            <li>
+              A retirement of a node that holds an attempt fails with
+              <code>mission.import.condition_failed</code>. The message is
+              &quot;Import cannot retire a node that holds an attempt. Discard
+              the node, then keep its unchanged file in the plan.&quot;.
+            </li>
+            <li>
+              To remove a node that holds an attempt, discard it, then keep its
+              unchanged file in the plan. An import that omits the file of a
+              discarded node fails with
+              <code>mission.import.terminal_change</code>.
+            </li>
+            <li>
+              A change of only <code>depends_on</code> requires a nonterminal
+              node, not the import condition. The dependency rules of
+              <a href="dependency.html#function-description">dependency</a>
+              apply.
+            </li>
+            <li>
+              A new dependency of a kept node requires no live claim on that
+              node. Only apply checks this rule.
+            </li>
+            <li>
+              An import that adds an unmatched pair of a node and a claimable
+              state fails with <code>mission.node.tags_unmatched</code>. The
+              preview lists one violation for each node file with an added pair.
+            </li>
+          </ul>
+          <p>
+            One failed check fails the whole import. A changed
+            <code>depends_on</code> list counts as an update even if the content
+            is unchanged. An apply that changes nothing keeps the mission
+            version. An apply that changes the plan increases the mission
+            version by one.
+          </p>
+          <p>
+            The preview digest covers the mission ID, the mission version, the
+            normalized entries and the <code>creates</code>,
+            <code>updates</code> and <code>retirements</code> sets. A change of
+            these sets between the preview and the apply fails the apply with
+            <code>mission.import.retirement_mismatch</code>. A stale mission
+            version fails the preview and the apply. A preview reserves no node.
+          </p>
+          <p>
+            The import does not unblock a node, reopen an attempt or change
+            priority. It records the human that submits the import as the actor
+            of each revision.
+          </p>
+          <h3 id="re-import-an-applied-plan">Re-import an applied plan</h3>
+          <p>
+            The import matches a plan file to a current node or task by its
+            <code>id</code> alone. A file name never matches a current node. A
+            plan file without <code>id</code> creates a node or a task. The
+            import retires every current node that no plan file names by
+            <code>id</code>. An edited copy of plan files without
+            <code>id</code> lines, for example the files of the first import,
+            thus replaces the whole plan. Its preview lists every current node
+            in <code>retirements</code> and every file in <code>creates</code>.
+            A retired node that holds an attempt adds
+            <code>mission.import.condition_failed</code>, and a retired terminal
+            node adds <code>mission.import.terminal_change</code>. To remove a
+            node that holds an attempt, follow the
+            <a href="#import-condition">retirement exit</a>.
+          </p>
+          <p>To edit an applied plan:</p>
+          <ol>
+            <li>
+              Export the plan as Markdown. Each exported file holds the
+              <code>id</code> of its node or task.
+            </li>
+            <li>Edit the exported files. Keep each <code>id</code> line.</li>
+            <li>
+              Preview the edited files. Make sure that
+              <code>retirements</code> and <code>creates</code> hold only the
+              intended entries. Make sure that <code>updates</code> holds every
+              node that you edited.
+            </li>
+            <li>
+              Apply the same files. Set <code>preview_digest</code> to the
+              digest of the preview, and set
+              <code>confirmed_retirements</code> to its
+              <code>retirements</code>.
+            </li>
+          </ol>
+          <pre><code class="language-sh">kanthord mission export mission_01M4C5J3SA6W8RBBC92HA9SSDS --format markdown --out ./plan
+kanthord mission import preview mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --file import.json
+kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --file apply.json</code></pre>
+          <p>The <code>import.json</code> of the preview:</p>
+          <pre><code class="language-json">{
+  "format": "markdown",
+  "mission_version": 7,
+  "reason": "Tighten the login verification"
+}</code></pre>
+          <p>
+            An edit of one verification in <code>plan/login.md</code> previews
+            <code>updates: [&quot;node_01M4C5J3SAMS4Z4KZD8DQ9GFTB&quot;]</code>,
+            <code>retirements: []</code> and <code>creates: []</code>.
+          </p>
+          <p>The <code>apply.json</code> of the apply:</p>
+          <pre><code class="language-json">{
+  "format": "markdown",
+  "mission_version": 7,
+  "reason": "Tighten the login verification",
+  "preview_digest": "4f0c2e6a9b1d3c5e7f8a0b2c4d6e8f0a1b3c5d7e9f1a2b4c6d8e0f1a3b5c7d9e",
+  "confirmed_retirements": []
+}</code></pre>
+          <p>
+            The <a href="#import-condition">import condition</a> also applies to
+            a re-import. A node with changed content must be
+            <code>Pending</code> or <code>Available</code> with attempt
+            <code>0</code>. To change a node that holds an attempt, use
+            <a href="node.html#node-update">node update</a>. The update applies
+            from the next attempt. To redirect the open attempt, use the
+            <a href="node-control.html#unblock">unblock</a> path. To remove a
+            node that holds an attempt, follow the
+            <a href="#import-condition">retirement exit</a>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="import-preview">import preview</h3>
+          <p>
+            The API returns HTTP <code>200</code> with the preview. A plan
+            violation does not fail the request; the answer lists it in
+            <code>violations</code>.
+          </p>
+          <pre><code class="language-json">{
+  "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
+  "expected_mission_version": 7,
+  "preview_digest": "4f0c2e6a9b1d3c5e7f8a0b2c4d6e8f0a1b3c5d7e9f1a2b4c6d8e0f1a3b5c7d9e",
+  "creates": ["signup.md"],
+  "updates": ["node_01M4C5J3SAMS4Z4KZD8DQ9GFTB"],
+  "retirements": ["node_01M4C5J3SBEB4P8KDXAZ6GKB6R"],
+  "removed_edges": [
+    {
+      "dependent_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+      "depends_on_id": "node_01M4C5J3SBEB4P8KDXAZ6GKB6R"
+    }
+  ],
+  "no_ops": ["node_01M4C5J3SAYFD1BFNQB3BEBN6P"],
+  "violations": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission_id</code></td>
+                  <td><code>mission_&lt;ulid&gt;</code></td>
+                  <td>Mission of the route.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>The <code>mission_version</code> of the request.</td>
+                </tr>
+                <tr>
+                  <td><code>preview_digest</code></td>
+                  <td>64 lower-case hex chars</td>
+                  <td>
+                    Send this value as <code>preview_digest</code> to apply.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>creates</code></td>
+                  <td>array of file names</td>
+                  <td>Entries without <code>id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>updates</code></td>
+                  <td>array of node IDs</td>
+                  <td>
+                    Kept nodes with changed content or changed dependencies.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>retirements</code></td>
+                  <td>array of node IDs</td>
+                  <td>
+                    Current nodes that the import set omits. Send this set as
+                    <code>confirmed_retirements</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>removed_edges</code></td>
+                  <td>array of edges</td>
+                  <td>Current dependency edges that the import removes.</td>
+                </tr>
+                <tr>
+                  <td><code>no_ops</code></td>
+                  <td>array of node IDs</td>
+                  <td>
+                    Kept nodes without a change. A terminal node is always a
+                    no-op unless its <code>filename</code> changes. The import
+                    ignores the other content of its file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>violations</code></td>
+                  <td>array</td>
+                  <td>
+                    <code>{ code, message, filename, node_id, details }</code>
+                    for each failed check. Empty when the import is valid.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The violation codes are
+            <code>mission.import.mission_mismatch</code>,
+            <code>mission.import.duplicate_file</code>,
+            <code>mission.import.plan_invalid</code>,
+            <code>mission.import.duplicate_id</code>,
+            <code>mission.import.unknown_id</code>,
+            <code>mission.import.foreign_id</code>,
+            <code>mission.import.retired_id</code>,
+            <code>mission.import.unresolved_reference</code>,
+            <code>mission.import.reference_kind_invalid</code>,
+            <code>mission.import.cycle</code>,
+            <code>mission.import.verification_uncovered</code>,
+            <code>mission.import.terminal_change</code>,
+            <code>mission.import.condition_failed</code>,
+            <code>mission.node.content_invalid</code>,
+            <code>mission.node.verifications_missing</code>,
+            <code>mission.node.bindings_invalid</code>,
+            <code>mission.node.state_conflict</code> and
+            <code>mission.node.tags_unmatched</code>.
+          </p>
+          <p>
+            The import validates in three stages: the plan files and their
+            content, the resolved graph, then the import condition. A preview
+            reports every violation of the first stage that fails and stops
+            there. When the three stages pass, the preview runs the write steps
+            of the apply and rolls them back. It then lists one
+            <code>mission.node.tags_unmatched</code> violation for each node
+            file with an added unmatched pair. That violation holds
+            <code>details.claims</code>, and <code>node_id</code> is
+            <code>null</code> for a created node, also in each claim.
+          </p>
+          <h3 id="import-apply">import apply</h3>
+          <p>The API returns HTTP <code>200</code> with the import result:</p>
+          <pre><code class="language-json">{
+  "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
+  "mission_version": 8,
+  "assigned_ids": [
+    { "filename": "login.md", "node_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB" },
+    {
+      "filename": "login-form.md",
+      "task_id": "task_01M4C5J3SAYFD1BFNQB3BEBN6P"
+    },
+    { "filename": "signup.md", "node_id": "node_01M4C5J3SBKF4M6X325KZGRKHH" }
+  ],
+  "changes": {
+    "mission_version": 8,
+    "revisions": [],
+    "retired_node_ids": ["node_01M4C5J3SBEB4P8KDXAZ6GKB6R"],
+    "added_edges": [],
+    "removed_edges": [],
+    "open_attempts_unchanged": []
+  },
+  "actor": { "kind": "human", "account": "&lt;account&gt;", "name": "&lt;name&gt;" },
+  "accepted_at": 1791446400000
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission_id</code></td>
+                  <td><code>mission_&lt;ulid&gt;</code></td>
+                  <td>Imported mission.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>Mission version after the apply.</td>
+                </tr>
+                <tr>
+                  <td><code>assigned_ids</code></td>
+                  <td>array</td>
+                  <td>
+                    <code>{ filename, node_id }</code> for every node file and
+                    <code>{ filename, task_id }</code> for every task file,
+                    sorted by file name, with the IDs of new nodes and tasks.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>changes</code></td>
+                  <td>object</td>
+                  <td>
+                    The
+                    <a href="node.html#node-change-result"
+                      >node change result</a
+                    >
+                    of the import.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>actor</code></td>
+                  <td>object</td>
+                  <td>The human that submitted the import.</td>
+                </tr>
+                <tr>
+                  <td><code>accepted_at</code></td>
+                  <td>integer</td>
+                  <td>Acceptance time in Unix milliseconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI writes the result plus <code>idempotency_key</code> as one
+            JSON line to stdout and exits <code>0</code>. The CLI writes no
+            assigned ID back to a plan file. Run <code>mission export</code> to
+            get plan files with IDs.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Operation</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>Both</td>
+                  <td>
+                    <code>Content-Type</code> is not
+                    <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>Both</td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Both</td>
+                  <td>
+                    The body fails the schema, for example an unknown field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>Both</td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>Apply</td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>Apply</td>
+                  <td>
+                    The key belongs to another request, or its first request is
+                    still in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.mission.not_found</code></td>
+                  <td>Both</td>
+                  <td>The mission ID is unknown.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td>Both</td>
+                  <td>
+                    <code>mission_version</code> is stale;
+                    <code>details.current</code> holds the current version.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.node.content_invalid</code></td>
+                  <td>Both</td>
+                  <td>
+                    <code>reason</code> is blank or exceeds the text limit.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400</code> or <code>409</code> with a violation code
+                  </td>
+                  <td>Apply</td>
+                  <td>
+                    The first violation of the preview. <code>409</code> for
+                    <code>mission.import.condition_failed</code>,
+                    <code>mission.import.terminal_change</code> and
+                    <code>mission.node.state_conflict</code>, otherwise
+                    <code>400</code>. <code>details</code> adds
+                    <code>filename</code> and <code>node_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.tags_unmatched</code></td>
+                  <td>Apply</td>
+                  <td>
+                    The import adds an unmatched pair;
+                    <code>details.claims</code> lists each pair as
+                    <code>{ node_id, revision, claim }</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.filename_conflict</code></td>
+                  <td>Apply</td>
+                  <td>
+                    Another current node or task of the mission uses the file
+                    name; <code>details.filename</code> names it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.import.retirement_mismatch</code></td>
+                  <td>Apply</td>
+                  <td>
+                    <code>preview_digest</code> or
+                    <code>confirmed_retirements</code> does not match the
+                    current preview.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.claim_live</code></td>
+                  <td>Apply</td>
+                  <td>A new dependency names a dependent with a live claim.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>Both</td>
+                  <td>
+                    The operation exceeded 30 seconds. An apply can still
+                    complete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The text limit is the server configuration value
+            <code>mission.text_max_bytes</code>, 32768 UTF-8 bytes by default.
+          </p>
+          <p>
+            The CLI exits <code>1</code> on every failure and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr. A declared
+            remote failure prints <code>&lt;code&gt;: request failed</code> and
+            the row <code>status: &lt;status&gt;</code>. For apply, the CLI
+            prints <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.import.&lt;action&gt;.invalid_mission_id</code
+                    >
+                  </td>
+                  <td>
+                    <code>&lt;mission-id&gt;</code> is not a
+                    <code>mission_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.import.&lt;action&gt;.positionals_not_accepted</code
+                    >
+                  </td>
+                  <td>
+                    The file sets <code>format: &quot;json&quot;</code> and the
+                    command has plan-file positionals.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.import.&lt;action&gt;.files_conflict</code
+                    >
+                  </td>
+                  <td>
+                    The file sets <code>format: &quot;markdown&quot;</code>,
+                    holds <code>files</code>, and the command has plan-file
+                    positionals.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.import.&lt;action&gt;.token_required</code
+                    >
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.import.&lt;action&gt;.indeterminate</code>
+                  </td>
+                  <td>
+                    A transport failure, a timeout or a malformed answer. For
+                    apply, retry with the printed key.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.not_found</code>,
+                    <code>cli.file.not_regular</code>
+                  </td>
+                  <td>
+                    <code>--file</code> or a plan file is absent or is not a
+                    regular file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.invalid_path</code></td>
+                  <td>
+                    <code>--file</code> is <code>-</code>; the CLI does not read
+                    stdin.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.encoding_invalid</code>,
+                    <code>cli.file.not_json</code>,
+                    <code>cli.file.duplicate_key</code>,
+                    <code>cli.file.not_object</code>
+                  </td>
+                  <td>
+                    <code>--file</code> is not UTF-8, not JSON, has a repeated
+                    key, or is not an object.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.schema_invalid</code></td>
+                  <td>The completed body fails the request schema.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>&lt;action&gt;</code> is <code>preview</code> or
+            <code>apply</code>.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="import-preview-1">import preview</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>POST /api/mission/:mission_id/import/preview</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.import.preview</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No; the POST writes nothing</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>mission_id</code>: <code>mission_&lt;ulid&gt;</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>Import snapshot, below</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="import-apply-1">import apply</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/mission/:mission_id/import</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.import.apply</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>mission_id</code>: <code>mission_&lt;ulid&gt;</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>Import snapshot plus the apply fields, below</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="request-body">Request body</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>format</code></td>
+                  <td><code>markdown</code> or <code>json</code></td>
+                  <td>Yes</td>
+                  <td>Selects <code>files</code> or <code>entries</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_id</code></td>
+                  <td><code>mission_&lt;ulid&gt;</code></td>
+                  <td>Yes</td>
+                  <td>
+                    Must equal the route mission; otherwise a
+                    <code>mission.import.mission_mismatch</code> violation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>Yes</td>
+                  <td>Expected current mission version.</td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>nonblank string</td>
+                  <td>Yes</td>
+                  <td>Reason recorded on each revision.</td>
+                </tr>
+                <tr>
+                  <td><code>files</code></td>
+                  <td>array of <code>{ filename, content }</code></td>
+                  <td>Markdown</td>
+                  <td>
+                    Plan files. <code>filename</code> is a nonempty string;
+                    <code>content</code> is a string.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entries</code></td>
+                  <td>array of entries</td>
+                  <td>JSON</td>
+                  <td>Plan entries, below.</td>
+                </tr>
+                <tr>
+                  <td><code>preview_digest</code></td>
+                  <td>64 lower-case hex chars</td>
+                  <td>Apply only</td>
+                  <td>Digest from the preview.</td>
+                </tr>
+                <tr>
+                  <td><code>confirmed_retirements</code></td>
+                  <td>array of <code>node_&lt;ulid&gt;</code></td>
+                  <td>Apply only</td>
+                  <td>
+                    Exactly the <code>retirements</code> set of the preview.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Entry field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>filename</code></td>
+                  <td>string</td>
+                  <td>Yes</td>
+                  <td>Plan file name, <code>^[a-z][a-z0-9_-]*\.md$</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>intent</code></td>
+                  <td><code>implement</code> or <code>examine</code></td>
+                  <td>Node entry</td>
+                  <td>Intent of the node. A task entry forbids it.</td>
+                </tr>
+                <tr>
+                  <td><code>node</code></td>
+                  <td>plan file name</td>
+                  <td>Task entry</td>
+                  <td>
+                    The <code>implement</code> node entry of the task. A node
+                    entry forbids it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>name</code>, <code>requirement</code>,
+                    <code>criterion</code>
+                  </td>
+                  <td>nonblank string</td>
+                  <td>Yes</td>
+                  <td>Node content.</td>
+                </tr>
+                <tr>
+                  <td><code>verifications</code></td>
+                  <td>array of nonblank strings</td>
+                  <td>Yes</td>
+                  <td>At least one verification.</td>
+                </tr>
+                <tr>
+                  <td><code>bindings</code></td>
+                  <td>array of binding names</td>
+                  <td>Yes</td>
+                  <td>
+                    Binding names; see
+                    <a href="#bindings-of-a-node">Bindings of a node</a>. A task
+                    entry holds <code>[]</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>id</code></td>
+                  <td>
+                    <code>node_&lt;ulid&gt;</code> or
+                    <code>task_&lt;ulid&gt;</code>
+                  </td>
+                  <td>No</td>
+                  <td>Current node or task to keep.</td>
+                </tr>
+                <tr>
+                  <td><code>tags</code></td>
+                  <td>array of tags</td>
+                  <td>No</td>
+                  <td>
+                    Tags that a worker binding needs to claim the node;
+                    <code>[]</code> by default. A task entry forbids it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>commit_type</code></td>
+                  <td>
+                    <code>feat</code>, <code>fix</code>, <code>docs</code>,
+                    <code>style</code>, <code>refactor</code>,
+                    <code>test</code> or <code>chore</code>
+                  </td>
+                  <td>No</td>
+                  <td>
+                    Type of the worker commits and of the pull request title of
+                    the node; <code>feat</code> when absent. A task entry
+                    forbids it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>depends_on</code></td>
+                  <td>array of plan file names</td>
+                  <td>No</td>
+                  <td>Dependency targets. A task entry forbids it.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The body accepts no unknown field.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Apply only</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it to
+                    retry the same apply.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/import \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -d '{"format":"json","mission_id":"mission_01M4C5J3SA6W8RBBC92HA9SSDS","mission_version":7,"reason":"Add sign-up","entries":[],"preview_digest":"&lt;digest&gt;","confirmed_retirements":[]}'</code></pre>
+          <p>
+            The Gateway keeps the answer of a mutation for its idempotency key
+            in process memory for <code>idempotency_ttl</code> seconds, 86400 by
+            default. A retry with the same key, human account and request
+            replays that answer. This rule also applies to a failure.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord mission import preview &lt;mission-id&gt; [plan-file...] --file &lt;path&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord mission import apply &lt;mission-id&gt; [plan-file...] --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission import preview mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --file import.json
+kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md \
+  --file apply.json --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;mission-id&gt;</code></td>
+                  <td>Required <code>mission_&lt;ulid&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>[plan-file...]</code></td>
+                  <td>
+                    Markdown plan files in import order. Only for
+                    <code>format: &quot;markdown&quot;</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>
+                    JSON file with the import controls and, for JSON format,
+                    <code>entries</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>
+                    Apply only; a generated
+                    <code>idempotency_key_&lt;ulid&gt;</code>
+                  </td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>; supply the same key to
+                    retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI builds the request body from <code>--file</code> as follows:
+          </p>
+          <ul>
+            <li>
+              If the file has no <code>mission_id</code>, the CLI sets it from
+              <code>&lt;mission-id&gt;</code>.
+            </li>
+            <li>
+              For <code>format: &quot;markdown&quot;</code> with positionals,
+              the CLI reads each plan file and sends its base name as
+              <code>filename</code> and its text as <code>content</code>. It
+              does not parse Markdown.
+            </li>
+            <li>
+              For <code>format: &quot;markdown&quot;</code> without positionals,
+              the CLI sends the <code>files</code> of the file unchanged. If the
+              file has no <code>files</code>, the schema check fails with
+              <code>cli.file.schema_invalid</code>, and the CLI sends no
+              request. An empty set needs an explicit
+              <code>&quot;files&quot;: []</code>.
+            </li>
+            <li>
+              For <code>format: &quot;json&quot;</code>, the CLI sends the
+              <code>entries</code> of the file.
+            </li>
+          </ul>
+          <p>
+            The CLI does not scan directories and asks for no confirmation. Each
+            option is accepted once. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

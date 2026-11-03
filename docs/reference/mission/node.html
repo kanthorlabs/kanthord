@@ -1,0 +1,1606 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan mission nodes · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="plan-mission-nodes">Plan mission nodes</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A mission node is the unit that the Scheduler Service schedules.
+            Every node holds an <code>intent</code> and a
+            <code>tags</code> list. An <code>implement</code> node holds zero or
+            more tasks. Each node has a plan file name that is unique among the
+            current nodes of its mission. Dependency is the only edge kind.
+          </p>
+          <p>
+            The <code>intent</code> of a node is <code>implement</code> or
+            <code>examine</code>. An <code>implement</code> node changes one or
+            more repositories, and its tasks state the final-state requirements
+            of that change. An <code>examine</code> node reads zero or more
+            repositories and the outcomes of its direct dependencies, changes no
+            repository and holds no task. A human changes the intent of a node
+            only while the attempt of the node reads <code>0</code>.
+          </p>
+          <p>
+            The tags of a node state the facts of a host that a worker binding
+            needs to claim the node. The Scheduler Service matches the intent
+            and the tags of a node against each worker binding of the project.
+          </p>
+          <p>
+            Node content has <code>name</code>, <code>requirement</code>,
+            <code>criterion</code>, <code>verifications</code>,
+            <code>bindings</code>, <code>intent</code>, <code>tags</code> and
+            the optional <code>commit_type</code>. <code>commit_type</code> is
+            the type of every worker commit of the node and of its pull request
+            title: <code>feat</code>, <code>fix</code>, <code>docs</code>,
+            <code>style</code>, <code>refactor</code>, <code>test</code> or
+            <code>chore</code>. The worker uses <code>feat</code> when it is
+            absent. In the node API, <code>bindings</code> holds binding IDs of
+            the project. A node names every binding that it uses, and no node
+            takes a binding from the project. The service stores the latest
+            revision of each named binding. The
+            <a href="import.html#bindings-of-a-node">bindings of a node</a> rule
+            states the count of each binding kind. An
+            <code>implement</code> node names one or more repository bindings,
+            and the convention is one binding. No node names a worker binding.
+          </p>
+          <p>
+            A task is content of an <code>implement</code> node. A task holds a
+            <code>task_&lt;ulid&gt;</code> ID, a plan file name and its own
+            content, and names no binding. A task has no revision, state,
+            attempt or priority. The tasks are part of each revision of their
+            node, and a task write creates a new revision of that node. An
+            <code>implement</code> node with no task is its own single work
+            unit. Revision numbers start at <code>1</code> for each node.
+          </p>
+          <p>These commands read and change the plan:</p>
+          <ul>
+            <li>
+              <code>node list</code> and <code>node get</code> read nodes.
+              <code>node revision list</code> and
+              <code>node revision get</code> read the revisions of a node.
+            </li>
+            <li>
+              <code>node create</code> adds a node with its tasks.
+              <code>node update</code> replaces the content, the file name and
+              the tasks of a node.
+            </li>
+            <li>
+              <code>node retire preview</code> reports a retirement.
+              <code>node retire</code> retires the named node.
+            </li>
+            <li>
+              <code>node rebind</code> moves binding pins to a later revision of
+              the same binding.
+            </li>
+          </ul>
+          <p>
+            Every write requires the current mission version in
+            <code>expected_mission_version</code>. A write that changes the plan
+            increases the mission version by one. A write that changes nothing
+            returns an empty change and keeps the version. A human edit does not
+            change the state of a node or the pinned revision of an open
+            attempt.
+          </p>
+          <p>
+            No write reaches a retired node or a terminal node (<code
+              >Completed</code
+            >
+            or <code>Discarded</code>), except that
+            <code>node rebind</code> reports these nodes as skipped. The
+            <a href="node-control.html">node control</a> page describes states
+            and controls.
+          </p>
+          <p>
+            A node write that adds an unmatched pair of a node and a claimable
+            state fails with <code>mission.node.tags_unmatched</code>. A pair is
+            unmatched when no current worker binding of the project covers it. A
+            write that keeps an unmatched pair that the node held before the
+            write succeeds. <code>node create</code>,
+            <code>node update</code> and <code>node rebind</code> run this
+            check.
+          </p>
+          <p>
+            <strong>Authority:</strong> every authenticated human holds the same
+            authority under the server-owner ruling. Any verified human token
+            reads and changes any mission.
+          </p>
+          <h3 id="node-create">node create</h3>
+          <ul>
+            <li>
+              The body holds the node content and <code>tasks</code>, the
+              complete task list of the new node.
+            </li>
+            <li>
+              The service creates a <code>task_&lt;ulid&gt;</code> ID for each
+              task. A task write with an <code>id</code> fails with
+              <code>mission.node.content_invalid</code>.
+            </li>
+            <li>
+              An <code>examine</code> node takes <code>tasks: []</code>. Another
+              list fails with <code>mission.node.content_invalid</code>.
+            </li>
+            <li>
+              A new node starts at revision <code>1</code>. Dependencies use
+              their own <a href="dependency.html">dependency</a> operations.
+            </li>
+          </ul>
+          <h3 id="node-update">node update</h3>
+          <ul>
+            <li>
+              The command replaces <code>filename</code>,
+              <code>content</code> and <code>tasks</code>, and records
+              <code>reason</code>. It does not change the dependencies, the
+              priority or the state.
+            </li>
+            <li>
+              <code>expected_revision</code> names the current revision of the
+              node.
+            </li>
+            <li>
+              <code>tasks</code> is the complete task list. A task write with an
+              <code>id</code> keeps or updates that task. A task write without
+              an <code>id</code> creates a task. The update retires each current
+              task that the list omits.
+            </li>
+            <li>
+              An unknown <code>id</code>, a repeated <code>id</code> or the
+              <code>id</code> of a task of another node fails with
+              <code>mission.node.content_invalid</code>.
+            </li>
+            <li>
+              A change of <code>intent</code> while the attempt reads
+              <code>1</code> or more fails with
+              <code>mission.node.intent_locked</code>.
+            </li>
+            <li>
+              The node must be nonterminal. A node with an open attempt stays
+              editable.
+            </li>
+            <li>
+              An update applies from the next attempt. The open attempt keeps
+              its pinned revision, and each of its executions reads that
+              revision. The node record shows that revision in
+              <code>pinned_revision</code>.
+            </li>
+            <li>
+              To change the work of an open attempt, pause the node, block it,
+              and unblock it with the change.
+              <a href="node-control.html#unblock"
+                >To redirect an open attempt</a
+              >
+              shows the steps.
+            </li>
+          </ul>
+          <h3 id="node-retire-preview-and-node-retire">
+            node retire preview and node retire
+          </h3>
+          <ul>
+            <li>
+              The retirement set holds the named node alone. Its tasks leave the
+              work of the mission with it.
+            </li>
+            <li>
+              The node must be <code>Pending</code> or
+              <code>Available</code> with attempt <code>0</code>.
+            </li>
+            <li>
+              A dependent is a nonterminal node outside the set that depends on
+              the node. Without <code>force</code>, a dependent fails the
+              retirement. With <code>force</code>, the retirement removes those
+              dependency edges. A terminal dependent keeps its edge.
+            </li>
+            <li>
+              The preview returns a digest of its result. The digest also covers
+              <code>force</code>. The retirement recomputes the plan and
+              requires the same digest.
+            </li>
+            <li>
+              A retirement is final and writes no revision. The node row and its
+              revisions remain readable.
+            </li>
+          </ul>
+          <h3 id="node-rebind">node rebind</h3>
+          <ul>
+            <li>
+              <code>binding_id</code> names the target binding revision. It must
+              belong to the project of the mission and must not be removed or
+              disabled.
+            </li>
+            <li>
+              A node pin is replaced when it names an earlier revision of the
+              same binding resource.
+            </li>
+            <li>
+              Without <code>node_id</code>, the command checks every node of the
+              mission. A retired or terminal node with a replaceable pin is
+              reported in <code>skipped</code> and keeps its pin.
+            </li>
+            <li>
+              With <code>node_id</code>, the node must be a current, nonterminal
+              node of the mission. It must pin an earlier or equal revision of
+              the binding.
+            </li>
+            <li>
+              Each changed node takes one revision. The new pin applies to the
+              next attempt.
+            </li>
+          </ul>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            All operations return HTTP <code>200</code>. The CLI writes the API
+            answer as one JSON line to stdout and exits <code>0</code>. A write
+            command adds <code>idempotency_key</code> to the printed object.
+          </p>
+          <h3 id="node-record">Node record</h3>
+          <p>
+            <code>node get</code> returns one node.
+            <code>node list</code> returns
+            <code
+              >{ &quot;items&quot;: [&lt;node&gt;], &quot;next_cursor&quot;:
+              &lt;string or null&gt; }</code
+            >.
+          </p>
+          <pre><code class="language-json">{
+  "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+  "filename": "login.md",
+  "mission_id": "mission_01M4C5J3SA6W8RBBC92HA9SSDS",
+  "intent": "implement",
+  "tags": [],
+  "visible_revision": 3,
+  "content": {
+    "name": "Add the login page",
+    "requirement": "The application shows a login form.",
+    "criterion": "A user with valid credentials reaches the dashboard.",
+    "verifications": ["pnpm test"],
+    "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
+    "intent": "implement",
+    "tags": []
+  },
+  "tasks": [
+    {
+      "id": "task_01M4C5J3SACNE2WP46QAMA4Q4F",
+      "filename": "login-form.md",
+      "content": {
+        "name": "Show the login form",
+        "requirement": "...",
+        "criterion": "...",
+        "verifications": ["pnpm test"],
+        "bindings": []
+      }
+    }
+  ],
+  "retired_at": null,
+  "pinned_by_attempts": [],
+  "state": "Available",
+  "attempt": 0,
+  "pinned_revision": null,
+  "priority": 0,
+  "depends_on": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node ID.</td>
+                </tr>
+                <tr>
+                  <td><code>filename</code></td>
+                  <td>plan file name</td>
+                  <td>Unique name among current nodes of the mission.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_id</code></td>
+                  <td><code>mission_&lt;ulid&gt;</code></td>
+                  <td>Mission of the node.</td>
+                </tr>
+                <tr>
+                  <td><code>intent</code></td>
+                  <td><code>implement</code> or <code>examine</code></td>
+                  <td>
+                    Intent at the claim revision: the revision that the open
+                    attempt pins, else the current revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tags</code></td>
+                  <td>array of tags</td>
+                  <td>Tags at the claim revision.</td>
+                </tr>
+                <tr>
+                  <td><code>visible_revision</code></td>
+                  <td>positive integer</td>
+                  <td>Current revision of the node.</td>
+                </tr>
+                <tr>
+                  <td><code>content</code></td>
+                  <td>object</td>
+                  <td>
+                    Current content; <code>bindings</code> holds binding
+                    revision IDs.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tasks</code></td>
+                  <td>array</td>
+                  <td>
+                    <code>{ id, filename, content }</code> of each task at the
+                    claim revision; <code>[]</code> for an
+                    <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>retired_at</code></td>
+                  <td>integer or <code>null</code></td>
+                  <td>Retirement time in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>pinned_by_attempts</code></td>
+                  <td>array of integers</td>
+                  <td>
+                    Attempts that pin the current revision of the node. An
+                    attempt that pins an older revision is not in the list.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>state</code></td>
+                  <td>state name</td>
+                  <td>Current state of the node.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>integer</td>
+                  <td>
+                    Current attempt number; <code>0</code> before the first
+                    attempt.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>pinned_revision</code></td>
+                  <td>integer or <code>null</code></td>
+                  <td>
+                    Revision that the open attempt pins; <code>null</code> when
+                    no attempt is open. A node update does not change it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>priority</code></td>
+                  <td>safe integer</td>
+                  <td>Scheduling priority; <code>0</code> by default.</td>
+                </tr>
+                <tr>
+                  <td><code>depends_on</code></td>
+                  <td>array of <code>node_&lt;ulid&gt;</code></td>
+                  <td>Direct dependency targets.</td>
+                </tr>
+                <tr>
+                  <td><code>blocked_context</code></td>
+                  <td>object</td>
+                  <td>
+                    Only in state <code>Blocked</code>: the
+                    <code>outcome</code> that closed the attempt and its request
+                    evidence in <code>requests</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>tasks</code> of a node read can come from an older
+            revision than <code>content</code>. That older revision is
+            <code>pinned_revision</code>. To edit the tasks, read the current
+            tasks with <code>node revision get</code> at
+            <code>visible_revision</code>.
+          </p>
+          <h3 id="revision-record">Revision record</h3>
+          <p>
+            <code>node revision get</code> returns one revision.
+            <code>node revision list</code> returns
+            <code
+              >{ &quot;items&quot;: [&lt;revision&gt;], &quot;next_cursor&quot;:
+              &lt;string or null&gt; }</code
+            >
+            from the highest revision to the lowest.
+          </p>
+          <pre><code class="language-json">{
+  "node_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+  "filename": "login.md",
+  "revision": 3,
+  "reason": "Add a task",
+  "actor": { "kind": "human", "account": "&lt;account&gt;", "name": "&lt;name&gt;" },
+  "created_at": 1791446400000,
+  "content": {
+    "name": "Add the login page",
+    "requirement": "...",
+    "criterion": "...",
+    "verifications": ["pnpm test"],
+    "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
+    "intent": "implement",
+    "tags": []
+  },
+  "tasks": [
+    {
+      "id": "task_01M4C5J3SACNE2WP46QAMA4Q4F",
+      "filename": "login-form.md",
+      "content": {
+        "name": "...",
+        "requirement": "...",
+        "criterion": "...",
+        "verifications": ["..."],
+        "bindings": []
+      }
+    }
+  ],
+  "change": {
+    "write": "node.update",
+    "previous_revision": 2,
+    "changed_fields": ["tasks"],
+    "tasks": [
+      {
+        "id": "task_01M4C5J3SACNE2WP46QAMA4Q4F",
+        "change": "created",
+        "changed_fields": [
+          "filename",
+          "name",
+          "requirement",
+          "criterion",
+          "verifications",
+          "bindings"
+        ]
+      }
+    ]
+  },
+  "pinned_by_attempts": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node of the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>filename</code></td>
+                  <td>plan file name</td>
+                  <td>File name of the node at this revision.</td>
+                </tr>
+                <tr>
+                  <td><code>revision</code></td>
+                  <td>positive integer</td>
+                  <td>Revision number of the node.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>reason</code>, <code>actor</code>,
+                    <code>created_at</code>
+                  </td>
+                  <td>mixed</td>
+                  <td>
+                    Who wrote the revision, why, and when.
+                    <code>actor.kind</code> is <code>human</code>,
+                    <code>execution</code> or <code>service</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>content</code></td>
+                  <td>object</td>
+                  <td>Node content at this revision.</td>
+                </tr>
+                <tr>
+                  <td><code>tasks</code></td>
+                  <td>array</td>
+                  <td>
+                    <code>{ id, filename, content }</code> of each task at this
+                    revision; <code>[]</code> for an <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>change.write</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>import</code>, <code>node.create</code>,
+                    <code>node.update</code>, <code>node.rebind</code>,
+                    <code>criterion.set</code> or <code>unblock</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>change.previous_revision</code></td>
+                  <td>integer or <code>null</code></td>
+                  <td>
+                    Previous revision; <code>null</code> for revision
+                    <code>1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>change.changed_fields</code></td>
+                  <td>array of strings</td>
+                  <td>Changed node fields, or <code>tasks</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>change.tasks</code></td>
+                  <td>array</td>
+                  <td>
+                    Task changes: <code>created</code>, <code>updated</code>,
+                    <code>moved-in</code>, <code>moved-out</code> or
+                    <code>retired</code>; <code>[]</code> for an
+                    <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>pinned_by_attempts</code></td>
+                  <td>array of integers</td>
+                  <td>Attempts that pin this revision.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="node-change-result">Node change result</h3>
+          <p>
+            <code>node create</code>, <code>node update</code> and
+            <code>node retire</code> return a node change. Other plan writes
+            return it too.
+          </p>
+          <pre><code class="language-json">{
+  "mission_version": 8,
+  "revisions": [],
+  "retired_node_ids": [],
+  "added_edges": [],
+  "removed_edges": [],
+  "open_attempts_unchanged": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>Mission version after the write.</td>
+                </tr>
+                <tr>
+                  <td><code>revisions</code></td>
+                  <td>array</td>
+                  <td>Revision records that the write created.</td>
+                </tr>
+                <tr>
+                  <td><code>retired_node_ids</code></td>
+                  <td>array</td>
+                  <td>Nodes that the write retired.</td>
+                </tr>
+                <tr>
+                  <td><code>added_edges</code></td>
+                  <td>array of edges</td>
+                  <td>Added dependency edges.</td>
+                </tr>
+                <tr>
+                  <td><code>removed_edges</code></td>
+                  <td>array of edges</td>
+                  <td>Removed dependency edges.</td>
+                </tr>
+                <tr>
+                  <td><code>open_attempts_unchanged</code></td>
+                  <td>array</td>
+                  <td>
+                    <code>{ node_id, attempt }</code> of open attempts of
+                    revised nodes. These attempts keep their pinned revision.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An edge is
+            <code>{ &quot;dependent_id&quot;, &quot;depends_on_id&quot; }</code
+            >.
+          </p>
+          <h3 id="node-retire-preview">node retire preview</h3>
+          <pre><code class="language-json">{
+  "node_id": "node_01M4C5J3SBEB4P8KDXAZ6GKB6R",
+  "force": false,
+  "mission_version": 8,
+  "retired_node_ids": ["node_01M4C5J3SBEB4P8KDXAZ6GKB6R"],
+  "removed_edges": [],
+  "preview_digest": "9a1c3e5f7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Named node.</td>
+                </tr>
+                <tr>
+                  <td><code>force</code></td>
+                  <td>boolean</td>
+                  <td>The <code>force</code> value of the preview.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>Current mission version.</td>
+                </tr>
+                <tr>
+                  <td><code>retired_node_ids</code></td>
+                  <td>array, sorted</td>
+                  <td>The named node.</td>
+                </tr>
+                <tr>
+                  <td><code>removed_edges</code></td>
+                  <td>array of edges</td>
+                  <td>Dependency edges that <code>force</code> removes.</td>
+                </tr>
+                <tr>
+                  <td><code>preview_digest</code></td>
+                  <td>64 lower-case hex chars</td>
+                  <td>Send this value to <code>node retire</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="node-rebind-1">node rebind</h3>
+          <pre><code class="language-json">{
+  "node_change": {
+    "mission_version": 9,
+    "revisions": [],
+    "retired_node_ids": [],
+    "added_edges": [],
+    "removed_edges": [],
+    "open_attempts_unchanged": []
+  },
+  "skipped": [
+    {
+      "node": { "id": "node_01M4C5J3SBEB4P8KDXAZ6GKB6R", "...": "..." },
+      "condition": "terminal"
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node_change</code></td>
+                  <td>object</td>
+                  <td>
+                    <a href="#node-change-result">Node change result</a> with
+                    one revision for each rebound node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>skipped</code></td>
+                  <td>array</td>
+                  <td>
+                    <code>{ node, condition }</code> for each node that keeps an
+                    old pin; <code>condition</code> is <code>terminal</code> or
+                    <code>retired</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>. These
+            failures apply to every operation on this page:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    A path, query or body value fails the schema, for example an
+                    unknown body field, an empty <code>verifications</code> list
+                    or an unknown <code>intent</code> query value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>A read request has a body.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    A write request has no <code>application/json</code> content
+                    type.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>
+                    A write request has an absent or malformed
+                    <code>Idempotency-Key</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    The key belongs to another request, or its first request is
+                    still in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>
+                    The operation exceeded 30 seconds. A write can still
+                    complete.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.mission.not_found</code></td>
+                  <td>The mission ID is unknown.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td>The node or the revision is unknown.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td>A list cursor is not a cursor that the list returned.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td>
+                    <code>expected_mission_version</code> is stale;
+                    <code>details.current</code> holds the current version.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.revision.conflict</code></td>
+                  <td>
+                    An expected revision is stale;
+                    <code>details.current</code> holds the current revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.retired</code></td>
+                  <td>The node is retired.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.terminal</code></td>
+                  <td>
+                    The node is <code>Completed</code> or
+                    <code>Discarded</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.node.content_invalid</code></td>
+                  <td>
+                    A text field or <code>reason</code> is blank or exceeds the
+                    text limit. A <code>verifications</code> item is blank.
+                    <code>intent</code> is absent or unknown.
+                    <code>tags</code> is no list, or holds a repeated or
+                    malformed tag. <code>commit_type</code> is outside its
+                    closed set. A <code>name</code> gives no commit subject. An
+                    <code>examine</code> node holds a task. A task
+                    <code>id</code> is wrong for the write.
+                    <code>details.field</code> names the field.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Command-specific failures:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Operation</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>400 mission.node.bindings_invalid</code></td>
+                  <td>Create, update</td>
+                  <td>
+                    A binding ID does not resolve in the project. The count of a
+                    binding kind breaks the rule for the intent of the node. A
+                    task names a binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.filename_conflict</code></td>
+                  <td>Create, update</td>
+                  <td>
+                    Another current node or task of the mission uses the file
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.intent_locked</code></td>
+                  <td>Update</td>
+                  <td>
+                    The write changes <code>intent</code> while the attempt
+                    reads <code>1</code> or more; <code>details</code> holds
+                    <code>node_id</code> and <code>attempt</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.tags_unmatched</code></td>
+                  <td>Create, update, rebind</td>
+                  <td>
+                    The write adds an unmatched pair;
+                    <code>details.claims</code> lists each pair as
+                    <code>{ node_id, revision, claim }</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.retire_refused</code></td>
+                  <td>Retire, preview</td>
+                  <td>
+                    The node fails the state and attempt condition;
+                    <code>details</code> holds <code>node_id</code>,
+                    <code>state</code> and <code>attempt</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.retire_has_dependents</code></td>
+                  <td>Retire, preview</td>
+                  <td>
+                    Nonterminal dependents exist and <code>force</code> is
+                    false; <code>details.dependents</code> lists them.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.state_conflict</code></td>
+                  <td>Retire, preview</td>
+                  <td>
+                    With <code>force</code>, a dependent that loses its edge is
+                    in a guarded state; <code>details</code> holds
+                    <code>node_id</code>, <code>state</code> and
+                    <code>attempt</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.retire_mismatch</code></td>
+                  <td>Retire</td>
+                  <td>
+                    <code>preview_digest</code> does not match the current
+                    retirement plan.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.binding.not_found</code></td>
+                  <td>Rebind</td>
+                  <td>
+                    The binding revision is unknown or belongs to another
+                    project.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.binding.removed</code></td>
+                  <td>Rebind</td>
+                  <td>The binding is removed.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.binding.disabled</code></td>
+                  <td>Rebind</td>
+                  <td>The binding is disabled.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.binding.mismatch</code></td>
+                  <td>Rebind</td>
+                  <td>
+                    The named node pins no earlier or equal revision of the
+                    binding.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The text limit is the server configuration value
+            <code>mission.text_max_bytes</code>, 32768 UTF-8 bytes by default.
+          </p>
+          <p>
+            The CLI exits <code>1</code> on every failure and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr. A declared
+            remote failure of a read prints
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code>. A declared remote failure of a
+            write prints <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.node.&lt;command&gt;.invalid_mission_id</code
+                    >,
+                    <code
+                      >cli.mission.node.&lt;command&gt;.invalid_node_id</code
+                    >
+                  </td>
+                  <td>
+                    A positional or option ID has the wrong prefix or is not a
+                    canonical ULID.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.list.invalid_intent</code>,
+                    <code>cli.mission.node.list.invalid_state</code>
+                  </td>
+                  <td>
+                    <code>--intent</code> is not <code>implement</code> or
+                    <code>examine</code>, or <code>--state</code> is not a known
+                    state.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.rebind.invalid_binding_id</code>
+                  </td>
+                  <td>
+                    <code>&lt;binding-id&gt;</code> is not a
+                    <code>binding_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.revision.get.invalid_revision</code>
+                  </td>
+                  <td>
+                    <code>&lt;revision&gt;</code> is not a positive safe
+                    integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.pagination.limit_invalid</code>,
+                    <code>cli.pagination.limit_out_of_range</code>
+                  </td>
+                  <td>
+                    <code>--limit</code> is not a positive integer, or exceeds
+                    1000.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.&lt;command&gt;.token_required</code>
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.&lt;command&gt;.indeterminate</code>
+                  </td>
+                  <td>
+                    A transport failure, a timeout or a malformed answer. For a
+                    write, retry with the printed key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.*</code></td>
+                  <td>
+                    <code>--file</code> is absent, not a regular file,
+                    <code>-</code>, not UTF-8, not JSON, has a repeated key, is
+                    not an object, or fails the schema
+                    (<code>cli.file.schema_invalid</code>).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>&lt;command&gt;</code> is the dotted command path, for example
+            <code>retire.preview</code> or <code>revision.list</code>.
+            <code>node retire</code> without <code>--file</code> fails with the
+            Commander message for a required option.
+            <code>node retire preview</code> rejects <code>--file</code> and
+            <code>--idempotency-key</code> as unknown options.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            All operations use access <code>human</code> (human bearer JWT) and
+            a 30-second timeout.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Mutation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node list</code></td>
+                  <td><code>GET /api/mission/:mission_id/node</code></td>
+                  <td><code>mission.node.list</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>node get</code></td>
+                  <td><code>GET /api/mission/node/:node_id</code></td>
+                  <td><code>mission.node.get</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>node create</code></td>
+                  <td><code>POST /api/mission/:mission_id/node</code></td>
+                  <td><code>mission.node.create</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node update</code></td>
+                  <td><code>PUT /api/mission/node/:node_id</code></td>
+                  <td><code>mission.node.update</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node retire preview</code></td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/retire/preview</code>
+                  </td>
+                  <td><code>mission.node.retire.preview</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>node retire</code></td>
+                  <td><code>POST /api/mission/node/:node_id/retire</code></td>
+                  <td><code>mission.node.retire</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node rebind</code></td>
+                  <td><code>POST /api/mission/:mission_id/rebind</code></td>
+                  <td><code>mission.node.rebind</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node revision list</code></td>
+                  <td><code>GET /api/mission/node/:node_id/revision</code></td>
+                  <td><code>mission.node.revision.list</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>node revision get</code></td>
+                  <td>
+                    <code
+                      >GET /api/mission/node/:node_id/revision/:revision</code
+                    >
+                  </td>
+                  <td><code>mission.node.revision.get</code></td>
+                  <td>No</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Path parameters: <code>mission_id</code> is
+            <code>mission_&lt;ulid&gt;</code>, <code>node_id</code> is
+            <code>node_&lt;ulid&gt;</code>, and <code>revision</code> is a
+            positive safe integer.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Writes only</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Writes only</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it to
+                    retry the same write.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The Gateway keeps the answer of a write for its idempotency key in
+            process memory for <code>idempotency_ttl</code> seconds, 86400 by
+            default. A retry with the same key, human account and request
+            replays that answer. This rule also applies to a failure. Read
+            requests send no body.
+          </p>
+          <h3 id="query-parameters">Query parameters</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Parameter</th>
+                  <th>Default</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>List operations</td>
+                  <td><code>limit</code></td>
+                  <td><code>100</code></td>
+                  <td>Page size, <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td>List operations</td>
+                  <td><code>cursor</code></td>
+                  <td>Absent</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+                <tr>
+                  <td><code>node list</code></td>
+                  <td><code>intent</code></td>
+                  <td>Absent</td>
+                  <td>
+                    <code>implement</code> or <code>examine</code>; filters by
+                    the intent at the claim revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>node list</code></td>
+                  <td><code>state</code></td>
+                  <td>Absent</td>
+                  <td>Exact state name.</td>
+                </tr>
+                <tr>
+                  <td><code>node list</code></td>
+                  <td><code>include_retired</code></td>
+                  <td><code>false</code></td>
+                  <td><code>true</code> or <code>false</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>node retire preview</code></td>
+                  <td><code>force</code></td>
+                  <td><code>false</code></td>
+                  <td><code>true</code> or <code>false</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>node list</code> returns nodes from the highest node ID to the
+            lowest. <code>node revision list</code> returns revisions from the
+            highest revision to the lowest.
+          </p>
+          <h3 id="request-bodies">Request bodies</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node create</code></td>
+                  <td><code>filename</code></td>
+                  <td>plan file name</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node create</code></td>
+                  <td><code>content</code></td>
+                  <td>content object, below</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node create</code></td>
+                  <td><code>tasks</code></td>
+                  <td>array of task writes, below</td>
+                  <td>Yes; <code>[]</code> for no task</td>
+                </tr>
+                <tr>
+                  <td><code>node create</code></td>
+                  <td><code>reason</code></td>
+                  <td>nonblank string</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node create</code></td>
+                  <td><code>expected_mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node update</code></td>
+                  <td>
+                    <code>filename</code>, <code>content</code>,
+                    <code>tasks</code>, <code>reason</code>,
+                    <code>expected_mission_version</code>
+                  </td>
+                  <td>as above</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node update</code></td>
+                  <td><code>expected_revision</code></td>
+                  <td>positive integer</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node retire</code></td>
+                  <td>
+                    <code>reason</code>, <code>expected_mission_version</code>
+                  </td>
+                  <td>as above</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node retire</code></td>
+                  <td><code>preview_digest</code></td>
+                  <td>64 lower-case hex chars</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node retire</code></td>
+                  <td><code>force</code></td>
+                  <td>boolean</td>
+                  <td>Yes; must match the preview</td>
+                </tr>
+                <tr>
+                  <td><code>node rebind</code></td>
+                  <td><code>binding_id</code></td>
+                  <td><code>binding_&lt;ulid&gt;</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node rebind</code></td>
+                  <td>
+                    <code>reason</code>, <code>expected_mission_version</code>
+                  </td>
+                  <td>as above</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>node rebind</code></td>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>No; absent rebinds the mission</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The content object has <code>name</code>,
+            <code>requirement</code> and <code>criterion</code> (nonblank
+            strings), <code>verifications</code> (at least one nonblank string),
+            <code>bindings</code> (binding IDs), <code>intent</code> (<code
+              >implement</code
+            >
+            or <code>examine</code>), the optional <code>tags</code> (unique
+            tags, <code>[]</code> by default) and the optional
+            <code>commit_type</code>. A tag matches
+            <code>^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$</code> and holds at most
+            64 bytes. A task write holds an optional
+            <code>id</code> (<code>task_&lt;ulid&gt;</code>),
+            <code>filename</code> and <code>content</code> with
+            <code>name</code>, <code>requirement</code>, <code>criterion</code>,
+            <code>verifications</code> and <code>bindings: []</code>. A plan
+            file name matches <code>^[a-z][a-z0-9_-]*\.md$</code>. Bodies accept
+            no unknown field.
+          </p>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/node \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -d '{"filename":"signup.md","expected_mission_version":7,"reason":"Add sign-up","content":{"name":"Add sign-up","requirement":"Users create accounts.","criterion":"A new user signs in.","verifications":["pnpm test"],"bindings":["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],"intent":"implement","tags":[]},"tasks":[]}'</code></pre>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/mission_01M4C5J3SA6W8RBBC92HA9SSDS/node?intent=implement&amp;state=Available&amp;limit=50' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord mission node list &lt;mission-id&gt; [--intent &lt;intent&gt;] [--state &lt;state&gt;] [--include-retired] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;]
+kanthord mission node get &lt;node-id&gt;
+kanthord mission node create &lt;mission-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node update &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node retire preview &lt;node-id&gt; [--force]
+kanthord mission node retire &lt;node-id&gt; --file &lt;path&gt; [--force] [--idempotency-key &lt;key&gt;]
+kanthord mission node rebind &lt;mission-id&gt; &lt;binding-id&gt; --file &lt;path&gt; [--node &lt;node-id&gt;] [--idempotency-key &lt;key&gt;]
+kanthord mission node revision list &lt;node-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;]
+kanthord mission node revision get &lt;node-id&gt; &lt;revision&gt;</code></pre>
+          <p>
+            Every command also accepts <code>--token &lt;jwt&gt;</code> and
+            <code>--endpoint &lt;url&gt;</code>.
+          </p>
+          <pre><code class="language-sh">kanthord mission node create mission_01M4C5J3SA6W8RBBC92HA9SSDS --file signup.json
+kanthord mission node retire preview node_01M4C5J3SBEB4P8KDXAZ6GKB6R --force
+kanthord mission node retire node_01M4C5J3SBEB4P8KDXAZ6GKB6R --force --file retire.json \
+  --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;mission-id&gt;</code></td>
+                  <td>Required <code>mission_&lt;ulid&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;binding-id&gt;</code></td>
+                  <td>
+                    Required <code>binding_&lt;ulid&gt;</code>: the target
+                    binding revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;revision&gt;</code></td>
+                  <td>Required positive safe integer.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--intent &lt;intent&gt;</code></td>
+                  <td><code>node list</code></td>
+                  <td>Absent</td>
+                  <td>Sets <code>intent</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--state &lt;state&gt;</code></td>
+                  <td><code>node list</code></td>
+                  <td>Absent</td>
+                  <td>Sets <code>state</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--include-retired</code></td>
+                  <td><code>node list</code></td>
+                  <td><code>false</code></td>
+                  <td>
+                    Sets <code>include_retired=true</code>; the CLI always sends
+                    this value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td>List commands</td>
+                  <td><code>100</code></td>
+                  <td>Page size, <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>List commands</td>
+                  <td>Absent</td>
+                  <td>Continues from <code>next_cursor</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Writes</td>
+                  <td>Required; no default</td>
+                  <td>JSON body file. See the file contents below.</td>
+                </tr>
+                <tr>
+                  <td><code>--force</code></td>
+                  <td>
+                    <code>node retire</code>, <code>node retire preview</code>
+                  </td>
+                  <td><code>false</code></td>
+                  <td>
+                    Sets <code>force</code>. Use the same value for the preview
+                    and the retirement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--node &lt;node-id&gt;</code></td>
+                  <td><code>node rebind</code></td>
+                  <td>Absent</td>
+                  <td>Sets <code>node_id</code>; rebinds only this node.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>Writes</td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>; supply the same key to
+                    retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The <code>--file</code> contents:</p>
+          <ul>
+            <li>
+              <code>node create</code> and <code>node update</code>: the
+              complete request body.
+            </li>
+            <li>
+              <code>node retire</code>: <code>reason</code>,
+              <code>expected_mission_version</code> and
+              <code>preview_digest</code>. The CLI sets <code>force</code> from
+              <code>--force</code>. A <code>force</code> field in the file fails
+              the schema.
+            </li>
+            <li>
+              <code>node rebind</code>: <code>reason</code> and
+              <code>expected_mission_version</code>. The CLI sets
+              <code>binding_id</code> from <code>&lt;binding-id&gt;</code> and
+              <code>node_id</code> from <code>--node</code>. Either field in the
+              file fails the schema.
+            </li>
+          </ul>
+          <p>
+            The CLI validates IDs, the token, the key and the file before it
+            sends a request. The CLI does not read stdin. Each option is
+            accepted once. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

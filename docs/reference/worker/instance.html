@@ -1,0 +1,1967 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage worker instances · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="manage-worker-instances">Manage worker instances</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A worker instance is the unit of capacity of a worker that kanthord
+            hosts. It runs one execution at a time. To run more executions at
+            once, add an instance. An instance belongs to one worker, for
+            example <code>coder@1</code>, and holds one
+            <a href="placement.html">placement</a>. The name, the worker and the
+            placement never change. A
+            <a href="../project/binding.html#binding-configuration"
+              >worker binding</a
+            >
+            lists its instances in <code>worker_instances</code>, at every
+            placement.
+          </p>
+          <ul>
+            <li>
+              At the <code>server</code> placement, the server runs the instance
+              as one thread.
+            </li>
+            <li>
+              At the <code>container</code> placement, the server runs the
+              instance in one container on its own host.
+            </li>
+            <li>
+              At the <code>worker</code> placement, one
+              <code>kanthord serve worker</code> process is one instance.
+            </li>
+          </ul>
+          <p>
+            The server runs each <code>server</code> and
+            <code>container</code> instance from its create until its archive,
+            also while no binding lists it. Such an instance holds no key. It
+            uses the <code>server</code> copy of each credential through the
+            slot channel. A create at
+            <code>worker.server_instance_limit</code> (16 by default) refuses.
+            The server runs at most that many <code>server</code> and
+            <code>container</code> instances at once.
+          </p>
+          <p>
+            The rest of this section applies to an instance at the
+            <code>worker</code> placement. The X25519 key pair of the instance
+            is its only machine credential. The server stores only the public
+            key. The private key stays in the instance configuration on the host
+            of the instance:
+          </p>
+          <ul>
+            <li>
+              The instance configuration holds <code>name</code>,
+              <code>endpoint</code>, <code>instance_id</code> and
+              <code>private_key</code>. Its value is the unpadded base64url form
+              of its canonical JSON, with no prefix.
+            </li>
+            <li>
+              The instance file
+              <code>$XDG_CONFIG_HOME/kanthord/workers/&lt;name&gt;.yaml</code>
+              holds the same four keys, with mode <code>0600</code>. Without
+              <code>XDG_CONFIG_HOME</code>, the directory is
+              <code>~/.config/kanthord/workers/</code>.
+            </li>
+            <li>
+              On a host without a writable configuration, the env value
+              <code>KANTHORD_WORKER_CONFIG</code> holds the instance
+              configuration. See
+              <a href="../serve.html">Run an application</a> for the start of
+              <code>kanthord serve worker</code>.
+            </li>
+          </ul>
+          <p>
+            Each instance has revisions. Each revision has its own
+            <code>worker_instance_&lt;ulid&gt;</code> identity, key and
+            fingerprint. The live revision of a name is its newest revision with
+            <code>ended_at</code> <code>null</code>. A name with no live
+            revision is archived.
+          </p>
+          <ul>
+            <li>
+              <code>worker instance create</code> stores revision
+              <code>1</code> of a new name, with its placement. The name follows
+              the binding name form: 1 to 63 characters,
+              <code>^[a-z][a-z0-9-]*$</code>. The names <code>server</code>,
+              <code>token</code>, <code>connect</code> and
+              <code>heartbeat</code> are reserved. An archived name stays taken.
+            </li>
+            <li>
+              <code>worker instance list</code> pages the newest revision of
+              each name in ascending name order. By default it leaves out
+              archived instances.
+            </li>
+            <li>
+              <code>worker instance get</code> reads the newest revision of one
+              name, live or archived, with its bindings, its connection, its
+              live registrations and its credential copies.
+            </li>
+            <li>
+              <code>worker instance rotate</code> is the Reset key, at the
+              <code>worker</code> placement only. In one transaction, it ends
+              the live revision and stores the next revision with a new key. It
+              also ends every live registration of the old revision. Each worker
+              token, connection and client token of the old revision then fails
+              its next request.
+            </li>
+            <li>
+              <code>worker instance archive</code> ends the live revision for
+              good. It refuses while a binding lists the instance. Remove the
+              instance from each binding first. Without <code>--force</code>, it
+              also refuses while a registration of the instance holds an
+              execution that has not ended. With <code>--force</code>, it
+              revokes that execution: the node returns to
+              <code>Available</code> or <code>Waiting</code> with no loss and no
+              failure count. In one transaction, it ends the registrations of
+              the instance and archives every
+              <a href="../llm/credential.html#instance-copies"
+                >credential copy</a
+              >
+              that the instance holds. The server then stops a
+              <code>server</code> or <code>container</code> instance.
+            </li>
+          </ul>
+          <p>
+            At the <code>worker</code> placement, create and rotate take
+            <code>public_key</code> or <code>endpoint</code>, never both and
+            never neither. At the <code>server</code> and the
+            <code>container</code> placements, create takes neither:
+          </p>
+          <ul>
+            <li>
+              With <code>public_key</code>, the server stores that key. The CLI
+              generates the key pair on its own host and sends only
+              <code>public_key</code>.
+            </li>
+            <li>
+              With <code>endpoint</code>, the server generates the key pair and
+              stores only the public key. The answer adds
+              <code>instance_configuration</code> once, with the header
+              <code>Cache-Control: no-store</code>. The server keeps no copy of
+              the private key.
+            </li>
+          </ul>
+          <p>
+            A Reset key gives a new instance configuration. Replace the instance
+            file with <code>kanthord worker join --force</code>, or replace the
+            env value. A credential copy that is sealed to the old key has
+            <code>sealed_current</code> <code>false</code>. Rotate each listed
+            credential with a new secret, and rotate the key at the provider.
+            The old configuration still opens these credentials.
+          </p>
+          <h3 id="the-instance-exchange">The instance exchange</h3>
+          <p>
+            <code>kanthord serve worker</code> calls three operations. A human
+            does not call them:
+          </p>
+          <ol>
+            <li>
+              <code>worker.instance.token</code> sends the
+              <code>instance_id</code> and receives a worker token sealed to the
+              public key of the live revision. Only the holder of the private
+              key opens it. The call changes no state.
+            </li>
+            <li>
+              <code>worker.instance.connect</code> sends the worker token. The
+              answer holds, sealed, a <code>client</code> JWT and a
+              <code>client_secret</code> for each binding that lists the
+              instance.
+            </li>
+            <li>
+              <code>worker.instance.heartbeat</code> renews the connection once
+              at the start, then every 15 seconds, and every 2 seconds while a
+              <a href="../llm/login.html#login-on-a-worker-instance"
+                >login on the instance</a
+              >
+              is pending.
+            </li>
+          </ol>
+          <p>
+            The seal is HPKE base mode with the suite
+            <code>hpke-x25519-sha256-aes128gcm</code>. HPKE does not
+            authenticate the server. TLS or the same host authenticates the
+            server to an instance.
+          </p>
+          <p>
+            The server keeps only the current connection of each instance in
+            memory, with its last heartbeat. A connect without
+            <code>connection_id</code> creates a new connection, and the
+            previous connection ends at once. A connect or a heartbeat with
+            another <code>connection_id</code> fails with
+            <code>409 worker.instance.connection_superseded</code>. After a
+            server start, no connection is current. The first connect, heartbeat
+            or <code>client</code> request with a valid
+            <code>connection_id</code> makes that connection current.
+          </p>
+          <p>
+            The dashboard shows an instance as connected while its last
+            heartbeat is at most 60 seconds old.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="instance-record">Instance record</h3>
+          <p>
+            <code>create</code>, <code>rotate</code> and
+            <code>archive</code> answer HTTP <code>200</code> with an instance
+            record. <code>list</code> and <code>get</code> add fields to the
+            same record.
+          </p>
+          <pre><code class="language-json">{
+  "id": "worker_instance_01M34JC4BJ66JHP41M4MYY6PST",
+  "name": "builder-1",
+  "worker": "coder@1",
+  "placement": "worker",
+  "revision": 1,
+  "public_key": "&lt;43-base64url-characters&gt;",
+  "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+  "created_at": 1791467996322,
+  "ended_at": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td>string</td>
+                  <td>
+                    Identity of the revision,
+                    <code>worker_instance_&lt;ulid&gt;</code>. Each revision has
+                    its own identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>Instance name. It never changes.</td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td>string</td>
+                  <td>
+                    Worker of the instance, for example <code>coder@1</code>. It
+                    never changes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>placement</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>server</code>, <code>container</code> or
+                    <code>worker</code>. It never changes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>revision</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Revision number of the name, from <code>1</code>. Each Reset
+                    key adds <code>1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>public_key</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Base64url form of the 32-byte X25519 public key of the
+                    revision. <code>null</code> at the <code>server</code> and
+                    the <code>container</code> placements.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fingerprint</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code
+                      >SHA256:&lt;unpadded base64 of the SHA-256 of the
+                      key&gt;</code
+                    >. No two revisions share one. <code>null</code> at the
+                    <code>server</code> and the
+                    <code>container</code> placements.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>integer</td>
+                  <td>Creation time of the revision in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>ended_at</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    End time of the revision in Unix milliseconds.
+                    <code>null</code> while the revision is live.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>archive</code> answer is the archived revision, with
+            <code>ended_at</code> set. The <code>rotate</code> answer is the new
+            revision.
+          </p>
+          <h3 id="worker-instance-create-and-worker-instance-rotate">
+            <code>worker instance create</code> and
+            <code>worker instance rotate</code>
+          </h3>
+          <p>
+            With <code>endpoint</code> in the request, the API answer adds one
+            field and the header <code>Cache-Control: no-store</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>instance_configuration</code></td>
+                  <td>string</td>
+                  <td>
+                    The instance configuration with the generated private key.
+                    The server answers it only once.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            With <code>public_key</code>, the answer is the instance record
+            only. No other answer of this page holds a secret, except the sealed
+            objects.
+          </p>
+          <p>
+            The CLI generates the key pair on its own host and builds the
+            instance configuration with the private key. It writes one JSON line
+            to stdout and exits <code>0</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Instance record</td>
+                  <td>The answer of the server.</td>
+                </tr>
+                <tr>
+                  <td><code>instance_configuration</code></td>
+                  <td>
+                    Without <code>--output</code>: the instance configuration.
+                    Give it to <code>kanthord worker join</code> or to
+                    <code>KANTHORD_WORKER_CONFIG</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created</code></td>
+                  <td>
+                    With <code>--output</code>: the path of the instance file
+                    that the CLI wrote. The line then holds no private key.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The success line holds no <code>idempotency_key</code>.</p>
+          <h3 id="worker-instance-list"><code>worker instance list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "worker_instance_01M34JC4BJ66JHP41M4MYY6PST",
+      "name": "builder-1",
+      "worker": "coder@1",
+      "placement": "worker",
+      "revision": 2,
+      "public_key": "&lt;43-base64url-characters&gt;",
+      "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+      "created_at": 1791467996322,
+      "ended_at": null,
+      "connection": {
+        "connection_name": "build-host",
+        "connected_at": 1791468000000,
+        "last_heartbeat_at": 1791468015000
+      },
+      "binding_count": 1,
+      "holder_mismatch": false
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    The newest revision of each name, with the fields of the
+                    <a href="#instance-record">instance record</a> and the
+                    fields below.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>connection</code></td>
+                  <td>object or null</td>
+                  <td>
+                    Current connection of the revision; <code>null</code> when
+                    the revision holds no current connection, or when its last
+                    heartbeat is more than 60 seconds old.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>connection.connection_name</code></td>
+                  <td>string</td>
+                  <td>
+                    Host name that the process sent.
+                    <code>&quot;&quot;</code> when a <code>client</code> request
+                    made the connection current before a connect or a heartbeat
+                    named it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>connection.connected_at</code></td>
+                  <td>integer</td>
+                  <td>
+                    Time in Unix milliseconds when the connection became
+                    current.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>connection.last_heartbeat_at</code></td>
+                  <td>integer</td>
+                  <td>
+                    Time in Unix milliseconds of the last connect or heartbeat.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>binding_count</code></td>
+                  <td>integer</td>
+                  <td>
+                    Number of current bindings, over every project, that list
+                    the instance. A <code>server</code> or
+                    <code>container</code> instance with <code>0</code> still
+                    runs.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>holder_mismatch</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when an agent of a binding that lists the
+                    instance gives the issue
+                    <code>agent.configuration.credential_holder_mismatch</code>
+                    for this instance. A chain credential then has no live copy
+                    sealed to the current key. It is <code>false</code> for a
+                    <code>server</code> or a <code>container</code> instance,
+                    which uses the copy of the holder <code>server</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The connection state is process-local. A server start clears every
+            connection.
+          </p>
+          <h3 id="worker-instance-get"><code>worker instance get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with the newest revision of
+            the name, live or archived. The CLI writes the same object as one
+            JSON line to stdout and exits <code>0</code> (shown formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "id": "worker_instance_01M34JC4BJ66JHP41M4MYY6PST",
+  "name": "builder-1",
+  "worker": "coder@1",
+  "placement": "worker",
+  "revision": 2,
+  "public_key": "&lt;43-base64url-characters&gt;",
+  "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+  "created_at": 1791467996322,
+  "ended_at": null,
+  "connection": null,
+  "bindings": [
+    { "project_id": "project_01M34JC4BJ66JHP41M4MYY6PSA", "binding": "general" }
+  ],
+  "registrations": [],
+  "credentials": [
+    {
+      "name": "claude",
+      "revision": 1,
+      "platform": "anthropic-subscription",
+      "sealed_current": true,
+      "health": {
+        "status": "unhealthy",
+        "capability": "model call",
+        "failure_reason": "unauthorized",
+        "models": null,
+        "reported_at": 1791468011422
+      }
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>connection</code></td>
+                  <td>object or null</td>
+                  <td>
+                    Current connection, as in <code>worker instance list</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>bindings</code></td>
+                  <td>array</td>
+                  <td>
+                    One <code>{ project_id, binding }</code> item for each
+                    current binding, over every project, that lists the
+                    instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>registrations</code></td>
+                  <td>array</td>
+                  <td>
+                    Live registrations of every revision of the instance. Each
+                    item is a record of
+                    <a href="registration.html#worker-registration-get"
+                      ><code>worker registration get</code></a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credentials</code></td>
+                  <td>array</td>
+                  <td>
+                    Live credential copies that the instance holds, in ascending
+                    name order. Each item describes the newest live revision of
+                    one name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credentials[].name</code></td>
+                  <td>string</td>
+                  <td>Credential name.</td>
+                </tr>
+                <tr>
+                  <td><code>credentials[].revision</code></td>
+                  <td>integer</td>
+                  <td>Newest live revision of the copy.</td>
+                </tr>
+                <tr>
+                  <td><code>credentials[].platform</code></td>
+                  <td>string</td>
+                  <td>Platform of the credential.</td>
+                </tr>
+                <tr>
+                  <td><code>credentials[].sealed_current</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when the copy is sealed to the current key
+                    of the instance. <code>false</code> after a Reset key;
+                    rotate the copy with a new secret.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credentials[].health</code></td>
+                  <td>object</td>
+                  <td>
+                    The last check that the instance reported for this revision.
+                    See
+                    <a href="../llm/credential.html#health-of-an-instance-copy"
+                      >health of an instance copy</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>health.status</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>healthy</code>, <code>unhealthy</code> or
+                    <code>unknown</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>health.capability</code></td>
+                  <td>string</td>
+                  <td>
+                    The capability that the check proves, as in
+                    <a href="../llm/credential.html#check-and-verify-answer"
+                      >the check answer</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>health.failure_reason</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code>null</code> for <code>healthy</code> only.
+                    <code>held_by_instance</code> when no report is held.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>health.models</code></td>
+                  <td>array or null</td>
+                  <td>
+                    The model list of a check that reads one, else
+                    <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>health.reported_at</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    Time of the report in Unix milliseconds.
+                    <code>null</code> when the server holds no report of this
+                    revision.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The server holds no report after its start, after a new revision of
+            the copy, or for a copy with <code>sealed_current</code>
+            <code>false</code>. Such a copy shows <code>status</code>
+            <code>unknown</code>, <code>failure_reason</code>
+            <code>held_by_instance</code>, <code>models</code>
+            <code>null</code> and <code>reported_at</code> <code>null</code>.
+          </p>
+          <p>
+            The record fields are the fields of the
+            <a href="#instance-record">instance record</a>.
+          </p>
+          <h3 id="workerinstancetoken"><code>worker.instance.token</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with the header
+            <code>Cache-Control: no-store</code>. No CLI command calls this
+            operation.
+          </p>
+          <pre><code class="language-json">{
+  "server_version": "0.1.0",
+  "sealed": {
+    "alg": "hpke-x25519-sha256-aes128gcm",
+    "enc": "&lt;base64url&gt;",
+    "ciphertext": "&lt;base64url&gt;"
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server_version</code></td>
+                  <td>string</td>
+                  <td>Package version of the server.</td>
+                </tr>
+                <tr>
+                  <td><code>sealed</code></td>
+                  <td>object</td>
+                  <td>
+                    The worker token, sealed to the public key of the revision,
+                    with the info <code>kanthord/worker-token/v1</code> and the
+                    <code>instance_id</code> as additional data.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>sealed</code> opens to
+            <code>{ token, expired_at, name, worker, fingerprint }</code>.
+            <code>token</code> is a JWT of the kind <code>worker</code> with a
+            lifetime of 3600 seconds. <code>expired_at</code> is its expiry in
+            Unix milliseconds.
+          </p>
+          <h3 id="workerinstanceconnect">
+            <code>worker.instance.connect</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code> with the header
+            <code>Cache-Control: no-store</code>. No CLI command calls this
+            operation.
+          </p>
+          <pre><code class="language-json">{
+  "connection_id": "connection_01M34JC4BJ66JHP41M4MYY6PSE",
+  "binding_version": 3,
+  "sealed": {
+    "alg": "hpke-x25519-sha256-aes128gcm",
+    "enc": "&lt;base64url&gt;",
+    "ciphertext": "&lt;base64url&gt;"
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>connection_id</code></td>
+                  <td>string</td>
+                  <td>
+                    Current connection, <code>connection_&lt;ulid&gt;</code>.
+                    Send it with each heartbeat and each later connect.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>binding_version</code></td>
+                  <td>integer</td>
+                  <td>
+                    Version of the bindings that list the instance. A heartbeat
+                    with another value tells the process to connect again.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>sealed</code></td>
+                  <td>object</td>
+                  <td>
+                    The binding entries, sealed with the info
+                    <code>kanthord/instance-connection/v1</code> and the
+                    <code>instance_id</code> followed by the
+                    <code>connection_id</code> as additional data.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>sealed</code> opens to <code>{ bindings: [...] }</code>, one
+            entry for each binding that lists the instance:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Entry field</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>Project of the binding.</td>
+                </tr>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>
+                    Worker binding,
+                    <code>worker:kanthord:&lt;binding-name&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>client_id</code></td>
+                  <td>
+                    Client identity of the instance for this binding. A new
+                    binding generation or a Reset key changes it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>token</code></td>
+                  <td>
+                    <code>client</code> JWT with the claims
+                    <code>instance_id</code> and <code>connection_id</code>,
+                    with a lifetime of 3600 seconds.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>expired_at</code></td>
+                  <td>Expiry of <code>token</code> in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>client_secret</code></td>
+                  <td>Client secret of <code>client_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>state</code></td>
+                  <td>
+                    <code>serving</code>, or <code>draining</code> for a binding
+                    that no longer lists the instance while the instance holds a
+                    live registration in it.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>binding_version</code> is process-local and starts at
+            <code>0</code> at each server start. Each binding-set write of a
+            project adds <code>1</code> for each instance that the previous or
+            the new set of that project lists.
+          </p>
+          <h3 id="workerinstanceheartbeat">
+            <code>worker.instance.heartbeat</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code>. No CLI command calls this
+            operation.
+          </p>
+          <pre><code class="language-json">{
+  "server_version": "0.1.0",
+  "binding_version": 3,
+  "credential_version": 0,
+  "login_sessions": [
+    {
+      "session_id": "&lt;session-id&gt;",
+      "name": "claude",
+      "platform": "anthropic-subscription",
+      "mode": "copy_code",
+      "code": null
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server_version</code></td>
+                  <td>string</td>
+                  <td>
+                    Package version of the server. A process with another
+                    version stops with <code>worker.version.mismatch</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>binding_version</code></td>
+                  <td>integer</td>
+                  <td>
+                    Current binding version of the instance, as in the connect
+                    answer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credential_version</code></td>
+                  <td>integer</td>
+                  <td>
+                    Version of the credential copies of the instance. Each
+                    server start and each copy write give a new value. A changed
+                    value starts a
+                    <a href="../llm/credential.html#health-of-an-instance-copy"
+                      >check of the copies</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions</code></td>
+                  <td>array</td>
+                  <td>
+                    Pending
+                    <a href="../llm/login.html#login-on-a-worker-instance"
+                      >logins on the instance</a
+                    >. An empty list when none is pending.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions[].session_id</code></td>
+                  <td>string</td>
+                  <td>Login session.</td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions[].name</code></td>
+                  <td>string</td>
+                  <td>Name of the credential that the login creates.</td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions[].platform</code></td>
+                  <td>string</td>
+                  <td>Platform of the login.</td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions[].mode</code></td>
+                  <td>string</td>
+                  <td><code>copy_code</code> or <code>device</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions[].code</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The value that the human submitted with
+                    <code>login-code</code>; <code>null</code> until then.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A heartbeat also sets the <code>connection_name</code> of a current
+            connection that holds none.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All except <code>token</code></td>
+                  <td>
+                    Missing or invalid token, or a token of the wrong kind.
+                    Create, list, get, rotate and archive require a human token.
+                    Connect and heartbeat require a worker token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>401 gateway.jwt.*</code></td>
+                  <td>All except <code>token</code></td>
+                  <td>
+                    A claim of the token fails, for example
+                    <code>gateway.jwt.expired</code>. A worker token of an ended
+                    revision answers <code>gateway.jwt.instance_ended</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    A query value or a body field fails the schema, for example
+                    an unknown field, a malformed <code>instance_id</code>, or a
+                    <code>connection_name</code> above 255 characters.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td><code>list</code>, <code>get</code></td>
+                  <td>The request has a body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The cursor is not a cursor that this operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.instance.name_invalid</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    The name breaks the binding name form, or it is
+                    <code>server</code>, <code>token</code>,
+                    <code>connect</code> or <code>heartbeat</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.instance.worker_invalid</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    The worker is unknown, or it is a worker of an external
+                    harness.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.instance.key_invalid</code></td>
+                  <td><code>create</code>, <code>rotate</code></td>
+                  <td>
+                    At the <code>worker</code> placement:
+                    <code>public_key</code> is no base64url 32-byte value, or
+                    all its bytes are zero. Also a body with both
+                    <code>public_key</code> and <code>endpoint</code>, or with
+                    neither.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.instance.placement_invalid</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    <code>placement</code> is absent, or it is not
+                    <code>server</code>, <code>container</code> or
+                    <code>worker</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.instance.key_forbidden</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    A create at the <code>server</code> or the
+                    <code>container</code> placement holds
+                    <code>public_key</code> or <code>endpoint</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 worker.instance.placement_unavailable</code>
+                  </td>
+                  <td><code>create</code></td>
+                  <td>
+                    A create at the <code>container</code> placement meets a
+                    server that cannot run containers.
+                    <code>details</code> holds <code>placement</code> and
+                    <code>reason</code>: <code>server_in_container</code>,
+                    <code>runtime_absent</code> or <code>runtime_rootful</code>.
+                    <code>runtime_failed</code> passes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.instance.server_limit</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    A create at the <code>server</code> or the
+                    <code>container</code> placement meets
+                    <code>worker.server_instance_limit</code>.
+                    <code>details.limit</code> holds the limit.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 worker.instance.placement_unsupported</code>
+                  </td>
+                  <td><code>rotate</code></td>
+                  <td>
+                    The instance is at the <code>server</code> or the
+                    <code>container</code> placement, which holds no key.
+                    <code>details.placement</code> holds the placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 worker.instance.not_found</code></td>
+                  <td>
+                    <code>get</code>, <code>rotate</code>, <code>archive</code>,
+                    <code>token</code>, <code>connect</code>
+                  </td>
+                  <td>
+                    No instance has the name. For <code>token</code>, the
+                    <code>instance_id</code> is unknown or its revision ended.
+                    For <code>connect</code>, the revision ended during the
+                    request. A revision that ended before the request answers
+                    <code>401 gateway.jwt.instance_ended</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.instance.name_conflict</code></td>
+                  <td><code>create</code></td>
+                  <td>A live or an archived instance holds the name.</td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.instance.key_conflict</code></td>
+                  <td><code>create</code>, <code>rotate</code></td>
+                  <td>
+                    A revision of any instance holds the fingerprint of the key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.instance.archived</code></td>
+                  <td><code>rotate</code>, <code>archive</code></td>
+                  <td>The instance is archived.</td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.instance.revision_conflict</code></td>
+                  <td><code>rotate</code>, <code>archive</code></td>
+                  <td>
+                    <code>expected_revision</code> is not the live revision.
+                    <code>details.revision</code> holds the live revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.instance.in_use</code></td>
+                  <td><code>archive</code></td>
+                  <td>
+                    A current binding lists the instance;
+                    <code>details.bindings</code> lists
+                    <code>{ project_id, binding }</code>. Or, without
+                    <code>force</code>, a registration of the instance holds an
+                    execution; <code>details.executions</code> lists the
+                    execution IDs.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 worker.instance.connection_superseded</code>
+                  </td>
+                  <td><code>connect</code>, <code>heartbeat</code></td>
+                  <td>
+                    Another connection of the instance is current.
+                    <code>details.connection_name</code> holds the name of the
+                    current connection.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>,
+                    <code>archive</code>, <code>connect</code>,
+                    <code>heartbeat</code>
+                  </td>
+                  <td>Missing or malformed idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>,
+                    <code>archive</code>, <code>connect</code>,
+                    <code>heartbeat</code>
+                  </td>
+                  <td>
+                    Conflicting reuse of an idempotency key. For
+                    <code>create</code>, <code>rotate</code> and
+                    <code>connect</code>, also every repeated key, because the
+                    server never replays an answer that holds a secret.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>,
+                    <code>archive</code>, <code>token</code>,
+                    <code>connect</code>, <code>heartbeat</code>
+                  </td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>,
+                    <code>archive</code>, <code>token</code>,
+                    <code>connect</code>, <code>heartbeat</code>
+                  </td>
+                  <td>
+                    The request body is not <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>
+                    The operation exceeded 30 seconds. A mutation can still
+                    complete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Within the replay TTL, a repeated <code>archive</code> or
+            <code>heartbeat</code> key with the same request and caller returns
+            the recorded response.
+          </p>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status</code> to stderr. For <code>create</code>,
+            <code>rotate</code> and <code>archive</code>, the CLI also prints
+            the row <code>idempotency_key</code>. A transport failure, timeout
+            or malformed response exits <code>1</code> with an indeterminate
+            code:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Code</th>
+                  <th>Recovery</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>create</code></td>
+                  <td><code>cli.worker.instance.create.indeterminate</code></td>
+                  <td>
+                    Run <code>worker instance get &lt;name&gt;</code>. When the
+                    name is free, run the create again. When the name holds a
+                    revision that this host did not receive, run
+                    <code
+                      >kanthord worker instance rotate &lt;name&gt;
+                      --expected-revision &lt;revision&gt; --output</code
+                    >. <code>&lt;revision&gt;</code> is the
+                    <code>revision</code> of the <code>get</code> answer. When
+                    the instance file exists, add <code>--force</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>list</code></td>
+                  <td><code>cli.worker.instance.list.indeterminate</code></td>
+                  <td>Run the command again.</td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td><code>cli.worker.instance.get.indeterminate</code></td>
+                  <td>Run the command again.</td>
+                </tr>
+                <tr>
+                  <td><code>rotate</code></td>
+                  <td><code>cli.worker.instance.rotate.indeterminate</code></td>
+                  <td>
+                    Run <code>worker instance get &lt;name&gt;</code>. When the
+                    revision did not change, run the rotate again. When the
+                    revision changed, no host holds the new private key. Run the
+                    rotate again with
+                    <code>--expected-revision &lt;revision&gt;</code>, the new
+                    revision. With <code>--output</code> and an existing
+                    instance file, add <code>--force</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>archive</code></td>
+                  <td>
+                    <code>cli.worker.instance.archive.indeterminate</code>
+                  </td>
+                  <td>
+                    Run again with the reported <code>--idempotency-key</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A repeated key for <code>create</code> or
+            <code>rotate</code> answers
+            <code>409 gateway.idempotency.conflict</code>, so a retry with the
+            same key does not recover the answer. A new create or rotate
+            generates a new key pair.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Access</th>
+                  <th>Mutation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>create</code></td>
+                  <td><code>POST /api/worker/instance</code></td>
+                  <td><code>worker.instance.create</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>list</code></td>
+                  <td><code>GET /api/worker/instance</code></td>
+                  <td><code>worker.instance.list</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td><code>GET /api/worker/instance/:instance_name</code></td>
+                  <td><code>worker.instance.get</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>rotate</code></td>
+                  <td>
+                    <code
+                      >POST /api/worker/instance/:instance_name/revision</code
+                    >
+                  </td>
+                  <td><code>worker.instance.rotate</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>archive</code></td>
+                  <td>
+                    <code
+                      >POST /api/worker/instance/:instance_name/archive</code
+                    >
+                  </td>
+                  <td><code>worker.instance.archive</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>token</code></td>
+                  <td><code>POST /api/worker/instance/token</code></td>
+                  <td><code>worker.instance.token</code></td>
+                  <td><code>public</code> (no token)</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>connect</code></td>
+                  <td><code>POST /api/worker/instance/connect</code></td>
+                  <td><code>worker.instance.connect</code></td>
+                  <td><code>worker</code> (worker JWT)</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>heartbeat</code></td>
+                  <td><code>POST /api/worker/instance/heartbeat</code></td>
+                  <td><code>worker.instance.heartbeat</code></td>
+                  <td><code>worker</code> (worker JWT)</td>
+                  <td>Yes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every operation has a timeout of 30 seconds. The body limit is 10
+            MiB. The Gateway skips the Host allowlist for the
+            <code>token</code>, <code>connect</code> and
+            <code>heartbeat</code> routes.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Operations</th>
+                  <th>Default</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>instance_name</code></td>
+                  <td>path</td>
+                  <td>
+                    <code>get</code>, <code>rotate</code>, <code>archive</code>
+                  </td>
+                  <td>None</td>
+                  <td>Instance name. An unknown name answers not found.</td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td>None</td>
+                  <td>Returns the instances of this worker only.</td>
+                </tr>
+                <tr>
+                  <td><code>include_archived</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td><code>false</code></td>
+                  <td>
+                    <code>true</code> or <code>false</code>.
+                    <code>true</code> also returns archived instances.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td><code>100</code></td>
+                  <td>Integer from <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td>None</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Request body</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>create</code></td>
+                  <td>
+                    <code
+                      >{ &quot;name&quot;, &quot;worker&quot;,
+                      &quot;placement&quot;, &quot;public_key&quot;?,
+                      &quot;endpoint&quot;? }</code
+                    >. <code>placement</code> is <code>server</code>,
+                    <code>container</code> or <code>worker</code>. At the
+                    <code>worker</code> placement, send exactly one of
+                    <code>public_key</code> and <code>endpoint</code>;
+                    <code>endpoint</code> is an absolute URL. At another
+                    placement, send neither.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>rotate</code></td>
+                  <td>
+                    <code
+                      >{ &quot;expected_revision&quot;, &quot;public_key&quot;?,
+                      &quot;endpoint&quot;? }</code
+                    >. <code>expected_revision</code> is the live revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>archive</code></td>
+                  <td>
+                    <code
+                      >{ &quot;expected_revision&quot;, &quot;force&quot;?
+                      }</code
+                    >. <code>force</code> is a boolean, <code>false</code> by
+                    default. <code>true</code> revokes the live execution of the
+                    instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>token</code></td>
+                  <td>
+                    <code>{ &quot;instance_id&quot; }</code>, the
+                    <code>worker_instance</code> identity of the live revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>connect</code></td>
+                  <td>
+                    <code
+                      >{ &quot;connection_id&quot;?, &quot;connection_name&quot;
+                      }</code
+                    >. <code>connection_name</code> is 1 to 255 characters, for
+                    display only.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>heartbeat</code></td>
+                  <td>
+                    <code
+                      >{ &quot;connection_id&quot;, &quot;connection_name&quot;
+                      }</code
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>list</code>, <code>get</code></td>
+                  <td>None.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>All except <code>token</code></td>
+                  <td>
+                    <code>Bearer &lt;human-jwt&gt;</code> or
+                    <code>Bearer &lt;worker-jwt&gt;</code>, as in the access
+                    column.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>,
+                    <code>archive</code>, <code>connect</code>,
+                    <code>heartbeat</code>
+                  </td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Operations with a body</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/worker/instance \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"builder-1","worker":"coder@1","endpoint":"https://kanthord.example.com"}'
+
+curl -i 'http://127.0.0.1:31415/api/worker/instance?worker=coder@1&amp;include_archived=true' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/worker/instance/builder-1 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i -X POST http://127.0.0.1:31415/api/worker/instance/builder-1/archive \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD' \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision":2}'
+
+curl -i -X POST http://127.0.0.1:31415/api/worker/instance/token \
+  -H 'Content-Type: application/json' \
+  -d '{"instance_id":"worker_instance_01M34JC4BJ66JHP41M4MYY6PST"}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord worker instance create &lt;name&gt; --worker &lt;worker&gt; --placement &lt;placement&gt; [--worker-endpoint &lt;url&gt;] [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker instance list [--worker &lt;worker&gt;] [--include-archived] [--limit &lt;count&gt;] [--cursor &lt;opaque&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker instance get &lt;name&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker instance rotate &lt;name&gt; --expected-revision &lt;revision&gt; [--worker-endpoint &lt;url&gt;] [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker instance archive &lt;name&gt; --expected-revision &lt;revision&gt; [--force] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker join [--force]</code></pre>
+          <pre><code class="language-sh">kanthord worker instance create builder-1 --worker coder@1 --placement worker --output
+kanthord worker instance create coder-1 --worker coder@1 --placement server
+kanthord worker instance list --worker coder@1
+kanthord worker instance get builder-1
+kanthord worker instance rotate builder-1 --expected-revision 1 --output --force
+kanthord worker instance archive builder-1 --expected-revision 2
+kanthord worker instance archive coder-1 --expected-revision 1 --force</code></pre>
+          <p>
+            <code>kanthord worker instance</code> without a subcommand displays
+            help. No CLI command calls <code>token</code>,
+            <code>connect</code> or <code>heartbeat</code>;
+            <code>kanthord serve worker</code> calls them.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;name&gt;</code></td>
+                  <td>
+                    <code>create</code>, <code>get</code>, <code>rotate</code>,
+                    <code>archive</code>
+                  </td>
+                  <td>Instance name.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI refuses a malformed or reserved name with
+            <code>worker.instance.name_invalid</code> before it sends a request.
+          </p>
+          <h3 id="worker-instance-create-and-worker-instance-rotate-1">
+            <code>worker instance create</code> and
+            <code>worker instance rotate</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--worker &lt;worker&gt;</code></td>
+                  <td>Required for <code>create</code></td>
+                  <td>Hosted worker of the instance.</td>
+                </tr>
+                <tr>
+                  <td><code>--placement &lt;placement&gt;</code></td>
+                  <td>Required for <code>create</code></td>
+                  <td>
+                    <code>server</code>, <code>container</code> or
+                    <code>worker</code>. <code>--worker-endpoint</code> and
+                    <code>--output</code> apply only at <code>worker</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--expected-revision &lt;revision&gt;</code></td>
+                  <td>Required for <code>rotate</code></td>
+                  <td>Live revision of the instance.</td>
+                </tr>
+                <tr>
+                  <td><code>--worker-endpoint &lt;url&gt;</code></td>
+                  <td>The resolved <code>--endpoint</code></td>
+                  <td>
+                    Server address that the instance calls. The CLI writes it
+                    into the instance configuration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--output</code></td>
+                  <td>Off</td>
+                  <td>
+                    Writes the instance file
+                    <code>workers/&lt;name&gt;.yaml</code> on this host in place
+                    of the configuration on stdout.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--force</code></td>
+                  <td>Off</td>
+                  <td>
+                    With <code>--output</code>, overwrites an existing instance
+                    file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>Sets the <code>Idempotency-Key</code> header.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Run the command with <code>--output</code> on the host of the
+            instance. Without <code>--output</code>, stdout must be a terminal,
+            because the line holds the private key.
+          </p>
+          <p>The CLI checks the input before it sends a request:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>worker.instance.name_invalid</code></td>
+                  <td>The name breaks the binding name form or is reserved.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.instance.force_without_output</code></td>
+                  <td><code>--force</code> without <code>--output</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.instance.placement_invalid</code></td>
+                  <td>
+                    <code>create</code>: <code>--placement</code> is absent or
+                    invalid, or <code>--output</code> or
+                    <code>--worker-endpoint</code> meets a
+                    <code>server</code> or <code>container</code> placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.worker.instance.create.token_required</code>,
+                    <code>cli.worker.instance.rotate.token_required</code>
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.config.invalid_endpoint</code></td>
+                  <td>
+                    <code>--worker-endpoint</code> is not an absolute HTTP(S)
+                    URL without credentials, query or fragment.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.join.config_exists</code></td>
+                  <td>
+                    <code>--output</code> without <code>--force</code>, and the
+                    instance file exists. The row <code>path</code> names it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.output.terminal_required</code></td>
+                  <td>
+                    No <code>--output</code>, and stdout is not a terminal.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.instance.revision_invalid</code></td>
+                  <td>
+                    <code>rotate</code>: <code>--expected-revision</code> is
+                    absent or not a positive integer.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="worker-instance-list-1"><code>worker instance list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--worker &lt;worker&gt;</code></td>
+                  <td>None</td>
+                  <td>Sets the query <code>worker</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--include-archived</code></td>
+                  <td>Off</td>
+                  <td>Sets <code>include_archived=true</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Page size; a positive integer up to <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;opaque&gt;</code></td>
+                  <td>None (first page)</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>--limit</code> fails with
+            <code>cli.pagination.limit_invalid</code> when it is not a positive
+            decimal integer, and with
+            <code>cli.pagination.limit_out_of_range</code> above
+            <code>1000</code>. A missing token fails with
+            <code>cli.worker.instance.list.token_required</code>.
+          </p>
+          <h3 id="worker-instance-get-1"><code>worker instance get</code></h3>
+          <p>
+            There are no command options. A missing token fails with
+            <code>cli.worker.instance.get.token_required</code>.
+          </p>
+          <h3 id="worker-instance-archive">
+            <code>worker instance archive</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--expected-revision &lt;revision&gt;</code></td>
+                  <td>Required</td>
+                  <td>Live revision of the instance.</td>
+                </tr>
+                <tr>
+                  <td><code>--force</code></td>
+                  <td>Off</td>
+                  <td>
+                    Sends <code>force: true</code>. It revokes the live
+                    execution of the instance. A binding that lists the instance
+                    still refuses the archive.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key for a retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The success line adds <code>idempotency_key</code> to the archived
+            record. <code>--expected-revision</code> that is absent or not a
+            positive integer fails with
+            <code>cli.worker.instance.revision_invalid</code>. A missing token
+            fails with <code>cli.worker.instance.archive.token_required</code>.
+          </p>
+          <h3 id="worker-join"><code>worker join</code></h3>
+          <p>
+            <code>kanthord worker join</code> reads the instance configuration
+            from stdin and writes the instance file
+            <code>workers/&lt;name&gt;.yaml</code>, with mode <code>0600</code>.
+            It sends no request. On success, it prints the row
+            <code>created: &lt;path&gt;</code> and exits <code>0</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--force</code></td>
+                  <td>Off</td>
+                  <td>Overwrites an existing instance file.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">kanthord worker join &lt; builder-1.configuration</code></pre>
+          <p>
+            A value that is no base64url JSON of the configuration schema fails
+            with <code>worker.instance.config_invalid</code>. An existing file
+            without <code>--force</code> fails with
+            <code>cli.worker.join.config_exists</code> and the row
+            <code>path</code>.
+          </p>
+          <h3 id="shared-options">Shared options</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A repeated value option other than <code>--endpoint</code> fails
+            with <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the token and endpoint precedence. The HTTP client deadline is
+            31 seconds.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

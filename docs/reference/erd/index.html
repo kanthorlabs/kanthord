@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Database schema · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+    <link rel="stylesheet" href="../../assets/diagram.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#status">Status</a></li>
+          <li><a href="#views">Views</a></li>
+          <li><a href="#map">Map</a></li>
+          <li>
+            <a href="#dependencies-between-views">Dependencies between views</a>
+          </li>
+          <li><a href="#stores">Stores</a></li>
+          <li><a href="#owners-without-a-table">Owners without a table</a></li>
+          <li><a href="#conventions">Conventions</a></li>
+          <li><a href="#diagram-notation">Diagram notation</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="database-schema">Database schema</h1>
+          <h2 id="status">Status</h2>
+          <p>
+            These pages are a design of the KanthorD database, not a description
+            of implemented behavior. They follow the rulings of the
+            <a
+              href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md"
+              >design set</a
+            >
+            as of 2026-10-19. An open item of
+            <a
+              href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md"
+              >HANDOFF</a
+            >
+            stays out of the schema. A later ruling changes the schema. Before
+            the first tag, the change edits the one migration of the service,
+            and an existing database follows the
+            <a href="../upgrade.html#reset-a-pre-release-database"
+              >reset procedure</a
+            >.
+          </p>
+          <h2 id="views">Views</h2>
+          <p>
+            The schema has four functional views. Their order is the order of
+            delivery.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>View</th>
+                  <th>Scope</th>
+                  <th>Tables of the owners</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <a href="01-setup.html">ERD 1: Environment and planning</a>
+                  </td>
+                  <td>
+                    Projects, credentials, worker instances, bindings, agent
+                    enablement, the mission plan and the work queue.
+                  </td>
+                  <td>
+                    Custody, Repository, Worker, Project, Agent, Mission,
+                    Scheduler
+                  </td>
+                </tr>
+                <tr>
+                  <td><a href="02-execution.html">ERD 2: Execution</a></td>
+                  <td>
+                    Registrations, executions, attempts, evidence and its
+                    assets, assessments, outcomes and proposals.
+                  </td>
+                  <td>Worker, Scheduler, Mission</td>
+                </tr>
+                <tr>
+                  <td>
+                    <a href="03-integration.html"
+                      >ERD 3: External integration</a
+                    >
+                  </td>
+                  <td>Inbounds, inbound events and outbound requests.</td>
+                  <td>Intake</td>
+                </tr>
+                <tr>
+                  <td><a href="04-tracking.html">ERD 4: Telemetry</a></td>
+                  <td>
+                    Traces, spans, records, telemetry texts and session entries.
+                  </td>
+                  <td>Tracking</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A view holds the canonical definition of each of its tables. Another
+            view shows that table as a stub: its key only, the color of its
+            owner and a dashed border.
+          </p>
+          <h2 id="map">Map</h2>
+          <p>
+            The map shows the owners of each view and the references that cross
+            two views. A box is the set of tables of one owner in one view.
+          </p>
+          <pre class="mermaid">
+flowchart TB
+    subgraph db1["kanthord.db"]
+        subgraph v1["ERD 1: Environment and planning"]
+            c1["Custody: credential"]
+            r1["Repository: host key"]
+            p1["Project: project, binding, binding revision"]
+            a1["Agent: agent enablement"]
+            w1["Worker: instance"]
+            m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
+            s1["Scheduler: job, queue place"]
+        end
+        subgraph v2["ERD 2: Execution"]
+            w2["Worker: registration"]
+            s2["Scheduler: execution"]
+            m2["Mission: attempt with prompt commits, evidence, evidence asset, assessment, outcome, proposal"]
+        end
+        subgraph v3["ERD 3: External integration"]
+            i3["Intake: inbound, inbound event, outbound request"]
+        end
+    end
+    subgraph db2["tracking.db"]
+        subgraph v4["ERD 4: Telemetry"]
+            t4["Tracking: trace, span, record, telemetry text"]
+        end
+    end
+
+    w2 -.-&gt;|registration of binding| p1
+    w2 -.-&gt;|registration of instance| w1
+    s2 -.-&gt;|claim of node| m1
+    s2 -.-&gt;|claim of binding| p1
+    s2 -.-&gt;|execution pins credential revision| c1
+    m2 -.-&gt;|records of node| m1
+    m2 -.-&gt;|evidence assets name binding| p1
+
+    i3 -.-&gt;|inbound and outbound request of project| p1
+    i3 -.-&gt;|inbound and outbound request name credential| c1
+    m2 -.-&gt;|evidence names inbound event| i3
+
+    t4 -.-&gt;|trace of execution| s2
+    s2 -.-&gt;|trace and root span| t4
+    t4 -.-&gt;|trace of project| p1
+
+    classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
+    classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
+    classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
+    classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
+    classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
+    classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
+    classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
+    classDef intake fill:#e8daef,stroke:#6c3483,color:#212529
+    classDef tracking fill:#d1f2eb,stroke:#117a65,color:#212529
+
+    class c1 custody
+    class r1 repository
+    class p1 project
+    class w1,w2 worker
+    class a1 agent
+    class m1,m2 mission
+    class s1,s2 scheduler
+    class i3 intake
+    class t4 tracking
+</pre>
+          <h2 id="dependencies-between-views">Dependencies between views</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>View</th>
+                  <th>Needs</th>
+                  <th>Adds</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ERD 1</td>
+                  <td>Nothing.</td>
+                  <td>
+                    An environment and a plan. The work queue is here because
+                    the Mission Service writes it in its own transaction, and no
+                    later migration of the Scheduler Service can read Mission
+                    rows. Agent enablement is here because a native worker
+                    binding write validates it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>ERD 2</td>
+                  <td>ERD 1.</td>
+                  <td>
+                    Execution and the human controls. A requested external
+                    action of an attempt stays unresolved until ERD 3, because
+                    the check of the Intake Service sets the end state of its
+                    request evidence. The node cannot reach a terminal state
+                    through that attempt. A human can still pause the node,
+                    block it and unblock it into a next attempt. A frozen action
+                    that the attempt has not requested prevents no terminal
+                    transition.
+                  </td>
+                </tr>
+                <tr>
+                  <td>ERD 3</td>
+                  <td>ERD 1 and ERD 2.</td>
+                  <td>
+                    The inbounds, their inbound events and the outbound
+                    requests. Delivery admission writes the end state of a
+                    request evidence, so a node in
+                    <code>External.Requested</code> reaches its end state. Only
+                    GitHub and the storage delete are ruled.
+                  </td>
+                </tr>
+                <tr>
+                  <td>ERD 4</td>
+                  <td>
+                    Nothing in its store. Every service calls the interface of
+                    the Tracking Service from ERD 1.
+                  </td>
+                  <td>The stored telemetry.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="stores">Stores</h2>
+          <ul>
+            <li>
+              <code>kanthord.db</code> of the data directory holds every table
+              of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission,
+              Scheduler, Worker and Intake Services, custody, the Repository
+              component and the Agent component share that file. One file gives
+              a collaboration of two services one transaction.
+            </li>
+            <li>
+              <code>tracking.db</code> of the data directory holds every table
+              of ERD 4. The server opens it at every start.
+            </li>
+            <li>
+              Each file holds its own
+              <code>migration(service, version, applied_at)</code> table, keyed
+              by service and version. It is the only table without the prefix of
+              a service beside the <code>credential</code> table of custody.
+              Before the first tag, it holds one row of version 1 for each
+              service that owns tables.
+            </li>
+            <li>Custody owns the unprefixed <code>credential</code> table.</li>
+          </ul>
+          <h2 id="owners-without-a-table">Owners without a table</h2>
+          <ul>
+            <li>
+              The Gateway Service holds idempotency records in memory. It stores
+              no human account, no password and no client identity.
+            </li>
+            <li>
+              The worker catalog and the agent catalog are static server
+              modules.
+            </li>
+            <li>
+              The <code>worker</code> application and an external harness hold
+              no table of the server. A <code>worker</code> application runs on
+              the host of the server or on another host.
+            </li>
+          </ul>
+          <h2 id="conventions">Conventions</h2>
+          <ul>
+            <li>
+              A table name carries the prefix of its owning service. A service
+              reads no table of another service.
+            </li>
+            <li>
+              A foreign key never reaches a table of another owner. A
+              cross-owner reference is a validated value.
+            </li>
+            <li>
+              An opaque identity that the server generates for an entity of its
+              own is text of the form <code>&lt;prefix&gt;_&lt;ulid&gt;</code>.
+              A protocol value keeps its protocol form. A natural key, for
+              example <code>agent_name</code>, and a composite key take no
+              prefix.
+            </li>
+            <li>
+              A timestamp is an <code>INTEGER</code> of Unix milliseconds in
+              UTC.
+            </li>
+            <li>
+              A JSON column holds the canonical JSON of
+              <a href="https://www.rfc-editor.org/rfc/rfc8785">RFC 8785</a>.
+            </li>
+            <li>A boolean is an <code>INTEGER</code> 0 or 1.</li>
+            <li>
+              A revision and a version start at 1. The attempt of a node reads 0
+              before its first attempt opens, and no attempt row exists for 0.
+              An opened attempt starts at 1.
+            </li>
+            <li>
+              An owner deletes no row that a peer can reference. It retires or
+              disables that row. Telemetry is the one exception: the Tracking
+              Service deletes a trace at its retention, and a peer value that
+              names it resolves to expired. Today the store keeps no tombstone,
+              and a read answers <code>404 tracking.trace.not_found</code>.
+            </li>
+          </ul>
+          <h2 id="diagram-notation">Diagram notation</h2>
+          <ul>
+            <li>
+              A solid line is an identifying relationship: the primary key of
+              the child contains the primary key of the parent. A dashed line is
+              a non-identifying relationship.
+            </li>
+            <li>
+              The label of a line states the enforcement: <code>FK</code>,
+              <code>ref, no FK</code>, <code>ref in JSON</code> or
+              <code>validated</code>.
+            </li>
+            <li>
+              The basis of each table is <code>Ruled</code> when a design page
+              names the table, or <code>Derived</code> when the view maps a
+              ruled record to rows. The basis column of a view states when the
+              columns of a ruled table are derived.
+            </li>
+            <li>A stub has a dashed border and the color of its owner.</li>
+          </ul>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Owner</th>
+                  <th>Color</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Custody</td>
+                  <td>grey</td>
+                </tr>
+                <tr>
+                  <td>Repository</td>
+                  <td>brown</td>
+                </tr>
+                <tr>
+                  <td>Project Service</td>
+                  <td>yellow</td>
+                </tr>
+                <tr>
+                  <td>Worker Service</td>
+                  <td>red</td>
+                </tr>
+                <tr>
+                  <td>Mission Service</td>
+                  <td>green</td>
+                </tr>
+                <tr>
+                  <td>Scheduler Service</td>
+                  <td>blue</td>
+                </tr>
+                <tr>
+                  <td>Intake Service</td>
+                  <td>purple</td>
+                </tr>
+                <tr>
+                  <td>Tracking Service</td>
+                  <td>teal</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The ER diagrams color their tables with <code>classDef</code>.
+            <a href="../../assets/diagram-page.mjs"
+              ><code>assets/diagram-page.mjs</code></a
+            >
+            loads Mermaid 11.17.2, which supports this notation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+    <script type="module" src="../../assets/diagram-page.mjs"></script>
+  </body>
+</html>

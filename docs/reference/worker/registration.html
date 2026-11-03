@@ -1,0 +1,1111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage worker registrations · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="manage-worker-registrations">Manage worker registrations</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Read, resume and end worker registrations. A worker registration is
+            one registration of a machine client identity in a worker binding.
+            Its runtime identity is
+            <code>worker_registration_&lt;ulid&gt;</code>; see the
+            <a href="../identities.html">identity contract</a>.
+          </p>
+          <ul>
+            <li>
+              <code>worker registration list</code> pages the live registrations
+              in descending runtime-identity order. Filter by project, and by
+              worker binding within that project.
+            </li>
+            <li>
+              <code>worker registration get</code> reads one live registration.
+              An unknown or ended registration answers not found.
+            </li>
+            <li>
+              <code>worker registration resume</code> reopens an ended
+              registration that still has a running execution. The registration
+              keeps its runtime identity, and its heartbeat window starts again.
+              A live registration stays unchanged and gives the same answer.
+            </li>
+            <li>
+              <code>worker registration deregister</code> ends the live
+              registration of the caller and frees its slot in the same
+              transaction. Only the machine client that owns the registration
+              ends it. When the worker group of the caller ended, deregister
+              answers <code>404 worker.registration.ended</code> and changes no
+              state. The worker reads that answer as a completed deregister.
+            </li>
+          </ul>
+          <p>
+            List and get are read-only. Resume and deregister are mutations and
+            take an <code>Idempotency-Key</code>. A repeated key with the same
+            request replays the recorded answer within the gateway idempotency
+            TTL.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="worker-registration-list">
+            <code>worker registration list</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "runtime_identity": "worker_registration_01M34JC4BJ66JHP41M4MYY6PST",
+      "project_id": "project_01M34JC4BJ66JHP41M4MYY6PSA",
+      "resource_identity": "worker:kanthord:general",
+      "worker_name": "coder@1",
+      "host": "kanthord",
+      "placement": "worker",
+      "client_id": "client_identity_01M34JC4BJ66JHP41M4MYY6PSB",
+      "name": "builder-1",
+      "instance": "builder-1",
+      "activity": "executing",
+      "execution_id": "execution_01M34JC4BJ66JHP41M4MYY6PSC",
+      "draining": false,
+      "registered": true
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    Registration records, as described for
+                    <code>worker registration get</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="worker-registration-get">
+            <code>worker registration get</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code> with one registration record.
+            The CLI writes the same object as one JSON line to stdout and exits
+            <code>0</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>runtime_identity</code></td>
+                  <td>string</td>
+                  <td>
+                    Runtime identity of the registration,
+                    <code>worker_registration_&lt;ulid&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>string</td>
+                  <td>Project of the worker binding.</td>
+                </tr>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>string</td>
+                  <td>
+                    Worker binding,
+                    <code>worker:kanthord:&lt;binding-name&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_name</code></td>
+                  <td>string</td>
+                  <td>
+                    Supplied worker of the binding, for example
+                    <code>coder@1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>kanthord</code> or <code>external-harness</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>placement</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>server</code>, <code>container</code> or
+                    <code>worker</code>, the placement of the instance of the
+                    registration; present only when <code>host</code> is
+                    <code>kanthord</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>client_id</code></td>
+                  <td>string</td>
+                  <td>
+                    Machine client identity that owns the registration,
+                    <code>client_identity_&lt;ulid&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>
+                    Display name of the machine client, 1 to 64 characters.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>instance</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Name of the live
+                    <a href="instance.html">worker instance</a> of the
+                    registration, at every placement; <code>null</code> for an
+                    external harness, or after the revision ended.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>activity</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>idle</code>, <code>pulling</code> or
+                    <code>executing</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td>string</td>
+                  <td>
+                    Execution that the registration claims; present only when
+                    <code>activity</code> is <code>executing</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>draining</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when the latest binding revision no longer
+                    lists the instance of the registration. Its live execution
+                    finishes, and the binding gets no new claim from that
+                    instance. Otherwise <code>false</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>registered</code></td>
+                  <td>boolean</td>
+                  <td>
+                    Always <code>true</code>, because the operation returns live
+                    registrations only.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3
+            id="worker-registration-resume-and-worker-registration-deregister"
+          >
+            <code>worker registration resume</code> and
+            <code>worker registration deregister</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code>. Resume returns
+            <code>registered: true</code>, and deregister returns
+            <code>registered: false</code>:
+          </p>
+          <pre><code class="language-json">{
+  "runtime_identity": "worker_registration_01M34JC4BJ66JHP41M4MYY6PST",
+  "registered": false
+}</code></pre>
+          <p>
+            The CLI adds the retry key, writes one JSON line to stdout and exits
+            <code>0</code> (shown formatted here):
+          </p>
+          <pre><code class="language-json">{
+  "runtime_identity": "worker_registration_01M34JC4BJ66JHP41M4MYY6PST",
+  "registered": false,
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>runtime_identity</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Runtime identity from the request path.</td>
+                </tr>
+                <tr>
+                  <td><code>registered</code></td>
+                  <td>boolean</td>
+                  <td>API and CLI</td>
+                  <td>
+                    <code>true</code> after resume; <code>false</code> after
+                    deregister.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>
+                    Key used for this request; supply it again for a retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Missing, invalid or expired token, or a token of the wrong
+                    kind. List, get and resume require a human token; deregister
+                    requires a machine token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid runtime identity, query or body; also
+                    <code>resource_identity</code> without
+                    <code>project_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td>list</td>
+                  <td>
+                    The cursor is not a cursor that this operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.registration.binding_unknown</code></td>
+                  <td>list</td>
+                  <td>
+                    The worker binding does not exist in the project, or it is
+                    removed.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 worker.registration.not_found</code></td>
+                  <td>get, resume, deregister</td>
+                  <td>
+                    Get: no live registration. Resume: no registration.
+                    Deregister: no live registration that the caller owns.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 worker.registration.ended</code></td>
+                  <td>deregister</td>
+                  <td>
+                    The worker group of the caller ended: its binding is
+                    removed, is an external-harness binding with
+                    <code>instance_count</code> <code>0</code> or has a
+                    tombstone newer than the token. Authentication answers it
+                    before the handler, in place of <code>401</code>. Every
+                    other authentication failure keeps <code>401</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 worker.registration.no_live_execution</code>
+                  </td>
+                  <td>resume</td>
+                  <td>The ended registration has no running execution.</td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.registration.client_live</code></td>
+                  <td>resume</td>
+                  <td>
+                    The client identity already holds another live registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.registration.slot_unavailable</code></td>
+                  <td>resume</td>
+                  <td>
+                    The worker binding is absent or removed, or its live
+                    registrations reach its instance count.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>resume, deregister</td>
+                  <td>Missing or malformed idempotency key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>resume, deregister</td>
+                  <td>Conflicting reuse of an idempotency key.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. For resume and
+            deregister, the CLI prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead.
+          </p>
+          <p>
+            A transport failure, timeout or malformed response exits
+            <code>1</code> with an indeterminate code:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Code</th>
+                  <th>Recovery</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>cli.worker.registration.list.indeterminate</code>
+                  </td>
+                  <td>Run the command again.</td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td>
+                    <code>cli.worker.registration.get.indeterminate</code>
+                  </td>
+                  <td>Run the command again.</td>
+                </tr>
+                <tr>
+                  <td><code>resume</code></td>
+                  <td>
+                    <code>cli.worker.registration.resume.indeterminate</code>
+                  </td>
+                  <td>
+                    Run again with the reported <code>--idempotency-key</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>deregister</code></td>
+                  <td>
+                    <code
+                      >cli.worker.registration.deregister.indeterminate</code
+                    >
+                  </td>
+                  <td>
+                    Run again with the reported <code>--idempotency-key</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="worker-registration-list-1">
+            <code>worker registration list</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/worker/registration</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.registration.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>See the table below.</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Query parameter</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>No</td>
+                  <td>
+                    Canonical project identity; returns registrations of this
+                    project only.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>No; requires <code>project_id</code></td>
+                  <td>
+                    Worker binding,
+                    <code>worker:kanthord:&lt;binding-name&gt;</code>; returns
+                    its registrations only.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>No</td>
+                  <td>Integer from 1 to 1000; default 100.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>No</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/worker/registration?project_id=&lt;project-id&gt;&amp;resource_identity=worker:kanthord:general' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="worker-registration-get-1">
+            <code>worker registration get</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/worker/registration/:runtime_identity</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.registration.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>runtime_identity</code>: canonical
+                    <code>worker_registration</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/worker/registration/&lt;runtime-identity&gt; \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <p>
+            The list and get operations take only the
+            <code>Authorization: Bearer &lt;human-jwt&gt;</code> header.
+          </p>
+          <h3 id="worker-registration-resume">
+            <code>worker registration resume</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >POST
+                      /api/worker/registration/:runtime_identity/resume</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.registration.resume</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>runtime_identity</code>: canonical
+                    <code>worker_registration</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    request; retain it for retries.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/worker/registration/&lt;runtime-identity&gt;/resume \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD'</code></pre>
+          <h3 id="worker-registration-deregister">
+            <code>worker registration deregister</code>
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >DELETE /api/worker/registration/:runtime_identity</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.registration.deregister</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT); a live
+                    registration is not required
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td>
+                    <code>runtime_identity</code>: canonical
+                    <code>worker_registration</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the client that
+                    owns the registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    request; retain it for retries.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X DELETE http://127.0.0.1:31415/api/worker/registration/&lt;runtime-identity&gt; \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD'</code></pre>
+          <p>
+            After the registration ends, a retry with the same key replays the
+            recorded <code>200</code> answer. A new key answers
+            <code>404 worker.registration.not_found</code>.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <h3 id="worker-registration-list-2">
+            <code>worker registration list</code>
+          </h3>
+          <pre><code class="language-text">kanthord worker registration list [--project &lt;project-id&gt;] [--binding &lt;binding-name&gt;] [--limit &lt;count&gt;] [--cursor &lt;opaque&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker registration list --project '&lt;project-id&gt;' --binding general --limit 50</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--project &lt;project-id&gt;</code></td>
+                  <td>None</td>
+                  <td>Sets <code>project_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--binding &lt;binding-name&gt;</code></td>
+                  <td>None</td>
+                  <td>
+                    Requires <code>--project</code>. Sets
+                    <code>resource_identity</code> to
+                    <code>worker:kanthord:&lt;binding-name&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Page size; a positive integer up to <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;opaque&gt;</code></td>
+                  <td>None (first page)</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The CLI checks the options before it resolves the token:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>cli.worker.registration.list.invalid_project_id</code>
+                  </td>
+                  <td>
+                    <code>--project</code> is not a canonical project identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.worker.registration.list.invalid_binding_name</code
+                    >
+                  </td>
+                  <td>
+                    <code>--binding</code> is not 1 to 63 lower-case letters,
+                    digits or hyphens that start with a letter.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.worker.registration.list.binding_without_project</code
+                    >
+                  </td>
+                  <td>
+                    <code>--binding</code> without <code>--project</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>--limit</code> is above <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.worker.registration.list.token_required</code>
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="worker-registration-get-2">
+            <code>worker registration get</code>
+          </h3>
+          <pre><code class="language-text">kanthord worker registration get &lt;runtime-identity&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker registration get worker_registration_01M34JC4BJ66JHP41M4MYY6PST</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;runtime-identity&gt;</code></td>
+                  <td>Canonical <code>worker_registration</code> identity.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An invalid identity fails with
+            <code>cli.worker.registration.get.invalid_runtime_identity</code>. A
+            missing token fails with
+            <code>cli.worker.registration.get.token_required</code>.
+          </p>
+          <h3 id="worker-registration-resume-1">
+            <code>worker registration resume</code>
+          </h3>
+          <pre><code class="language-text">kanthord worker registration resume &lt;runtime-identity&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker registration resume worker_registration_01M34JC4BJ66JHP41M4MYY6PST \
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;runtime-identity&gt;</code></td>
+                  <td>Canonical <code>worker_registration</code> identity.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key for a retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An invalid identity fails with
+            <code>cli.worker.registration.resume.invalid_runtime_identity</code
+            >. A missing token fails with
+            <code>cli.worker.registration.resume.token_required</code>. A
+            malformed key fails with <code>cli.idempotency_key.invalid</code>.
+          </p>
+          <h3 id="worker-registration-deregister-1">
+            <code>worker registration deregister</code>
+          </h3>
+          <pre><code class="language-text">kanthord worker registration deregister &lt;runtime-identity&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord worker registration deregister worker_registration_01M34JC4BJ66JHP41M4MYY6PST \
+  --token '&lt;machine-jwt&gt;' \
+  --idempotency-key idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;runtime-identity&gt;</code></td>
+                  <td>Canonical <code>worker_registration</code> identity.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key for a retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An invalid identity fails with
+            <code
+              >cli.worker.registration.deregister.invalid_runtime_identity</code
+            >. A missing token fails with
+            <code>cli.worker.registration.deregister.token_required</code>. A
+            malformed key fails with <code>cli.idempotency_key.invalid</code>.
+          </p>
+          <h3 id="shared-options">Shared options</h3>
+          <p>
+            Every <code>worker registration</code> command accepts these group
+            options:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>
+                    Bearer credential: a human JWT for list, get and resume; a
+                    machine JWT for deregister.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A repeated option other than <code>--endpoint</code> fails with
+            <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the token and endpoint precedence. The HTTP client deadline is
+            31 seconds.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

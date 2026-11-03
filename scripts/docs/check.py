@@ -4,7 +4,7 @@
 import re
 import sys
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import unquote, urlsplit
 
 REPO = Path(__file__).resolve().parents[2]
 PUBLIC = REPO / "docs"
@@ -16,10 +16,11 @@ MAX_LINKS = 4096
 def is_public(path):
     assert isinstance(path, Path), "Expected a relative path"
     assert not path.is_absolute(), "Public paths must be relative"
+    if path.suffix == ".md":
+        return False
     if path.parts[0] in SECTIONS | {"assets"}:
         return True
     return path.as_posix() in {
-        "README.md",
         "index.html",
         "viewer.html",
         "CNAME",
@@ -38,19 +39,16 @@ def check_link(source, href, boundary, public):
         raise ValueError(f"{source}: link escapes documentation boundary: {href}")
     if not target.exists():
         raise ValueError(f"{source}: broken link: {href}")
+    if public and (
+        target.suffix == ".md" or (target.name == "viewer.html" and url.query)
+    ):
+        raise ValueError(f"{source}: public link to Markdown: {href}")
     if public and not is_public(target.relative_to(boundary)):
         raise ValueError(f"{source}: public link to internal material: {href}")
-    if target.name == "viewer.html" and url.query:
-        query = parse_qs(url.query)
-        paths = query.get("p", [])
-        if len(paths) != 1 or not paths[0].endswith(".md"):
-            raise ValueError(f"{source}: invalid viewer link: {href}")
-        check_link(
-            source,
-            paths[0] + ("#" + url.fragment if url.fragment else ""),
-            boundary,
-            public,
-        )
+    if url.fragment and target.suffix == ".html":
+        anchors = set(re.findall(r'\bid="([^"]+)"', target.read_text()))
+        if unquote(url.fragment) not in anchors:
+            raise ValueError(f"{source}: missing anchor: {href}")
     if url.fragment and target.suffix == ".md":
         text = target.read_text()
         headings = re.findall(r"^#{1,6} (.+)$", text, re.MULTILINE)
@@ -119,11 +117,11 @@ def main():
         required = {
             "index.html",
             "viewer.html",
-            "README.md",
             "CNAME",
             ".nojekyll",
-            "assets/navigation.mjs",
             "assets/diagrams.mjs",
+            "assets/diagram-page.mjs",
+            "assets/base.css",
         }
         if any(not (site / name).is_file() for name in required):
             raise ValueError(

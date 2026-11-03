@@ -22,12 +22,12 @@ trap 'rm -f "$LOG"' EXIT
 if python3 scripts/docs/check.py >"$LOG" 2>&1; then
 	tail -n 1 "$LOG"
 else
-	grep -E '^[A-Za-z]*Error|^ValueError|broken link|missing anchor|escapes|internal material' "$LOG" | sed "s#$ROOT/##g" || tail -n 5 "$LOG"
+	grep -E '^[A-Za-z]*Error|^ValueError|broken link|missing anchor|escapes|internal material|public link to Markdown' "$LOG" | sed "s#$ROOT/##g" || tail -n 5 "$LOG"
 	FAILED=1
 fi
 
 echo "== (c) lines for manual review: limitation, not yet, Today =="
-grep -rnE --include='*.md' 'Current limitation|not yet|Today ' docs/reference docs/explanation | cut -c1-200 || true
+grep -rnE --include='*.html' 'Current limitation|not yet|Today ' docs/reference docs/explanation | cut -c1-200 || true
 
 if [ "$FAILED" -ne 0 ]; then
 	echo "drift: FAIL (see (a) and (b))"

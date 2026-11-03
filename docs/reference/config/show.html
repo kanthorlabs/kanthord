@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Show server configuration · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="show-server-configuration">Show server configuration</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Print the effective YAML configuration with sensitive fields masked.
+            The command uses the same path precedence and file/schema checks as
+            <a href="validate.html">validate configuration</a>, fills defaults,
+            and masks <code>master_key</code> during serialization. It does not
+            change the stored configuration.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Success writes YAML to stdout and exits <code>0</code>. A
+            configuration created with defaults is displayed as:
+          </p>
+          <pre><code class="language-yaml">version: 3
+master_key: "[Sensitive]"
+log:
+  level: info
+  destination: stderr
+gateway:
+  bind: 127.0.0.1
+  port: 31415
+  allowed_hosts:
+    - 127.0.0.1:31415
+    - localhost:31415
+  allowed_origins: []
+  base_path: /
+  auth:
+    version: 1
+    token_lifetime: 31536000
+  idempotency_ttl: 86400</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Configuration version;
+                    <a href="../upgrade.html">upgrade</a> sets it. A file
+                    without it is version 1.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>master_key</code></td>
+                  <td>string</td>
+                  <td>
+                    32-byte base64 server secret in the file; always displayed
+                    as <code>[Sensitive]</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>log.level</code></td>
+                  <td>string</td>
+                  <td>
+                    Operational log threshold: <code>trace</code>,
+                    <code>debug</code>, <code>info</code>, <code>warn</code>,
+                    <code>error</code>, or <code>fatal</code>; defaults to
+                    <code>info</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>log.destination</code></td>
+                  <td>string</td>
+                  <td>
+                    Sends operational logs to <code>stderr</code> (default) or
+                    <code>file</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.bind</code></td>
+                  <td>string</td>
+                  <td>
+                    Listener IP address; defaults to <code>127.0.0.1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.port</code></td>
+                  <td>integer</td>
+                  <td>Listener port; defaults to <code>31415</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.allowed_hosts</code></td>
+                  <td>string array</td>
+                  <td>
+                    Accepted Host headers, including port; defaults to
+                    <code>127.0.0.1:31415</code> and
+                    <code>localhost:31415</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.allowed_origins</code></td>
+                  <td>string array</td>
+                  <td>Allowed CORS origins; defaults to an empty list.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.base_path</code></td>
+                  <td>string</td>
+                  <td>
+                    Path prefix of the whole HTTP surface; defaults to
+                    <code>/</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.auth.version</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Authentication version of the signing key and every client
+                    secret; defaults to <code>1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.auth.token_lifetime</code></td>
+                  <td>nonnegative integer</td>
+                  <td>
+                    JWT lifetime in seconds; defaults to <code>31536000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.idempotency_ttl</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Process-local replay record lifetime in seconds; defaults to
+                    <code>86400</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A load or validation failure writes a
+            <a href="../errors.html#cli-diagnostics">diagnostic</a> to stderr
+            and exits <code>1</code> instead of printing configuration.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Not available. Configuration inspection is a local filesystem
+            operation, with no API endpoint or cURL equivalent.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord config show [--config &lt;path&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord config show --config /absolute/path/kanthord.yaml</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--config &lt;path&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_CONFIG</code> → XDG/default server
+                    configuration path
+                  </td>
+                  <td>Selects the stored server configuration to display.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An explicit <code>--config</code> wins. See
+            <a href="init.html#cli-shape">initialize configuration</a> for the
+            full path precedence.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

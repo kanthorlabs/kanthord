@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Set a node criterion · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="set-a-node-criterion">Set a node criterion</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            The criterion is the condition that a node must meet. The
+            verifications are the checks that support it. Both are fields of the
+            node content. <code>criterion set</code> replaces both fields of one
+            node in one human revision and keeps the other content fields.
+          </p>
+          <ul>
+            <li>
+              The write creates the next revision of the node. It changes no
+              task of the node. A task changes through
+              <a href="node.html#node-update"><code>node update</code></a> or an
+              import.
+            </li>
+            <li>
+              The write creates no separate criterion record, state or ID. Read
+              the criterion with
+              <a href="node.html"
+                ><code>node get</code> or <code>node revision get</code></a
+              >.
+            </li>
+            <li>
+              A write that changes neither field returns an empty change and
+              keeps the mission version. Otherwise the mission version increases
+              by one.
+            </li>
+            <li>
+              The node must be current and nonterminal. A node with an open
+              attempt stays editable. The open attempt keeps its pinned
+              revision.
+            </li>
+          </ul>
+          <p>
+            <strong>Authority:</strong> every authenticated human holds the same
+            authority under the server-owner ruling. Any verified human token
+            changes any mission.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with a
+            <a href="node.html#node-change-result">node change result</a>.
+            <code>revisions</code> holds the new revision. Its
+            <code>change.write</code> is <code>criterion.set</code>, and
+            <code>change.changed_fields</code> lists <code>criterion</code>,
+            <code>verifications</code> or both.
+          </p>
+          <pre><code class="language-json">{
+  "mission_version": 10,
+  "revisions": [
+    {
+      "node_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+      "filename": "login.md",
+      "revision": 4,
+      "reason": "Require an audit log entry",
+      "actor": { "kind": "human", "account": "&lt;account&gt;", "name": "&lt;name&gt;" },
+      "created_at": 1791446400000,
+      "content": {
+        "name": "Add the login page",
+        "requirement": "The application shows a login form.",
+        "criterion": "A user with valid credentials reaches the dashboard, and the audit log records the login.",
+        "verifications": ["pnpm test", "pnpm test:audit"],
+        "bindings": ["binding_01M4C5J3SA3P10JFTRYWW3AD0Y"],
+        "intent": "implement",
+        "tags": []
+      },
+      "tasks": [],
+      "change": {
+        "write": "criterion.set",
+        "previous_revision": 3,
+        "changed_fields": ["criterion", "verifications"],
+        "tasks": []
+      },
+      "pinned_by_attempts": []
+    }
+  ],
+  "retired_node_ids": [],
+  "added_edges": [],
+  "removed_edges": [],
+  "open_attempts_unchanged": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission_version</code></td>
+                  <td>Mission version after the write.</td>
+                </tr>
+                <tr>
+                  <td><code>revisions</code></td>
+                  <td>
+                    The new node revision, with its <code>change</code> record.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>retired_node_ids</code></td>
+                  <td>Always empty for this command.</td>
+                </tr>
+                <tr>
+                  <td><code>added_edges</code></td>
+                  <td>Always empty for this command.</td>
+                </tr>
+                <tr>
+                  <td><code>removed_edges</code></td>
+                  <td>Always empty for this command.</td>
+                </tr>
+                <tr>
+                  <td><code>open_attempts_unchanged</code></td>
+                  <td>Open attempts that keep their pinned revision.</td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td>
+                    CLI only. Key of this request; reuse it to retry the
+                    request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The
+            <a href="node.html#node-change-result">node change result</a>
+            describes each property in detail.
+          </p>
+          <p>
+            The CLI writes the API answer plus <code>idempotency_key</code> as
+            one JSON line to stdout and exits <code>0</code>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    <code>Content-Type</code> is not
+                    <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    The path or body fails the schema, for example empty
+                    <code>verifications</code> or an unknown field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    The key belongs to another request, or its first request is
+                    still in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td>The node ID is unknown.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.retired</code></td>
+                  <td>The node is retired.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td>
+                    <code>expected_mission_version</code> is stale;
+                    <code>details.current</code> holds the current version.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.terminal</code></td>
+                  <td>
+                    The node is <code>Completed</code> or
+                    <code>Discarded</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.revision.conflict</code></td>
+                  <td>
+                    <code>expected_revision</code> is stale;
+                    <code>details.current</code> holds the current revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.node.content_invalid</code></td>
+                  <td>
+                    <code>criterion</code>, a verification or
+                    <code>reason</code> is blank or exceeds the text limit;
+                    <code>details.field</code> names it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>
+                    The operation exceeded 30 seconds. The write can still
+                    complete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The text limit is the server configuration value
+            <code>mission.text_max_bytes</code>, 32768 UTF-8 bytes by default.
+          </p>
+          <p>
+            The CLI exits <code>1</code> on every failure and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr. A declared
+            remote failure prints <code>&lt;code&gt;: request failed</code> and
+            the rows <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>cli.mission.criterion.set.invalid_node_id</code>
+                  </td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a
+                    <code>node_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.criterion.set.token_required</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.criterion.set.indeterminate</code></td>
+                  <td>
+                    A transport failure, a timeout or a malformed answer. Retry
+                    with the printed key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.*</code></td>
+                  <td>
+                    <code>--file</code> is absent, not a regular file,
+                    <code>-</code>, not UTF-8, not JSON, has a repeated key, is
+                    not an object, or fails the schema
+                    (<code>cli.file.schema_invalid</code>).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>PUT /api/mission/node/:node_id/criterion</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.criterion.set</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path parameters</td>
+                  <td><code>node_id</code>: <code>node_&lt;ulid&gt;</code></td>
+                </tr>
+                <tr>
+                  <td>Query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>JSON object, below</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>criterion</code></td>
+                  <td>nonblank string</td>
+                  <td>Yes</td>
+                  <td>New criterion text.</td>
+                </tr>
+                <tr>
+                  <td><code>verifications</code></td>
+                  <td>array of nonblank strings</td>
+                  <td>Yes</td>
+                  <td>New verifications; at least one.</td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>nonblank string</td>
+                  <td>Yes</td>
+                  <td>Reason recorded on the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_revision</code></td>
+                  <td>positive integer</td>
+                  <td>Yes</td>
+                  <td>Current revision of the node.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>Yes</td>
+                  <td>Current mission version.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The body accepts no unknown field.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it to
+                    retry the same write.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X PUT http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/criterion \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -d '{"criterion":"A user with valid credentials reaches the dashboard, and the audit log records the login.","verifications":["pnpm test","pnpm test:audit"],"reason":"Require an audit log entry","expected_revision":3,"expected_mission_version":9}'</code></pre>
+          <p>
+            The Gateway keeps the answer of a mutation for its idempotency key
+            in process memory for <code>idempotency_ttl</code> seconds, 86400 by
+            default. A retry with the same key, human account and request
+            replays that answer. This rule also applies to a failure.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord mission criterion set &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission criterion set node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file criterion.json \
+  --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>JSON file with the complete request body.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>; supply the same key to
+                    retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI validates the ID, the token, the key and the file before it
+            sends a request. Each option is accepted once. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

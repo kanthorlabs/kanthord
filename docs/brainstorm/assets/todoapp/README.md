@@ -69,8 +69,8 @@ An import is authoritative for the whole mission. Never submit a partial set or 
 - [Mission ownership, graph and review rules](../../mission-service.md).
 - [Exact Markdown grammar and binding cardinalities](../../mission-service.impl.md#the-plan-file-grammar).
 - [Vocabulary and plan example](../../mission-service.vocabulary.md#plan-file).
-- [Planning ERD](../../../reference/erd/01-setup.md): nodes, revisions, dependencies and jobs.
-- [Execution ERD](../../../reference/erd/02-execution.md): attempts, claims, evidence, assessments and outcomes.
+- [Planning ERD](../../../reference/erd/01-setup.html): nodes, revisions, dependencies and jobs.
+- [Execution ERD](../../../reference/erd/02-execution.html): attempts, claims, evidence, assessments and outcomes.
 
 The ERDs describe KanthorD's design, not proof of implemented capability. The app's users, sessions and TODO tables are separate from KanthorD's database. Run [the operator checks](kanthord-checks.md) to distinguish app correctness from KanthorD correctness.
 

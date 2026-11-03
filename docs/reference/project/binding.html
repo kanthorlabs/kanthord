@@ -1,0 +1,2560 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage project bindings · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="manage-project-bindings">Manage project bindings</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A binding connects a project to one resource under a project-local
+            name. The binding set of a project is the complete map of its
+            current bindings. The Project Service reads the set, replaces it as
+            a whole, lists binding revisions and probes repository bindings.
+          </p>
+          <p>
+            A binding has one of three kinds. The kind and configuration give
+            the resource identity of the binding:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Resource identity</th>
+                  <th>Resource</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>
+                    <code
+                      >repository:&lt;platform&gt;:&lt;owner&gt;/&lt;repository&gt;</code
+                    >
+                  </td>
+                  <td>A Git repository on GitHub, GitLab or Bitbucket.</td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td><code>worker:kanthord:&lt;binding-name&gt;</code></td>
+                  <td>A group of worker instances of one worker.</td>
+                </tr>
+                <tr>
+                  <td><code>storage</code></td>
+                  <td>
+                    <code>storage:s3:&lt;endpoint-host&gt;/&lt;bucket&gt;</code>
+                  </td>
+                  <td>An S3 bucket.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each stored change of a binding is a revision with its own binding
+            ID and a revision number. Revision numbers start at
+            <code>1</code> for each resource identity in a project. A removal
+            stores a tombstone revision: a copy of the last configuration with
+            <code>removed_at</code> set. The binding set version of a project is
+            <code>1</code> plus the number of stored revisions in the project. A
+            binding name follows the project name rule: 1 to 63 characters,
+            <code>^[a-z][a-z0-9-]*$</code>.
+          </p>
+          <h3 id="project-binding-list">project binding list</h3>
+          <p>
+            List the latest revision of each resource identity in the project,
+            highest binding ID first. The <code>state</code> filter selects
+            <code>current</code> (the default), <code>removed</code> or
+            <code>all</code> bindings. A current binding has a latest revision
+            that is not a tombstone. The <code>kind</code> filter accepts one or
+            more kinds and keeps bindings of any given kind.
+          </p>
+          <h3 id="project-binding-get">project binding get</h3>
+          <p>
+            Read one binding revision by its binding ID. The revision can be
+            old, current or a tombstone. It must belong to the project.
+          </p>
+          <h3 id="project-binding-export">project binding export</h3>
+          <p>
+            Read the current binding set in the input form of
+            <code>project binding apply</code>. The output holds the current
+            version and each current binding with its kind and configuration.
+            Optional fields with defaults appear with their values.
+          </p>
+          <h3 id="project-binding-apply">project binding apply</h3>
+          <p>
+            Replace the complete binding set of a project. The request gives the
+            expected binding set version and every binding that the project
+            keeps. Export the set, edit it, and apply it with the exported
+            version.
+          </p>
+          <p>The service compares each submitted name with the current set:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Change</th>
+                  <th>Condition</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>created</code></td>
+                  <td>The name is new, or its resource identity changed.</td>
+                  <td>
+                    Stores revision <code>1</code> of the new resource. A
+                    replaced resource gets a tombstone.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>revised</code></td>
+                  <td>
+                    The resource identity is the same and the configuration
+                    changed.
+                  </td>
+                  <td>Stores the next revision.</td>
+                </tr>
+                <tr>
+                  <td><code>unchanged</code></td>
+                  <td>The configuration is the same.</td>
+                  <td>
+                    Stores nothing. The change gives the current binding ID.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>removed</code></td>
+                  <td>A current binding name is absent from the submission.</td>
+                  <td>
+                    Stores a tombstone. The change gives the tombstone binding
+                    ID.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An apply without changes keeps the version. Two submitted bindings
+            must not have the same resource identity. A worker binding cannot
+            change its <code>worker</code> value.
+          </p>
+          <p>
+            Before the service commits, it checks each new or changed repository
+            binding over the network. An unchanged binding gets no check. A
+            binding is unchanged when the current set at the submitted version
+            holds a binding of the same name, resource identity and
+            configuration. An unchanged binding with an unreachable address
+            therefore does not block an apply that changes another binding. The
+            same holds for an unchanged binding whose address host has no pin or
+            lies outside the SSH host set. With a stale version, the service
+            checks every submitted repository binding. A failed check refuses
+            the apply first. Otherwise the version check refuses it with
+            <code>409 project.binding_set.version_conflict</code>.
+          </p>
+          <p>
+            The action rules apply to every submitted repository binding. The
+            network check of a new or changed binding has four steps. The first
+            failed step refuses the apply:
+          </p>
+          <ol>
+            <li>
+              The address host is a member of the SSH host set of the platform,
+              for example <code>github.com</code> or
+              <code>ssh.github.com</code> for <code>github</code>. Another host
+              refuses with
+              <code>400 project.bindings.repository.address_invalid</code>. No
+              name resolution runs.
+            </li>
+            <li>
+              Custody releases the newest live revision of the
+              <code>ssh_credential</code>.
+            </li>
+            <li>
+              The address host holds a
+              <a href="../repository/host-key.html">host key pin</a>. A host
+              with no pin refuses with
+              <code>409 repository.host_key.unpinned</code>. Then a revision
+              that holds no generated key refuses with
+              <code>409 repository.credential.ssh_key_legacy</code>.
+            </li>
+            <li>
+              <code>git ls-remote</code> reads the repository through the
+              <a href="../repository/ssh-key.html#the-agent-of-one-operation"
+                >SSH agent of the operation</a
+              >, with a 30-second deadline.
+            </li>
+          </ol>
+          <p>
+            A failed read refuses the apply with
+            <code>422 project.bindings.repository.ssh_unreachable</code>. Its
+            <code>details.failure_reason</code> names the cause with a value of
+            the
+            <a href="#failure-reasons-of-the-address-entry"
+              >failure reason list</a
+            >, other than <code>address_invalid</code>. The route timeout is
+            also 30 seconds. A read that reaches its deadline therefore gives
+            <code>504 gateway.invocation.timeout</code>, and the apply commits
+            nothing.
+          </p>
+          <p>
+            These checks run before the version check. Inside the commit
+            transaction, the service validates each binding, checks the version,
+            and stores the revisions. A worker binding that the apply removes,
+            or an external-harness binding set to <code>instance_count</code>
+            <code>0</code>, ends the live worker registrations of its group. A
+            revision to <code>worker_instances: []</code> drains each removed
+            instance. The instance count of a native worker binding is the
+            length of <code>worker_instances</code>. After the commit, the
+            service wakes the scheduler for the project.
+          </p>
+          <h3 id="project-binding-revision-list">
+            project binding revision list
+          </h3>
+          <p>
+            List every retained revision of the resource identity of one binding
+            revision, highest revision first. Tombstones appear in the list. Any
+            binding ID of the resource selects the same list.
+          </p>
+          <h3 id="project-binding-verify">project binding verify</h3>
+          <p>
+            Probe a stored repository binding revision without a write. The
+            revision must be a repository binding of the project that no later
+            tombstone follows. The service probes three resources:
+          </p>
+          <ul>
+            <li>
+              <code>address</code>: the service checks the address host and its
+              pin, releases the SSH key, and runs <code>git ls-remote</code>,
+              with a 10-second deadline.
+            </li>
+            <li>
+              <code>ssh_credential</code>: the Repository component verifies the
+              <code>ssh</code> credential with its local key check, with a
+              10-second deadline.
+            </li>
+            <li>
+              <code>credential</code>: the Credential Service checks the
+              optional platform credential. The entry is <code>null</code> when
+              the binding has no <code>credential</code>.
+            </li>
+          </ul>
+          <p>
+            A failed probe reports <code>unhealthy</code> and is not an error. A
+            probe that exceeds its deadline reports <code>unknown</code>. Each
+            entry carries a <code>failure_reason</code>: <code>null</code> for a
+            <code>healthy</code> entry only, and a value for every other entry.
+            Every entry carries <code>deadline_exceeded</code> when its probe
+            exceeds its deadline.
+          </p>
+          <h3 id="project-binding-check">project binding check</h3>
+          <p>
+            Probe an unsaved repository configuration with the same three probes
+            as <code>verify</code>. The service writes nothing. Before the
+            probes, the service applies the action rules, checks the address
+            form, and checks the credential platforms. A host outside the SSH
+            host set, a host with no pin, or a legacy
+            <code>ssh</code> credential does not refuse <code>check</code>. The
+            <code>address</code> entry reports it with a
+            <code>failure_reason</code>. Use <code>check</code> to test a
+            repository binding before an apply.
+          </p>
+          <h3 id="binding-configuration">Binding configuration</h3>
+          <p>
+            The <code>config</code> object of each kind accepts only the fields
+            below.
+          </p>
+          <p><strong>Repository</strong></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>available</code></td>
+                  <td>boolean</td>
+                  <td>Required.</td>
+                </tr>
+                <tr>
+                  <td><code>platform</code></td>
+                  <td>
+                    <code>github</code>, <code>gitlab</code>,
+                    <code>bitbucket</code>
+                  </td>
+                  <td>Required.</td>
+                </tr>
+                <tr>
+                  <td><code>address</code></td>
+                  <td>string</td>
+                  <td>
+                    Required. Form
+                    <code
+                      >git@&lt;host&gt;:&lt;owner&gt;/&lt;repository&gt;.git</code
+                    >
+                    with no port; <code>&lt;host&gt;</code> is a member of the
+                    <a href="../repository/host-key.html#function-description"
+                      >SSH host set</a
+                    >
+                    of <code>platform</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>strategy.base_branch</code></td>
+                  <td>string</td>
+                  <td>Required, nonblank.</td>
+                </tr>
+                <tr>
+                  <td><code>strategy.action</code></td>
+                  <td>object</td>
+                  <td>
+                    Optional. <code>name</code> is <code>pull_request</code> or
+                    <code>merge_push</code>; <code>follows</code> is
+                    <code
+                      >{ &quot;type&quot;: &quot;assessment_passed&quot; }</code
+                    >; <code>landing</code> is optional. See
+                    <a href="#repository-actions">Repository actions</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>ssh_credential</code></td>
+                  <td>string</td>
+                  <td>
+                    Required. Name of a live <code>ssh</code> credential; see
+                    <a href="../repository/ssh-key.html">SSH keys</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>string</td>
+                  <td>
+                    Optional. Name of a live credential of platform
+                    <code>github</code>. Required for <code>pull_request</code>;
+                    refused on <code>gitlab</code> and <code>bitbucket</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>prompts</code></td>
+                  <td>object</td>
+                  <td>
+                    Optional. One optional text for each agent name
+                    <code>swe@1</code>, <code>re@1</code> and
+                    <code>env@1</code>. A text holds at most 32768 UTF-8 bytes
+                    and no control character other than a tab and a newline. See
+                    <a href="#binding-prompts">Binding prompts</a>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="binding-prompts">Binding prompts</h3>
+          <p>
+            The field <code>prompts</code> of a repository binding holds the
+            Binding prompt. The key is the name of an agent of the catalog. A
+            key outside <code>swe@1</code>, <code>re@1</code> and
+            <code>env@1</code> fails with
+            <code>400 gateway.request.validation_failed</code>. A text that
+            exceeds 32768 UTF-8 bytes or holds a control character fails with
+            <code>400 project.bindings.repository.prompt_invalid</code> and
+            <code>details.agent_name</code> and <code>details.reason</code>.
+            <code>reason</code> is <code>too_large</code> or
+            <code>control_character</code>.
+          </p>
+          <p>
+            The server joins the text of
+            <code>prompts[&lt;agent&gt;]</code> into the system prompt of that
+            agent as <code>Instructions of repository &lt;name&gt;:</code> and
+            the text. A missing key, an empty text and a blank text add nothing.
+            <code>swe@1</code> and <code>re@1</code> read the prompts of every
+            repository binding of the node at its pinned revision.
+            <code>env@1</code> reads the prompt of the binding of its
+            environment run. The text ranks above the Agent prompt and below the
+            framing. See
+            <a href="../../explanation/native-agent.html#the-prompt"
+              >how the native agent reads its prompt</a
+            >.
+          </p>
+          <ul>
+            <li>
+              A change of <code>prompts</code> stores the next binding revision.
+              A node keeps the text of the revision that it pins until
+              <code>mission node rebind</code> moves the node to the current
+              revision.
+            </li>
+            <li>
+              Environment onboarding treats the new binding ID as a changed
+              binding and clears <code>environment_from_agent</code>, the mark
+              that a stored environment came from a session of
+              <code>env@1</code>.
+            </li>
+            <li>
+              The prompts of the agents are separate texts.
+              <code>re@1</code> does not read the prompt of <code>swe@1</code>.
+              Write a rule that relaxes the default standard into the prompts of
+              both <code>swe@1</code> and <code>re@1</code>.
+            </li>
+            <li>
+              The server and every worker host run the same execution setup
+              contract, so a deploy upgrades them together.
+            </li>
+          </ul>
+          <p><strong>Worker</strong></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td>string</td>
+                  <td>Required. Name of a declared worker.</td>
+                </tr>
+                <tr>
+                  <td><code>instance_count</code></td>
+                  <td>integer</td>
+                  <td>
+                    Required for a worker that declares no agent, an external
+                    harness. From <code>0</code> to <code>64</code>. The value
+                    <code>0</code> disables the group. Refused for a worker that
+                    declares an agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_instances</code></td>
+                  <td>array</td>
+                  <td>
+                    Required for a worker that declares an agent. Refused for a
+                    worker that declares no agent. See
+                    <a href="#worker-instances-of-a-binding"
+                      >Worker instances of a binding</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>environment</code></td>
+                  <td>string</td>
+                  <td>
+                    Optional. The name of one repository binding of the project.
+                    Required when the binding lists a
+                    <code>container</code> instance and the project holds two
+                    repository bindings or more.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resource_budget</code></td>
+                  <td>object</td>
+                  <td>
+                    Optional. Positive integers <code>turns</code> and
+                    <code>wall_time_ms</code>. Refused for a worker that
+                    declares no agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tags</code></td>
+                  <td>array</td>
+                  <td>
+                    Optional. A list of unique tags. Each tag matches
+                    <code>^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$</code> and holds
+                    at most 64 bytes. An absent field reads as <code>[]</code>.
+                    A change of <code>tags</code> stores the next revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>entries</code></td>
+                  <td>array</td>
+                  <td>
+                    Optional. Items
+                    <code
+                      >{ &quot;agent&quot;, &quot;agent_provider&quot;?,
+                      &quot;model_identifier&quot;?,
+                      &quot;reasoning_effort&quot;?,
+                      &quot;fallback_configurations&quot;? }</code
+                    >. Each <code>agent</code> is unique and declared by the
+                    worker. Refused for a worker that declares no agent.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The Agent Service validates the effective configuration of each
+            agent of the worker.
+          </p>
+          <h4 id="placement">Placement</h4>
+          <p>
+            A binding holds no placement. Each
+            <a href="../worker/instance.html">worker instance</a> holds its own
+            placement, set at its create. One binding can list instances of
+            different placements.
+            <a href="../worker/placement.html">Worker placements</a> lists the
+            availability of each value.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Value</th>
+                  <th>Where the instance runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server</code></td>
+                  <td>The server runs the instance as one thread.</td>
+                </tr>
+                <tr>
+                  <td><code>container</code></td>
+                  <td>
+                    The server runs the instance in one container on its own
+                    host, with Podman or Docker.
+                    <a
+                      href="../../how-to-guides/isolate-worker-instances-in-containers.html"
+                      >Isolate worker instances in containers</a
+                    >
+                    shows the steps.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td>
+                    The instance runs as one
+                    <code>kanthord serve worker</code> process on its own host.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The server runs each <code>server</code> and
+            <code>container</code> instance until its archive, also while no
+            binding lists it. A binding with <code>placement</code> fails with
+            <code>project.bindings.worker.field_forbidden</code> and
+            <code>details.field</code> <code>placement</code>.
+          </p>
+          <h4 id="worker-instances-of-a-binding">
+            Worker instances of a binding
+          </h4>
+          <p>
+            A binding of a worker that declares an agent lists its
+            <a href="../worker/instance.html">worker instances</a> by name in
+            <code>worker_instances</code>, at every placement. The length of the
+            list is the instance count of the binding. To add capacity, add an
+            instance and list it. The service checks the list in this order:
+          </p>
+          <ol>
+            <li>
+              <code>instance_count</code> and <code>placement</code> are absent.
+              A binding with one of them fails with
+              <code>project.bindings.worker.field_forbidden</code>, and
+              <code>details.field</code> names the field.
+            </li>
+            <li>
+              <code>worker_instances</code> is present. A binding without it
+              fails with
+              <code>project.bindings.worker.instances_required</code>.
+            </li>
+            <li>
+              The value is a list of at most 64 unique strings. Another value
+              fails with <code>project.bindings.worker.instances_invalid</code>.
+            </li>
+            <li>
+              For each name in list order, the name is a live instance of the
+              <code>worker</code> of the binding. An unknown or archived name
+              fails with <code>project.bindings.worker.instance_unknown</code>.
+              An instance of another worker fails with
+              <code>project.bindings.worker.instance_worker_mismatch</code>. The
+              first name that fails stops the check.
+            </li>
+            <li>
+              A <code>container</code> instance is listed by no other live
+              worker binding. A second listing fails with
+              <code>project.bindings.worker.instance_shared</code>. One
+              container runs one image, and the image belongs to the environment
+              of one binding.
+            </li>
+          </ol>
+          <p>
+            An empty list is valid and disables the group: the binding gets no
+            new claim, and each removed instance drains.
+            <code>instance_count</code> <code>0</code> of an external harness
+            also disables the group, and it ends every live registration at
+            once. A <code>server</code> or a <code>worker</code> instance can
+            serve bindings of several projects. Each binding-set write changes
+            the bindings of each listed instance. An instance that leaves the
+            list keeps the binding as <code>draining</code> while it holds a
+            live registration in it: its live execution finishes, and the
+            binding gets no new claim from that instance. A
+            <code>server</code> or <code>container</code> instance keeps running
+            with no binding.
+          </p>
+          <pre><code class="language-json">{
+  "kind": "worker",
+  "config": {
+    "worker": "coder@1",
+    "worker_instances": ["builder-1", "builder-2"]
+  }
+}</code></pre>
+          <p>
+            Each listed instance at the <code>worker</code> placement needs a
+            live copy of each chain credential, sealed to its current key. A
+            <code>server</code> or <code>container</code> instance uses the
+            <code>server</code> copy. Otherwise the apply fails with
+            <code>agent.configuration.credential_holder_mismatch</code>. The
+            <a href="../worker/instance.html#worker-instance-list"
+              >instance list</a
+            >
+            shows the same condition as <code>holder_mismatch</code>.
+          </p>
+          <p>
+            A tag states a fact of the host of the instances, for example
+            <code>platform.macos</code>. The Scheduler match admits a node for a
+            worker binding only when the tags of the binding include every tag
+            of the node. The match compares exact strings and reads no version,
+            no range and no operator. Before and after its change, the apply
+            reads the pairs of a node and a claimable state that no current
+            worker binding covers. An apply that adds such a pair fails with
+            <code>project.bindings.worker.node_unmatched</code>. A pair that
+            exists before the apply refuses no apply. Configure the worker
+            bindings of a project before the first import.
+          </p>
+          <p>
+            An entry can name <code>fallback_configurations</code>: an array of
+            at most 7 complete
+            <code>{ agent_provider, model_identifier, reasoning_effort }</code>
+            items. An entry can hold only this field; the default configuration
+            is then the head of the chain. A named field, also <code>[]</code>,
+            replaces the <code>fallback_configurations</code> of the enablement
+            whole. An omitted field inherits them. <code>[]</code> means no
+            fallback. Each item passes the validation of the default
+            configuration. A repeated <code>agent_provider</code> and
+            <code>model_identifier</code>, or an item with the
+            <code>agent_provider</code> and <code>model_identifier</code> of the
+            head of the entry, fails with
+            <code>agent.configuration.fallback_duplicate</code>.
+          </p>
+          <p><strong>Storage</strong></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>available</code></td>
+                  <td>boolean</td>
+                  <td>Required.</td>
+                </tr>
+                <tr>
+                  <td><code>endpoint</code></td>
+                  <td>string</td>
+                  <td>Required URL.</td>
+                </tr>
+                <tr>
+                  <td><code>bucket</code></td>
+                  <td>string</td>
+                  <td>Required, nonblank.</td>
+                </tr>
+                <tr>
+                  <td><code>region</code></td>
+                  <td>string</td>
+                  <td>Required, nonblank.</td>
+                </tr>
+                <tr>
+                  <td><code>prefix</code></td>
+                  <td>string</td>
+                  <td>Required. Can be empty.</td>
+                </tr>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>string</td>
+                  <td>
+                    Required. Name of a live credential of platform
+                    <code>s3</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A node names zero or more storage bindings as an ordered list. Its
+            uploads use the first binding of that list that accepts the grant. A
+            node names every binding that it uses and takes no binding from the
+            project. A node with no storage binding accepts only inline evidence
+            content.
+          </p>
+          <h3 id="repository-actions">Repository actions</h3>
+          <p>
+            <code>strategy.action</code> of a repository binding names the
+            external action that a passing node requires.
+          </p>
+          <p>
+            The schema accepts <code>follows</code> type
+            <code>action_end_state</code> with a <code>binding</code> name, but
+            a refinement refuses it.
+          </p>
+          <p>
+            <code>strategy.action.landing</code> chooses who merges the pull
+            request of a <code>pull_request</code> action. The value is
+            <code>human</code> or <code>kanthord</code>, with the default
+            <code>human</code>.
+          </p>
+          <ul>
+            <li><code>human</code>: a human merges the pull request.</li>
+            <li>
+              <code>kanthord</code>: after the pull request is recorded, the
+              action performer of the Worker Service reads the required checks
+              of the pull request. It requests the merge as a separate write
+              only when the head commit is the tested commit and no required
+              check is pending or failed. When the read of the required checks
+              fails or answers an unexpected body, the action performer requests
+              no merge. The <a href="#the-deferred-check">deferred check</a> can
+              then request the merge. The Intake Service merges the pull request
+              with the tested commit as the head guard. A refused merge leaves
+              the pull request open for a human.
+            </li>
+          </ul>
+          <p>
+            Only a <code>pull_request</code> action holds <code>landing</code>.
+            A <code>merge_push</code> action with <code>landing</code> fails
+            with <code>400 gateway.request.validation_failed</code> at the
+            <code>landing</code> path.
+          </p>
+          <h4 id="required-checks">Required checks</h4>
+          <p>
+            A required check is a status check that a ruleset of the base branch
+            requires. KanthorD reads the rules of the base branch from the
+            GitHub rulesets endpoint only. KanthorD does not read a required
+            check of a classic branch protection rule. KanthorD then reads the
+            check runs and the commit statuses of the head commit of the pull
+            request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Result on the head commit</th>
+                  <th>Outcome</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    The newest check run of the name completed with
+                    <code>success</code>, <code>neutral</code> or
+                    <code>skipped</code>
+                  </td>
+                  <td>Passed</td>
+                </tr>
+                <tr>
+                  <td>
+                    The newest check run of the name completed with another
+                    conclusion
+                  </td>
+                  <td>Failed</td>
+                </tr>
+                <tr>
+                  <td>The newest check run of the name did not complete</td>
+                  <td>Pending</td>
+                </tr>
+                <tr>
+                  <td>
+                    No check run of the name exists, and the newest commit
+                    status is <code>success</code>
+                  </td>
+                  <td>Passed</td>
+                </tr>
+                <tr>
+                  <td>
+                    No check run of the name exists, and the newest commit
+                    status is <code>failure</code> or <code>error</code>
+                  </td>
+                  <td>Failed</td>
+                </tr>
+                <tr>
+                  <td>
+                    No check run of the name exists, and the newest commit
+                    status is <code>pending</code>, or no status
+                  </td>
+                  <td>Pending</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The check of an open pull request applies the required checks to the
+            request, for both landings:
+          </p>
+          <ul>
+            <li>
+              A failed required check returns the node from
+              <code>External.Requested</code> to <code>Available</code> in the
+              same attempt. The request stays unresolved. The next
+              <code>coder@1</code> execution reads the names of the failed
+              checks as its verdict; see
+              <a href="../../explanation/coder-worker.html#prepare-steps-1-to-4"
+                >the verdict</a
+              >.
+            </li>
+            <li>
+              A pending required check leaves the request unresolved and the
+              node in <code>External.Requested</code>.
+            </li>
+            <li>
+              When the head commit of the pull request changes between the reads
+              of the check, the required checks count as pending.
+            </li>
+          </ul>
+          <p>
+            The <code>github</code> credential of the binding needs read access
+            to the checks and the commit statuses; see
+            <a href="../repository/credential.html#github-token-permissions"
+              >GitHub token permissions</a
+            >.
+          </p>
+          <h4 id="the-deferred-check">The deferred check</h4>
+          <p>
+            After a reviewer release to <code>External.Requested</code>, the
+            Mission Service checks the unresolved requests of the node again in
+            the background. It runs at most 60 rounds:
+          </p>
+          <ul>
+            <li>
+              When a request answers <code>checks_pending</code>, or a check
+              call of the round fails, the next round runs after 60 seconds.
+            </li>
+            <li>
+              When the request of a <code>pull_request</code> action with the
+              landing <code>kanthord</code> answers <code>none</code>, the
+              Mission Service requests a <strong>service merge</strong>. The
+              request needs no execution claim. The Mission Service requests a
+              service merge only when no live claim holds the node. When the
+              Intake Service accepts the service merge, the next round runs at
+              once and folds the merge.
+            </li>
+            <li>
+              A service merge that answers <code>confirmed_failure</code>,
+              <code>retryable_refusal</code> or
+              <code>unknown_outcome</code> counts as a failed call. The next
+              round then runs after 60 seconds. A
+              <code>final_refusal</code> answer or a merge call that throws
+              counts as no failed call and no merge.
+            </li>
+            <li>
+              The loop stops after a round with no
+              <code>checks_pending</code> answer, no failed call and no merge.
+              It also stops after round 60, when the node leaves
+              <code>External.Requested</code>, and when the server stops.
+            </li>
+            <li>
+              After the loop stops, a human merges the pull request. Then run
+              <a href="../mission/node-control.html#check"
+                ><code>mission node check</code></a
+              >, or rely on an Intake inbound of the repository.
+            </li>
+          </ul>
+          <p>
+            The Mission Service authorizes a service merge only in these
+            conditions:
+          </p>
+          <ul>
+            <li>
+              The node is <code>External.Requested</code>, and the request
+              belongs to its open attempt.
+            </li>
+            <li>
+              The action is a <code>pull_request</code> with the landing
+              <code>kanthord</code>.
+            </li>
+            <li>
+              The current assessment of the attempt is a
+              <code>success</code> with no changed gate file.
+            </li>
+            <li>The commit is the tested commit of the binding.</li>
+            <li>
+              The binding is not removed and not disabled, and the project is
+              not paused.
+            </li>
+          </ul>
+          <p>
+            The Intake Service stores the service merge under the request key
+            <code>service_merge/&lt;request key&gt;</code>. KanthorD reserves
+            the prefix <code>service_merge/</code>. An
+            <code>intake.action.perform</code> request with a key that starts
+            with <code>service_merge/</code> fails with
+            <code>400 gateway.request.validation_failed</code>. Each round sends
+            a new request key. A failed service merge logs the warning
+            <code>Deferred merge failed.</code>.
+          </p>
+          <p>
+            At each server start, the Mission Service starts the deferred check
+            again for each <code>External.Requested</code> node whose open
+            attempt holds an unresolved request. It starts at most 50 nodes, the
+            newest attempts first. Past that limit, the server logs the warning
+            <code>Deferred check start limit reached.</code>. A human checks
+            each other node with <code>mission node check</code>.
+          </p>
+          <h4 id="gate-files">Gate files</h4>
+          <p>
+            A node whose change set changes a gate file lands with
+            <code>human</code> for that attempt, whatever value
+            <code>landing</code> holds. A gate file is a path of
+            <code>gate_files</code> in the
+            <a
+              href="../../how-to-guides/declare-affected-tests.html#2-write-the-declaration"
+              >affected test declaration</a
+            >
+            of the base branch. The pull request body names each changed gate
+            file.
+          </p>
+          <p>
+            A <code>merge_push</code> action of that attempt pushes nothing. The
+            action performer records a <code>branch_push</code> request on the
+            base branch with the tested commit, and the node waits in
+            <code>External.Requested</code> for a human landing:
+          </p>
+          <ol>
+            <li>
+              A human merges the node branch into the base branch and pushes. A
+              merge commit and a fast-forward both keep the tested commit.
+            </li>
+            <li>
+              The check of the request answers <code>expected</code> when the
+              tested commit is an ancestor of the base branch head. It answers
+              <code>none</code> before that.
+            </li>
+            <li>
+              The deferred check stops at the first <code>none</code>. Without a
+              poll or webhook inbound of the repository, no process checks the
+              request again. After the landing, run
+              <a href="../mission/node-control.html#check"
+                ><code>mission node check</code></a
+              >.
+            </li>
+          </ol>
+          <p>
+            A squash or a rebase of the node branch does not put the tested
+            commit on the base branch. The request then never resolves, and the
+            node stays <code>External.Requested</code>. Land the node branch
+            with a merge commit or a fast-forward. After a squash or a rebase,
+            discard the node: the discard sets the end state
+            <code>other</code> on its <code>branch_push</code> requests. See
+            <a href="../mission/node-control.html#block-discard-and-override"
+              >block, discard and override</a
+            >.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Every operation returns HTTP <code>200</code>. The CLI writes one
+            JSON line to stdout and exits <code>0</code> (shown formatted here).
+            The CLI adds <code>idempotency_key</code> to the output of
+            <code>apply</code> only.
+          </p>
+          <h3 id="project-binding-list-1">project binding list</h3>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D3",
+      "project_id": "project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
+      "name": "builder",
+      "kind": "worker",
+      "resource_identity": "worker:kanthord:builder",
+      "revision": 2,
+      "config": {
+        "worker": "&lt;worker-name&gt;",
+        "worker_instances": ["builder-1", "builder-2"]
+      },
+      "created_at": 1759900000000,
+      "removed_at": null
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td>string</td>
+                  <td>
+                    Binding ID of this revision, with the
+                    <code>binding</code> prefix.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>string</td>
+                  <td>Project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>Binding name.</td>
+                </tr>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>repository</code>, <code>worker</code> or
+                    <code>storage</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resource_identity</code></td>
+                  <td>string</td>
+                  <td>Resource identity of the binding.</td>
+                </tr>
+                <tr>
+                  <td><code>revision</code></td>
+                  <td>positive integer</td>
+                  <td>Revision number for the resource identity.</td>
+                </tr>
+                <tr>
+                  <td><code>config</code></td>
+                  <td>object</td>
+                  <td>Stored configuration of the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>integer</td>
+                  <td>Revision time in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>removed_at</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    Removal time for a tombstone; <code>null</code> otherwise.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-binding-get-1">project binding get</h3>
+          <p>
+            The response is one binding record with the fields of the list
+            items.
+          </p>
+          <h3 id="project-binding-export-1">project binding export</h3>
+          <pre><code class="language-json">{
+  "version": 4,
+  "bindings": {
+    "builder": {
+      "kind": "worker",
+      "config": {
+        "worker": "&lt;worker-name&gt;",
+        "worker_instances": ["builder-1", "builder-2"]
+      }
+    }
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Current binding set version. Submit it with the next apply.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>bindings</code></td>
+                  <td>object</td>
+                  <td>
+                    Map from binding name to
+                    <code>{ &quot;kind&quot;, &quot;config&quot; }</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-binding-apply-1">project binding apply</h3>
+          <pre><code class="language-json">{
+  "project_id": "project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
+  "binding_set_version": 5,
+  "bindings": {
+    "builder": {
+      "id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4",
+      "project_id": "project_01JD3W8QF4Q7J8M9N0P1R2S3T4",
+      "name": "builder",
+      "kind": "worker",
+      "resource_identity": "worker:kanthord:builder",
+      "revision": 3,
+      "config": {
+        "worker": "&lt;worker-name&gt;",
+        "worker_instances": ["builder-1", "builder-2", "builder-3"]
+      },
+      "created_at": 1759900100000,
+      "removed_at": null
+    }
+  },
+  "changes": [
+    { "kind": "revised", "binding_id": "binding_01JD3WA2K5V6X7Y8Z9A0B1C2D4" }
+  ],
+  "stale_pins": [
+    {
+      "node_id": "node_01JD3WB7M2N3P4Q5R6S7T8V9W0",
+      "binding_name": "builder",
+      "pinned_revision": 2,
+      "current_revision": 3
+    }
+  ],
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_set_version</code></td>
+                  <td>positive integer</td>
+                  <td>API and CLI</td>
+                  <td>Binding set version after the apply.</td>
+                </tr>
+                <tr>
+                  <td><code>bindings</code></td>
+                  <td>object</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Map from name to the binding record of each current binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>changes</code></td>
+                  <td>array</td>
+                  <td>API and CLI</td>
+                  <td>
+                    One
+                    <code>{ &quot;kind&quot;, &quot;binding_id&quot; }</code>
+                    item for each submitted or removed name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>stale_pins</code></td>
+                  <td>array</td>
+                  <td>API and CLI</td>
+                  <td>
+                    One item for each node that pins an older revision of a
+                    revised binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>
+                    Key of this request. Supply it again to retry the same
+                    request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>stale_pins</code> lists each node that is not terminal and not
+            retired. Its current node revision pins an older revision of a
+            binding that the apply revised. A revised binding keeps its name and
+            its resource identity. Each item holds <code>node_id</code>,
+            <code>binding_name</code>, <code>pinned_revision</code> and
+            <code>current_revision</code>. The list is in the order of
+            <code>node_id</code>, then <code>binding_name</code>. A removed
+            binding adds no item. The apply moves no pin. Run
+            <a href="../mission/node.html#node-rebind"
+              ><code>mission node rebind</code></a
+            >
+            to move a node to the current revision. A retry with the same
+            idempotency key answers the list of the first apply until a restart
+            of the daemon.
+          </p>
+          <h3 id="project-binding-revision-list-1">
+            project binding revision list
+          </h3>
+          <p>
+            The response has the page form of <code>project binding list</code>.
+            Each item is one revision of the same resource identity.
+          </p>
+          <h3 id="project-binding-verify-and-project-binding-check">
+            project binding verify and project binding check
+          </h3>
+          <pre><code class="language-json">{
+  "address": {
+    "status": "unhealthy",
+    "capability": "network git read",
+    "failure_reason": "key_refused"
+  },
+  "ssh_credential": {
+    "status": "healthy",
+    "capability": "ssh identity",
+    "failure_reason": null
+  },
+  "credential": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>address</code></td>
+                  <td>object</td>
+                  <td>
+                    Address probe. <code>capability</code> is
+                    <code>network git read</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>ssh_credential</code></td>
+                  <td>object</td>
+                  <td>
+                    <code>ssh</code> credential probe. The Credential Service
+                    gives <code>capability</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>object or null</td>
+                  <td>
+                    Platform credential probe; <code>null</code> when the
+                    configuration has no <code>credential</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>*.status</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>healthy</code>, <code>unhealthy</code> or
+                    <code>unknown</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>*.failure_reason</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code>null</code> for a <code>healthy</code> entry only.
+                    Every other entry carries a value. A probe that exceeds its
+                    deadline carries <code>deadline_exceeded</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>ssh_credential</code> and <code>credential</code> entries
+            are the answers of the credential verify. Their values are in the
+            <a href="../repository/credential.html#verify-and-check"
+              >repository credential check</a
+            >.
+          </p>
+          <h4 id="failure-reasons-of-the-address-entry">
+            Failure reasons of the address entry
+          </h4>
+          <p>
+            The <code>address</code> entry reports a refusal before the read or
+            a failed read as <code>unhealthy</code>, and a probe that exceeds
+            its deadline as <code>unknown</code>. The server reads only the
+            lines of ssh and of the remote, because git translates its own
+            lines. No remote text reaches the client. The first row that matches
+            decides.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>failure_reason</code></th>
+                  <th>Cause</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>address_invalid</code></td>
+                  <td>
+                    The address host is outside the SSH host set of the
+                    platform. No read runs.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_key_unknown</code></td>
+                  <td>
+                    The address host holds no pin, so no read runs. Pin the
+                    <a href="../repository/host-key.html">host key</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>identity_unavailable</code></td>
+                  <td>
+                    The SSH key does not load: a legacy
+                    <code>ssh</code> credential, or
+                    <code>repository.connector.ssh_agent_failed</code>, for
+                    example a
+                    <a
+                      href="../repository/ssh-key.html#the-temporary-directory-limit"
+                      >temporary directory path above 75 bytes</a
+                    >. Verify the <code>ssh</code> credential:
+                    <code>unhealthy</code> means a legacy key, so rotate it.
+                    <code>healthy</code> means that the SSH agent of the server
+                    failed. Today the server log names no agent step for a
+                    binding operation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_key_changed</code></td>
+                  <td>
+                    ssh writes &quot;REMOTE HOST IDENTIFICATION HAS
+                    CHANGED&quot;: the host presented a key other than its pin.
+                    Compare the published fingerprint, then pin again.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_key_unknown</code></td>
+                  <td>
+                    ssh writes &quot;Host key verification failed&quot; without
+                    the line above.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>key_refused</code></td>
+                  <td>ssh writes &quot;Permission denied (publickey)&quot;.</td>
+                </tr>
+                <tr>
+                  <td><code>repository_not_found</code></td>
+                  <td>
+                    The remote writes &quot;Repository not found&quot;, or
+                    GitLab writes &quot;The project you were looking for could
+                    not be found&quot;. A deploy key of another repository also
+                    gives this value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_unreachable</code></td>
+                  <td>
+                    ssh writes &quot;Could not resolve hostname&quot;,
+                    &quot;Connection timed out&quot;, &quot;Connection
+                    refused&quot;, &quot;Operation timed out&quot;, &quot;No
+                    route to host&quot; or &quot;Network is unreachable&quot;.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>deadline_exceeded</code></td>
+                  <td>
+                    The git read exceeds its deadline. The host answers too
+                    slowly or not at all. Verify again.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unclassified</code></td>
+                  <td>Any other failure.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The same values appear in <code>details.failure_reason</code> of
+            <code>project.bindings.repository.ssh_unreachable</code>, and in the
+            <a href="../gateway/healthcheck.html">resource healthcheck</a> entry
+            of the binding.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Absent, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    A parameter, query value or body field fails the schema or a
+                    schema refinement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code>, <code>revision list</code></td>
+                  <td>The cursor does not decode to a valid position.</td>
+                </tr>
+                <tr>
+                  <td><code>404 project.project.not_found</code></td>
+                  <td>
+                    <code>list</code>, <code>export</code>, <code>apply</code>,
+                    <code>verify</code>, <code>check</code>
+                  </td>
+                  <td>No project has this ID.</td>
+                </tr>
+                <tr>
+                  <td><code>404 project.binding.not_found</code></td>
+                  <td>
+                    <code>get</code>, <code>revision list</code>,
+                    <code>verify</code>
+                  </td>
+                  <td>
+                    No revision with this ID belongs to the project. For
+                    <code>get</code> and <code>revision list</code>, also an
+                    unknown project. For <code>verify</code>, also a removed or
+                    non-repository binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 project.binding_set.version_conflict</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The submitted version is not current.
+                    <code>details.binding_set_version</code> holds the current
+                    version.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 project.bindings.duplicate_resource</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    Two submitted bindings have the same resource identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 project.bindings.worker.resource_changed</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A submitted worker binding changes its
+                    <code>worker</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >400 project.bindings.worker.instance_count_range</code
+                    >
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A binding of a worker that declares no agent has no
+                    <code>instance_count</code>, or a value outside
+                    <code>0</code> to <code>64</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.worker.field_forbidden</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A worker binding holds <code>placement</code>. A binding of
+                    a worker that declares an agent holds
+                    <code>instance_count</code>. A binding of a worker that
+                    declares no agent holds <code>entries</code>,
+                    <code>resource_budget</code>, <code>environment</code> or
+                    <code>worker_instances</code>. <code>details</code> holds
+                    <code>binding</code> and <code>field</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.worker.instances_required</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A binding of a worker that declares an agent has no
+                    <code>worker_instances</code>. <code>details</code> holds
+                    <code>binding</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.worker.instances_invalid</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code>worker_instances</code> is no list, holds more than 64
+                    items, repeats a name or holds a nontext item.
+                    <code>details</code> holds <code>binding</code> and
+                    <code>instance</code>; <code>instance</code> is
+                    <code>null</code> for a nonlist value, a list above 64 items
+                    or a nontext item.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.worker.instance_unknown</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code>worker_instances</code> names no live worker instance.
+                    <code>details</code> holds <code>binding</code> and
+                    <code>instance</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >400
+                      project.bindings.worker.instance_worker_mismatch</code
+                    >
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code>worker_instances</code> names an instance of another
+                    worker. <code>details</code> holds <code>binding</code>,
+                    <code>instance</code> and <code>worker</code>, the worker of
+                    the instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 project.bindings.worker.instance_shared</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code>worker_instances</code> names a
+                    <code>container</code> instance that another live worker
+                    binding lists. <code>details</code> holds
+                    <code>binding</code>, <code>instance</code> and
+                    <code>listed_by</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.worker.agent_unknown</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    An entry names an agent that the worker does not declare.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 project.bindings.worker.tags_invalid</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A worker <code>tags</code> value is no list, repeats a tag
+                    or holds a malformed tag. <code>details</code> holds
+                    <code>binding</code> and <code>tag</code>;
+                    <code>tag</code> is <code>null</code> for a nonlist value or
+                    a nontext item.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 project.bindings.worker.node_unmatched</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The apply adds a pair of a node and a claimable state that
+                    no current worker binding covers.
+                    <code>details.node_ids</code> names the nodes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 agent.configuration.invalid</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The <code>worker</code> value names no declared worker.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >400 agent.configuration.credential_holder_mismatch</code
+                    >
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A holder of the worker binding holds no live copy of a chain
+                    credential sealed to its current key. The holders are
+                    <code>server</code> for each listed <code>server</code> or
+                    <code>container</code> instance, and each listed instance at
+                    the <code>worker</code> placement.
+                    <code>details</code> holds
+                    <code>{ agent, agent_provider, credential, holder }</code>.
+                    See
+                    <a href="../worker/instance.html#worker-instance-list"
+                      ><code>holder_mismatch</code></a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 agent.configuration.fallback_duplicate</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A <code>fallback_configurations</code> list of an entry
+                    repeats an agent provider and model, or repeats those of the
+                    head of the entry.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>agent.configuration.*</code>,
+                    <code>agent.enablement.*</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The Agent Service refuses the effective configuration of an
+                    agent, for example a disabled agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.repository.address_invalid</code>
+                  </td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>
+                    The address does not match the form. For <code>apply</code>,
+                    also an address host outside the SSH host set of the
+                    platform; <code>check</code> reports that case as
+                    <code>failure_reason</code> <code>address_invalid</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 repository.host_key.unpinned</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The address host of a new or changed binding holds no pin.
+                    <code>details.host</code> holds the host. No git process
+                    starts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 repository.credential.ssh_key_legacy</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The newest live revision of the
+                    <code>ssh_credential</code> holds no generated key.
+                    <code>details.credential</code> holds the name. Rotate the
+                    key with
+                    <a href="../repository/ssh-key.html#ssh-key-rotate"
+                      ><code>ssh-key-rotate</code></a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >400 project.bindings.repository.action_unsupported</code
+                    >
+                  </td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>
+                    A <code>gitlab</code> or <code>bitbucket</code> binding sets
+                    <code>credential</code> or the
+                    <code>pull_request</code> action.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >400 project.bindings.repository.credential_required</code
+                    >
+                  </td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>
+                    The <code>pull_request</code> action has no
+                    <code>credential</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 project.bindings.repository.prompt_invalid</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A text of <code>prompts</code> exceeds 32768 UTF-8 bytes or
+                    holds a control character. <code>details</code> holds
+                    <code>agent_name</code> and <code>reason</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>422 project.bindings.repository.ssh_unreachable</code>
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code>git ls-remote</code> of a new or changed binding
+                    fails. <code>details.failure_reason</code> names the cause,
+                    for example <code>key_refused</code> or
+                    <code>identity_unavailable</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 credential.credential.not_found</code></td>
+                  <td>
+                    <code>apply</code>, <code>verify</code>, <code>check</code>
+                  </td>
+                  <td>
+                    A named credential has no live revision, or the probe cannot
+                    use it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.platform.mismatch</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>A named credential has a different platform.</td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.credential.archived</code></td>
+                  <td><code>verify</code>, <code>check</code></td>
+                  <td>A named credential is archived.</td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.check.unsupported</code></td>
+                  <td><code>verify</code>, <code>check</code></td>
+                  <td>The credential platform has no check.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td><code>apply</code></td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    The key is in use for a different request, or the first
+                    request with the key is in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>
+                    The request body is not <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>
+                    <code>list</code>, <code>get</code>, <code>export</code>,
+                    <code>revision list</code>, <code>verify</code>
+                  </td>
+                  <td>The request has a body.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>
+                    The operation exceeded 30 seconds. An apply can still
+                    complete.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Within the replay TTL, a repeated apply key with the same request
+            and caller returns the recorded response, success or failure.
+          </p>
+          <p>
+            The CLI checks its input before it sends a request. Each local
+            failure exits <code>1</code> and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.project.binding.&lt;command&gt;.invalid_project_id</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>The project argument is not a valid project ID.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.project.binding.&lt;command&gt;.invalid_binding_id</code
+                    >
+                  </td>
+                  <td>
+                    <code>get</code>, <code>verify</code>,
+                    <code>revision list</code>
+                  </td>
+                  <td>The binding argument is not a valid binding ID.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.binding.list.invalid_kind</code></td>
+                  <td><code>list</code></td>
+                  <td>A <code>--kind</code> value is not a binding kind.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.project.binding.list.invalid_state</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--state</code> is not <code>current</code>,
+                    <code>removed</code> or <code>all</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code>, <code>revision list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code>, <code>revision list</code></td>
+                  <td><code>--limit</code> is more than <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.invalid_path</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>
+                    <code>--file</code> is <code>-</code>. The CLI does not read
+                    stdin.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_found</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>The file does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_regular</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>The path is not a regular file.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.encoding_invalid</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>The file is not valid UTF-8.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_json</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>The file is not a JSON document.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.duplicate_key</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>A JSON object in the file repeats a key.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.not_object</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>The JSON document is not an object.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.schema_invalid</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td>
+                    The object fails the request schema. The
+                    <code>details</code> row lists each issue path and code.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All</td>
+                  <td>A single-value option occurs more than once.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.project.binding.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            For <code>revision list</code>, <code>&lt;command&gt;</code> is
+            <code>revision.list</code>, for example
+            <code>cli.project.binding.revision.list.token_required</code>.
+          </p>
+          <p>
+            A declared server failure exits <code>1</code>. The CLI writes
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status</code>. For <code>apply</code>, it also writes the row
+            <code>idempotency_key</code>. A transport failure, a timeout or a
+            malformed response exits <code>1</code> with
+            <code>cli.project.binding.&lt;command&gt;.indeterminate</code>. For
+            <code>apply</code>, the message is
+            <code
+              >the result is unknown; retry with the same idempotency key</code
+            >, and the row <code>idempotency_key</code> holds the key. For a
+            read, the message is
+            <code>the result is unknown; retry the command</code>. There is no
+            automatic retry.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Mutation</th>
+                  <th>Timeout</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>list</code></td>
+                  <td><code>GET /api/project/:project_id/binding</code></td>
+                  <td><code>project.binding.list</code></td>
+                  <td>No</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td>
+                    <code
+                      >GET /api/project/:project_id/binding/:binding_id</code
+                    >
+                  </td>
+                  <td><code>project.binding.get</code></td>
+                  <td>No</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td><code>export</code></td>
+                  <td><code>GET /api/project/:project_id/binding-set</code></td>
+                  <td><code>project.bindingSet.get</code></td>
+                  <td>No</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td><code>apply</code></td>
+                  <td><code>PUT /api/project/:project_id/binding-set</code></td>
+                  <td><code>project.bindingSet.write</code></td>
+                  <td>Yes</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td><code>revision list</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/project/:project_id/binding/:binding_id/revision</code
+                    >
+                  </td>
+                  <td><code>project.bindingRevision.list</code></td>
+                  <td>No</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td><code>verify</code></td>
+                  <td>
+                    <code
+                      >POST
+                      /api/project/:project_id/binding/:binding_id/verify</code
+                    >
+                  </td>
+                  <td><code>project.binding.verify</code></td>
+                  <td>No</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td><code>check</code></td>
+                  <td>
+                    <code>POST /api/project/:project_id/binding/check</code>
+                  </td>
+                  <td><code>project.binding.check</code></td>
+                  <td>No</td>
+                  <td>30 seconds</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every operation has <code>human</code> access: it requires a human
+            bearer JWT.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Operations</th>
+                  <th>Default</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td>path</td>
+                  <td>All</td>
+                  <td>None</td>
+                  <td>Project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>binding_id</code></td>
+                  <td>path</td>
+                  <td>
+                    <code>get</code>, <code>revision list</code>,
+                    <code>verify</code>
+                  </td>
+                  <td>None</td>
+                  <td>Binding ID of any revision of the project.</td>
+                </tr>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td>All kinds</td>
+                  <td>
+                    <code>repository</code>, <code>worker</code> or
+                    <code>storage</code>. Repeat it for more kinds.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>state</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td><code>current</code></td>
+                  <td>
+                    <code>current</code>, <code>removed</code> or
+                    <code>all</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>query</td>
+                  <td><code>list</code>, <code>revision list</code></td>
+                  <td><code>100</code></td>
+                  <td>Integer from <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>query</td>
+                  <td><code>list</code>, <code>revision list</code></td>
+                  <td>None</td>
+                  <td>Nonempty <code>next_cursor</code> value.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Request body</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>apply</code></td>
+                  <td>
+                    <code
+                      >{ &quot;version&quot;: &lt;positive integer&gt;,
+                      &quot;bindings&quot;: { &quot;&lt;name&gt;&quot;: {
+                      &quot;kind&quot;: &quot;&lt;kind&gt;&quot;,
+                      &quot;config&quot;: { ... } } } }</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>check</code></td>
+                  <td>
+                    <code
+                      >{ &quot;kind&quot;: &quot;repository&quot;,
+                      &quot;config&quot;: { ... } }</code
+                    >
+                    with a repository configuration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Others</td>
+                  <td>
+                    None. <code>verify</code> is a <code>POST</code> without a
+                    body.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The body limit is 10 MiB.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td><code>apply</code></td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    request. Keep it to retry that request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding?kind=repository&amp;kind=worker&amp;state=all' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding-set \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i -X PUT http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding-set \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  --data-binary @bindings.json
+
+curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/binding_01JD3WA2K5V6X7Y8Z9A0B1C2D5/verify \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i -X POST http://127.0.0.1:31415/api/project/project_01JD3W8QF4Q7J8M9N0P1R2S3T4/binding/check \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  --data-binary @repository.json</code></pre>
+          <p>An example <code>bindings.json</code>:</p>
+          <pre><code class="language-json">{
+  "version": 4,
+  "bindings": {
+    "app": {
+      "kind": "repository",
+      "config": {
+        "available": true,
+        "platform": "github",
+        "address": "git@github.com:acme/app.git",
+        "strategy": {
+          "base_branch": "main",
+          "action": {
+            "name": "pull_request",
+            "follows": { "type": "assessment_passed" }
+          }
+        },
+        "ssh_credential": "&lt;ssh-credential-name&gt;",
+        "credential": "&lt;github-credential-name&gt;"
+      }
+    },
+    "builder": {
+      "kind": "worker",
+      "config": {
+        "worker": "&lt;worker-name&gt;",
+        "worker_instances": ["builder-1", "builder-2"]
+      }
+    },
+    "artifacts": {
+      "kind": "storage",
+      "config": {
+        "available": true,
+        "endpoint": "https://s3.example.com",
+        "bucket": "artifacts",
+        "region": "us-east-1",
+        "prefix": "",
+        "credential": "&lt;s3-credential-name&gt;"
+      }
+    }
+  }
+}</code></pre>
+          <p>
+            An example <code>repository.json</code> for <code>check</code>, with
+            the configuration of <code>app</code> above:
+          </p>
+          <pre><code class="language-json">{
+  "kind": "repository",
+  "config": {
+    "available": true,
+    "platform": "github",
+    "address": "git@github.com:acme/app.git",
+    "strategy": {
+      "base_branch": "main",
+      "action": {
+        "name": "pull_request",
+        "follows": { "type": "assessment_passed" }
+      }
+    },
+    "ssh_credential": "&lt;ssh-credential-name&gt;",
+    "credential": "&lt;github-credential-name&gt;"
+  }
+}</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord project binding list &lt;project-id&gt; [--kind &lt;kind&gt;]... [--state &lt;state&gt;] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project binding get &lt;project-id&gt; &lt;binding-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project binding export &lt;project-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project binding apply &lt;project-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project binding revision list &lt;project-id&gt; &lt;binding-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project binding verify &lt;project-id&gt; &lt;binding-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord project binding check &lt;project-id&gt; --file &lt;path&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord project binding list project_01JD3W8QF4Q7J8M9N0P1R2S3T4 --kind repository --kind worker --state all
+kanthord project binding export project_01JD3W8QF4Q7J8M9N0P1R2S3T4 &gt; bindings.json
+kanthord project binding apply project_01JD3W8QF4Q7J8M9N0P1R2S3T4 --file bindings.json
+kanthord project binding revision list project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D3
+kanthord project binding verify project_01JD3W8QF4Q7J8M9N0P1R2S3T4 binding_01JD3WA2K5V6X7Y8Z9A0B1C2D5
+kanthord project binding check project_01JD3W8QF4Q7J8M9N0P1R2S3T4 --file repository.json</code></pre>
+          <p>
+            <code>kanthord project binding</code> and
+            <code>kanthord project binding revision</code> without a subcommand
+            display help.
+          </p>
+          <h3 id="positional-arguments">Positional arguments</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>All</td>
+                  <td>Project ID.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;binding-id&gt;</code></td>
+                  <td>
+                    <code>get</code>, <code>revision list</code>,
+                    <code>verify</code>
+                  </td>
+                  <td>Binding ID of a revision of the project.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-binding-list-2">project binding list</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--kind &lt;kind&gt;</code></td>
+                  <td>All kinds</td>
+                  <td>
+                    Keeps bindings of this kind. Repeat the option for more
+                    kinds.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--state &lt;state&gt;</code></td>
+                  <td><code>current</code></td>
+                  <td>
+                    <code>current</code>, <code>removed</code> or
+                    <code>all</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Maximum bindings per page, from <code>1</code> to
+                    <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None</td>
+                  <td>
+                    Continues from the <code>next_cursor</code> of a previous
+                    page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-binding-get-export-and-verify">
+            project binding get, export and verify
+          </h3>
+          <p>There are no command options.</p>
+          <h3 id="project-binding-apply-2">project binding apply</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required</td>
+                  <td>
+                    JSON file with the complete binding set:
+                    <code>version</code> and <code>bindings</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>. Supply the same key to
+                    retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI reads the file as UTF-8 JSON, refuses repeated keys, and
+            checks it against the request schema before it sends the request.
+            The output of <code>export</code> is a valid input file.
+          </p>
+          <h3 id="project-binding-revision-list-2">
+            project binding revision list
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>
+                    Maximum revisions per page, from <code>1</code> to
+                    <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None</td>
+                  <td>
+                    Continues from the <code>next_cursor</code> of a previous
+                    page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="project-binding-check-1">project binding check</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required</td>
+                  <td>
+                    JSON file with one
+                    <code
+                      >{ &quot;kind&quot;: &quot;repository&quot;,
+                      &quot;config&quot;: { ... } }</code
+                    >
+                    object.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI applies the file rules of <code>apply</code> to this file.
+          </p>
+          <p>
+            The <code>repository.json</code> example in
+            <a href="#api-shape">API shape</a> is a complete file.
+          </p>
+          <h3 id="shared-options">Shared options</h3>
+          <p>Every command accepts these <code>project</code> group options.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. Only <code>--kind</code> can occur more than once. The HTTP
+            client has a 31-second deadline for these 30-second operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

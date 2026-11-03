@@ -1,0 +1,1002 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent enablements · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="agent-enablements">Agent enablements</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Manage the global enablement of a catalog agent. An enablement
+            belongs to no project, and the agent name is its key. It names the
+            agent providers, which pair a provider kind with an LLM credential.
+            It also holds the default configuration of the agent and the tail of
+            its fallback chain. A worker binding can run the agent only while
+            its enablement is live and <code>enabled</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>list</code></td>
+                  <td>
+                    Read the live enablements in ascending agent-name order, one
+                    page at a time.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td>Read the live enablement of one agent.</td>
+                </tr>
+                <tr>
+                  <td><code>put</code></td>
+                  <td>
+                    Create an enablement, or replace its agent providers and
+                    default configuration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>enable</code></td>
+                  <td>
+                    Validate a live enablement and set its state to
+                    <code>enabled</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>disable</code></td>
+                  <td>
+                    Set the state of a live enablement to <code>disabled</code>,
+                    without a validation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>remove</code></td>
+                  <td>Remove an enablement that no worker binding uses.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every write adds a revision, and the revision increases by
+            <code>1</code>. Every write except a <code>put</code> with no live
+            record requires the latest revision that the caller read.
+            <code>enable</code> and <code>disable</code> add a revision also
+            when the state does not change.
+          </p>
+          <p>
+            <code>put</code> with no prior record creates the enablement in the
+            <code>enabled</code> state. A replacement keeps the current state. A
+            retained agent provider cannot change its provider kind. An omitted
+            agent provider is a removal. To change only the provider list, use
+            <a href="enablement-provider.html">the provider commands</a>.
+          </p>
+          <p>
+            A configuration write validates the default configuration. The
+            default <code>agent_provider</code> must name an agent provider of
+            the request. Its credential must exist with the platform of the
+            provider kind. The model must be a model of that provider kind or
+            credential, and the reasoning effort must be a level of that model.
+            <a href="model.html">List the models of a credential</a> shows the
+            valid pairs. <code>put</code> also checks the credential of every
+            other agent provider in the request the same way.
+            <code>put</code> and <code>enable</code> also validate the effective
+            configuration of each dependent worker binding.
+          </p>
+          <p>
+            <code>fallback_configurations</code> is required. It is an array of
+            at most <code>7</code> complete
+            <code>{ agent_provider, model_identifier, reasoning_effort }</code>
+            items, and <code>[]</code> means no fallback. Each item passes the
+            validation of the default configuration against the agent providers
+            of the request. A repeated <code>agent_provider</code> and
+            <code>model_identifier</code>, or an item with the
+            <code>agent_provider</code> and <code>model_identifier</code> of the
+            default configuration, fails with
+            <code>agent.configuration.fallback_duplicate</code>. A worker
+            binding entry can replace the list whole; see
+            <a href="../project/binding.html">the binding entries</a>. A
+            cooldown moves a claim to the next item; see
+            <a href="cooldown.html">agent cooldowns</a>.
+          </p>
+          <p>
+            <code>disable</code> is the stop switch of an agent. It keeps the
+            worker bindings. A later binding write for the agent fails with
+            <code>agent.enablement.unavailable</code>, and configuration
+            resolution reports that code.
+          </p>
+          <p>
+            <code>remove</code> writes a removal revision. The record then
+            disappears from <code>list</code> and <code>get</code>, and
+            <code>agent get</code> answers <code>enablement: null</code>. A
+            later <code>put</code> creates a new <code>enabled</code> record.
+            That <code>put</code> names no <code>expected_revision</code>,
+            because a removed enablement counts as absent.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            <code>get</code>, <code>put</code>, <code>enable</code> and
+            <code>disable</code> return HTTP <code>200</code> with the
+            enablement record. The CLI writes one JSON line to stdout and exits
+            <code>0</code>. Mutations add the retry key on the CLI only.
+          </p>
+          <pre><code class="language-json">{
+  "agent_name": "swe@1",
+  "state": "enabled",
+  "agent_providers": [
+    {
+      "name": "main",
+      "provider": "anthropic",
+      "credential": "&lt;credential-name&gt;"
+    }
+  ],
+  "default_configuration": {
+    "agent_provider": "main",
+    "model_identifier": "claude-sonnet-4-5",
+    "reasoning_effort": "high"
+  },
+  "fallback_configurations": [
+    {
+      "agent_provider": "main",
+      "model_identifier": "claude-haiku-4-5",
+      "reasoning_effort": "off"
+    }
+  ],
+  "revision": 1,
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Catalog key of the agent.</td>
+                </tr>
+                <tr>
+                  <td><code>state</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td><code>enabled</code> or <code>disabled</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>agent_providers</code></td>
+                  <td>array</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Agent providers. Each name and each credential is unique
+                    inside the enablement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_providers[].name</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Name of the agent provider; binding entries and the default
+                    configuration refer to it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_providers[].provider</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Provider kind: <code>openai-compatible</code> or a built-in
+                    provider of pi-ai 1.1.0.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_providers[].credential</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Credential name in custody. The record holds no secret.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>default_configuration.agent_provider</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Name of the default agent provider.</td>
+                </tr>
+                <tr>
+                  <td><code>default_configuration.model_identifier</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Default model.</td>
+                </tr>
+                <tr>
+                  <td><code>default_configuration.reasoning_effort</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    <code>off</code>, <code>minimal</code>, <code>low</code>,
+                    <code>medium</code>, <code>high</code>,
+                    <code>xhigh</code> or <code>max</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fallback_configurations</code></td>
+                  <td>array</td>
+                  <td>API and CLI</td>
+                  <td>
+                    Tail of the fallback chain, at most 7 items.
+                    <code>[]</code> means no fallback.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fallback_configurations[].agent_provider</code></td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Name of an agent provider of the enablement.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>fallback_configurations[].model_identifier</code>
+                  </td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>Model of that agent provider.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>fallback_configurations[].reasoning_effort</code>
+                  </td>
+                  <td>string</td>
+                  <td>API and CLI</td>
+                  <td>
+                    A level of that model, from the set of
+                    <code>default_configuration.reasoning_effort</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>revision</code></td>
+                  <td>integer</td>
+                  <td>API and CLI</td>
+                  <td>Revision of this record.</td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only, mutations only</td>
+                  <td>
+                    Key used for this request; reuse it to retry the same
+                    request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>list</code> returns
+            <code
+              >{ &quot;items&quot;: [&lt;record&gt;, ...],
+              &quot;next_cursor&quot;: &quot;&lt;cursor&gt;&quot; }</code
+            >. <code>next_cursor</code> is <code>null</code> on the last page.
+          </p>
+          <p>
+            <code>remove</code> returns
+            <code
+              >{ &quot;agent_name&quot;: &quot;swe@1&quot;, &quot;removed&quot;:
+              true }</code
+            >
+            on the API. The CLI adds the retry key and prints
+            <code
+              >{ &quot;agent_name&quot;: &quot;swe@1&quot;, &quot;removed&quot;:
+              true, &quot;idempotency_key&quot;:
+              &quot;idempotency_key_&lt;ulid&gt;&quot; }</code
+            >.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>. The server
+            checks the catalog, then the record, then the revision, then the
+            configuration.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    The input breaks the schema, for example an empty
+                    <code>agent_providers</code> array or an unknown field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td>list</td>
+                  <td>The cursor is malformed.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>Mutations</td>
+                  <td>
+                    Missing or malformed idempotency key, checked after schema
+                    validation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>Mutations</td>
+                  <td>
+                    The key belongs to a different request of the same caller.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.catalog.not_found</code></td>
+                  <td>put, enable, disable, remove</td>
+                  <td>The agent name is not in the catalog.</td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.enablement.not_found</code></td>
+                  <td>get, enable, disable, remove</td>
+                  <td>
+                    The agent has no live enablement. <code>get</code> answers
+                    this code also for a name outside the catalog.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 agent.enablement.revision_conflict</code></td>
+                  <td>Mutations</td>
+                  <td>
+                    <code>expected_revision</code> differs from the latest
+                    revision. <code>details.revision</code> holds that revision,
+                    or <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 agent.enablement.provider.name_conflict</code>
+                  </td>
+                  <td>put</td>
+                  <td>Two agent providers use the same name.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >409 agent.enablement.provider.credential_conflict</code
+                    >
+                  </td>
+                  <td>put</td>
+                  <td>Two agent providers use the same credential.</td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.enablement.provider.not_found</code></td>
+                  <td>put, enable</td>
+                  <td>
+                    The default or a fallback <code>agent_provider</code> names
+                    no agent provider.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 agent.configuration.credential_unsuitable</code>
+                  </td>
+                  <td>put, enable</td>
+                  <td>
+                    A credential does not exist, or its platform differs from
+                    the provider kind. <code>put</code> checks each provider.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 agent.configuration.model_unknown</code></td>
+                  <td>put, enable</td>
+                  <td>
+                    The default or a fallback model is not a model of the
+                    provider kind or credential.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >400
+                      agent.configuration.reasoning_effort_unsupported</code
+                    >
+                  </td>
+                  <td>put, enable</td>
+                  <td>
+                    The default or a fallback model does not support the
+                    reasoning effort.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 agent.configuration.fallback_duplicate</code>
+                  </td>
+                  <td>put</td>
+                  <td>
+                    A fallback item repeats an agent provider and model, or
+                    repeats those of the default configuration.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 agent.enablement.provider.fixed</code></td>
+                  <td>put</td>
+                  <td>
+                    The request changes the provider kind of a retained agent
+                    provider.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 agent.enablement.provider.in_use</code></td>
+                  <td>put</td>
+                  <td>
+                    A binding entry or a binding tail names an omitted agent
+                    provider. <code>details.bindings</code> lists the bindings.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 agent.enablement.invalidates_bindings</code>
+                  </td>
+                  <td>put, enable</td>
+                  <td>
+                    The change makes a dependent binding invalid.
+                    <code>details.bindings</code> lists <code>binding_id</code>,
+                    <code>worker_name</code> and <code>code</code>. The
+                    <code>code</code>
+                    <code>agent.configuration.credential_holder_mismatch</code>
+                    marks a binding holder with no live copy of the credential
+                    sealed to its current key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 agent.enablement.in_use</code></td>
+                  <td>remove</td>
+                  <td>
+                    A worker binding of a worker that runs the agent exists.
+                    <code>details.bindings</code> lists the bindings.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>Mutations</td>
+                  <td>The body exceeds 64 KiB.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends the request.
+            <code>&lt;command&gt;</code> is the command name.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td>list</td>
+                  <td><code>--limit</code> is not a positive safe integer.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td>list</td>
+                  <td><code>--limit</code> is above 1000.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.agent.enablement.&lt;command&gt;.invalid_revision</code
+                    >
+                  </td>
+                  <td>enable, disable, remove</td>
+                  <td>
+                    <code>--expected-revision</code> is not a positive safe
+                    integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.agent.enablement.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>
+                    No option, environment variable or client file supplies a
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>Mutations</td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.invalid_path</code></td>
+                  <td>put</td>
+                  <td>
+                    <code>--file</code> is <code>-</code>; the command does not
+                    read stdin.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.not_found</code>,
+                    <code>cli.file.not_regular</code>
+                  </td>
+                  <td>put</td>
+                  <td>
+                    The <code>--file</code> path does not exist, or is not a
+                    regular file.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.encoding_invalid</code>,
+                    <code>cli.file.not_json</code>
+                  </td>
+                  <td>put</td>
+                  <td>The file is not UTF-8, or is not one JSON document.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.file.duplicate_key</code>,
+                    <code>cli.file.not_object</code>
+                  </td>
+                  <td>put</td>
+                  <td>The JSON repeats an object key, or is not an object.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.schema_invalid</code></td>
+                  <td>put</td>
+                  <td>
+                    The object breaks the body schema; the
+                    <code>details</code> row lists each issue path and code.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.agent.enablement.&lt;command&gt;.indeterminate</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>A transport failure, timeout or malformed response.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A mutation prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead. An indeterminate
+            mutation prints the retry key. Retry with the same key and the same
+            input. The server replays the recorded answer, a failure included,
+            for the same caller and key within
+            <code>gateway.idempotency_ttl</code> (default 86400 seconds).
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            All operations use <code>human</code> access, a 30-second timeout,
+            and the header <code>Authorization: Bearer &lt;human-jwt&gt;</code>.
+            Mutations also require
+            <code>Content-Type: application/json</code> and an
+            <code>Idempotency-Key</code> header with a fresh
+            <code>idempotency_key_&lt;ulid&gt;</code>. The mutation body limit
+            is 64 KiB. The HTTP client of the CLI has a 31-second deadline.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Mutation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>list</code></td>
+                  <td><code>GET /api/agent/enablement</code></td>
+                  <td><code>agent.enablement.list</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td><code>GET /api/agent/enablement/:agent_name</code></td>
+                  <td><code>agent.enablement.get</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>put</code></td>
+                  <td><code>PUT /api/agent/enablement/:agent_name</code></td>
+                  <td><code>agent.enablement.put</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>enable</code></td>
+                  <td>
+                    <code>POST /api/agent/enablement/:agent_name/enable</code>
+                  </td>
+                  <td><code>agent.enablement.enable</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>disable</code></td>
+                  <td>
+                    <code>POST /api/agent/enablement/:agent_name/disable</code>
+                  </td>
+                  <td><code>agent.enablement.disable</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>remove</code></td>
+                  <td><code>DELETE /api/agent/enablement/:agent_name</code></td>
+                  <td><code>agent.enablement.remove</code></td>
+                  <td>Yes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The path parameter <code>agent_name</code> is the catalog key, for
+            example <code>swe@1</code>. The static path
+            <code>/api/agent/enablement</code> does not match
+            <code>GET /api/agent/:agent_name</code>.
+          </p>
+          <h3 id="list-enablements">List enablements</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>query</td>
+                  <td>No</td>
+                  <td>
+                    Page size from <code>1</code> to <code>1000</code>; the
+                    default is <code>100</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>query</td>
+                  <td>No</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The request has no body.</p>
+          <pre><code class="language-sh">curl -s 'http://127.0.0.1:31415/api/agent/enablement?limit=100' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="get-an-enablement">Get an enablement</h3>
+          <p>The request has no query parameters and no body.</p>
+          <pre><code class="language-sh">curl -s http://127.0.0.1:31415/api/agent/enablement/swe@1 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="create-or-replace-an-enablement">
+            Create or replace an enablement
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>expected_revision</code></td>
+                  <td>integer</td>
+                  <td>Yes when a live record exists</td>
+                  <td>Positive latest revision that the caller read.</td>
+                </tr>
+                <tr>
+                  <td><code>agent_providers</code></td>
+                  <td>array</td>
+                  <td>Yes, at least one item</td>
+                  <td>
+                    Complete list of
+                    <code>{ name, provider, credential }</code>; every field is
+                    a nonempty string.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>default_configuration</code></td>
+                  <td>object</td>
+                  <td>Yes</td>
+                  <td>
+                    <code
+                      >{ agent_provider, model_identifier, reasoning_effort
+                      }</code
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fallback_configurations</code></td>
+                  <td>array</td>
+                  <td>Yes</td>
+                  <td>
+                    At most 7 complete
+                    <code
+                      >{ agent_provider, model_identifier, reasoning_effort
+                      }</code
+                    >
+                    items; <code>[]</code> means no fallback.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The body and its objects are closed; an unknown field fails
+            validation.
+          </p>
+          <pre><code class="language-sh">curl -s -X PUT http://127.0.0.1:31415/api/agent/enablement/swe@1 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_providers":[{"name":"main","provider":"anthropic","credential":"&lt;credential-name&gt;"}],"default_configuration":{"agent_provider":"main","model_identifier":"claude-sonnet-4-5","reasoning_effort":"high"},"fallback_configurations":[{"agent_provider":"main","model_identifier":"claude-haiku-4-5","reasoning_effort":"off"}]}'</code></pre>
+          <h3 id="enable-disable-or-remove-an-enablement">
+            Enable, disable or remove an enablement
+          </h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>expected_revision</code></td>
+                  <td>integer</td>
+                  <td>Yes</td>
+                  <td>Positive latest revision that the caller read.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -s -X POST http://127.0.0.1:31415/api/agent/enablement/swe@1/disable \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision":1}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord agent enablement list [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;]
+kanthord agent enablement get &lt;agent-name&gt;
+kanthord agent enablement put &lt;agent-name&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord agent enablement enable &lt;agent-name&gt; --expected-revision &lt;revision&gt; [--idempotency-key &lt;key&gt;]
+kanthord agent enablement disable &lt;agent-name&gt; --expected-revision &lt;revision&gt; [--idempotency-key &lt;key&gt;]
+kanthord agent enablement remove &lt;agent-name&gt; --expected-revision &lt;revision&gt; [--idempotency-key &lt;key&gt;]</code></pre>
+          <p>
+            Each command also accepts <code>--token &lt;jwt&gt;</code> and
+            <code>--endpoint &lt;url&gt;</code>.
+          </p>
+          <pre><code class="language-sh">kanthord agent enablement list --limit 50
+kanthord agent enablement put swe@1 --file swe-enablement.json
+kanthord agent enablement disable swe@1 --expected-revision 1
+kanthord agent enablement enable swe@1 --expected-revision 2
+kanthord agent enablement remove swe@1 --expected-revision 3</code></pre>
+          <p>
+            The <code>--file</code> of <code>put</code> holds the request body
+            as one JSON object:
+          </p>
+          <pre><code class="language-json">{
+  "expected_revision": 1,
+  "agent_providers": [
+    {
+      "name": "main",
+      "provider": "anthropic",
+      "credential": "&lt;credential-name&gt;"
+    }
+  ],
+  "default_configuration": {
+    "agent_provider": "main",
+    "model_identifier": "claude-sonnet-4-5",
+    "reasoning_effort": "high"
+  },
+  "fallback_configurations": [
+    {
+      "agent_provider": "main",
+      "model_identifier": "claude-haiku-4-5",
+      "reasoning_effort": "off"
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;agent-name&gt;</code></td>
+                  <td>get, put, enable, disable, remove</td>
+                  <td>Yes</td>
+                  <td>Catalog key; maps to <code>agent_name</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td>list</td>
+                  <td><code>100</code>; at most <code>1000</code></td>
+                  <td>Sets <code>limit</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>list</td>
+                  <td>None</td>
+                  <td>Sets <code>cursor</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>put</td>
+                  <td>Required</td>
+                  <td>UTF-8 JSON file with the request body.</td>
+                </tr>
+                <tr>
+                  <td><code>--expected-revision &lt;revision&gt;</code></td>
+                  <td>enable, disable, remove</td>
+                  <td>Required</td>
+                  <td>Sets <code>expected_revision</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>Mutations</td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key on a retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>agent</code> group declares <code>--token</code> and
+            <code>--endpoint</code>. Each option except
+            <code>--endpoint</code> accepts one occurrence only; a repeat fails
+            with <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

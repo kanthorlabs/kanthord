@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Check server liveness · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="check-server-liveness">Check server liveness</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Report whether the server process and its services run. The API and
+            <code>kanthord gateway liveness</code> perform the same read. The
+            read needs no token, so a container supervisor can run it.
+          </p>
+          <p>
+            Each service of the server registers one component map. A liveness
+            read starts every registered probe at the same time and collects the
+            maps. A probe reads local state only: the SQLite store, the log
+            descriptor, the lifecycle state of each service, and the version
+            commands of <code>bash</code>, <code>git</code> and
+            <code>ssh</code>. No probe calls a remote repository, an LLM
+            provider, a bucket or a worker host. A failed remote resource
+            therefore changes no liveness answer. The
+            <a href="healthcheck.html">resource healthcheck</a> checks the
+            remote resources. See
+            <a href="../../explanation/healthchecks.html"
+              >how healthchecks work</a
+            >
+            for the collection.
+          </p>
+          <p>
+            The answer is HTTP <code>200</code> when every registered service
+            returns a nonempty map and every component in it is healthy. Any
+            other result is HTTP <code>503</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Components</th>
+                  <th>What the probe checks</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server</code></td>
+                  <td>
+                    <code>gateway</code>, <code>store</code>, <code>log</code>
+                  </td>
+                  <td>
+                    The summary of the <code>gateway</code> map, a SQLite query
+                    and the operational log descriptor.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway</code></td>
+                  <td>
+                    <code>listener</code>, <code>authentication</code>,
+                    <code>idempotency</code>, <code>registry</code>,
+                    <code>invocation</code>
+                  </td>
+                  <td>
+                    The listener, the token checks, the idempotency memory, the
+                    operation registry and invocation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>custody</code></td>
+                  <td><code>credential</code></td>
+                  <td>The Custody Service started and did not stop.</td>
+                </tr>
+                <tr>
+                  <td><code>scheduler</code></td>
+                  <td><code>queue</code></td>
+                  <td>The Scheduler Service started and did not stop.</td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td><code>registrations</code></td>
+                  <td>The Worker Service started and did not stop.</td>
+                </tr>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td><code>toolchain</code></td>
+                  <td>
+                    The version commands of <code>bash</code>,
+                    <code>git</code> and <code>ssh</code> run.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project</code></td>
+                  <td><code>bindings</code></td>
+                  <td>The Project Service started and did not stop.</td>
+                </tr>
+                <tr>
+                  <td><code>mission</code></td>
+                  <td><code>operations</code></td>
+                  <td>The Mission Service started and did not stop.</td>
+                </tr>
+                <tr>
+                  <td><code>intake</code></td>
+                  <td><code>events</code></td>
+                  <td>
+                    The Intake Service dispatcher started and did not stop.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tracking</code></td>
+                  <td><code>store</code></td>
+                  <td>
+                    The Tracking Service started and its SQLite store answers.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with JSON. The CLI writes the
+            same object as one JSON line to stdout and exits <code>0</code>.
+            This answer comes from a fresh server:
+          </p>
+          <pre><code class="language-json">{
+  "status": "ok",
+  "services": {
+    "server": { "gateway": 200, "store": 200, "log": 200 },
+    "repository": { "toolchain": 200 },
+    "scheduler": { "queue": 200 },
+    "tracking": { "store": 200 },
+    "custody": { "credential": 200 },
+    "worker": { "registrations": 200 },
+    "mission": { "operations": 200 },
+    "project": { "bindings": 200 },
+    "gateway": {
+      "listener": 200,
+      "authentication": 200,
+      "idempotency": 200,
+      "registry": 200,
+      "invocation": 200
+    },
+    "intake": { "events": 200 }
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>status</code></td>
+                  <td><code>&quot;ok&quot;</code></td>
+                  <td>
+                    Every registered service reports, and every component is
+                    healthy.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>services</code></td>
+                  <td>object</td>
+                  <td>
+                    Maps each registered service name to its component map.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>services.&lt;service&gt;</code></td>
+                  <td>nonempty object</td>
+                  <td>Maps each component name to its code.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>services.&lt;service&gt;.&lt;component&gt;</code>
+                  </td>
+                  <td><code>200</code> or <code>503</code></td>
+                  <td>
+                    <code>200</code> is healthy. <code>503</code> is
+                    unavailable. A <code>200</code> answer holds only
+                    <code>200</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The order of the services is not fixed. A client reads the services
+            by name.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>503 gateway.liveness.unhealthy</code></td>
+                  <td>
+                    A component is unavailable, a probe failed, or no service is
+                    registered. <code>error.details</code> holds the complete
+                    service map.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>503 gateway.lifecycle.not_ready</code></td>
+                  <td>
+                    The Gateway Service is not ready. The server collects no
+                    map.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.http.host_not_allowed</code></td>
+                  <td>
+                    The <code>Host</code> header is absent or not in
+                    <code>gateway.allowed_hosts</code>.
+                    <code>details.host</code> holds the received host, and
+                    <code>details.field</code> holds
+                    <code>gateway.allowed_hosts</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 gateway.routing.not_found</code></td>
+                  <td>
+                    The request path is outside <code>gateway.base_path</code>.
+                    Put the base path into the endpoint, for example
+                    <code>http://127.0.0.1:31415/s/kanthord</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>The read exceeded 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>error.details</code> of
+            <code>gateway.liveness.unhealthy</code> has the shape of
+            <code>services</code> in a <code>200</code> answer. It keeps the
+            healthy components next to the unavailable ones. This example is
+            shortened to three services:
+          </p>
+          <pre><code class="language-json">{
+  "error": {
+    "code": "gateway.liveness.unhealthy",
+    "message": "One or more services are unavailable.",
+    "details": {
+      "server": { "gateway": 200, "store": 200, "log": 503 },
+      "project": { "bindings": 200 },
+      "intake": { "healthcheck": 503 }
+    }
+  },
+  "request_id": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}</code></pre>
+          <p>
+            A probe that throws, returns an empty or malformed map, or exceeds
+            its deadline of 5 seconds gives
+            <code>{ &quot;healthcheck&quot;: 503 }</code> under its service
+            name. This marker reports a failed probe, not the state of one
+            component. The answer holds no exception text.
+          </p>
+          <p>
+            A client disconnect or a server stop cancels the read, and the
+            server sends no <code>200</code> answer.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/liveness</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>gateway.liveness</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>Public. The request needs no token.</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>
+                    30 seconds for the route; 5 seconds for each service probe
+                  </td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/liveness</code></pre>
+          <p>
+            The host check and the readiness check apply also to this public
+            route.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord gateway [--endpoint &lt;url&gt;] liveness</code></pre>
+          <pre><code class="language-sh">kanthord gateway liveness
+kanthord gateway liveness --endpoint http://127.0.0.1:31415/s/kanthord</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The command sends no <code>Authorization</code> header. It reads no
+            token from <code>KANTHORD_TOKEN</code> or <code>cli.yaml</code>, and
+            it refuses the option <code>--token</code>.
+          </p>
+          <p>
+            Before the request, the command checks the optional
+            <a href="../index.html#client-configuration">client file</a>
+            <code>cli.yaml</code>. The check also runs when
+            <code>--endpoint</code> or <code>KANTHORD_ENDPOINT</code> gives the
+            endpoint. The file must be a regular file, not a symlink, with the
+            mode <code>0600</code> and the user of the process as owner. Its
+            content must match the client schema, the <code>token</code> field
+            included. An invalid file fails the command while the server is
+            healthy.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Result</th>
+                  <th>Stdout</th>
+                  <th>Stderr</th>
+                  <th>Exit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>HTTP <code>200</code></td>
+                  <td>The answer, one line</td>
+                  <td>Empty</td>
+                  <td><code>0</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    A declared API failure, for example
+                    <code>503 gateway.liveness.unhealthy</code>
+                  </td>
+                  <td>Empty</td>
+                  <td>
+                    <code>&lt;code&gt;: gateway liveness: request failed</code>,
+                    the row <code>status</code> and, when
+                    <code>details</code> is not null, the row
+                    <code>details</code>
+                  </td>
+                  <td><code>1</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    A refused connection, a transport failure, a deadline,
+                    invalid JSON, a redirect, or an answer other than
+                    <code>200</code> with no error envelope
+                  </td>
+                  <td>Empty</td>
+                  <td>
+                    <code
+                      >cli.gateway.liveness.indeterminate: gateway liveness: the
+                      result is unknown; retry the command</code
+                    >
+                  </td>
+                  <td><code>1</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    A <code>200</code> answer that fails the output schema
+                  </td>
+                  <td>Empty</td>
+                  <td>
+                    <code
+                      >gateway.client.answer_invalid: gateway liveness: request
+                      failed</code
+                    >, the row <code>status: 200</code> and the row
+                    <code>details</code>
+                  </td>
+                  <td><code>1</code></td>
+                </tr>
+                <tr>
+                  <td>An invalid <code>cli.yaml</code> or endpoint value</td>
+                  <td>Empty</td>
+                  <td>The local diagnostic</td>
+                  <td><code>1</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The local diagnostics of an invalid client file:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cause</th>
+                  <th>Stderr</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.yaml</code> is not valid YAML</td>
+                  <td>
+                    <code
+                      >system.config.invalid_yaml: configuration: expected one
+                      valid YAML mapping with unique string keys.</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.yaml</code> holds a field outside the client
+                    schema
+                  </td>
+                  <td>
+                    <code
+                      >cli.config.invalid: invalid client configuration</code
+                    >
+                    and the row <code>path</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.yaml</code> has a mode other than
+                    <code>0600</code>, another owner, or is a symlink
+                  </td>
+                  <td>
+                    <code
+                      >system.files.invalid_permissions: expected an owned file
+                      with mode 600 on a POSIX filesystem</code
+                    >
+                    and the row <code>path</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.yaml</code> is empty or holds no mapping</td>
+                  <td>
+                    <code
+                      >system.config.invalid_mapping: configuration: expected
+                      one YAML mapping.</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>The endpoint is not an absolute HTTP(S) URL</td>
+                  <td>
+                    <code
+                      >cli.config.invalid_endpoint: endpoint: expected an
+                      absolute HTTP(S) URL without credentials, query or
+                      fragment.</code
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A stopped server gives
+            <code>cli.gateway.liveness.indeterminate</code>, because the
+            connection is refused. The HTTP client has a 31-second deadline for
+            this 30-second operation. The command makes no retry.
+          </p>
+          <h3 id="container-healthcheck">Container healthcheck</h3>
+          <p>The container image runs this command as its healthcheck:</p>
+          <pre><code class="language-text">HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD ["kanthord","gateway","liveness"]</code></pre>
+          <p>
+            Exit <code>0</code> means that the server answers HTTP
+            <code>200</code>. The command sends its request from inside the
+            container. A healthy result therefore does not prove that a
+            published host port reaches the server. A container with another
+            <code>gateway.port</code> or a <code>gateway.base_path</code> sets
+            <code>KANTHORD_ENDPOINT</code>, for example
+            <code>http://127.0.0.1:31415/s/kanthord</code>. The
+            <code>Host</code> header of that endpoint must be in
+            <code>gateway.allowed_hosts</code>.
+          </p>
+          <p>
+            The container timeout of 5 seconds equals the probe deadline. A
+            probe that reaches its deadline therefore ends the check by the
+            timeout, and the health log holds no <code>details</code>.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

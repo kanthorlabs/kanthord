@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Explanations · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a>
+      </nav>
+      <main>
+        <article>
+          <h1 id="explanations">Explanations</h1>
+          <p>
+            These pages answer “How does this work, and why?” They explain
+            mechanisms and design choices rather than prescribing tasks or
+            defining interfaces.
+          </p>
+          <ul>
+            <li>
+              <a href="architecture.html">Service architecture</a>: a colored
+              Mermaid diagram of all seven services, their components,
+              ownership, and shared runtime.
+            </li>
+            <li>
+              <a href="healthchecks.html">How healthchecks work</a>:
+              interpreting component reports, partial failures, freshness,
+              cancellation, and the limits of diagnostics.
+            </li>
+            <li>
+              <a href="worker.html">How a worker works</a>: start here. The
+              worker concept, the life of an <code>implement</code> node, one
+              execution from pull to release, how
+              <code>reviewer@1</code> judges, the limits and the rules that hold
+              in every execution.
+            </li>
+            <li>
+              <a href="coder-worker.html">How the coder@1 worker works</a>: the
+              12 steps of an execution, gate G after every agent turn, the done
+              records, the verdict unit, the release gate, every way that an
+              execution ends, the edge cases with examples and the pi calls.
+            </li>
+            <li>
+              <a href="native-agent.html">How the native agent works</a>: how
+              KanthorD builds an agent session on pi, the model configuration
+              and its fallback chain, the prompt, the tools, the budget and the
+              current limits.
+            </li>
+            <li>
+              <a href="worker-contract.html"
+                >What a worker reports to KanthorD</a
+              >: the state channel and the telemetry channel that a native
+              worker and an external harness share.
+            </li>
+          </ul>
+          <p>
+            For exact commands and API contracts, see the
+            <a href="../reference/index.html">reference</a>.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

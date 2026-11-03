@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read attempts and external actions · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-attempts-and-external-actions">
+            Read attempts and external actions
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Read the attempt records of a node and the required external actions
+            of each attempt. A task has no attempts.
+          </p>
+          <ul>
+            <li>
+              <code>attempt list</code> returns one page of the attempts of a
+              node, highest attempt first.
+            </li>
+            <li><code>attempt get</code> returns one attempt of a node.</li>
+            <li>
+              <code>external-action list</code> returns one page of the required
+              external actions across the attempts of a node.
+            </li>
+            <li>
+              <code>external-action get</code> returns one required external
+              action of one attempt.
+            </li>
+          </ul>
+          <p>
+            An attempt pins one node revision. The server derives the required
+            external actions of an attempt at read time from the repository
+            bindings of that pinned revision. Each repository binding with a
+            configured action yields one action. An <code>examine</code> node
+            has no required external actions.
+          </p>
+          <p>
+            An external-action record joins the frozen action with its request
+            evidence and resolution. These reads do not inspect a platform. To
+            read the request evidence, use
+            <a href="evidence.html"><code>mission evidence get</code></a
+            >.
+          </p>
+          <p>
+            These operations change nothing. Each list call reads one page. The
+            CLI does not follow <code>next_cursor</code>. The reads take no
+            shared snapshot with other reads.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            All four operations return HTTP <code>200</code>. The CLI writes the
+            same JSON value as one line to stdout and exits
+            <code>0</code> (shown formatted here).
+          </p>
+          <h3 id="attempt-list"><code>attempt list</code></h3>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+      "attempt": 1,
+      "node_revision": 3,
+      "required_external_actions": [
+        {
+          "key": "app.pull_request",
+          "binding_id": "binding_01M4C5G6BP5EWTVTTXFH1R25MC",
+          "action": "pull_request",
+          "expected_end_state": "pull_request_merged",
+          "follows": null,
+          "configuration": { "base_branch": "main" }
+        }
+      ],
+      "opened_at": 1791398400000,
+      "closed_at": null,
+      "outcome_ids": [],
+      "opened_by": {
+        "kind": "execution",
+        "execution_id": "execution_01M4C5G6BP0355Z52M6JCYZCSK",
+        "client_id": "client_identity_01M4C5G6BPC5C40S9NFE96N5FB",
+        "name": "worker-a"
+      }
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array of <code>Attempt</code></td>
+                  <td>
+                    At most <code>limit</code> attempts, highest attempt number
+                    first.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Opaque cursor for the next page. <code>null</code> ends the
+                    traversal.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="attempt-get"><code>attempt get</code></h3>
+          <p>The answer is one <code>Attempt</code> record.</p>
+          <h3 id="attempt"><code>Attempt</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node that owns the attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>positive safe integer</td>
+                  <td>Attempt number. The first attempt is <code>1</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>node_revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Node revision that the attempt pins.</td>
+                </tr>
+                <tr>
+                  <td><code>start_point</code></td>
+                  <td><code>base_branch</code> or <code>node_branch</code></td>
+                  <td>
+                    Branch that the work of the attempt starts from. Attempt 1
+                    records <code>base_branch</code>. An unblock records the
+                    value that it names, <code>node_branch</code> by default.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>required_external_actions</code></td>
+                  <td>array of <code>FrozenAction</code></td>
+                  <td>
+                    Actions derived from the pinned revision, sorted by
+                    <code>key</code>. Empty for an <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>opened_at</code></td>
+                  <td>Unix milliseconds</td>
+                  <td>Time that the attempt opened.</td>
+                </tr>
+                <tr>
+                  <td><code>closed_at</code></td>
+                  <td>Unix milliseconds or <code>null</code></td>
+                  <td>
+                    Time that the attempt closed; <code>null</code> while the
+                    attempt is open.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>outcome_ids</code></td>
+                  <td>array of <code>outcome_&lt;ulid&gt;</code></td>
+                  <td>Outcomes of the attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>opened_by</code></td>
+                  <td><code>Actor</code></td>
+                  <td>
+                    Actor that opened the attempt. A claim,
+                    <code>ready</code> or <code>resume</code> opens attempt 1;
+                    only an unblock opens a later attempt.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>Actor</code> has one of three forms, selected by
+            <code>kind</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>kind</code></th>
+                  <th>Other properties</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>human</code></td>
+                  <td><code>account</code> and <code>name</code> strings.</td>
+                </tr>
+                <tr>
+                  <td><code>execution</code></td>
+                  <td>
+                    <code>execution_id</code>, <code>client_id</code> (<code
+                      >client_identity_&lt;ulid&gt;</code
+                    >
+                    or <code>null</code>), <code>name</code> (string or
+                    <code>null</code>).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>service</code></td>
+                  <td>
+                    <code>service</code> (<code>scheduler</code> or
+                    <code>mission</code>) and an optional
+                    <code>inbound_event_id</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="frozenaction"><code>FrozenAction</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>key</code></td>
+                  <td>string</td>
+                  <td>
+                    Action key <code>&lt;binding name&gt;.&lt;action&gt;</code>,
+                    for example <code>app.pull_request</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>binding_id</code></td>
+                  <td><code>binding_&lt;ulid&gt;</code></td>
+                  <td>Repository binding that owns the action.</td>
+                </tr>
+                <tr>
+                  <td><code>action</code></td>
+                  <td><code>pull_request</code> or <code>merge_push</code></td>
+                  <td>Configured repository action.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_end_state</code></td>
+                  <td>
+                    <code>pull_request_merged</code> or
+                    <code>base_branch_pushed</code>
+                  </td>
+                  <td>End state that counts as success for the action.</td>
+                </tr>
+                <tr>
+                  <td><code>follows</code></td>
+                  <td>action key or <code>null</code></td>
+                  <td>
+                    Predecessor action. The current derivation always writes
+                    <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>configuration</code></td>
+                  <td>object with <code>base_branch</code> string</td>
+                  <td>Base branch of the repository binding.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="external-action-list"><code>external-action list</code></h3>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+      "attempt": 1,
+      "action": {
+        "key": "app.pull_request",
+        "binding_id": "binding_01M4C5G6BP5EWTVTTXFH1R25MC",
+        "action": "pull_request",
+        "expected_end_state": "pull_request_merged",
+        "follows": null,
+        "configuration": { "base_branch": "main" }
+      },
+      "requested": true,
+      "request_evidence_id": "evidence_01M4C5G6BN71J38HW3MFCKMAT6",
+      "resolution": "unresolved"
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <p>
+            The list orders records by attempt, highest first, then by action
+            key in reverse order. Without <code>attempt</code>, the list covers
+            every attempt of the node.
+          </p>
+          <h3 id="external-action-get"><code>external-action get</code></h3>
+          <p>The answer is one <code>ExternalAction</code> record.</p>
+          <h3 id="externalaction"><code>ExternalAction</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node that owns the attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>nonnegative safe integer</td>
+                  <td>Attempt that froze the action.</td>
+                </tr>
+                <tr>
+                  <td><code>action</code></td>
+                  <td><code>FrozenAction</code></td>
+                  <td>The required action.</td>
+                </tr>
+                <tr>
+                  <td><code>requested</code></td>
+                  <td>boolean</td>
+                  <td>
+                    <code>true</code> when a request evidence exists for the
+                    action.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>request_evidence_id</code></td>
+                  <td>
+                    <code>evidence_&lt;ulid&gt;</code> or <code>null</code>
+                  </td>
+                  <td>Request evidence of the action in this attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>resolution</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>unrequested</code>, <code>unresolved</code>,
+                    <code>expected-end</code> or <code>other-end</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The resolution values have these meanings:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Value</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>unrequested</code></td>
+                  <td>The attempt holds no request evidence for the action.</td>
+                </tr>
+                <tr>
+                  <td><code>unresolved</code></td>
+                  <td>The request evidence holds no end state.</td>
+                </tr>
+                <tr>
+                  <td><code>expected-end</code></td>
+                  <td>The request evidence reached the expected end state.</td>
+                </tr>
+                <tr>
+                  <td><code>other-end</code></td>
+                  <td>The request evidence reached a different end state.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>. Timestamps are
+            integer Unix milliseconds in UTC.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid path parameter, <code>limit</code> outside 1 to
+                    1000, invalid <code>attempt</code>, or an unknown query
+                    field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>All</td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td>Both <code>list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td>All</td>
+                  <td>The node does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td>Both <code>get</code></td>
+                  <td>
+                    The attempt does not exist, or the attempt has no required
+                    action with that key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.mission.attempt.list.invalid_node_id</code></td>
+                  <td><code>attempt list</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.attempt.get.invalid_node_id</code></td>
+                  <td><code>attempt get</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.attempt.get.invalid_attempt</code></td>
+                  <td><code>attempt get</code></td>
+                  <td>
+                    <code>&lt;attempt&gt;</code> is not a positive safe integer
+                    in canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.external_action.list.invalid_node_id</code
+                    >
+                  </td>
+                  <td><code>external-action list</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.external_action.list.invalid_attempt</code
+                    >
+                  </td>
+                  <td><code>external-action list</code></td>
+                  <td>
+                    <code>--attempt</code> is not a nonnegative safe integer in
+                    canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.external_action.get.invalid_node_id</code>
+                  </td>
+                  <td><code>external-action get</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.external_action.get.invalid_attempt</code>
+                  </td>
+                  <td><code>external-action get</code></td>
+                  <td>
+                    <code>&lt;attempt&gt;</code> is not a positive safe integer
+                    in canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.external_action.get.invalid_action_key</code
+                    >
+                  </td>
+                  <td><code>external-action get</code></td>
+                  <td>
+                    <code>&lt;action-key&gt;</code> does not match
+                    <code>&lt;name&gt;.pull_request</code> or
+                    <code>&lt;name&gt;.merge_push</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.attempt.list.token_required</code>,
+                    <code>cli.mission.attempt.get.token_required</code>,
+                    <code>cli.mission.external_action.list.token_required</code
+                    >,
+                    <code>cli.mission.external_action.get.token_required</code>
+                  </td>
+                  <td>Same command</td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td>Both <code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td>Both <code>list</code></td>
+                  <td><code>--limit</code> is greater than 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td><code>list</code> commands</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Canonical form means decimal digits with no sign and no zero before
+            another digit. A declared failure makes the CLI exit
+            <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.mission.attempt.list.indeterminate</code>,
+            <code>cli.mission.attempt.get.indeterminate</code>,
+            <code>cli.mission.external_action.list.indeterminate</code> or
+            <code>cli.mission.external_action.get.indeterminate</code>. These
+            reads change nothing, so run the command again.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>All four operations share these properties:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="attempt-list-1"><code>attempt list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/mission/node/:node_id/attempt</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.attempt.list</code></td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query, optional)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="attempt-get-1"><code>attempt get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/attempt/:attempt</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.attempt.get</code></td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>attempt</code> (path, positive safe integer); no query
+                    fields
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="external-action-list-1"><code>external-action list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/external-action</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.externalAction.list</code></td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>attempt</code> (query, optional nonnegative safe
+                    integer); <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query, optional)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="external-action-get-1"><code>external-action get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/node/:node_id/attempt/:attempt/external-action/:action_key</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.externalAction.get</code></td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>node_id</code> (path, required);
+                    <code>attempt</code> (path, positive safe integer);
+                    <code>action_key</code> (path, required); no query fields
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/attempt?limit=20' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/attempt/1 \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/external-action?attempt=1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/attempt/1/external-action/app.pull_request \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <p>
+            To read the next page, send the <code>next_cursor</code> value as
+            the <code>cursor</code> query parameter with the same
+            <code>limit</code> and <code>attempt</code>.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>mission</code> group, and each leaf command accepts them.
+            Every command below takes these two options:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+          <h3 id="attempt-list-2"><code>attempt list</code></h3>
+          <pre><code class="language-text">kanthord mission attempt list &lt;node-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission attempt list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --limit 20</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum attempts on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="attempt-get-2"><code>attempt get</code></h3>
+          <pre><code class="language-text">kanthord mission attempt get &lt;node-id&gt; &lt;attempt&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission attempt get node_01M4C5G6BNQQPFNM7M8W0GW1W4 1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;attempt&gt;</code></td>
+                  <td>
+                    Required positive attempt number, for example
+                    <code>1</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="external-action-list-2"><code>external-action list</code></h3>
+          <pre><code class="language-text">kanthord mission external-action list &lt;node-id&gt; [--attempt &lt;attempt&gt;] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission external-action list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --attempt 1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--attempt &lt;attempt&gt;</code></td>
+                  <td>None; every attempt</td>
+                  <td>Nonnegative attempt number that selects one attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum records on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="external-action-get-2"><code>external-action get</code></h3>
+          <pre><code class="language-text">kanthord mission external-action get &lt;node-id&gt; &lt;attempt&gt; &lt;action-key&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission external-action get node_01M4C5G6BNQQPFNM7M8W0GW1W4 1 app.pull_request</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;attempt&gt;</code></td>
+                  <td>Required positive attempt number.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;action-key&gt;</code></td>
+                  <td>
+                    Required action key: a lower-case binding name, a dot, then
+                    <code>pull_request</code> or <code>merge_push</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Check resource health · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="check-resource-health">Check resource health</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Check every remote resource that KanthorD uses, on demand, and
+            report one entry for each resource. A resource is a repository
+            binding, a credential, an agent provider, a registered worker
+            instance or an Intake inbound identity. The report stores no result
+            and changes no binding, credential or execution.
+          </p>
+          <p>
+            The report does not tell whether the server process runs. Use
+            <a href="liveness.html">liveness</a> for that question, for example
+            in a container healthcheck.
+          </p>
+          <p>
+            Seven owners supply the resources. The server reads all inventories
+            in one transaction before it starts the checks:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th>Owner</th>
+                  <th>Resource name</th>
+                  <th>Scope</th>
+                  <th>Resource</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>services</code></td>
+                  <td><code>project</code></td>
+                  <td>Binding name</td>
+                  <td><code>projects</code></td>
+                  <td>A current repository binding.</td>
+                </tr>
+                <tr>
+                  <td><code>services</code></td>
+                  <td><code>intake</code></td>
+                  <td>Inbound ID</td>
+                  <td><code>projects</code></td>
+                  <td>An Intake inbound.</td>
+                </tr>
+                <tr>
+                  <td><code>services</code></td>
+                  <td><code>worker</code></td>
+                  <td>
+                    <code
+                      >&lt;worker binding name&gt;/&lt;runtime
+                      identity&gt;</code
+                    >
+                  </td>
+                  <td><code>projects</code></td>
+                  <td>A registered worker instance.</td>
+                </tr>
+                <tr>
+                  <td><code>shared</code></td>
+                  <td><code>llm</code></td>
+                  <td>Credential name</td>
+                  <td><code>global</code></td>
+                  <td>A live LLM credential.</td>
+                </tr>
+                <tr>
+                  <td><code>shared</code></td>
+                  <td><code>repository</code></td>
+                  <td>Credential name</td>
+                  <td><code>global</code></td>
+                  <td>A live repository credential.</td>
+                </tr>
+                <tr>
+                  <td><code>shared</code></td>
+                  <td><code>storage</code></td>
+                  <td>Credential name</td>
+                  <td><code>global</code></td>
+                  <td>A live storage credential.</td>
+                </tr>
+                <tr>
+                  <td><code>shared</code></td>
+                  <td><code>agent</code></td>
+                  <td>
+                    <code>&lt;agent name&gt;/&lt;agent provider name&gt;</code>
+                  </td>
+                  <td><code>global</code></td>
+                  <td>An agent provider of an agent enablement.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each name segment is percent-encoded, a literal <code>/</code> or
+            <code>%</code> included.
+          </p>
+          <p>The checks run under these rules:</p>
+          <ol>
+            <li>
+              The server checks each target once. Two entries with the same
+              target, for example two bindings of one address, show the same
+              result.
+            </li>
+            <li>At most 32 checks run at the same time across all owners.</li>
+            <li>
+              Each check has a deadline of 10 seconds from its start. A check
+              that exceeds its deadline reports <code>unknown</code> with
+              <code>deadline_exceeded</code>, for every kind of check.
+            </li>
+            <li>
+              The report has a deadline of 115 seconds after the start: the
+              route timeout of 120 seconds minus a margin of 5 seconds. At that
+              deadline, every entry without a result reports
+              <code>unknown</code> with <code>deadline_exceeded</code>, a check
+              that did not start included.
+            </li>
+            <li>
+              A failure of a check is not a failure of the request. The request
+              answers HTTP <code>200</code> with <code>unhealthy</code> and
+              <code>unknown</code> entries.
+            </li>
+          </ol>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with JSON. This report holds
+            one project <code>shop</code> with the repository binding
+            <code>app</code>, one LLM credential and one GitHub credential:
+          </p>
+          <pre><code class="language-json">{
+  "services": {
+    "project": {
+      "global": {},
+      "projects": {
+        "shop": {
+          "app": {
+            "status": "unhealthy",
+            "capability": "network git read",
+            "failure_reason": "key_refused"
+          }
+        }
+      }
+    },
+    "intake": { "global": {}, "projects": {} },
+    "worker": { "global": {}, "projects": {} }
+  },
+  "shared": {
+    "llm": {
+      "global": {
+        "team-openai": {
+          "status": "healthy",
+          "capability": "model-list read",
+          "failure_reason": null
+        }
+      },
+      "projects": {}
+    },
+    "repository": {
+      "global": {
+        "github-main": {
+          "status": "unknown",
+          "capability": "rate-limit read",
+          "failure_reason": "unclassified"
+        }
+      },
+      "projects": {}
+    },
+    "storage": { "global": {}, "projects": {} },
+    "agent": { "global": {}, "projects": {} }
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>services</code></td>
+                  <td>object</td>
+                  <td>
+                    Holds exactly <code>project</code>, <code>intake</code> and
+                    <code>worker</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>shared</code></td>
+                  <td>object</td>
+                  <td>
+                    Holds exactly <code>llm</code>, <code>repository</code>,
+                    <code>storage</code> and <code>agent</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;group&gt;.&lt;owner&gt;.global</code></td>
+                  <td>object</td>
+                  <td>
+                    Maps a resource name to an entry. The object can be empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;group&gt;.&lt;owner&gt;.projects</code></td>
+                  <td>object</td>
+                  <td>
+                    Maps a project name to a resource map. The object can be
+                    empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >&lt;group&gt;.&lt;owner&gt;.projects.&lt;project&gt;.&lt;resource&gt;</code
+                    >
+                  </td>
+                  <td>object</td>
+                  <td>One entry of a project-scoped resource.</td>
+                </tr>
+                <tr>
+                  <td><code>&lt;entry&gt;.status</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>healthy</code>, <code>unhealthy</code> or
+                    <code>unknown</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;entry&gt;.capability</code></td>
+                  <td>string</td>
+                  <td>
+                    The capability that the check proves, for example
+                    <code>network git read</code>. It is no claim about other
+                    capabilities.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;entry&gt;.failure_reason</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code>null</code> only when <code>status</code> is
+                    <code>healthy</code>. Every other entry carries a value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>failure_reason</code> is a value of one closed list. The
+            <a href="../errors.html#failure-reasons-of-a-health-entry"
+              >failure reason table</a
+            >
+            defines each value. The value of an entry depends on its resource:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Entry</th>
+                  <th>Values</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A repository binding of <code>project</code></td>
+                  <td>
+                    A git value of the
+                    <a
+                      href="../project/binding.html#failure-reasons-of-the-address-entry"
+                      >binding check</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A credential of <code>llm</code></td>
+                  <td>
+                    A value of the
+                    <a href="../llm/credential.html#check-and-verify-answer"
+                      >LLM credential check</a
+                    >. The report lists only <code>server</code> copies.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A credential of <code>repository</code></td>
+                  <td>
+                    A value of the
+                    <a href="../repository/credential.html#verify-and-check"
+                      >repository credential check</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A credential of <code>storage</code></td>
+                  <td>
+                    A value of the
+                    <a href="../storage/credential.html#verify-and-check"
+                      >storage credential check</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>An agent provider of <code>agent</code></td>
+                  <td>
+                    A value of the LLM credential check of its credential. A
+                    credential that only worker instances hold reports
+                    <code>unknown</code> with <code>held_by_instance</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    An entry of <code>intake</code> or <code>worker</code>
+                  </td>
+                  <td>
+                    <code>deadline_exceeded</code> or <code>unclassified</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every entry whose check exceeds its deadline carries
+            <code>deadline_exceeded</code>. The answer holds no remote text, no
+            secret and no endpoint URL with credentials. The server log record
+            <code>resource.health.check</code> keeps the redacted remote text of
+            each failed check under <code>reason</code>. An entry that exceeds
+            its deadline logs <code>check deadline exceeded</code> under
+            <code>reason</code>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Absent, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>503 gateway.healthcheck.inventory_failed</code></td>
+                  <td>
+                    One or more owners cannot supply their inventory.
+                    <code>error.details.missing_inventories</code> names each
+                    owner.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>503 gateway.lifecycle.not_ready</code></td>
+                  <td>The Gateway Service is not ready.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>The request exceeded 120 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-json">{
+  "error": {
+    "code": "gateway.healthcheck.inventory_failed",
+    "message": "One or more resource owners failed to supply their inventory.",
+    "details": { "missing_inventories": ["intake"] }
+  },
+  "request_id": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}</code></pre>
+          <p>
+            A client disconnect or a server stop cancels every check, and the
+            server sends no <code>200</code> answer.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/healthcheck</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>gateway.healthcheck</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>Human bearer JWT</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>
+                    120 seconds for the route; 115 seconds for the report; 10
+                    seconds for each check
+                  </td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;jwt&gt;</code> containing the human
+                    credential.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/healthcheck \
+  -H 'Authorization: Bearer &lt;jwt&gt;'</code></pre>
+          <p>The host check and the readiness check apply.</p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <p>
+            No CLI command reads the resource report. Use the cURL request
+            above. To check one resource from the CLI, use
+            <code>kanthord project binding verify</code>, or the
+            <code>verify</code> command of the
+            <a href="../llm/credential.html">LLM</a>,
+            <a href="../repository/credential.html">repository</a> or
+            <a href="../storage/credential.html">storage</a> credential group.
+            To check whether the server runs, use
+            <a href="liveness.html#cli-shape"
+              ><code>kanthord gateway liveness</code></a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

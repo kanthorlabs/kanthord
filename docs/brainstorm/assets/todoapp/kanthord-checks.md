@@ -63,4 +63,4 @@ This fixture does not claim exhaustive KanthorD recovery, external-provider or l
 
 For each check record: check name; pass/fail/not-run; project/mission identity; before/after mission version; affected node IDs; actual response/status; relevant record identities; tested commit; reason for any failure or not-run result. Never place credentials in the report.
 
-The design basis is [Mission Service](../../mission-service.md), its [implementation sibling](../../mission-service.impl.md), [planning ERD](../../../reference/erd/01-setup.md) and [execution ERD](../../../reference/erd/02-execution.md). These documents are contracts to test, not evidence that the implementation already satisfies them.
+The design basis is [Mission Service](../../mission-service.md), its [implementation sibling](../../mission-service.impl.md), [planning ERD](../../../reference/erd/01-setup.html) and [execution ERD](../../../reference/erd/02-execution.html). These documents are contracts to test, not evidence that the implementation already satisfies them.

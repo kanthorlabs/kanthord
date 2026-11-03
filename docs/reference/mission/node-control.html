@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Control mission nodes · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="control-mission-nodes">Control mission nodes</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Human controls change the state, the attempt or the priority of a
+            node. A task has no state, no attempt and no priority, and no
+            control names a task.
+          </p>
+          <p>
+            A node has one of these states: <code>Pending</code>,
+            <code>Available</code>, <code>Executing</code>,
+            <code>Waiting</code>, <code>Evaluating</code>, <code>Blocked</code>,
+            <code>Paused</code>, <code>Completed</code>, <code>Discarded</code>,
+            <code>External.Requested</code>, <code>External.Success</code> and
+            <code>External.Failed</code>. <code>Completed</code> and
+            <code>Discarded</code> are terminal. Only
+            <code>Completed</code> satisfies a dependency.
+          </p>
+          <p>
+            An attempt is one try to complete a node. The attempt number starts
+            at <code>0</code>, which means no attempt. At most one attempt is
+            open. An attempt pins the node revision that it opens with.
+          </p>
+          <p>
+            Every state control except <code>unblock</code> sends the expected
+            state and attempt. <code>unblock</code> sends
+            <code>blocked_attempt</code> and
+            <code>expected_revision</code> instead. The service checks these
+            values after it settles the Scheduler claims of the node. A control
+            commits in one transaction, routes the mission, and wakes the
+            Scheduler of the project. Controls do not change the mission
+            version, except an <code>unblock</code> that changes content.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Admitted states</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>pause</code></td>
+                  <td>
+                    <code>Pending</code>, <code>Available</code>,
+                    <code>Executing</code>, <code>Waiting</code>,
+                    <code>Evaluating</code>, <code>External.Requested</code>,
+                    <code>External.Success</code>, <code>External.Failed</code>
+                  </td>
+                  <td>
+                    Revokes a live execution or evaluation claim and sets
+                    <code>Paused</code>. The open attempt stays open.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>resume</code></td>
+                  <td><code>Paused</code></td>
+                  <td>Selects the next state, below.</td>
+                </tr>
+                <tr>
+                  <td><code>block</code></td>
+                  <td><code>Paused</code></td>
+                  <td>
+                    Closes the open attempt, records an
+                    <code>undetermined</code> human assessment and outcome, and
+                    sets <code>Blocked</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unblock</code></td>
+                  <td><code>Blocked</code></td>
+                  <td>
+                    Writes an optional content change, opens the next attempt,
+                    and sets <code>Available</code> or <code>Pending</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>ready</code></td>
+                  <td><code>Available</code></td>
+                  <td>
+                    Asserts that execution needs no further work, opens attempt
+                    <code>1</code> if none exists, and sets
+                    <code>Waiting</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>override</code></td>
+                  <td>
+                    <code>Pending</code>, <code>Available</code>,
+                    <code>Executing</code>, <code>Waiting</code>,
+                    <code>Blocked</code>, <code>Paused</code>,
+                    <code>External.Success</code>, <code>External.Failed</code>
+                  </td>
+                  <td>
+                    Records a <code>success</code> human assessment and outcome,
+                    closes the open attempt, and sets <code>Completed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>discard</code></td>
+                  <td>
+                    <code>Pending</code>, <code>Available</code>,
+                    <code>Executing</code>, <code>Waiting</code>,
+                    <code>Evaluating</code>, <code>Blocked</code>,
+                    <code>Paused</code>, <code>External.Success</code>,
+                    <code>External.Failed</code>;
+                    <code>External.Requested</code> for a human landing, below
+                  </td>
+                  <td>
+                    Records an <code>undetermined</code> human assessment and
+                    outcome, closes the open attempt, and sets
+                    <code>Discarded</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="resume">resume</h3>
+          <p>
+            <code>resume</code> reads the required external actions of the open
+            attempt first:
+          </p>
+          <ol>
+            <li>
+              If an action ended in another state than expected, the node goes
+              to <code>External.Failed</code>.
+            </li>
+            <li>
+              Otherwise, if an action has a request, the node goes to
+              <code>External.Success</code> when every action reached its
+              expected end. It goes to <code>External.Requested</code> in other
+              cases.
+            </li>
+            <li>
+              Otherwise, <code>target</code> selects the state.
+              <code>Available</code> becomes <code>Available</code> or
+              <code>Pending</code> by the dependency closure.
+              <code>Waiting</code> requires readiness and a satisfied dependency
+              closure, and opens attempt <code>1</code> if none exists.
+            </li>
+          </ol>
+          <p>
+            After <code>External.Success</code> or <code>External.Failed</code>,
+            a current assessment with result <code>success</code> closes the
+            attempt. The node then goes to <code>Completed</code> or
+            <code>Blocked</code>, and the answer holds the new outcome.
+          </p>
+          <h3 id="ready">ready</h3>
+          <p>
+            Readiness requires two conditions. The dependency closure of the
+            node holds. For the open attempt, no request is unresolved. An
+            <code>implement</code> node needs no task.
+            <code>ready</code> publishes no assessment.
+          </p>
+          <h3 id="block-discard-and-override">block, discard and override</h3>
+          <ul>
+            <li>
+              An attempt closes only when the node holds an open attempt that is
+              not <code>Blocked</code>. With attempt <code>0</code>, the outcome
+              records attempt <code>0</code>.
+            </li>
+            <li>
+              <code>override</code> and <code>discard</code> revoke a live
+              claim. They fail while the open attempt has an unresolved external
+              request, except for the discard of a human landing.
+            </li>
+            <li>
+              <code>override</code> with <code>landed_commit</code> adds
+              repository evidence attributed to the human. The node must be an
+              <code>implement</code> node, and the binding must be a repository
+              binding that the revision of the act pins. The service does not
+              check the repository.
+            </li>
+            <li>
+              <code>discard</code> cancels no external request, except for a
+              human landing. A <code>Discarded</code> node satisfies no
+              dependency.
+            </li>
+            <li>
+              <code>discard</code> and <code>override</code> of a
+              <code>Blocked</code> <code>examine</code> node reject every open
+              <a href="assessment.html#fix-node-proposals">fix-node proposal</a>
+              of the assessment that blocked it, in the same transaction.
+            </li>
+            <li>
+              A <strong>human landing</strong> is an
+              <code>External.Requested</code> node with only
+              <code>branch_push</code> requests unresolved in the open attempt.
+              Each request belongs to a <code>merge_push</code> action with a
+              changed gate file. <code>discard</code> admits such a node. It
+              sets the end state <code>other</code> on those requests, then
+              closes the attempt. See
+              <a href="../project/binding.html#gate-files">gate files</a> of a
+              repository binding.
+            </li>
+          </ul>
+          <h3 id="unblock">unblock</h3>
+          <ul>
+            <li>
+              <code>blocked_attempt</code> must equal the current attempt.
+              <code>expected_revision</code> must equal the current revision:
+              the <code>visible_revision</code> of the node record, not
+              <code>pinned_revision</code>.
+            </li>
+            <li>
+              <code>change</code> holds new <code>content</code>, a
+              <code>reason</code> and <code>tasks</code>, the complete task list
+              of the node. <code>tasks</code> follows the task list rules of
+              <a href="node.html#node-update"><code>node update</code></a
+              >. A task in the list has no bindings. An
+              <code>examine</code> node sends <code>tasks: []</code>.
+            </li>
+            <li>
+              A change of <code>intent</code> while the attempt reads
+              <code>1</code> or more fails with
+              <code>mission.node.intent_locked</code>. A change that adds an
+              unmatched pair fails with
+              <code>mission.node.tags_unmatched</code>.
+            </li>
+            <li>
+              A content change writes a revision with <code>change.write</code>
+              <code>unblock</code> and increases the mission version.
+            </li>
+            <li>
+              <code>unblock</code> of a <code>Blocked</code>
+              <code>examine</code> node rejects every open
+              <a href="assessment.html#fix-node-proposals">fix-node proposal</a>
+              of the assessment that blocked it, in the same transaction.
+            </li>
+            <li>
+              With attempt <code>0</code>, <code>unblock</code> opens no
+              attempt. Otherwise it opens the next attempt, pinned to the
+              current revision, with the human as <code>opened_by</code>.
+            </li>
+            <li>
+              <code>start_point</code> names where the next attempt starts.
+              <code>node_branch</code>, the default, continues the node branch
+              of the cleared attempt. <code>base_branch</code> starts a new node
+              branch <code>kanthord/&lt;node id&gt;-a&lt;attempt&gt;</code> from
+              the base branch. Another value answers 400
+              <code>gateway.request.validation_failed</code>, and nothing is
+              written.
+            </li>
+            <li>
+              A start from the base branch deletes, renames and force-pushes no
+              branch. An open pull request of the earlier node branch stays
+              open, and a human closes it. The start point of an
+              <code>examine</code> attempt has no effect.
+            </li>
+            <li>
+              A node that an
+              <a href="assessment.html#function-description">assessment</a>
+              blocked with the transition rule <code>plan_defect</code> holds a
+              defect of the plan. Unblock it with a <code>change</code> that
+              holds the corrected <code>content</code> and <code>tasks</code>.
+              The next attempt pins the edited revision. The trace of the
+              reviewer execution shows &quot;Blocked by a plan defect&quot;.
+            </li>
+          </ul>
+          <p>
+            A <a href="node.html#node-update">node update</a> does not change
+            the pinned revision of an open attempt. The update applies from the
+            next attempt. The node record shows the pinned revision in
+            <code>pinned_revision</code>.
+          </p>
+          <p>
+            To redirect an open attempt, pause the node, block it, and unblock
+            it with the changed content. An unblock without
+            <code>change</code> also works after a node update, because the next
+            attempt pins the current revision. To restart an open attempt from
+            the base branch, pause the node, block it, and unblock it with
+            <code>start_point: &quot;base_branch&quot;</code>.
+          </p>
+          <h3 id="check">check</h3>
+          <p>
+            <code>node check</code> checks each unresolved external request of
+            the open attempt through the Intake service. Each result commits in
+            its own transaction. An expected end adds landed-commit evidence. A
+            node in <code>External.Requested</code> can move to
+            <code>External.Success</code> or <code>External.Failed</code>, and
+            then close its attempt. A request whose node has a live claim is not
+            changed.
+          </p>
+          <ul>
+            <li>
+              A merge conflict or a failed
+              <a href="../project/binding.html#required-checks"
+                >required check</a
+              >
+              at the head commit returns the node from
+              <code>External.Requested</code> to <code>Available</code> in the
+              same attempt. The request stays <code>unresolved</code>.
+            </li>
+            <li>
+              An open pull request with a pending required check leaves the
+              request <code>unresolved</code>.
+            </li>
+            <li>
+              <code>node check</code> requests no merge. The
+              <a href="../project/binding.html#the-deferred-check"
+                >deferred check</a
+              >
+              of the Mission Service merges a <code>kanthord</code> landing pull
+              request.
+            </li>
+            <li>
+              A <code>branch_push</code> request of a human landing answers
+              <code>unresolved</code> until the base branch contains the tested
+              commit. When no Intake inbound of the repository exists, run
+              <code>node check</code> after the landing.
+            </li>
+          </ul>
+          <h3 id="priority-set">priority set</h3>
+          <p>
+            <code>priority set</code> writes the priority of a nonterminal node
+            without a live claim. Any signed safe integer is valid. The default
+            priority is <code>0</code>. The write keeps no history, records no
+            actor or reason, and does not change the mission version.
+          </p>
+          <p>
+            <strong>Authority:</strong> every authenticated human holds the same
+            authority under the server-owner ruling. Any verified human token
+            controls any mission.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            All operations return HTTP <code>200</code>. The CLI writes the API
+            answer plus <code>idempotency_key</code> as one JSON line to stdout
+            and exits <code>0</code>.
+          </p>
+          <h3 id="state-controls">State controls</h3>
+          <p>
+            <code>pause</code>, <code>resume</code>, <code>block</code>,
+            <code>unblock</code>, <code>ready</code>, <code>override</code> and
+            <code>discard</code> return a control result:
+          </p>
+          <pre><code class="language-json">{
+  "node": {
+    "id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+    "intent": "implement",
+    "state": "Paused",
+    "attempt": 1,
+    "...": "..."
+  },
+  "attempt": {
+    "node_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+    "attempt": 1,
+    "node_revision": 3,
+    "required_external_actions": [],
+    "opened_at": 1791446400000,
+    "closed_at": null,
+    "outcome_ids": [],
+    "opened_by": { "kind": "human", "account": "&lt;account&gt;", "name": "&lt;name&gt;" }
+  },
+  "outcome": null,
+  "actor": { "kind": "human", "account": "&lt;account&gt;", "name": "&lt;name&gt;" },
+  "accepted_at": 1791446460000
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node</code></td>
+                  <td>object</td>
+                  <td>
+                    The <a href="node.html#node-record">node record</a> after
+                    the control.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>object or <code>null</code></td>
+                  <td>
+                    The current <a href="attempt.html">attempt record</a>;
+                    <code>null</code> while the attempt number is
+                    <code>0</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>outcome</code></td>
+                  <td>object or <code>null</code></td>
+                  <td>
+                    The <a href="outcome.html">outcome</a> that the control
+                    wrote, with <code>closing_event</code>, <code>result</code>,
+                    <code>assessment_id</code> and <code>evidence_ids</code>.
+                    <code>null</code> for <code>pause</code>,
+                    <code>ready</code> and <code>unblock</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>actor</code></td>
+                  <td>object</td>
+                  <td>The human that sent the control.</td>
+                </tr>
+                <tr>
+                  <td><code>accepted_at</code></td>
+                  <td>integer</td>
+                  <td>Acceptance time in Unix milliseconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="node-check">node check</h3>
+          <pre><code class="language-json">{
+  "results": [
+    {
+      "evidence_id": "evidence_01M4C5J3SBKF4M6X325KZGRKHH",
+      "requirement_key": "main-repository.pull_request",
+      "resolution": "expected-end"
+    }
+  ],
+  "failures": [
+    {
+      "evidence_id": "evidence_01M4C5J3SBY59S8V480WVEDRMG",
+      "error": {
+        "error": {
+          "code": "mission.node.claim_live",
+          "message": "Node has a live claim.",
+          "details": {
+            "node_id": "node_01M4C5J3SAMS4Z4KZD8DQ9GFTB",
+            "execution_id": "&lt;execution-id&gt;"
+          }
+        },
+        "request_id": "&lt;request-id&gt;"
+      }
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>results[].evidence_id</code></td>
+                  <td><code>evidence_&lt;ulid&gt;</code></td>
+                  <td>Checked request evidence.</td>
+                </tr>
+                <tr>
+                  <td><code>results[].requirement_key</code></td>
+                  <td>string</td>
+                  <td>Action key of the request.</td>
+                </tr>
+                <tr>
+                  <td><code>results[].resolution</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>unresolved</code>, <code>expected-end</code> or
+                    <code>other-end</code> after the check.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>failures[].evidence_id</code></td>
+                  <td><code>evidence_&lt;ulid&gt;</code></td>
+                  <td>Request that the call could not check or record.</td>
+                </tr>
+                <tr>
+                  <td><code>failures[].error</code></td>
+                  <td>object</td>
+                  <td>
+                    An error envelope for that request. An unknown failure uses
+                    <code>system.operation.unknown</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="node-priority-set">node priority set</h3>
+          <p>
+            The API returns the
+            <a href="node.html#node-record">node record</a> with the new
+            <code>priority</code>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>. These
+            failures apply to every operation on this page:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    <code>Content-Type</code> is not
+                    <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    A path or body value fails the schema, for example an
+                    unknown field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    The key belongs to another request, or its first request is
+                    still in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>
+                    The operation exceeded 30 seconds. The control can still
+                    complete.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td>The node ID is unknown.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td>
+                    <code>expected_mission_version</code> is stale;
+                    <code>details.current</code> holds the current version.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The state controls check in this order, and the first failure
+            answers:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>409 mission.node.retired</code></td>
+                  <td>The node is retired.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td>The mission version is stale.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.terminal</code></td>
+                  <td>
+                    The node is <code>Completed</code> or
+                    <code>Discarded</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.state_conflict</code></td>
+                  <td>
+                    <code>expected_state</code> or
+                    <code>expected_attempt</code> (<code>blocked_attempt</code>
+                    for <code>unblock</code>) differs;
+                    <code>details</code> holds <code>state</code> and
+                    <code>attempt</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.control_refused</code></td>
+                  <td>
+                    The control does not admit the current state;
+                    <code>details.state</code> holds it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.node.content_invalid</code></td>
+                  <td>
+                    <code>reason</code> is blank or exceeds the text limit.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Command-specific failures:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Operation</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>409 mission.node.not_ready</code></td>
+                  <td><code>ready</code>, <code>resume</code></td>
+                  <td>
+                    Readiness fails, or for <code>resume</code> with
+                    <code>Waiting</code> a dependency is unsatisfied.
+                    <code>details.unsatisfied_ids</code> lists the unsatisfied
+                    dependencies.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.action_unresolved</code></td>
+                  <td><code>override</code>, <code>discard</code></td>
+                  <td>
+                    The open attempt has unresolved requests;
+                    <code>details.requirement_keys</code> lists them.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.evidence.binding_mismatch</code></td>
+                  <td><code>override</code></td>
+                  <td>
+                    <code>landed_commit</code> does not name a repository
+                    binding that the node pins, or the node is an
+                    <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.revision.conflict</code></td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    <code>expected_revision</code> is stale;
+                    <code>details.current</code> holds the current revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.node.content_invalid</code></td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    The change content is invalid, or a task <code>id</code> in
+                    <code>tasks</code> is unknown, repeated or names a task of
+                    another node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 mission.node.bindings_invalid</code></td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    A change binding does not resolve or breaks the binding
+                    rule.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.filename_conflict</code></td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    A task file name is in use by another current node or task.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.intent_locked</code></td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    The change changes <code>intent</code> while the attempt
+                    reads <code>1</code> or more; <code>details</code> holds
+                    <code>node_id</code> and <code>attempt</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.tags_unmatched</code></td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    The change adds an unmatched pair;
+                    <code>details.claims</code> lists each pair.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.no_unresolved_request</code></td>
+                  <td><code>check</code></td>
+                  <td>The open attempt has no unresolved request.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.retired</code></td>
+                  <td><code>priority set</code></td>
+                  <td>The node is retired.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.terminal</code></td>
+                  <td><code>priority set</code></td>
+                  <td>
+                    The node is <code>Completed</code> or
+                    <code>Discarded</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.node.claim_live</code></td>
+                  <td><code>priority set</code></td>
+                  <td>
+                    The node has a live claim; <code>details</code> holds
+                    <code>node_id</code> and <code>execution_id</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>node check</code> checks the mission version again before it
+            records each result. A stale version then fails the call with
+            <code>409 mission.version.conflict</code>, and the results that
+            committed before stay committed. The text limit is the server
+            configuration value <code>mission.text_max_bytes</code>, 32768 UTF-8
+            bytes by default.
+          </p>
+          <p>
+            The CLI exits <code>1</code> on every failure and writes
+            <code>&lt;code&gt;: &lt;message&gt;</code> to stderr. A declared
+            remote failure prints <code>&lt;code&gt;: request failed</code> and
+            the rows <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.node.&lt;command&gt;.invalid_node_id</code
+                    >
+                  </td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a
+                    <code>node_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.node.override.invalid_result</code></td>
+                  <td><code>--result</code> is not <code>success</code>.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.&lt;command&gt;.token_required</code>
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.node.&lt;command&gt;.indeterminate</code>
+                  </td>
+                  <td>
+                    A transport failure, a timeout or a malformed answer. Retry
+                    with the printed key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.*</code></td>
+                  <td>
+                    <code>--file</code> is absent, not a regular file,
+                    <code>-</code>, not UTF-8, not JSON, has a repeated key, is
+                    not an object, or fails the schema
+                    (<code>cli.file.schema_invalid</code>).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>&lt;command&gt;</code> is <code>check</code>,
+            <code>pause</code>, <code>resume</code>, <code>block</code>,
+            <code>unblock</code>, <code>ready</code>, <code>override</code>,
+            <code>discard</code> or <code>priority.set</code>.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            All operations use <code>POST</code>, access
+            <code>human</code> (human bearer JWT), a 30-second timeout, and are
+            mutations. The path parameter <code>node_id</code> is a
+            <code>node_&lt;ulid&gt;</code>. No operation has query parameters.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI command</th>
+                  <th>Path</th>
+                  <th>Operation ID</th>
+                  <th>Request body</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>node check</code></td>
+                  <td><code>/api/mission/node/:node_id/check</code></td>
+                  <td><code>mission.node.check</code></td>
+                  <td><code>{ expected_mission_version }</code></td>
+                </tr>
+                <tr>
+                  <td><code>node pause</code></td>
+                  <td><code>/api/mission/node/:node_id/pause</code></td>
+                  <td><code>mission.node.pause</code></td>
+                  <td>Human act</td>
+                </tr>
+                <tr>
+                  <td><code>node resume</code></td>
+                  <td><code>/api/mission/node/:node_id/resume</code></td>
+                  <td><code>mission.node.resume</code></td>
+                  <td>Human act plus <code>target</code></td>
+                </tr>
+                <tr>
+                  <td><code>node block</code></td>
+                  <td><code>/api/mission/node/:node_id/block</code></td>
+                  <td><code>mission.node.block</code></td>
+                  <td>Human act</td>
+                </tr>
+                <tr>
+                  <td><code>node unblock</code></td>
+                  <td><code>/api/mission/node/:node_id/unblock</code></td>
+                  <td><code>mission.node.unblock</code></td>
+                  <td>Unblock body</td>
+                </tr>
+                <tr>
+                  <td><code>node ready</code></td>
+                  <td><code>/api/mission/node/:node_id/ready</code></td>
+                  <td><code>mission.node.ready</code></td>
+                  <td>Human act</td>
+                </tr>
+                <tr>
+                  <td><code>node override</code></td>
+                  <td><code>/api/mission/node/:node_id/override</code></td>
+                  <td><code>mission.node.override</code></td>
+                  <td>
+                    Human act plus <code>result</code> and
+                    <code>landed_commit</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>node discard</code></td>
+                  <td><code>/api/mission/node/:node_id/discard</code></td>
+                  <td><code>mission.node.discard</code></td>
+                  <td>Human act</td>
+                </tr>
+                <tr>
+                  <td><code>node priority set</code></td>
+                  <td><code>/api/mission/node/:node_id/priority</code></td>
+                  <td><code>mission.node.priority.set</code></td>
+                  <td><code>{ value, expected_mission_version }</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>nonblank string</td>
+                  <td>Human act; <code>unblock</code>, optional</td>
+                  <td>
+                    Reason recorded on the assessment, or the reason of the act.
+                    <code>unblock</code> checks the text limit and does not
+                    record it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>expected_mission_version</code></td>
+                  <td>positive integer</td>
+                  <td>All</td>
+                  <td>Current mission version.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_state</code></td>
+                  <td>state name</td>
+                  <td>Human act</td>
+                  <td>Current state of the node.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_attempt</code></td>
+                  <td>integer <code>&gt;= 0</code></td>
+                  <td>Human act</td>
+                  <td>Current attempt number.</td>
+                </tr>
+                <tr>
+                  <td><code>target</code></td>
+                  <td><code>Available</code> or <code>Waiting</code></td>
+                  <td><code>resume</code></td>
+                  <td>
+                    Resume target when no external action decides the state.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>result</code></td>
+                  <td><code>success</code></td>
+                  <td><code>override</code></td>
+                  <td>Asserted result; the only value.</td>
+                </tr>
+                <tr>
+                  <td><code>landed_commit</code></td>
+                  <td>object</td>
+                  <td><code>override</code>, optional</td>
+                  <td>
+                    <code
+                      >{ &quot;kind&quot;: &quot;repository&quot;,
+                      &quot;binding_id&quot;: &quot;binding_&lt;ulid&gt;&quot;,
+                      &quot;commit&quot;: &quot;&lt;40 or 64 lower-case
+                      hex&gt;&quot; }</code
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>blocked_attempt</code></td>
+                  <td>integer <code>&gt;= 0</code></td>
+                  <td><code>unblock</code></td>
+                  <td>Current attempt number of the blocked node.</td>
+                </tr>
+                <tr>
+                  <td><code>expected_revision</code></td>
+                  <td>positive integer</td>
+                  <td><code>unblock</code></td>
+                  <td>
+                    The <code>visible_revision</code> of the node record, not
+                    <code>pinned_revision</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>change</code></td>
+                  <td>object</td>
+                  <td><code>unblock</code>, optional</td>
+                  <td>
+                    <code>{ content, tasks, reason }</code>;
+                    <code>tasks</code> holds task writes
+                    <code>{ id?, filename, content }</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>start_point</code></td>
+                  <td><code>base_branch</code> or <code>node_branch</code></td>
+                  <td><code>unblock</code>, optional</td>
+                  <td>
+                    Start point of the next attempt. The default is
+                    <code>node_branch</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>value</code></td>
+                  <td>signed safe integer</td>
+                  <td><code>priority set</code></td>
+                  <td>New priority.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The human act fields are <code>reason</code>,
+            <code>expected_mission_version</code>,
+            <code>expected_state</code> and <code>expected_attempt</code>.
+            <code>pause</code>, <code>block</code>, <code>ready</code> and
+            <code>discard</code> send the human act. <code>resume</code> and
+            <code>override</code> add their fields to it. The unblock body is
+            not a human act. It holds <code>blocked_attempt</code>,
+            <code>expected_revision</code>,
+            <code>expected_mission_version</code> and the optional
+            <code>change</code>, <code>reason</code> and
+            <code>start_point</code>. It refuses <code>expected_state</code> and
+            <code>expected_attempt</code> with
+            <code>400 gateway.request.validation_failed</code>, and the CLI
+            refuses them with <code>cli.file.schema_invalid</code>. The content
+            object has <code>name</code>, <code>requirement</code>,
+            <code>criterion</code>, <code>verifications</code>,
+            <code>bindings</code> (binding IDs), <code>intent</code> and the
+            optional <code>tags</code>, as in
+            <a href="node.html#request-bodies">node create</a>. Bodies accept no
+            unknown field.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it to
+                    retry the same control.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/pause \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR' \
+  -d '{"reason":"Review the plan","expected_mission_version":8,"expected_state":"Executing","expected_attempt":1}'</code></pre>
+          <p>
+            <code>resume</code> adds the required <code>target</code> to the
+            human act fields:
+          </p>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/mission/node/node_01M4C5J3SAMS4Z4KZD8DQ9GFTB/resume \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PS' \
+  -d '{"reason":"Plan reviewed","expected_mission_version":8,"expected_state":"Paused","expected_attempt":1,"target":"Available"}'</code></pre>
+          <p>
+            The Gateway keeps the answer of a mutation for its idempotency key
+            in process memory for <code>idempotency_ttl</code> seconds, 86400 by
+            default. A retry with the same key, human account and request
+            replays that answer. This rule also applies to a failure. The
+            controls carry no other request identifier. After a lost answer and
+            an expired key, a retry answers a version or state conflict; read
+            the node again.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord mission node check &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node pause &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node resume &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node block &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node unblock &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node ready &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node override &lt;node-id&gt; --result success --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node discard &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission node priority set &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]</code></pre>
+          <p>
+            Every command also accepts <code>--token &lt;jwt&gt;</code> and
+            <code>--endpoint &lt;url&gt;</code>.
+          </p>
+          <pre><code class="language-sh">kanthord mission node pause node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file pause.json
+kanthord mission node resume node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --file resume.json
+kanthord mission node override node_01M4C5J3SAMS4Z4KZD8DQ9GFTB --result success --file override.json \
+  --idempotency-key idempotency_key_01M4C5J3SBXJ52XQ9FSFRTK4PR</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;node-id&gt;</code></td>
+                  <td>Required <code>node_&lt;ulid&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>JSON request body file.</td>
+                </tr>
+                <tr>
+                  <td><code>--result &lt;result&gt;</code></td>
+                  <td><code>override</code> only; required; no default</td>
+                  <td>
+                    Must be <code>success</code>. The CLI sets
+                    <code>result</code> in the body.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>; supply the same key to
+                    retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>--file</code> of each command holds the complete request
+            body, except for <code>override</code>. The
+            <code>override</code> file holds no <code>result</code> field, and a
+            <code>result</code> field fails the schema.
+          </p>
+          <p>An example <code>resume.json</code>:</p>
+          <pre><code class="language-json">{
+  "reason": "Plan reviewed",
+  "expected_mission_version": 8,
+  "expected_state": "Paused",
+  "expected_attempt": 1,
+  "target": "Available"
+}</code></pre>
+          <p>
+            An example <code>unblock.json</code> after a node update to revision
+            <code>2</code>. It opens attempt <code>2</code> on revision
+            <code>2</code>:
+          </p>
+          <pre><code class="language-json">{
+  "blocked_attempt": 1,
+  "expected_revision": 2,
+  "expected_mission_version": 9,
+  "start_point": "node_branch"
+}</code></pre>
+          <p>
+            The CLI validates the ID, the token, the key and the file before it
+            sends a request. Each option is accepted once. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

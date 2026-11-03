@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ERD 4: Telemetry · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+    <link rel="stylesheet" href="../../assets/diagram.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#scope">Scope</a></li>
+          <li><a href="#capability-limits">Capability limits</a></li>
+          <li>
+            <a href="#records-without-a-table">Records without a table</a>
+          </li>
+          <li><a href="#diagram">Diagram</a></li>
+          <li><a href="#tables">Tables</a></li>
+          <li><a href="#constraints">Constraints</a></li>
+          <li><a href="#cross-store-references">Cross-store references</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="erd-4-telemetry">ERD 4: Telemetry</h1>
+          <h2 id="scope">Scope</h2>
+          <p>
+            This view holds the tables of the Tracking Service. They live in
+            <code>tracking.db</code>, a database file separate from
+            <code>kanthord.db</code>. After this group, the server keeps the
+            spans, the telemetry texts and the session entries that reach it. A
+            human lists and reads traces and imports the capture of an external
+            harness. Telemetry is lossy, so the store holds no complete trace by
+            promise.
+          </p>
+          <p>
+            The <a href="index.html">README</a> holds the conventions, the
+            colors and the map of every group.
+          </p>
+          <h2 id="capability-limits">Capability limits</h2>
+          <ul>
+            <li>
+              Every other service plugs the interface of the Tracking Service in
+              from ERD 1 onwards, so a trace identity and a root span identity
+              exist in <code>scheduler_execution</code> before this group.
+            </li>
+            <li>
+              The server opens <code>tracking.db</code> at every start and runs
+              the migrations of the Tracking Service on it. The file holds its
+              own <code>migration(service, version, applied_at)</code> table.
+              The <a href="index.html#stores">README</a> defines that table. In
+              <code>tracking.db</code> it holds the history of the Tracking
+              Service alone.
+            </li>
+            <li>
+              No service reads telemetry to make a decision, and no outcome
+              depends on a row of this group.
+            </li>
+            <li>
+              A foreign key cannot reach <code>kanthord.db</code>. Every
+              project, execution and node value of this group is a correlation
+              value.
+            </li>
+          </ul>
+          <h2 id="records-without-a-table">Records without a table</h2>
+          <ul>
+            <li>
+              The local store of an external harness is an append-only log on
+              the host of the harness, not a kanthord record. Only an ingested
+              record is a kanthord record.
+            </li>
+            <li>
+              The Tracking Service holds no state of the progress of an
+              ingestion between two ingestions.
+            </li>
+            <li>
+              The count of a drop and of a refusal is itself telemetry. Its
+              representation is open in
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#tracking-service"
+                >HANDOFF</a
+              >.
+            </li>
+          </ul>
+          <h2 id="diagram">Diagram</h2>
+          <pre class="mermaid">
+erDiagram
+    tracking_trace {
+        text trace_id PK "protocol value"
+        text project_id "correlation, null for no project"
+        text execution_id UK "correlation or null, unique when set"
+        text root_span_id "the root of the trace, its row can be absent"
+        text node_id "correlation or null"
+        integer attempt "attempt of the execution or null"
+        text state "open | ok | error"
+        integer started_at "Unix ms of the root start or null"
+        integer ended_at "Unix ms of the root end or null"
+        text stop_reason "kanthord.stop.reason of the root or null"
+        text worker_name "first kanthord.worker.name or null"
+        text agent_names "JSON list of distinct agent names"
+        text models "JSON list of distinct models"
+        text error_types "JSON list of distinct error.type values"
+        integer input_tokens "sum over the spans"
+        integer output_tokens "sum over the spans"
+        integer cache_read_tokens "sum over the spans"
+        integer cache_creation_tokens "sum over the spans"
+        real cost_usd "sum of the pi cost estimates"
+        integer span_count "stored spans"
+        integer turn_count "stored agent.turn spans"
+        integer tool_count "stored agent.tool spans"
+        integer error_count "spans with status Error"
+        text first_error_span_id "first span with status Error, root, tool_error and stopped excluded"
+        integer created_at "Unix ms, start of the retention"
+    }
+
+    tracking_span {
+        text trace_id PK, FK "protocol value"
+        text span_id PK "protocol value"
+        text parent_span_id "null for a root span"
+        text producer "derived by the service"
+        text origin "observed | asserted"
+        text operation "one operation name"
+        integer start_time "Unix ms or null"
+        integer end_time "Unix ms or null"
+        text status "Unset | Ok | Error"
+        text attributes "JSON map of attribute values"
+        text events "JSON list of name, time, attributes"
+        text links "JSON list of trace_id, span_id"
+        text text_ids "JSON list of telemetry text identities"
+        integer created_at "Unix ms"
+    }
+
+    tracking_record {
+        text trace_id PK, FK
+        text record_id PK "producer-minted identity"
+        text kind "span | text | session_entry"
+        text target_id "span_id, text_id or record_id of the entry"
+        integer created_at "Unix ms"
+    }
+
+    tracking_telemetry_text {
+        text trace_id PK, FK
+        text text_id PK "identity contract open"
+        text content "authored prose, never null"
+        integer created_at "Unix ms"
+    }
+
+    tracking_session_entry {
+        text trace_id PK, FK
+        text session_id PK "span_id of the agent.session span"
+        text entry_id PK "identity inside the session"
+        text parent_entry_id "null for a root entry"
+        integer sequence UK "position in the session, unique per session"
+        text entry_type "type of the entry"
+        integer entry_time "Unix ms"
+        text tool_call_id "tool call of a tool result or null"
+        integer truncated "1 when the producer cut the entry"
+        text content "JSON of the entry, never null"
+        integer created_at "Unix ms"
+    }
+
+    tracking_trace ||--o{ tracking_span : "FK trace_id"
+    tracking_trace ||--o{ tracking_session_entry : "FK trace_id"
+    tracking_span |o..o{ tracking_session_entry : "ref session_id, unresolved allowed"
+    tracking_trace ||--o{ tracking_record : "FK trace_id"
+    tracking_trace ||--o{ tracking_telemetry_text : "FK trace_id"
+    tracking_span }o..o{ tracking_span : "ref in links JSON, other trace"
+    tracking_span |o..o{ tracking_span : "ref parent_span_id, unresolved allowed"
+    tracking_span }o..o{ tracking_telemetry_text : "ref in text_ids JSON"
+
+    classDef tracking fill:#d1f2eb,stroke:#117a65,color:#212529
+    class tracking_trace,tracking_span,tracking_record,tracking_telemetry_text,tracking_session_entry tracking
+</pre>
+          <h2 id="tables">Tables</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>Owner</th>
+                  <th>Basis</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>tracking_trace</code></td>
+                  <td>Tracking Service</td>
+                  <td>
+                    Derived: a trace belongs to exactly one project or to no
+                    project, it is the unit of deletion, and an ingestion
+                    resolves the project through the records of the Tracking
+                    Service, under
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-and-the-project"
+                      >the trace and the project</a
+                    >
+                    and
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#ingestion"
+                      >ingestion</a
+                    >. Ruled: the summary columns follow the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#trace-summary"
+                      >trace summary</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tracking_span</code></td>
+                  <td>Tracking Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store"
+                      >primary store</a
+                    >
+                    holds the span. The columns are derived from
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-model"
+                      >the trace model</a
+                    >
+                    and the span record of the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/tracking.md#span-record-fields-kind-span"
+                      >Tracking CLI</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tracking_record</code></td>
+                  <td>Tracking Service</td>
+                  <td>
+                    Derived: the Tracking Service deduplicates by the record
+                    identity that its producer mints, within the retention of
+                    the trace. The identity has the form
+                    <code>&lt;span_id&gt;:&lt;name&gt;</code> and holds at most
+                    128 characters.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tracking_telemetry_text</code></td>
+                  <td>Tracking Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store"
+                      >primary store</a
+                    >
+                    holds the telemetry text;
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention"
+                      >retention</a
+                    >
+                    deletes it with its trace. The columns are derived, and the
+                    identity of a text has the form
+                    <code>&lt;span_id&gt;:&lt;name&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tracking_session_entry</code></td>
+                  <td>Tracking Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#session-entries"
+                      >session entries</a
+                    >
+                    holds the entries of an agent session;
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention"
+                      >retention</a
+                    >
+                    deletes them with their trace.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="constraints">Constraints</h2>
+          <p>
+            The rules below have two kinds. A structural check is a rule that
+            the Tracking Service enforces at the admission of a record. A
+            producer obligation is a rule that the producer of a record follows,
+            and the Tracking Service does not verify it. The Tracking Service
+            refuses no record for its content.
+          </p>
+          <h3 id="admission-and-durability">Admission and durability</h3>
+          <ul>
+            <li>
+              One transaction inserts the <code>tracking_record</code> row of a
+              record and applies its contribution to its span, its telemetry
+              text or its session entry. The acknowledgement answers
+              <code>Stored</code> only after that commit.
+            </li>
+            <li>
+              <code>tracking_record</code> holds one row for each stored record
+              identity of a trace. A repeat of that identity is
+              <code>Stored</code> and changes nothing. A refused record and a
+              dropped record leave no row.
+            </li>
+            <li>
+              <code>target_id</code> of a record names a span, a telemetry text
+              or a session entry record of the same trace.
+            </li>
+            <li>
+              The records of one execution have a bound. A new record beyond
+              that bound is <code>Refused</code> and writes neither its
+              <code>tracking_record</code> row nor its contribution. A repeat of
+              a stored record stays <code>Stored</code> and adds no row. The
+              bound is 50,000 records for each trace.
+            </li>
+            <li>The retention sweep runs in bounded transactions.</li>
+          </ul>
+          <h3 id="traces">Traces</h3>
+          <ul>
+            <li>
+              A trace belongs to exactly one project or to no project. A server
+              operation that concerns several projects opens one root span, and
+              so one trace, for each project, and the root spans link to each
+              other.
+            </li>
+            <li>
+              A unique index covers
+              <code>tracking_trace.execution_id</code> where it is not null.
+            </li>
+            <li>
+              <code>node_id</code> and <code>attempt</code> of a trace with no
+              execution name the node and the attempt of its server operation,
+              or hold null. An act trace of the Mission Service names its node.
+            </li>
+            <li>
+              The first stored record of a trace creates its
+              <code>tracking_trace</code> row. The server record of the
+              Scheduler Service, an act trace of the Mission Service, an
+              environment trace of the Project Service or the first write of a
+              native worker creates it. For an execution, the Scheduler Service
+              opens the root span after the claim records the execution, and
+              <code>trace_id</code>, <code>root_span_id</code>,
+              <code>project_id</code> and <code>execution_id</code> equal the
+              values of the execution record. An imported record never creates a
+              trace row.
+            </li>
+            <li>
+              A trace has exactly one root span, and
+              <code>root_span_id</code> names it. A lost write of the root span
+              leaves no root row. The trace then stays readable through its
+              other spans, and a reader meets an unresolved parent. The
+              representation of a missing root is open.
+            </li>
+            <li>
+              An ingestion carries no project. It names an existing trace, and
+              it assigns no trace and reassigns no trace. The Tracking Service
+              resolves the project from <code>tracking_trace</code>.
+            </li>
+            <li>
+              An imported record names an execution and a trace that agree with
+              <code>tracking_trace</code>. A record that names another trace is
+              refused.
+            </li>
+            <li>
+              A record that arrives after its trace expires is refused with
+              <code>trace_expired</code>. The predicate is the predicate of the
+              retention sweep on the ULID time of the execution identity, so it
+              needs no tombstone.
+            </li>
+            <li>
+              The admission of a span updates the summary columns of its trace
+              row in the same transaction. A summary column adds only the values
+              that a record adds.
+            </li>
+          </ul>
+          <h3 id="spans">Spans</h3>
+          <ul>
+            <li>
+              <code>start_time</code> or <code>end_time</code> is not null. A
+              start with no end is an unfinished span. An end with no start
+              creates the span with no start time.
+            </li>
+            <li>
+              A span row holds no copy of a column of its trace row and no
+              column that an attribute derives. A read joins the trace row and
+              reads <code>attributes</code>.
+            </li>
+            <li>
+              The Tracking Service persists a start when it arrives and an end
+              when it arrives, so a reader reads a span that holds a start and
+              no end. The root span of an execution is persisted when the server
+              opens it.
+            </li>
+            <li>
+              The first record that creates a span binds it to its producer. A
+              record that names that span from another producer is refused.
+            </li>
+            <li>
+              No record replaces a value that an earlier record set. A second
+              end of one span is refused.
+            </li>
+            <li>
+              A record that names its own span identity as its parent is
+              refused. The Tracking Service verifies no further ancestry. A span
+              of an execution names the root span of that execution or a span
+              that descends from it, and that rule is a producer obligation.
+            </li>
+            <li>
+              An unresolved parent is a fact that a reader sees, and never an
+              error. A record can arrive before its parent.
+            </li>
+            <li>
+              <code>producer</code> is derived by the Tracking Service and never
+              read from a record. The producer of an imported record is the
+              claimant of the execution that the trace resolves to. A human who
+              issues an ingestion produces no record.
+            </li>
+            <li>
+              <code>origin</code> distinguishes a span that the server observed
+              from a span that an external harness asserted.
+            </li>
+            <li>
+              <code>attributes</code> maps a name to a value of one kind: a
+              string, a boolean, an integer, a floating-point number or an array
+              of one primitive kind. An event holds attributes of the same
+              kinds.
+            </li>
+            <li>
+              A span carries the identity of every kanthord object that its
+              operation concerns, as an identity attribute with the
+              <code>kanthord.</code> prefix. One object has one attribute name
+              in every span. An identity attribute holds an identity and never
+              the content that it names. That rule is a producer obligation, and
+              the registry of the attribute names is open.
+            </li>
+            <li>
+              A span attribute holds no authored prose. That rule is a producer
+              obligation.
+            </li>
+            <li>
+              A span of <code>links</code> names a span of another trace. A link
+              names no project.
+            </li>
+            <li>
+              <code>text_ids</code> names telemetry texts of the same trace.
+            </li>
+          </ul>
+          <h3 id="telemetry-texts">Telemetry texts</h3>
+          <ul>
+            <li>
+              A telemetry text belongs to exactly one trace. A span references
+              it by identity and never embeds it.
+            </li>
+            <li>
+              An agent transcript is the ordered session entries of one agent
+              session. A session entry is a record of its own kind and no
+              telemetry text.
+            </li>
+            <li>
+              <code>tracking_session_entry</code> holds one row for each entry.
+              A unique index covers
+              <code>(trace_id, session_id, sequence)</code>. A new entry at a
+              taken sequence is refused.
+            </li>
+            <li>
+              No foreign key joins an entry to its
+              <code>agent.session</code> span, so an entry can arrive before its
+              span.
+            </li>
+            <li>
+              A telemetry text holds no retention of its own and no
+              <code>expired_at</code>, and <code>content</code> is
+              <code>NOT NULL</code>. The deletion of its trace deletes it, and a
+              reference to a deleted trace resolves to expired. Today the store
+              keeps no tombstone, and a read of a deleted trace answers
+              <code>404 tracking.trace.not_found</code>. The text read checks
+              the trace first. A text of a deleted or unknown trace answers
+              <code>404 tracking.trace.not_found</code>. A text that a held
+              trace does not hold answers
+              <code>404 tracking.text.not_found</code>.
+            </li>
+          </ul>
+          <h3 id="retention-and-deletion">Retention and deletion</h3>
+          <ul>
+            <li>
+              The trace is the only unit of retention. The deletion of a trace
+              row deletes its spans, its records, its telemetry texts and its
+              session entries through <code>ON DELETE CASCADE</code>. The
+              deletion of a span deletes no telemetry text.
+            </li>
+            <li>
+              The operator configures the retention of a trace once for the
+              server, never per project, as
+              <code>tracking.retention_days</code>, default 30, a safe integer
+              from 1 to 3650. The retention starts at <code>created_at</code> of
+              the trace row. A sweep at the start and every hour deletes the
+              expired rows, at most 20 in each transaction and 50 transactions
+              in one sweep.
+            </li>
+            <li>
+              A deletion of a telemetry row changes no outcome, removes no
+              evidence and changes no state of a node.
+            </li>
+            <li>
+              Telemetry is the one exception to the rule that an owner deletes
+              no record that a peer can reference, as
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters"
+                >architecture.impl.md</a
+              >
+              rules. <code>scheduler_execution.trace_id</code> and
+              <code>root_span_id</code> keep their values after the deletion of
+              their trace, and they resolve to expired.
+            </li>
+          </ul>
+          <h2 id="cross-store-references">Cross-store references</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Kind</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>tracking_trace.project_id</code></td>
+                  <td>
+                    <code>project_project.id</code> in <code>kanthord.db</code>
+                  </td>
+                  <td>Correlation value, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>tracking_trace.execution_id</code></td>
+                  <td>
+                    <code>scheduler_execution.id</code> in
+                    <code>kanthord.db</code>
+                  </td>
+                  <td>Correlation value, no FK.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>scheduler_execution.trace_id</code>,
+                    <code>root_span_id</code> in <code>kanthord.db</code>
+                  </td>
+                  <td>
+                    <code>tracking_trace.trace_id</code>,
+                    <code>tracking_span.span_id</code>
+                  </td>
+                  <td>Correlation value, no FK.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+    <script type="module" src="../../assets/diagram-page.mjs"></script>
+  </body>
+</html>

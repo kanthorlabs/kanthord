@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How-to guides · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a>
+      </nav>
+      <main>
+        <article>
+          <h1 id="how-to-guides">How-to guides</h1>
+          <p>
+            These pages answer “How do I do this task?” Each guide is a short
+            sequence of steps for one goal.
+          </p>
+          <ul>
+            <li>
+              <a href="run-in-a-container.html">Run kanthord in a container</a>:
+              pull the published container image, run it with Podman or Docker,
+              and connect a first repository with a dashboard SSH key.
+            </li>
+            <li>
+              <a href="run-on-a-mac-with-tailscale.html"
+                >Run kanthord on a Mac with Tailscale</a
+              >: run the single binary on a Mac and open the dashboard from a
+              phone or a tablet on your tailnet.
+            </li>
+            <li>
+              <a href="run-on-a-vps.html">Run kanthord on a VPS</a>: run the
+              single binary on a Linux server behind Caddy with a domain and
+              HTTPS.
+            </li>
+            <li>
+              <a href="run-under-a-path-prefix.html"
+                >Run kanthord under a path prefix</a
+              >: run the single binary under a path such as
+              <code>/s/kanthord</code> behind any reverse proxy, or on a home
+              server with Cloudflare Tunnel and nginx.
+            </li>
+            <li>
+              <a href="isolate-worker-instances-in-containers.html"
+                >Isolate worker instances in containers</a
+              >: run each instance of a worker binding in its own container on
+              the host of the single binary. An agent command then reads no file
+              of the server.
+            </li>
+            <li>
+              <a href="add-a-toolchain-to-the-worker-image.html"
+                >Add a toolchain to the worker image</a
+              >: build an image with Node.js or another toolchain for the server
+              container.
+            </li>
+            <li>
+              <a href="declare-affected-tests.html"
+                >Declare the affected tests of a repository</a
+              >: write the selector command and
+              <code>.kanthord/affected-tests.json</code>, so that each
+              <code>implement</code> node runs the tests that its change
+              reaches.
+            </li>
+          </ul>
+          <p>
+            For the exact commands and options, see the
+            <a href="../reference/index.html">reference</a>.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

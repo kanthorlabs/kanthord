@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SSH host keys · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="ssh-host-keys">SSH host keys</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A host key pin is the one ed25519 host key that KanthorD trusts for
+            an SSH host. The Repository component stores one pin for each host
+            in the table <code>repository_host_key</code>. Each network git
+            operation writes the pin of its address host into the
+            <code>known_hosts</code> file of its
+            <a href="ssh-key.html#the-agent-of-one-operation">SSH agent</a>, and
+            ssh checks the host against that file only. ssh reads no
+            <code>~/.ssh/known_hosts</code>.
+          </p>
+          <p>
+            A pin serves every binding whose address names its host. A host with
+            no pin refuses each network git operation with
+            <code>409 repository.host_key.unpinned</code> before any process
+            starts. A binding apply refuses the same way, and a binding check or
+            verify answers <code>failure_reason</code>
+            <code>host_key_unknown</code>.
+          </p>
+          <p>
+            Only the hosts of the SSH host sets have a pin. A host compares
+            without regard to case, and the answers hold it in lower case. A
+            fixed table in the engine gives the SSH port of each host. You
+            cannot set a port.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Platform</th>
+                  <th>SSH host set</th>
+                  <th>Source of the key</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>github</code></td>
+                  <td><code>github.com</code>, <code>ssh.github.com</code></td>
+                  <td>
+                    <code>github_meta</code>:
+                    <code>GET https://api.github.com/meta</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gitlab</code></td>
+                  <td>
+                    <code>gitlab.com</code>, <code>altssh.gitlab.com</code>
+                  </td>
+                  <td>
+                    <code>keyscan</code>:
+                    <code
+                      >ssh-keyscan -T 5 -t ed25519 -p &lt;port&gt; --
+                      &lt;host&gt;</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>bitbucket</code></td>
+                  <td>
+                    <code>bitbucket.org</code>,
+                    <code>altssh.bitbucket.org</code>
+                  </td>
+                  <td>
+                    <code>keyscan</code>:
+                    <code
+                      >ssh-keyscan -T 5 -t ed25519 -p &lt;port&gt; --
+                      &lt;host&gt;</code
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Host</th>
+                  <th>SSH port</th>
+                  <th><code>known_hosts</code> line</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>ssh.github.com</code>, <code>altssh.gitlab.com</code>,
+                    <code>altssh.bitbucket.org</code>
+                  </td>
+                  <td>443</td>
+                  <td><code>[&lt;host&gt;]:443 &lt;key&gt;</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>github.com</code>, <code>gitlab.com</code>,
+                    <code>bitbucket.org</code>
+                  </td>
+                  <td>22</td>
+                  <td><code>&lt;host&gt; &lt;key&gt;</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>altssh.gitlab.com</code> and
+            <code>altssh.bitbucket.org</code> answer SSH on port 443 only.
+            <code>ssh.github.com</code> answers on port 22 and port 443, and
+            KanthorD uses port 443. Use these three hosts when a network blocks
+            the outbound port 22, for example
+            <code>git@ssh.github.com:acme/app.git</code> for GitHub. The address
+            keeps the form
+            <code>git@&lt;host&gt;:&lt;owner&gt;/&lt;repository&gt;.git</code>
+            and takes no port, for example
+            <code>git@altssh.gitlab.com:acme/app.git</code>. Any other form, for
+            example <code>ssh://git@altssh.gitlab.com:443/acme/app.git</code>,
+            fails with
+            <code>400 project.bindings.repository.address_invalid</code>. The
+            <code>ssh-keyscan</code> scan, the <code>known_hosts</code> line and
+            each git operation use the port of the table. The scan of
+            <code>altssh.gitlab.com</code> runs
+            <code>ssh-keyscan -T 5 -t ed25519 -p 443 -- altssh.gitlab.com</code
+            >, and the scan of <code>gitlab.com</code> runs
+            <code>ssh-keyscan -T 5 -t ed25519 -p 22 -- gitlab.com</code>. The
+            <code>known_hosts</code> line of a host on port 443 takes the form
+            <code>[&lt;host&gt;]:443</code>, because ssh looks up a host on a
+            port other than 22 under that name. A line with the bare name does
+            not match, and ssh refuses the host. The pin stores the bare host
+            name, so <code>list</code>, <code>scan</code> and
+            <code>pin</code> answer <code>host</code> without a port. For
+            example, the <code>known_hosts</code> line of
+            <code>altssh.gitlab.com</code> is
+            <code>[altssh.gitlab.com]:443 ssh-ed25519 &lt;base64&gt;</code>. The
+            key of <code>ssh.github.com</code> comes from the GitHub meta
+            answer, and its line is
+            <code>[ssh.github.com]:443 ssh-ed25519 &lt;base64&gt;</code>.
+          </p>
+          <h3 id="list">list</h3>
+          <p>
+            <code>list</code> returns one page of pins in ascending
+            <code>host</code> order. The server derives
+            <code>fingerprint</code> and <code>source</code> from the stored key
+            and the host on each read.
+          </p>
+          <h3 id="scan">scan</h3>
+          <p>
+            <code>scan</code> reads the current ed25519 key of one host and
+            writes nothing. For a GitHub host, the server reads the
+            <code>ssh_keys</code> list of the GitHub meta answer over TLS and
+            takes the entry that starts with <code>ssh-ed25519 </code>. For
+            every other host, the server runs <code>ssh-keyscan</code> on the
+            port of the host, skips its comment lines, and takes the
+            <code>ssh-ed25519</code> line of the host. On port 443 that line
+            starts with <code>[&lt;host&gt;]:443</code>.
+            <code>ssh-keyscan</code> reads no SSH configuration file. The read
+            has a 10-second deadline.
+          </p>
+          <h3 id="pin">pin</h3>
+          <p>
+            <code>pin</code> stores the key of a host after a human confirms its
+            fingerprint. The GitHub hosts <code>github.com</code> and
+            <code>ssh.github.com</code> are the exception. Their key comes over
+            TLS from <code>api.github.com/meta</code>, so the dashboard pins
+            them without a confirmation; see <a href="#dashboard">Dashboard</a>.
+            Every other host follows these steps:
+          </p>
+          <ol>
+            <li>
+              Run <code>scan</code>, or read the fingerprint from the dashboard.
+            </li>
+            <li>
+              Compare it with the fingerprint that the provider publishes.
+            </li>
+            <li>Send the confirmed fingerprint to <code>pin</code>.</li>
+          </ol>
+          <p>
+            The server reads the source again with a 10-second deadline. It pins
+            only when the new read gives the confirmed fingerprint. Another
+            fingerprint refuses the pin with
+            <code>409 repository.host_key.changed</code>, and the earlier pin of
+            the host stays. A successful pin replaces the earlier pin of the
+            host: one transaction deletes the old row and inserts the new one.
+            No operation removes the pin of a host without a replacement. The
+            server logs the human identity, the host, the fingerprint and the
+            source.
+          </p>
+          <p>
+            The workbench agent has no tool for <code>pin</code>, so only a
+            human confirms a host key. The agent can call <code>list</code> and
+            <code>scan</code>.
+          </p>
+          <h3 id="a-changed-host-key">A changed host key</h3>
+          <p>
+            When a host presents a key other than its pin, ssh writes
+            &quot;REMOTE HOST IDENTIFICATION HAS CHANGED&quot;. A binding check
+            then answers <code>failure_reason</code>
+            <code>host_key_changed</code>. A changed key can mean an
+            interception. Compare the published fingerprint of the provider
+            before you pin again. KanthorD never pins a new key of a host other
+            than <code>github.com</code> and <code>ssh.github.com</code> without
+            a human. For these two GitHub hosts, <code>Pin again</code> in the
+            dashboard pins the key of <code>api.github.com/meta</code> without a
+            confirmation, because that answer arrives over TLS.
+          </p>
+          <h3 id="dashboard">Dashboard</h3>
+          <ul>
+            <li>
+              The binding sheet pins <code>github.com</code> and
+              <code>ssh.github.com</code> without a confirmation, because the
+              GitHub meta answer arrives over TLS. It shows &quot;Host key
+              pinned from api.github.com&quot; with the fingerprint.
+            </li>
+            <li>
+              For every other host, the binding sheet shows the scanned
+              fingerprint, a link to the published fingerprints of the provider
+              and <code>Confirm host key</code>. Save stays off until the pin
+              exists.
+            </li>
+            <li>
+              Credentials &gt; Git holds the <code>Host keys</code> panel: one
+              row for each pin, with its host, fingerprint, source, pin time and
+              <code>Pin again</code>. <code>Pin again</code> scans the host and
+              shows the scanned and the pinned fingerprint before
+              <code>Confirm host key</code>. For <code>github.com</code> and
+              <code>ssh.github.com</code>, <code>Pin again</code> pins the
+              scanned key at once and shows &quot;Host key of &lt;host&gt;
+              pinned from api.github.com.&quot;
+            </li>
+          </ul>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Every API success returns HTTP <code>200</code> with JSON. The CLI
+            writes the same object as one JSON line to stdout and exits
+            <code>0</code>. The CLI <code>pin</code> adds
+            <code>idempotency_key</code>, the
+            <code>idempotency_key_&lt;ulid&gt;</code> that it sent.
+          </p>
+          <h3 id="list-1">list</h3>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "host": "github.com",
+      "public_key": "ssh-ed25519 &lt;base64&gt;",
+      "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+      "source": "github_meta",
+      "created_at": 1791441600000
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    Pins of this page, in ascending <code>host</code> order.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].host</code></td>
+                  <td>string</td>
+                  <td>
+                    SSH host in lower case, without a port, for example
+                    <code>altssh.gitlab.com</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].public_key</code></td>
+                  <td>string</td>
+                  <td>Pinned key, <code>ssh-ed25519 &lt;base64&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>items[].fingerprint</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>SHA256:</code> fingerprint of the key, the form of
+                    <code>ssh-keygen -l</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].source</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>github_meta</code> for <code>github.com</code> and
+                    <code>ssh.github.com</code>; <code>keyscan</code> for other
+                    hosts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].created_at</code></td>
+                  <td>integer</td>
+                  <td>Pin time in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Cursor of the next page; <code>null</code> on the last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="scan-1">scan</h3>
+          <pre><code class="language-json">{
+  "host": "gitlab.com",
+  "public_key": "ssh-ed25519 &lt;base64&gt;",
+  "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+  "source": "keyscan"
+}</code></pre>
+          <p>
+            The properties are those of a <code>list</code> item without
+            <code>created_at</code>.
+          </p>
+          <h3 id="pin-1">pin</h3>
+          <p>
+            The answer is the <code>list</code> item of the host after the pin.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Params, query or body fail the schema, for example a
+                    <code>fingerprint</code> that is not
+                    <code>SHA256:</code> and 43 base64 characters.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td><code>scan</code>, <code>pin</code></td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td><code>scan</code>, <code>pin</code></td>
+                  <td>The body is not <code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td><code>scan</code>, <code>pin</code></td>
+                  <td>The body exceeds 1 KiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td><code>list</code></td>
+                  <td>The operation accepts no body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td><code>pin</code></td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td><code>pin</code></td>
+                  <td>The key cannot be replayed for this request.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The 30-second operation timeout expired.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>The cursor is not a cursor of this list.</td>
+                </tr>
+                <tr>
+                  <td><code>400 repository.host_key.host_unsupported</code></td>
+                  <td><code>scan</code>, <code>pin</code></td>
+                  <td>
+                    The host is in no SSH host set;
+                    <code>details.host</code> holds it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>422 repository.host_key.scan_failed</code></td>
+                  <td><code>scan</code>, <code>pin</code></td>
+                  <td>
+                    The GitHub meta read or <code>ssh-keyscan</code> fails,
+                    reaches its deadline, or gives no ed25519 key;
+                    <code>details.host</code> holds the host.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 repository.host_key.changed</code></td>
+                  <td><code>pin</code></td>
+                  <td>
+                    The second read gives another fingerprint;
+                    <code>details</code> holds <code>host</code> and the
+                    <code>fingerprint</code> of that read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI exits <code>1</code> for every failure and writes a
+            diagnostic line <code>&lt;code&gt;: &lt;message&gt;</code> to
+            stderr, as
+            <a href="../errors.html#cli-diagnostics">CLI diagnostics</a> states.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.repository.host_key.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>
+                    The resolved token is absent or blank. The CLI sends no
+                    request.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.repository.host_key.&lt;command&gt;.indeterminate</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>
+                    Transport failure, timeout or malformed response. For
+                    <code>pin</code>, retry with the key.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.repository.host_key.pin.fingerprint_invalid</code>
+                  </td>
+                  <td><code>pin</code></td>
+                  <td>
+                    <code>--fingerprint</code> is not <code>SHA256:</code> and
+                    43 base64 characters. The CLI checks it first.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td><code>pin</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Every operation uses the <code>human</code> access policy and a
+            30-second timeout. <code>scan</code> and <code>pin</code> also apply
+            a 10-second read deadline.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>With a body</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td><code>pin</code></td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; reuse the same
+                    key to retry the same request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="list-2">list</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/repository/host-key</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>repository.host_key.list</code></td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Query parameter</th>
+                  <th>Required</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>No</td>
+                  <td>
+                    Positive integer, at most <code>1000</code>; default
+                    <code>100</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>No</td>
+                  <td>
+                    Nonempty <code>next_cursor</code> value of the previous
+                    page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/repository/host-key \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="scan-2">scan</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/repository/host-key/scan</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>repository.host_key.scan</code></td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No; no <code>Idempotency-Key</code></td>
+                </tr>
+                <tr>
+                  <td>Body limit</td>
+                  <td>1 KiB</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Required</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>host</code></td>
+                  <td>Yes</td>
+                  <td>A host of an SSH host set.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/repository/host-key/scan \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -d '{"host":"gitlab.com"}'</code></pre>
+          <h3 id="pin-2">pin</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>PUT /api/repository/host-key/:host</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>repository.host_key.pin</code></td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Parameters</td>
+                  <td><code>host</code>, a host of an SSH host set</td>
+                </tr>
+                <tr>
+                  <td>Body limit</td>
+                  <td>1 KiB</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Required</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>fingerprint</code></td>
+                  <td>Yes</td>
+                  <td>
+                    The confirmed fingerprint: <code>SHA256:</code> and 43
+                    base64 characters.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X PUT http://127.0.0.1:31415/api/repository/host-key/gitlab.com \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"fingerprint":"SHA256:&lt;43-base64-characters&gt;"}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord repository host-key list [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord repository host-key scan &lt;host&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord repository host-key pin &lt;host&gt; --fingerprint &lt;SHA256:...&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord repository host-key list
+kanthord repository host-key scan gitlab.com
+kanthord repository host-key pin gitlab.com --fingerprint 'SHA256:&lt;43-base64-characters&gt;'</code></pre>
+          <p>
+            Invoke <code>kanthord repository host-key</code> without a command
+            to show its help.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;host&gt;</code></td>
+                  <td><code>scan</code>, <code>pin</code></td>
+                  <td>
+                    SSH host without a port; sent as <code>body.host</code> by
+                    <code>scan</code> and as <code>host</code> by
+                    <code>pin</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--fingerprint &lt;SHA256:...&gt;</code></td>
+                  <td><code>pin</code></td>
+                  <td>Required; no default</td>
+                  <td>Sets <code>body.fingerprint</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td><code>pin</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when you retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    token is required
+                  </td>
+                  <td>
+                    Human JWT sent in the <code>Authorization</code> header.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each option is single-use. The CLI <code>list</code> sends no
+            <code>limit</code> and no <code>cursor</code>, so it prints the
+            first page of at most 100 pins. Use the API for a later page. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

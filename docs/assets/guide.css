@@ -1,0 +1,28 @@
+:root {
+  --accent: var(--color-pink);
+}
+
+article h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+article h2::before {
+  content: "";
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  background: var(--color-primary);
+  border: var(--border);
+  border-radius: 50%;
+}
+
+article > ol > li::marker {
+  color: var(--color-primary);
+  font-weight: 800;
+}
+
+article > pre {
+  box-shadow: 4px 4px 0 0 var(--color-primary);
+}

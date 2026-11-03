@@ -79,7 +79,7 @@ help:
 	@echo "  test-container   Build localhost/kanthord-dev:<version> and run the container driver"
 	@echo "                   against the live runtime. IMAGE=name CONTAINER_ENGINE=podman|docker"
 	@echo "  cleanup          Delete the configuration, data, state and cache directories"
-	@echo "  docs-tools       Regenerate docs/reference/workbench/tools.md"
+	@echo "  docs-tools       Regenerate docs/reference/workbench/tools.html"
 	@echo "                   CHECK=1 reports only, and fails when the page is stale"
 	@echo ""
 	@echo "e2e"

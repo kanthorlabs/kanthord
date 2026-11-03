@@ -1,0 +1,1548 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How a worker works · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li>
+            <a href="#the-idea-in-five-sentences">The idea in five sentences</a>
+          </li>
+          <li><a href="#the-words-you-need">The words you need</a></li>
+          <li><a href="#who-does-what">Who does what</a></li>
+          <li>
+            <a href="#the-life-of-an-implement-node"
+              >The life of an <code>implement</code> node</a
+            >
+          </li>
+          <li>
+            <a href="#one-execution-from-pull-to-release"
+              >One execution, from pull to release</a
+            >
+          </li>
+          <li><a href="#the-three-workers">The three workers</a></li>
+          <li><a href="#how-reviewer1-judges">How reviewer@1 judges</a></li>
+          <li>
+            <a href="#limits-that-stop-a-loop">Limits that stop a loop</a>
+          </li>
+          <li>
+            <a href="#rules-that-hold-in-every-execution"
+              >Rules that hold in every execution</a
+            >
+          </li>
+          <li><a href="#where-the-state-lives">Where the state lives</a></li>
+          <li><a href="#where-a-worker-runs">Where a worker runs</a></li>
+          <li><a href="#read-next">Read next</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="how-a-worker-works">How a worker works</h1>
+          <p>
+            A worker is the part of KanthorD that does the work of a mission. A
+            human writes the work as nodes: what to build, how to judge it, and
+            which commands check it. A worker takes one node, changes the code
+            of a repository with an LLM agent, proves the change with those
+            commands, and reports the result. A second worker then judges the
+            result independently.
+          </p>
+          <p>
+            This page is the entry point. Read it first. It explains the worker
+            concept from the top down. Two pages go deeper:
+          </p>
+          <ul>
+            <li>
+              <a href="coder-worker.html">How the coder@1 worker works</a>:
+              every step of one execution of the worker that writes the code.
+            </li>
+            <li>
+              <a href="native-agent.html">How the native agent works</a>: how
+              KanthorD builds the LLM agent that the worker drives.
+            </li>
+          </ul>
+          <h2 id="the-idea-in-five-sentences">The idea in five sentences</h2>
+          <ol>
+            <li>
+              A human imports a mission: a graph of <strong>nodes</strong> with
+              dependency edges. Each node holds a requirement, a criterion,
+              verification commands and an <strong>intent</strong>,
+              <code>implement</code> or <code>examine</code>.
+            </li>
+            <li>
+              The <strong>Scheduler</strong> gives one node at a time to one
+              <strong>worker instance</strong>. That grant is a
+              <strong>claim</strong>, and the work under it is an
+              <strong>execution</strong>.
+            </li>
+            <li>
+              The worker <code>coder@1</code> opens an LLM agent,
+              <code>swe@1</code>, in a git checkout. The agent edits files. The
+              worker code commits after every turn of the agent and runs the
+              verification commands of each task itself.
+            </li>
+            <li>
+              When every verification of the node passes in a clean clone, the
+              worker pushes a branch, records the head commit as
+              <strong>evidence</strong> and <strong>releases</strong> the claim.
+              The node now waits for review.
+            </li>
+            <li>
+              The worker <code>reviewer@1</code> checks out that commit in a
+              clean directory, runs every verification again, and asks a
+              read-only agent, <code>re@1</code>, for an
+              <strong>assessment</strong>. A passing assessment completes the
+              node, or first opens a pull request when the project requires one.
+            </li>
+          </ol>
+          <p>The rest of this page explains each of these sentences.</p>
+          <h2 id="the-words-you-need">The words you need</h2>
+          <p>
+            The terms below appear on every worker page. Each term has exactly
+            one meaning.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Term</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Mission</td>
+                  <td>All the work of one project, as a graph of nodes.</td>
+                </tr>
+                <tr>
+                  <td>Node</td>
+                  <td>
+                    One vertex of the mission. It holds an intent, tags, its
+                    bindings and, for an <code>implement</code> node, its tasks.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Intent</td>
+                  <td>
+                    The kind of work that a node asks for:
+                    <code>implement</code> or <code>examine</code>. The intent
+                    of the pinned revision selects the form of the method.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>implement</code> node</td>
+                  <td>
+                    A node that changes its repositories through its tasks. It
+                    names one or more repository bindings, and the convention is
+                    one binding. Most worker activity is on an
+                    <code>implement</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>examine</code> node</td>
+                  <td>
+                    A node that changes no repository. It checks out the
+                    base-branch head of each repository binding that it names,
+                    reads its direct dependencies and reports its findings.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Task</td>
+                  <td>
+                    One step of an <code>implement</code> node, with a
+                    <code>task_&lt;ulid&gt;</code> identity. A task has a
+                    criterion and verifications, but no state. A worker never
+                    claims a task alone. An <code>implement</code> node with no
+                    task is its own single work unit.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Tags of a node</td>
+                  <td>
+                    The list of tags that a worker binding needs to claim the
+                    node, for example <code>platform.macos</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Tag</td>
+                  <td>
+                    A fact of the host of a worker binding. The Scheduler admits
+                    a node only when the tags of the binding include every tag
+                    of the node.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Requirement</td>
+                  <td>The text that states what the node must achieve.</td>
+                </tr>
+                <tr>
+                  <td>Criterion</td>
+                  <td>The text that states how to judge the result.</td>
+                </tr>
+                <tr>
+                  <td>Verification</td>
+                  <td>
+                    One bash command that checks the result, for example
+                    <code>npm test</code>. Exit code 0 is a pass.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Node revision</td>
+                  <td>
+                    One version of the content of a node. An execution reads the
+                    revision that its attempt pins, so a later edit does not
+                    change a running execution.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Attempt</td>
+                  <td>
+                    One try at a node. It holds one or more executions. The
+                    first claim opens attempt 1. A human unblock opens the next
+                    attempt.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    A template that defines how work happens: its method, its
+                    agents, the node states that it claims, the intents that it
+                    takes and its default budget. <code>coder@1</code> and
+                    <code>reviewer@1</code> are workers.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker binding</td>
+                  <td>
+                    The project configuration that turns a worker on for one
+                    project. It lists the worker instances, the tags, the model
+                    of each agent and an optional budget. The count of listed
+                    instances is the instance count.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker instance</td>
+                  <td>
+                    One named copy of a worker with one placement. It pulls work
+                    and holds at most one execution at a time. To run more work
+                    at once, add an instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Claim</td>
+                  <td>
+                    The grant of one node to one instance. It has a fixed
+                    deadline, <code>expired_at</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Execution</td>
+                  <td>
+                    The work under one claim, from the claim to the release. It
+                    has an identity, for example
+                    <code>execution_01JZ8R2B…</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Agent</td>
+                  <td>
+                    An LLM participant that the worker drives, for example
+                    <code>swe@1</code>. <code>swe@1</code> edits files, and
+                    <code>re@1</code> judges. An agent decides nothing about the
+                    node.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Node branch</td>
+                  <td>
+                    The git branch of an <code>implement</code> node,
+                    <code>kanthord/&lt;node_id&gt;</code>. Every execution of
+                    the node continues on it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Evidence</td>
+                  <td>
+                    A result that an execution records, for example the head
+                    commit of the node branch.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Assessment</td>
+                  <td>
+                    The judgement of the evidence against the criterion:
+                    <code>success</code>, <code>criterion-not-met</code> or
+                    <code>undetermined</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Outcome</td>
+                  <td>
+                    The final record of an attempt. A successful outcome
+                    completes the node.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Release</td>
+                  <td>
+                    The end of an execution that returns the node to the Mission
+                    Service, with <code>further_work: true</code> or
+                    <code>false</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Budget</td>
+                  <td>
+                    The resource limit of one execution: 200 model turns and 2
+                    hours of wall time by default. A model turn is one reply of
+                    the model with the tool calls of that reply.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Stop</td>
+                  <td>
+                    The reason in a release that the execution ended early, for
+                    example
+                    <code
+                      >{ &quot;reason&quot;: &quot;budget_end&quot;,
+                      &quot;code&quot;: &quot;turns&quot; }</code
+                    >. A stop can carry <code>detail</code>, the cause text. A
+                    release with no stop has <code>stop: null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Revision instruction</td>
+                  <td>
+                    A message from the worker to the agent that asks for more
+                    work on a task, for example after a failed verification or a
+                    review. It is not a node revision.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="who-does-what">Who does what</h2>
+          <p>
+            A worker is one of several actors. Each actor owns one concern, and
+            no actor does the job of another one.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Actor</th>
+                  <th>Owns</th>
+                  <th>Does not own</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Human</td>
+                  <td>
+                    The WHAT: the requirement, the criterion and the
+                    verifications. Pause, unblock, override.
+                  </td>
+                  <td>How the work is done.</td>
+                </tr>
+                <tr>
+                  <td>Mission Service</td>
+                  <td>
+                    The node states, the attempts, the evidence, the assessments
+                    and the outcomes.
+                  </td>
+                  <td>Which instance does the work.</td>
+                </tr>
+                <tr>
+                  <td>Scheduler Service</td>
+                  <td>
+                    The work queue, the claim, its deadline and the execution
+                    record.
+                  </td>
+                  <td>The content of the work.</td>
+                </tr>
+                <tr>
+                  <td>Worker Service</td>
+                  <td>
+                    The registration, the heartbeat, the credential handover,
+                    the execution setup and the action requests.
+                  </td>
+                  <td>The node state and the claim.</td>
+                </tr>
+                <tr>
+                  <td>Worker (the code)</td>
+                  <td>
+                    The method: the order of the steps, git, the verifications,
+                    the decision that a task ends.
+                  </td>
+                  <td>The node state. It releases or submits an assessment.</td>
+                </tr>
+                <tr>
+                  <td>Agent <code>swe@1</code></td>
+                  <td>The file edits, inside one session.</td>
+                  <td>Git, the verifications, the release, the budget.</td>
+                </tr>
+                <tr>
+                  <td>Agent <code>re@1</code></td>
+                  <td>
+                    The judgement of a criterion and the default standard, in a
+                    read-only session.
+                  </td>
+                  <td>Any file edit, any command, the assessment record.</td>
+                </tr>
+                <tr>
+                  <td>Project Service, custody</td>
+                  <td>
+                    The bindings, the credentials and the model configuration.
+                  </td>
+                  <td>The execution.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The most important line is the split between the worker and the
+            agent. The agent can claim that its work is done. The worker does
+            not trust that claim and asks the agent no question. The worker
+            commits the work after every turn of the agent, runs the
+            verification commands itself, and releases only after every
+            verification of the node passes in a clean clone. Only
+            <code>re@1</code>, in the separate execution of
+            <code>reviewer@1</code>, judges a criterion.
+          </p>
+          <h2 id="the-life-of-an-implement-node">
+            The life of an <code>implement</code> node
+          </h2>
+          <p>
+            A node moves through states. Each worker claims only from the states
+            that it declares: <code>coder@1</code> claims
+            <code>Available</code>, and <code>reviewer@1</code> claims
+            <code>Waiting</code> and <code>External.Requested</code>. No worker
+            sets a state directly. A worker releases or submits an assessment,
+            and the Mission Service picks the next state from it. The Mission
+            Service makes every move of the diagram, also the moves that no
+            worker causes, for example <code>Pending</code> to
+            <code>Available</code> when the last dependency completes. A claim
+            also needs the match of the Scheduler. The worker declares the
+            intent of the node, and the tags of the binding include every tag of
+            the node.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
+flowchart LR
+    accTitle: The life of an implement node
+    accDescr: Pending becomes Available when its dependencies complete. coder@1 claims Available and the node is Executing. A release with further work returns it to Available. A release with no further work moves it to Waiting. reviewer@1 claims Waiting and the node is Evaluating. criterion-not-met below the rework limit returns it to Available. A success with no external action completes the node. A success with an external action opens a pull request and moves the node to External.Requested, then External.Success and Completed. A pull request that conflicts with the base, or that fails a required check, returns the node to Available. reviewer@1 claims External.Requested again when a chained action becomes eligible. A criterion-not-met at the limit, an undetermined assessment or a failed external action moves the node to Blocked. A human unblock opens the next attempt.
+    pending(["Pending"]) -- "dependencies Completed" --&gt; available(["Available"])
+    available -- "coder@1 claims" --&gt; executing["Executing&lt;br/&gt;coder@1 works"]
+    executing -- "release&lt;br/&gt;further_work: true" --&gt; available
+    executing -- "release&lt;br/&gt;further_work: false" --&gt; waiting(["Waiting"])
+    waiting -- "reviewer@1 claims" --&gt; evaluating["Evaluating&lt;br/&gt;reviewer@1 judges"]
+    evaluating -- "criterion-not-met&lt;br/&gt;rework" --&gt; available
+    evaluating -- "success,&lt;br/&gt;no external action" --&gt; completed(["Completed"])
+    evaluating -- "success,&lt;br/&gt;pull request opened" --&gt; requested(["External.Requested"])
+    requested -- "merged" --&gt; success(["External.Success"]) --&gt; completed
+    requested -- "conflict with the base,&lt;br/&gt;or a required check failed" --&gt; available
+    requested -- "next chained action&lt;br/&gt;eligible: reviewer@1 claims" --&gt; evaluating
+    requested -- "closed or&lt;br/&gt;changes requested" --&gt; failed(["External.Failed"]) --&gt; blocked
+    evaluating -- "criterion-not-met at the limit,&lt;br/&gt;or undetermined" --&gt; blocked(["Blocked"])
+    blocked -- "human unblock:&lt;br/&gt;next attempt" --&gt; available
+    classDef work fill:#fbeae1,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
+    classDef done fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class executing,evaluating work;
+    class completed done;
+</pre>
+          <p>
+            An <code>examine</code> node moves through the same states. Its
+            <code>coder@1</code> execution submits a report as produced evidence
+            and pushes no branch. It requires no external action, so a passing
+            assessment completes it.
+          </p>
+          <p>These facts explain most of the diagram:</p>
+          <ul>
+            <li>
+              <strong>Two workers, two claims.</strong> <code>coder@1</code> and
+              <code>reviewer@1</code> never share a claim. The coder does the
+              work and releases. The reviewer judges later in its own execution,
+              from a clean checkout.
+            </li>
+            <li>
+              <strong>Further work is normal.</strong> One execution does not
+              need to finish the node. When the budget ends, the coder commits a
+              checkpoint, pushes it and releases with
+              <code>further_work: true</code>. The node returns to
+              <code>Available</code>, and the next execution continues on the
+              same node branch.
+            </li>
+            <li>
+              <strong>A conflict sends the work back.</strong> A pull request
+              that conflicts with the base branch returns the node to
+              <code>Available</code> in the same attempt.
+              <code>coder@1</code> merges the base at its next start and
+              resolves the conflict.
+            </li>
+            <li>
+              <strong>A failed required check sends the work back.</strong> A
+              required check of the base branch that fails on the head commit
+              also returns the node to <code>Available</code> in the same
+              attempt. This applies to both landings. <code>coder@1</code> reads
+              the names of the failed checks as its verdict.
+            </li>
+            <li>
+              <strong>The merge comes from outside.</strong> After the reviewer
+              opens a pull request, no worker acts until the pull request ends.
+              The Intake Service checks the pull request on the git host. A
+              human starts that check with
+              <a href="../reference/mission/node-control.html#check"
+                ><code>kanthord mission node check</code></a
+              >. An Intake inbound of the repository, when one is configured,
+              starts it on an event of the git host. The Mission Service also
+              checks the pull request at the reviewer release. While a required
+              check is pending or a check call fails, it checks again every 60
+              seconds, at most 60 rounds. With the landing
+              <code>kanthord</code>, it merges the pull request when the
+              required checks pass; see
+              <a href="../reference/project/binding.html#the-deferred-check"
+                >the deferred check</a
+              >. A merge moves the node to <code>External.Success</code>, and
+              the Mission Service then completes it with the passing assessment
+              of the attempt. A closed pull request, or a pull request with a
+              change request, moves the node to <code>External.Failed</code> and
+              then to <code>Blocked</code>.
+            </li>
+            <li>
+              <strong>A human closes the loop.</strong> A node in
+              <code>Blocked</code> waits for a human. The human reads the
+              reason, edits the node or not, and unblocks it. The unblock opens
+              the next attempt.
+            </li>
+          </ul>
+          <p>
+            Two more states can interrupt any step. A human can pause a node,
+            which sets <code>Paused</code> and stops a running execution within
+            one model turn. The Mission Service also pauses a node that fails
+            too often, as
+            <a href="#limits-that-stop-a-loop">Limits that stop a loop</a>
+            explains. <code>Discarded</code> and <code>Completed</code> are the
+            two final states.
+          </p>
+          <h2 id="one-execution-from-pull-to-release">
+            One execution, from pull to release
+          </h2>
+          <p>
+            A native worker instance runs as one
+            <code>kanthord serve worker</code> process, as one worker thread of
+            the server, or as one container on the server host. It talks to the
+            server only through the API. It repeats the same cycle for every
+            execution:
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "&amp; { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
+sequenceDiagram
+    accTitle: One execution of a native worker
+    accDescr: The worker process registers, then pulls work. The Scheduler grants a claim and the Mission Service pins the revision. The worker takes the credentials and the setup, runs its method with the agent, checks its claim after each turn, records evidence and releases. The Mission Service routes the node.
+    autonumber
+    participant W as Worker process&lt;br/&gt;(kanthord serve worker)
+    participant WS as Worker Service
+    participant S as Scheduler
+    participant M as Mission Service
+    participant A as Agent (pi)
+
+    W-&gt;&gt;WS: Register, then heartbeat every 60 s
+    W-&gt;&gt;S: Pull work (waits up to 90 s)
+    S-&gt;&gt;M: Claim the node: open the attempt, pin the revision
+    S--&gt;&gt;W: Execution: execution_id, node, attempt,&lt;br/&gt;revision, node branch, expired_at
+    W-&gt;&gt;WS: Take the credentials (handover) and read the setup
+    loop The method: steps or evaluation
+        W-&gt;&gt;A: Prompt or instruction
+        A--&gt;&gt;W: Edits and reply
+        W-&gt;&gt;S: Check the claim after each turn
+    end
+    W-&gt;&gt;M: Submit evidence (or an assessment)
+    W-&gt;&gt;S: Release: further_work, stop&lt;br/&gt;(reviewer@1: only after a success with an action)
+    S-&gt;&gt;M: Route the node to its next state
+    Note over W: The instance is idle and pulls again
+</pre>
+          <p>The steps in plain words:</p>
+          <ol>
+            <li>
+              <strong>Register.</strong> The instance registers with the Worker
+              Service once for each worker binding that it serves, and sends a
+              heartbeat every 60 seconds. A thread or a container of the server
+              starts with the machine identity of its binding. A
+              <code>kanthord serve worker</code> process starts from its
+              instance configuration and receives a client token for each
+              binding that lists the instance.
+            </li>
+            <li>
+              <strong>Pull.</strong> The instance asks for work. The Scheduler
+              answers when a node in a declared state is ready and the match
+              admits the node, or answers &quot;no work&quot; after 90 seconds.
+            </li>
+            <li>
+              <strong>Claim.</strong> The Scheduler grants the node. The Mission
+              Service opens attempt 1 when the node has no attempt, and pins the
+              node revision. The claim holds a fixed deadline:
+              <code>expired_at</code> is the start time, plus the wall-time
+              budget of the binding, plus
+              <code>scheduler.release_reserve</code>, 10 minutes by default, for
+              the cleanup.
+            </li>
+            <li>
+              <strong>Setup.</strong> The process receives the credentials of
+              the execution through the credential handover of the Worker
+              Service. It then reads the execution setup: the worker name, the
+              model configuration, the composed prompt, the prompt templates,
+              the intent, the repository bindings and the budget. The process
+              reads no configuration file of its own.
+            </li>
+            <li>
+              <strong>Method.</strong> The process runs the method of its
+              worker: <code>steps</code> for <code>coder@1</code>,
+              <code>evaluation</code> for <code>reviewer@1</code>. Each method
+              holds one form for each intent, and the intent of the pinned
+              revision selects the form. The method opens one agent session and
+              drives it.
+            </li>
+            <li>
+              <strong>Claim check.</strong> After each model turn, and before
+              each turn of the agent on a task, the process reads its claim. A
+              claim that is no longer running ends the execution at once as
+              revoked. A revoked execution pushes nothing and releases nothing,
+              because the node is no longer its own.
+            </li>
+            <li>
+              <strong>Report.</strong> The method records evidence or an
+              assessment in the Mission Service.
+            </li>
+            <li>
+              <strong>Release.</strong> <code>coder@1</code> releases the claim
+              with <code>further_work</code> and an optional <code>stop</code>,
+              and the Mission Service picks the next node state.
+              <code>reviewer@1</code> releases only after a success that
+              requires an external action. Its other assessments move the node
+              and end the claim at once, with no release. Either way, the
+              instance is idle again and pulls the next node.
+            </li>
+          </ol>
+          <p>
+            <a href="worker-contract.html">What a worker reports to KanthorD</a>
+            lists each operation of this cycle and the telemetry that the worker
+            writes beside it.
+          </p>
+          <h2 id="the-three-workers">The three workers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Worker</th>
+                  <th>Host</th>
+                  <th>Method</th>
+                  <th>Agent</th>
+                  <th>Claims from</th>
+                  <th>Job</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>coder@1</code></td>
+                  <td>KanthorD (native)</td>
+                  <td><code>steps</code></td>
+                  <td><code>swe@1</code></td>
+                  <td><code>Available</code></td>
+                  <td>
+                    Does the tasks of an <code>implement</code> node, or writes
+                    the report of an <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>reviewer@1</code></td>
+                  <td>KanthorD (native)</td>
+                  <td><code>evaluation</code></td>
+                  <td><code>re@1</code></td>
+                  <td><code>Waiting</code>, <code>External.Requested</code></td>
+                  <td>Judges the result, then requests the pull request.</td>
+                </tr>
+                <tr>
+                  <td><code>claude-code@1</code></td>
+                  <td>External harness (Claude Code)</td>
+                  <td>Its own skill</td>
+                  <td>None of KanthorD</td>
+                  <td>
+                    <code>Available</code>, <code>Waiting</code>,
+                    <code>External.Requested</code>
+                  </td>
+                  <td>Does the work in a third-party agent program.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A <strong>native</strong> worker runs its agent inside KanthorD on
+            the <a href="native-agent.html">pi runtime</a>. An
+            <strong>external harness</strong> runs a third-party agent program,
+            and KanthorD configures none of its agent, prompt or tools. Each of
+            the three workers declares the intents <code>implement</code> and
+            <code>examine</code>. Both kinds use the same claim, evidence and
+            release operations. This page and the two pages below it cover the
+            native workers.
+          </p>
+          <h2 id="how-reviewer1-judges">How reviewer@1 judges</h2>
+          <p>
+            <code>reviewer@1</code> has its own execution. It trusts no result
+            that <code>coder@1</code> recorded, except the head commit that the
+            evidence names.
+          </p>
+          <ol>
+            <li>
+              It reads the pinned revision and the evidence of the attempt. For
+              an <code>implement</code> node, the evidence names the head commit
+              of each node branch. For an <code>examine</code> node, it also
+              reads the outcome and the evidence of each direct dependency.
+            </li>
+            <li>
+              It makes a fresh directory. For an <code>implement</code> node, it
+              makes a clean checkout of each commit under
+              <code>checkouts/&lt;binding name&gt;/</code>. For an
+              <code>examine</code> node, it checks out the base-branch head of
+              each repository binding of the node in the same way. It places the
+              produced evidence in <code>evidence/</code>, beside
+              <code>checkouts/</code> and outside the agent root.
+            </li>
+            <li>
+              Its code runs the verifications of the node, then the
+              verifications of each task, in order. The first failure stops the
+              run. A command that a signal ends, or that exits with a code from
+              129 to 192, or that does not spawn, is an infrastructure failure.
+              It runs once more, and a pass on that rerun is a pass. A second
+              infrastructure failure stops the execution with
+              <code>operation_failed</code> and the code
+              <code>worker.verification.infrastructure_failed</code>. Any other
+              failed command runs up to two more times, only to detect a flaky
+              test, unless its limit of 10 minutes ended it. A pass on such a
+              rerun still counts as a failure, and the rationale names the test
+              as flaky. A command that the list holds again copies the result of
+              its first run. The reviewer reads no
+              <a href="coder-worker.html#step-7-the-unit-loop"
+                >verification memo</a
+              >, so each rerun runs its command.
+            </li>
+            <li>It records the results as evidence.</li>
+            <li>
+              When a command failed, it writes a
+              <code>criterion-not-met</code> assessment at once, with no agent.
+              The rationale names the command and holds the last 4 KiB of its
+              output.
+            </li>
+            <li>
+              For an <code>implement</code> node, when every command passes, its
+              code runs
+              <a href="coder-worker.html#the-affected-test-run"
+                >the affected test run</a
+              >
+              of each checkout. It records the result as the evidence
+              <code>Affected test results</code> when at least one repository
+              declares a command. The verdict <code>failed</code> gives a
+              <code>criterion-not-met</code> assessment at once, with no agent.
+              The rationale holds the failed tests and the last 4 KiB of the
+              output.
+            </li>
+            <li>
+              When every command passes and no affected test run fails, the
+              agent <code>re@1</code> judges the evidence against the criterion
+              of the node, each task criterion and the default standard. Its
+              evaluation prompt also holds the affected test results. The prompt
+              asks <code>re@1</code> to weigh a <code>base_red</code> verdict,
+              each flaky test and each excluded e2e test as facts about the
+              change. It also asks <code>re@1</code> to judge a change to a file
+              that selects or runs tests against the criterion.
+              <code>re@1</code> can read files but cannot write a file or run a
+              command. When the repository binding names an instruction file,
+              its system prompt holds that file at the base commit that the
+              attempt pins. Its prompt takes no nested instruction file and no
+              file of the workspace.
+            </li>
+            <li>
+              It submits the assessment. The assessment itself moves the node:
+              the reviewer does not release, except in one case. A
+              <code>success</code> with no required external action completes
+              the node. A <code>success</code> with a required action, for
+              example a pull request, makes the reviewer request the action
+              through the Intake Service and release. The node then waits in
+              <code>External.Requested</code> until the action ends.
+            </li>
+          </ol>
+          <p>
+            A <code>criterion-not-met</code> assessment returns the node to
+            <code>coder@1</code> as a <strong>rework</strong>, in the same
+            attempt, while the attempt holds fewer reworks than the limit and no
+            requested action. The next <code>coder@1</code> execution reads the
+            rationale of that assessment as its <strong>verdict</strong>. It
+            sends the whole rationale to <code>swe@1</code> in one revision turn
+            of the node, and it sends the node to review again only when the
+            head holds new work after the judged commit, when the checkout still
+            holds that commit.
+            <a href="coder-worker.html#the-verdict-unit">The verdict unit</a>
+            explains the rule. An <code>undetermined</code> assessment, or a
+            <code>criterion-not-met</code> at the limit, moves the node to
+            <code>Blocked</code>.
+          </p>
+          <p>
+            A <code>criterion-not-met</code> assessment with a cause of the
+            category <code>plan</code> gets no rework. The reviewer gives such a
+            cause, <code>plan.requirement_conflict</code> or
+            <code>plan.criterion_unstated</code>, for a defect of the plan. The
+            assessment moves the node to <code>Blocked</code> at each rework
+            count, with the transition rule <code>plan_defect</code>. The plan
+            belongs to the human, and the execution belongs to KanthorD. The
+            human corrects the plan with
+            <a href="../reference/mission/node-control.html#unblock"
+              ><code>kanthord mission node unblock</code></a
+            >
+            and a <code>change</code>.
+          </p>
+          <p>
+            <strong>A fix-node proposal.</strong> An
+            <code>undetermined</code> assessment of an <code>examine</code> node
+            can hold up to 10 fix-node proposals. Each proposal names one defect
+            of a direct <code>implement</code> dependency in
+            <code>dependency_id</code>. A human decides every proposal of the
+            assessment in one decision. Each approved proposal creates an
+            <code>implement</code> node with its one task and records it in
+            <code>created_node_id</code>. Every other open proposal becomes
+            rejected. The <code>examine</code> node then depends on each new
+            node, and the decision unblocks it once into the next attempt.
+          </p>
+          <p>
+            <strong>A chained action.</strong> A project can require two actions
+            in order, for example a pull request and then a second action that
+            follows its merge. When the first action reaches its expected end,
+            the node is claimable again in <code>External.Requested</code>.
+            <code>reviewer@1</code> claims it, requests the next eligible action
+            and releases. This claim performs no evaluation, because a current
+            passing assessment already stands. Today
+            <code>reviewer@1</code> runs the full evaluation again at this
+            claim. A <code>criterion-not-met</code> there blocks the node,
+            because the attempt already holds a requested action.
+          </p>
+          <p>
+            <strong>When the reviewer fails.</strong> A reviewer execution can
+            stop before it has an assessment. It then releases with
+            <code>further_work: true</code> and a stop, and the node returns to
+            <code>Waiting</code> for the next reviewer execution:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Stop</th>
+                  <th>Cause</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>assessment_absent</code></td>
+                  <td>The budget ends before the assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>judgement_invalid</code></td>
+                  <td>
+                    <code>re@1</code> gives a second reply with no valid
+                    judgement line.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>action_unsettled</code></td>
+                  <td>
+                    The request of an external action fails or has an uncertain
+                    result.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>operation_failed</code></td>
+                  <td>Any other failure, for example a failed checkout.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each of these stops counts toward
+            <code>mission.consecutive_failure_limit</code>. A
+            <code>provider_failed</code> stop of the reviewer follows the same
+            rules as for <code>coder@1</code>.
+          </p>
+          <h2 id="limits-that-stop-a-loop">Limits that stop a loop</h2>
+          <p>
+            Without limits, a node could cycle between the coder and the
+            reviewer forever. Three limits in the server configuration stop
+            that. Each limit counts inside one attempt.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Limit</th>
+                  <th>Default</th>
+                  <th>Counts</th>
+                  <th>At the limit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mission.rework_limit</code></td>
+                  <td>2</td>
+                  <td>
+                    <code>criterion-not-met</code> assessments that returned the
+                    node to <code>Available</code>
+                  </td>
+                  <td>
+                    With the default, the first two
+                    <code>criterion-not-met</code> assessments of an attempt
+                    cause a rework, and the third moves the node to
+                    <code>Blocked</code>. A <code>plan</code> cause moves the
+                    node to <code>Blocked</code> at each count.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission.further_work_limit</code></td>
+                  <td>3</td>
+                  <td>
+                    Releases in a row with the stop <code>budget_end</code>,
+                    which means that no unit completed
+                  </td>
+                  <td>
+                    The third such release in a row moves the node to
+                    <code>Paused</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission.consecutive_failure_limit</code></td>
+                  <td>3</td>
+                  <td>
+                    Executions in a row, coder or reviewer, that stopped on a
+                    failure or lost their claim
+                  </td>
+                  <td>
+                    The third failure in a row moves the node to
+                    <code>Paused</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A human resumes a <code>Paused</code> node with
+            <a href="../reference/mission/node-control.html#resume"
+              ><code>kanthord mission node resume</code></a
+            >, which grants one more try and resets no count. A
+            <strong>failure</strong> is a lost claim or a release with any stop
+            except <code>budget_end</code> and a busy provider. The failure
+            stops are <code>operation_failed</code>, <code>no_progress</code>,
+            <code>judgement_invalid</code>, <code>report_absent</code>,
+            <code>action_unsettled</code>, <code>assessment_absent</code> and
+            <code>provider_failed</code> with the code
+            <code>bad_request</code> or <code>unauthorized</code>. A stop
+            because the provider is busy (<code>rate_limited</code>,
+            <code>quota_exhausted</code> or <code>unavailable</code>) does not
+            count as a failure. It moves the agent to the next model of its
+            fallback chain instead.
+            <a href="native-agent.html#configuration-which-model-answers"
+              >How the native agent works</a
+            >
+            explains the fallback chain.
+          </p>
+          <p>The two counters of an attempt have separate reset rules:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Counter</th>
+                  <th>Limit</th>
+                  <th>Counts</th>
+                  <th>Resets the count</th>
+                  <th>Neither counts nor resets</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Failures</td>
+                  <td><code>mission.consecutive_failure_limit</code></td>
+                  <td>
+                    A lost claim, and a release with a stop other than
+                    <code>budget_end</code>
+                  </td>
+                  <td>
+                    An execution that ends before <code>expired_at</code> with
+                    no stop or with the stop <code>budget_end</code>: a release
+                    with no stop, a <code>budget_end</code> release, and a
+                    revoked claim
+                  </td>
+                  <td>
+                    A <code>provider_failed</code> stop with
+                    <code>rate_limited</code>, <code>quota_exhausted</code> or
+                    <code>unavailable</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Stalls</td>
+                  <td><code>mission.further_work_limit</code></td>
+                  <td>A release with the stop <code>budget_end</code></td>
+                  <td>
+                    Any other end of an execution: a release with no stop, a
+                    release with any other stop, a revoked claim and a lost
+                    claim
+                  </td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A revoked claim, for example after a human pause, is no failure. The
+            Scheduler ends that execution with no stop before
+            <code>expired_at</code>, so it resets both counts.
+          </p>
+          <h2 id="rules-that-hold-in-every-execution">
+            Rules that hold in every execution
+          </h2>
+          <p>
+            These rules explain most behavior that looks surprising at first.
+          </p>
+          <ul>
+            <li>
+              <strong>The worker decides, the agent works.</strong> The worker
+              code commits, runs the verifications that count, pushes, records
+              evidence and releases. The agent cannot mark a task complete. The
+              worker does not depend on the agent for git:
+              <code>swe@1</code> has <code>bash</code>, so nothing blocks a
+              <code>git commit</code> by the agent, but gate G folds every agent
+              commit into the worker commit after the turn.
+            </li>
+            <li>
+              <strong>Commands before opinions.</strong>
+              <code>coder@1</code> asks no agent for a judgement.
+              <code>re@1</code> judges a criterion only after every verification
+              of the node passes. A failed command never reaches a judgement.
+            </li>
+            <li>
+              <strong>A fresh agent for each execution.</strong> Each execution
+              opens a new agent session with an empty conversation. The
+              execution can lose its claim or its process at any time, so
+              nothing durable lives in the agent. The next execution rebuilds
+              its context from the node branch and from the records of the
+              Mission Service.
+            </li>
+            <li>
+              <strong>Git is the memory of the work.</strong> The node branch
+              carries the work from one execution to the next. A
+              <code>Kanthord-Done</code> trailer on a worker commit marks each
+              unit that passed with a change, so the next execution skips it. A
+              budget end writes a checkpoint commit and pushes it, so no work is
+              lost.
+            </li>
+            <li>
+              <strong>No history rewrite.</strong> No execution deletes, renames
+              or force-pushes a node branch. No execution rewrites a commit that
+              it pushed, because a record can name that commit.
+            </li>
+            <li>
+              <strong>One instance, one execution.</strong> An instance holds at
+              most one execution at a time, at every placement, over all the
+              bindings that list it. Capacity comes only from the count of
+              instances. No rank and no weight exist between instances. At the
+              <code>worker</code> placement, one
+              <code>kanthord serve worker</code> process hosts one instance, so
+              a binding that lists 3 such instances needs 3 processes.
+            </li>
+            <li>
+              <strong>A lost claim is a failure.</strong> A claim that reaches
+              <code>expired_at</code> with no release is lost. The Scheduler
+              ends the execution and returns the node to
+              <code>Available</code> (or <code>Waiting</code> for a reviewer
+              claim). The loss counts toward
+              <code>mission.consecutive_failure_limit</code>. The worker process
+              that still runs learns of the loss at its next call and stops.
+            </li>
+          </ul>
+          <h2 id="where-the-state-lives">Where the state lives</h2>
+          <p>
+            The agent forgets everything at the end of an execution. The next
+            execution reads the state from these places:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>Where it lives</th>
+                  <th>Durable</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>The work: every worker commit and its done records</td>
+                  <td>The node branch on the git remote</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>The node state, the attempt and the pinned revision</td>
+                  <td>The Mission Service</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>The evidence, the assessments and their rationales</td>
+                  <td>The Mission Service</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>The claim, its deadline and the selected model</td>
+                  <td>The Scheduler execution record</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>The cooldown of a busy credential</td>
+                  <td>The Agent component on the server, in Custody</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>The checkout itself</td>
+                  <td><code>workspaces/</code> on the worker host</td>
+                  <td>No, a cache of one host</td>
+                </tr>
+                <tr>
+                  <td>The agent conversation</td>
+                  <td>
+                    The Tracking Service, and a pi session file on the worker
+                    host
+                  </td>
+                  <td>Telemetry, never read to decide</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The start of <code>coder@1</code> reads the done records of the node
+            branch, so it needs only the durable rows. The checkout saves a
+            clone and installed dependencies, and its loss repeats no work.
+          </p>
+          <ul>
+            <li>
+              <strong>Tasks are not scheduled.</strong> The Scheduler grants a
+              node. The worker orders and runs the tasks of an
+              <code>implement</code> node inside its own execution.
+            </li>
+            <li>
+              <strong>Telemetry decides nothing.</strong> The worker writes
+              spans of its phases, tasks, turns and tool calls. No service reads
+              them to move a node. Only the release and the records move a node.
+            </li>
+          </ul>
+          <h2 id="where-a-worker-runs">Where a worker runs</h2>
+          <p>
+            Each worker instance holds one placement: <code>server</code>,
+            <code>container</code> or <code>worker</code>. The placement is set
+            at the create of the instance and never changes. A worker binding
+            holds no placement. It lists its instances in
+            <code>worker_instances</code>, and one binding can list instances of
+            different placements.
+          </p>
+          <ul>
+            <li>
+              At the <code>server</code> placement, the server runs the instance
+              as a worker thread. A human generates no token and starts no
+              process.
+            </li>
+            <li>
+              At the <code>container</code> placement, the server runs the
+              instance in its own container on the server host, with Podman or
+              Docker. A human generates no token and starts no process. The
+              container waits until the
+              <a
+                href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#binding-environment"
+                >environment</a
+              >
+              of the repository binding of its listing binding is
+              <code>ready</code>, then runs the image of that environment. That
+              image takes <code>kanthord</code> and <code>tini</code> from
+              <code>&lt;worker.container_image&gt;:&lt;server version&gt;</code
+              >. With no listing binding, or in a project with no repository
+              binding, the container runs
+              <code>&lt;worker.container_image&gt;:&lt;server version&gt;</code
+              >. One live worker binding at most lists a
+              <code>container</code> instance, because one container runs one
+              image.
+            </li>
+            <li>
+              At the <code>worker</code> placement, each instance is a separate
+              <code>kanthord serve worker</code> process. The process can run on
+              the server host or on another host.
+            </li>
+          </ul>
+          <p>
+            The server runs each <code>server</code> and
+            <code>container</code> instance from its create until its archive,
+            also while no binding lists it. A create at
+            <code>worker.server_instance_limit</code> (default 16) refuses. The
+            server runs at most that many <code>server</code> and
+            <code>container</code> instances at once. A removal of an instance
+            from a binding drains it for that binding: its live execution
+            finishes, and the binding gets no new claim from that instance.
+          </p>
+          <p>
+            Every placement runs the same worker unit. A
+            <code>server</code> thread and a <code>container</code> instance
+            reach the server through the same API operations, under a machine
+            identity of the same project and binding scope. The container
+            reaches the server through a channel that the server holds, and it
+            holds no token.
+          </p>
+          <p>
+            The server checks the placement <code>container</code> with a
+            runtime check. The check answers a reason when the server cannot
+            host containers:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>reason</code></th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server_in_container</code></td>
+                  <td>The server runs inside a container.</td>
+                </tr>
+                <tr>
+                  <td><code>runtime_absent</code></td>
+                  <td>
+                    Neither <code>podman</code> nor <code>docker</code> resolves
+                    on the <code>PATH</code> of the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>runtime_failed</code></td>
+                  <td>
+                    The runtime does not answer or fails a check. The condition
+                    is transient.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>runtime_rootful</code></td>
+                  <td>
+                    A Linux host runs a rootful runtime and the server user is
+                    not root.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <a href="../reference/worker/placement.html">Worker placements</a>
+            lists the answer of the check.
+            <a
+              href="../how-to-guides/isolate-worker-instances-in-containers.html"
+              >Isolate worker instances in containers</a
+            >
+            shows the steps.
+          </p>
+          <p>
+            To run 3 instances of <code>coder@1</code> for one project at the
+            <code>server</code> placement:
+          </p>
+          <ol>
+            <li>
+              Enable the agent <code>swe@1</code> with a provider and a model.
+              See
+              <a href="../reference/agent/enablement.html">agent enablement</a>.
+            </li>
+            <li>
+              Add the instances <code>coder-1</code>, <code>coder-2</code> and
+              <code>coder-3</code> of <code>coder@1</code> at the
+              <code>server</code> placement on the worker page, or with
+              <code
+                >kanthord worker instance create coder-1 --worker coder@1
+                --placement server</code
+              >. See
+              <a href="../reference/worker/instance.html">worker instances</a>.
+            </li>
+            <li>
+              Add a worker binding with
+              <code>&quot;worker&quot;: &quot;coder@1&quot;</code> and
+              <code
+                >&quot;worker_instances&quot;: [&quot;coder-1&quot;,
+                &quot;coder-2&quot;, &quot;coder-3&quot;]</code
+              >
+              to the project. See
+              <a href="../reference/project/binding.html">project bindings</a>.
+            </li>
+          </ol>
+          <p>
+            The server starts the 3 threads at their create. To run more work at
+            once, add an instance and list it. To run less, remove an instance
+            from the list: an idle instance stops taking work of the binding at
+            once, and a busy instance finishes its execution first. The instance
+            still runs until its archive. A server restart starts each thread
+            again under the same client identity, and a live registration
+            resumes its running execution.
+          </p>
+          <p>
+            An archive refuses while a binding lists the instance. Remove the
+            instance from each binding first. An archive with
+            <code>--force</code> also stops the live execution of the instance.
+            The node returns to <code>Available</code> or <code>Waiting</code>,
+            and the revocation counts as no loss and no failure.
+          </p>
+          <p>
+            To run 3 instances of <code>coder@1</code> at the
+            <code>container</code> placement, create the instances with
+            <code>--placement container</code>, and list them as above. The
+            server starts the 3 containers, and a server restart starts each
+            container again under the same client identity.
+          </p>
+          <p>
+            To run 3 instances of <code>coder@1</code> at the
+            <code>worker</code> placement:
+          </p>
+          <ol>
+            <li>Enable the agent <code>swe@1</code>.</li>
+            <li>
+              Add 3 instances of <code>coder@1</code> at the
+              <code>worker</code> placement on the worker page, and start one
+              <code>kanthord serve worker</code> process for each. The host
+              needs <code>bash</code>, <code>git</code> 2.40 or later, and
+              OpenSSH 9.0 or later with <code>ssh</code>,
+              <code>ssh-agent</code> and <code>ssh-add</code>. The binary
+              supplies <code>rg</code> and <code>fd</code>, which the agent
+              tools <code>grep</code> and <code>find</code> call.
+            </li>
+            <li>
+              Give each instance its own copy of the LLM credential of the
+              agent.
+            </li>
+            <li>
+              Add the worker binding with the 3 instance names in
+              <code>worker_instances</code>.
+            </li>
+          </ol>
+          <p>
+            <a
+              href="../how-to-guides/run-in-a-container.html#8-run-a-worker-on-another-host"
+              >Run a worker on another host</a
+            >
+            shows the steps, and
+            <a href="../reference/worker/instance.html">worker instances</a>
+            lists the operations.
+          </p>
+          <p>
+            A worker host needs no SSH key, no SSH configuration and no
+            <code>known_hosts</code> entry. The server keeps each
+            <a href="../reference/repository/ssh-key.html">SSH key</a> in
+            custody. For each execution:
+          </p>
+          <ol>
+            <li>
+              For an instance at the <code>server</code> or the
+              <code>container</code> placement, the
+              <a href="../reference/worker/handover.html"
+                >credential handover</a
+              >
+              carries the SSH key of each repository binding of the node, in the
+              sealed envelope. At the <code>worker</code> placement, the key
+              stays on the server. The instance sends each SSH signature request
+              to the server through the SSH signature relay.
+            </li>
+            <li>
+              The execution setup carries the
+              <a href="../reference/repository/host-key.html"
+                >pinned host key</a
+              >
+              of each repository address. An address host with no pin refuses
+              the setup with <code>409 repository.host_key.unpinned</code>, and
+              a host outside the SSH host set with
+              <code>400 project.bindings.repository.address_invalid</code>. The
+              execution then does not start.
+            </li>
+            <li>
+              The worker keeps both in memory. Each clone, fetch and push starts
+              a private SSH agent, and ends the agent after the git command. At
+              the <code>server</code> and <code>container</code> placements, the
+              agent loads the key. At the <code>worker</code> placement, the
+              agent relays the signature request. The worker writes no private
+              key file.
+            </li>
+          </ol>
+          <p>
+            The worker host must reach the SSH port of each repository address
+            host. The SSH port is 443 for <code>ssh.github.com</code>,
+            <code>altssh.gitlab.com</code> and
+            <code>altssh.bitbucket.org</code>, and 22 for every other host. See
+            <a href="../reference/repository/host-key.html#function-description"
+              >SSH host keys</a
+            >. No binding check proves that path from the worker host. The
+            worker reads no file under <code>~/.ssh</code>, so a key or an alias
+            in the SSH configuration of the host has no effect. A temporary
+            directory path above 75 bytes makes every SSH operation fail; see
+            <a
+              href="../reference/repository/ssh-key.html#the-temporary-directory-limit"
+              >the temporary directory limit</a
+            >.
+          </p>
+          <p>
+            An instance keeps its files in a data directory. A process at the
+            <code>worker</code> placement uses
+            <code>$XDG_DATA_HOME/kanthord/workers/&lt;name&gt;/</code> of its
+            host, by default
+            <code>~/.local/share/kanthord/workers/&lt;name&gt;/</code>.
+            <code>&lt;name&gt;</code> is the instance name. A thread at the
+            <code>server</code> placement uses
+            <code>state/kanthord/</code> under its slot root,
+            <code>workers/&lt;name&gt;/</code> of the state directory of the
+            server. A container at the <code>container</code> placement uses
+            <code>state/kanthord/</code> of its volume, which carries the
+            instance name. The archive of the instance removes both. Two
+            instances share no file.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>workspaces/&lt;node_id&gt;/</code></td>
+                  <td>
+                    The workspace of one <code>implement</code> node:
+                    <code>checkouts/&lt;binding name&gt;/</code> for each
+                    repository binding, and <code>release/</code> for the clean
+                    clones of the release gate during a run. The next execution
+                    of the node on this host reuses it. The instance removes it
+                    7 days after its last use.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workspaces/&lt;execution_id&gt;/</code></td>
+                  <td>
+                    The fresh directory of one evaluation execution or one
+                    <code>examine</code> execution. It holds
+                    <code>checkouts/&lt;binding name&gt;/</code> for each
+                    checkout and <code>evidence/</code> for the placed evidence.
+                    The instance removes it at the end.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>pi/</code></td>
+                  <td>
+                    The private directory of the pi runtime. It is separate from
+                    any pi installation of the user.
+                    <code>pi/sessions/execution/&lt;execution_id&gt;/</code>
+                    holds the pi session files of one execution. The instance
+                    keeps the newest 50 execution directories.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The agent root is the directory that the agent works from. A node
+            with no repository binding uses the workspace as the agent root. A
+            node with one repository binding uses its checkout as the agent
+            root. A node with two or more repository bindings uses
+            <code>checkouts/</code> as the agent root.
+          </p>
+          <p>
+            The head commit of an <code>implement</code> node with two or more
+            repository bindings is the set of the heads of its node branches.
+            Each required external action resolves on its own.
+          </p>
+          <p>
+            The workspace and the pi session files are local conveniences, not
+            records. The worker sends every session entry to the Tracking
+            Service when the agent appends it. Another instance can take the
+            next execution of the same node. It then clones the repository and
+            checks out the pushed node branch.
+          </p>
+          <p>
+            The agent tools and the verification commands run with the rights of
+            the worker process. At the <code>server</code> placement, those
+            rights are the rights of the server user. A command can read the
+            files of that user and can signal the server process. At the
+            <code>container</code> placement, a command runs in the container of
+            its instance. It reads no file of the server and cannot signal the
+            server process. It still reaches every network that the container
+            reaches. KanthorD has no other sandbox. Run a worker on a host that
+            you trust with the repository and its credentials.
+          </p>
+          <h2 id="read-next">Read next</h2>
+          <ul>
+            <li>
+              <a href="coder-worker.html">How the coder@1 worker works</a>: the
+              12 steps of a <code>coder@1</code> execution, gate G, the done
+              records, the verdict unit, the release gate, every way that an
+              execution ends, and examples of the edge cases.
+            </li>
+            <li>
+              <a href="native-agent.html">How the native agent works</a>: the
+              model configuration, the prompt that the model reads, the tools,
+              the budget and the limits of the agent.
+            </li>
+            <li>
+              <a href="worker-contract.html"
+                >What a worker reports to KanthorD</a
+              >: the state channel and the telemetry channel.
+            </li>
+            <li>
+              Reference: <a href="../reference/worker/worker.html">worker</a>,
+              <a href="../reference/worker/register.html">register</a>,
+              <a href="../reference/scheduler/work.html">work pull</a>,
+              <a href="../reference/scheduler/execution.html">release</a>,
+              <a href="../reference/mission/node-control.html">node controls</a
+              >.
+            </li>
+          </ul>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>

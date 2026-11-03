@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KanthorD component architecture · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li>
+            <a href="#components-and-ownership">Components and ownership</a>
+          </li>
+          <li>
+            <a href="#interfaces-that-determine-implementation-order"
+              >Interfaces that determine implementation order</a
+            >
+          </li>
+          <li>
+            <a href="#component-boundaries-that-must-remain-explicit"
+              >Component boundaries that must remain explicit</a
+            >
+          </li>
+          <li>
+            <a href="#persistence-and-deployment">Persistence and deployment</a>
+          </li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="kanthord-component-architecture">
+            KanthorD component architecture
+          </h1>
+          <p>
+            This view expands services into individual named components.
+            <strong
+              >A container owns its contents. An arrow names a collaboration,
+              call or record flow.</strong
+            >
+            It does not mean “build the entire source service first.” The
+            <a href="#interfaces-that-determine-implementation-order"
+              >implementation order</a
+            >
+            handles cyclic dependencies through joint implementation slices.
+          </p>
+          <p>
+            Mission Service is embedded in the Project boundary because a
+            mission is intrinsic to its project. It is not a repository,
+            provider, worker or inbound. This containment does not remove
+            Mission&#39;s separate authority over its records.
+          </p>
+          <blockquote>
+            <p>
+              <strong>Design scope:</strong> The complete component map includes
+              planned work. On the documentation site, the diagram fits a wide
+              panel and shows its full height. Zoom in for detail and scroll
+              horizontally when enlarged.
+            </p>
+          </blockquote>
+          <h2 id="components-and-ownership">Components and ownership</h2>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "curve": "stepAfter", "nodeSpacing": 24, "rankSpacing": 48}}}%%
+flowchart TB
+    accTitle: KanthorD component ownership and collaboration
+    accDescr: Named components are grouped by their owning service, with Mission embedded in Project, and labeled arrows show invocation, authorization, scheduling, execution, acquisition and persistence dependencies.
+    subgraph Runtime["Shared runtime"]
+        Config["Configuration"]
+        Keys["Key derivation"]
+        Context["Context"]
+        Lifecycle["Lifecycle"]
+        Health["Health registry"]
+        Log["Operational log"]
+        Store["Operational store"]
+        Config --&gt;|"master key"| Keys
+        Context --&gt;|"cancellation"| Lifecycle
+    end
+
+    subgraph Gateway["Gateway Service"]
+        HTTP["HTTP listener"]
+        Auth["Authentication"]
+        Registry["Operation registry"]
+        Invocation["Invocation chain"]
+        Replay["Idempotency"]
+        HTTPAdapter["HTTP adapter"]
+        DirectAdapter["Direct adapter"]
+        OpenAPI["OpenAPI emitter"]
+        HTTPAdapter --&gt;|"requests"| HTTP
+        HTTP --&gt;|"credentials"| Auth
+        Auth --&gt;|"caller identity"| Invocation
+        DirectAdapter --&gt;|"internal calls"| Invocation
+        Registry --&gt;|"operation contracts"| Invocation
+        Registry --&gt;|"route contracts"| OpenAPI
+        Invocation --&gt;|"mutation replay"| Replay
+    end
+
+    subgraph ProjectService["Project Service"]
+        Project["Project"]
+        Bindings["Binding set"]
+        Resolution["Binding resolution"]
+        Authorization["Resource authorization"]
+        Custody["Credential custody"]
+        Grants["Acquisition grants"]
+        Verification["Delivery verification"]
+
+        subgraph MissionService["Mission Service"]
+            Graph["Mission graph"]
+            Attempts["Attempts"]
+            Criteria["Validation criteria"]
+            Evidence["Evidence records"]
+            Assessments["Assessment records"]
+            Outcomes["Outcome records"]
+            Objects["External objects"]
+        end
+
+        Project ==&gt;|"owns exactly one"| Graph
+        Project --&gt;|"allocates resources"| Bindings
+        Bindings --&gt;|"configuration"| Resolution
+        Resolution --&gt;|"resolved binding"| Authorization
+        Authorization --&gt;|"authorized use"| Custody
+        Custody --&gt;|"session material"| Grants
+        Custody --&gt;|"verification material"| Verification
+        Graph --&gt;|"pins revision"| Attempts
+        Criteria --&gt;|"assessment basis"| Assessments
+        Evidence --&gt;|"assessment basis"| Assessments
+        Assessments --&gt;|"accepted assessment"| Outcomes
+    end
+
+    subgraph Scheduler["Scheduler Service"]
+        Queue["Work queue"]
+        Processors["Scheduling processors"]
+        Claim["Claim operation"]
+        Executions["Execution records"]
+        Admission["Delivery admission"]
+        Observer["Observer"]
+        Queue --&gt;|"ordered candidates"| Processors
+        Processors --&gt;|"admission recheck"| Claim
+        Claim --&gt;|"claim and lease"| Executions
+        Admission --&gt;|"observation obligation"| Observer
+        Processors --&gt;|"runs"| Observer
+    end
+
+    subgraph Worker["Worker Service"]
+        Templates["Worker templates"]
+        Registration["Registration"]
+        RegistrationHealth["Registration healthcheck"]
+        Pools["Worker instances"]
+        Execution["Execution"]
+        Agents["Native agents"]
+        Prompts["Prompt composer"]
+        Workspace["Workspace"]
+        Memory["Memory"]
+        Model["Model connector"]
+        Repository["Repository connector"]
+        Platform["Platform connector"]
+        Implementations["Platform implementations"]
+        Action["Action performer"]
+        MCP["MCP server"]
+        Templates --&gt;|"instantiates"| Pools
+        Pools --&gt;|"hosts"| Execution
+        Registration --&gt;|"registered identity"| Execution
+        Execution --&gt;|"runs"| Agents
+        Prompts --&gt;|"composed prompt"| Agents
+        Execution --&gt;|"owns"| Workspace
+        Execution --&gt;|"owns"| Memory
+        Agents --&gt;|"inference"| Model
+        Execution --&gt;|"network git"| Repository
+        MCP --&gt;|"permitted reads"| Platform
+        MCP --&gt;|"external reviewer tool"| Action
+        Action --&gt;|"platform actions"| Platform
+        Action --&gt;|"network git"| Repository
+        Platform --&gt;|"selects"| Implementations
+    end
+
+    subgraph Intake["Intake Service"]
+        Subscriptions["Subscriptions"]
+        Reconciler["Reconciler"]
+        Webhook["Webhook acquisition"]
+        Poll["Poll acquisition"]
+        Stream["Stream acquisition"]
+        Deliveries["Delivery store"]
+        Handoff["Delivery handoff"]
+        Subscriptions --&gt;|"desired state"| Reconciler
+        Reconciler --&gt;|"reconciles"| Webhook
+        Reconciler --&gt;|"reconciles"| Poll
+        Reconciler --&gt;|"reconciles"| Stream
+        Webhook --&gt;|"verified delivery"| Deliveries
+        Poll --&gt;|"batch and checkpoint"| Deliveries
+        Stream --&gt;|"verified message"| Deliveries
+        Deliveries --&gt;|"unresolved delivery"| Handoff
+    end
+
+    subgraph Tracking["Tracking Service"]
+        Tracer["Tracer"]
+        SpanProcessor["Span processor"]
+        Exporter["Exporter"]
+        Ingestion["Telemetry ingestion"]
+        Retention["Retention sweep"]
+        Tracer --&gt;|"spans"| SpanProcessor
+        SpanProcessor --&gt;|"exports"| Exporter
+    end
+
+    subgraph Persistence["Persistence"]
+        OperationalDB[("kanthord.db")]
+        TrackingDB[("tracking.db")]
+        ConfigFiles["Configuration files"]
+        StateFiles["State files"]
+        Cache["Cache"]
+    end
+
+    Keys --&gt;|"signing key"| Auth
+    Store --&gt;|"owns connection"| OperationalDB
+    ConfigFiles --&gt;|"validated at startup"| Config
+    Log --&gt;|"file destination"| StateFiles
+    Invocation --&gt;|"project operations"| Project
+    Invocation --&gt;|"mission operations"| Graph
+    Invocation --&gt;|"work pulls"| Processors
+    Invocation --&gt;|"registration"| Registration
+    Invocation --&gt;|"MCP transport"| MCP
+    Invocation --&gt;|"delivery routes"| Webhook
+    Invocation --&gt;|"telemetry operations"| Ingestion
+    Graph --&gt;|"atomic insert / delete"| Queue
+    Claim --&gt;|"atomic node transition"| Graph
+    Authorization --&gt;|"prove live claim"| Executions
+    Resolution --&gt;|"worker declarations"| Templates
+    Pools --&gt;|"work pulls"| Processors
+    Execution --&gt;|"renew / release"| Executions
+    Claim --&gt;|"healthcheck"| RegistrationHealth
+    RegistrationHealth --&gt;|"effective configuration"| Resolution
+    RegistrationHealth --&gt;|"live registrations"| Registration
+    Claim --&gt;|"binding limits"| Bindings
+    Templates --&gt;|"compatibility"| Claim
+    Attempts --&gt;|"policy snapshot"| Bindings
+    Model --&gt;|"resolve resource"| Resolution
+    Repository --&gt;|"resolve resource"| Resolution
+    Platform --&gt;|"resolve resource"| Resolution
+    Execution --&gt;|"submits"| Evidence
+    Execution --&gt;|"reviewer submits"| Assessments
+    Action --&gt;|"requires passing assessment"| Assessments
+    Action --&gt;|"records request"| Objects
+    Handoff --&gt;|"at-least-once admission"| Admission
+    Webhook --&gt;|"verify before storage"| Verification
+    Reconciler --&gt;|"acquisition material"| Grants
+    Observer --&gt;|"authorized object reads"| Platform
+    Observer --&gt;|"accepted observation"| Objects
+    Objects --&gt;|"completion facts"| Outcomes
+    Exporter --&gt;|"persists"| TrackingDB
+    Ingestion --&gt;|"imports"| TrackingDB
+    Retention --&gt;|"expires telemetry"| TrackingDB
+
+    classDef focal fill:#fbe9e0,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
+    classDef component fill:#ffffff,stroke:#4f5d75,color:#2d3142;
+    classDef shared fill:#ececec,stroke:#7a8399,color:#2d3142;
+    class Project,Graph focal;
+    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,RegistrationHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion,Retention component;
+    class Config,Keys,Context,Lifecycle,Health,Log,Store,OperationalDB,TrackingDB,ConfigFiles,StateFiles,Cache shared;
+    style Runtime fill:#ececec,stroke:#bfc0c0,color:#2d3142
+    style Gateway fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style ProjectService fill:#f5f5f5,stroke:#4f5d75,color:#2d3142
+    style MissionService fill:#fbe9e0,stroke:#eb6c36,color:#2d3142
+    style Scheduler fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style Worker fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style Intake fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style Tracking fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style Persistence fill:#ececec,stroke:#bfc0c0,color:#2d3142
+</pre>
+          <p>
+            <strong>Legend:</strong> Service containers establish component
+            ownership. White nodes are components or domain records; gray nodes
+            are shared infrastructure or persistence. Orange identifies the
+            mandatory Project–Mission composition. Cylinders are database files.
+            Arrow labels state relationships; they do not imply shared authority
+            or one transaction unless explicitly marked atomic.
+          </p>
+          <p>
+            <strong>Coverage:</strong> The diagram expands the major
+            architectural components rather than listing responsibilities inside
+            service boxes. Repeated cross-cutting edges are omitted: services
+            use Context, lifecycle, health, logging and the store; all services
+            produce telemetry; every resource connector resolves and authorizes
+            its operation through Project. External systems and execution hosts
+            are not drawn.
+          </p>
+          <h2 id="interfaces-that-determine-implementation-order">
+            Interfaces that determine implementation order
+          </h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Consumer</th>
+                  <th>Provider</th>
+                  <th>Required contract</th>
+                  <th>Build consequence</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Project creation</td>
+                  <td>Intrinsic Mission</td>
+                  <td>
+                    Exactly one mission per project, created through
+                    <code>createMission</code> in Project&#39;s transaction.
+                  </td>
+                  <td>
+                    Build Project creation and Mission creation as one atomic
+                    slice; initialize an empty mission at revision 0.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Project binding resolution</td>
+                  <td>Worker templates</td>
+                  <td>
+                    Worker name, declared states, node format, agents and valid
+                    configuration.
+                  </td>
+                  <td>
+                    Publish template declarations early; full worker execution
+                    is not required to validate a binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Gateway authentication</td>
+                  <td>Project bindings and Worker registration</td>
+                  <td>
+                    Resolve a permitted binding and its live client
+                    registration.
+                  </td>
+                  <td>
+                    Gateway&#39;s transport can exist first; working machine
+                    authentication needs these collaborators.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission graph/state</td>
+                  <td>Scheduler work queue</td>
+                  <td>
+                    Insert/delete affected jobs inside the committing
+                    transaction.
+                  </td>
+                  <td>
+                    Mission transitions and queue membership form one atomic
+                    implementation slice.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Scheduler claim operation</td>
+                  <td>Mission, Project and Worker</td>
+                  <td>
+                    Node readiness, attempt/revision transition, binding counts,
+                    compatibility and instance health.
+                  </td>
+                  <td>
+                    Use narrow contracts and test doubles first; integrate the
+                    real collaborators before admitting production claims.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Project authorization</td>
+                  <td>Scheduler execution records</td>
+                  <td>
+                    Prove claim ownership and liveness before authorizing
+                    resource use.
+                  </td>
+                  <td>
+                    Execution-scoped resource authorization follows the claim
+                    model, not merely JWT authentication.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker execution</td>
+                  <td>Scheduler and Mission</td>
+                  <td>
+                    Claim/release; read pinned work; submit evidence and
+                    assessments.
+                  </td>
+                  <td>
+                    Implement one minimal execution path before adding more
+                    worker methods.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Model/repository/platform connectors</td>
+                  <td>Project resolution and custody</td>
+                  <td>
+                    Resolve the binding, authorize use and consult protected
+                    credential material.
+                  </td>
+                  <td>
+                    A connector cannot treat possession of a token or a prompt
+                    as permission.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Action performer</td>
+                  <td>Scheduler, Mission and connectors</td>
+                  <td>
+                    Live evaluation claim, passing assessment, required actions,
+                    evidence operands and external-object reconciliation.
+                  </td>
+                  <td>
+                    Repository actions follow claim and assessment contracts;
+                    they are not arbitrary agent tools.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Intake acquisition</td>
+                  <td>Project verification and grants</td>
+                  <td>
+                    Verify a delivery; acquire and revoke session-scoped
+                    acquisition material.
+                  </td>
+                  <td>
+                    Intake cannot acknowledge an unverified or unstored
+                    webhook/stream delivery.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Intake handoff</td>
+                  <td>Scheduler delivery admission</td>
+                  <td>
+                    Durable, idempotent acceptance and an explicit disposition.
+                  </td>
+                  <td>
+                    Implement admission and interrupted-handoff recovery before
+                    turning on live acquisition.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Scheduler observer</td>
+                  <td>Repository and Mission</td>
+                  <td>
+                    Decode deliveries, read external objects and submit
+                    observations.
+                  </td>
+                  <td>
+                    Observer integration needs platform reads; it does not need
+                    a worker instance or an LLM.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Service telemetry</td>
+                  <td>Tracking interface</td>
+                  <td>
+                    Trace/span production without influencing business results.
+                  </td>
+                  <td>
+                    Services call the interface only; the storage and the
+                    retention stay independent of the services.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="component-boundaries-that-must-remain-explicit">
+            Component boundaries that must remain explicit
+          </h2>
+          <ul>
+            <li>
+              <strong>Project and Mission:</strong> Mission is mandatory project
+              content. Bindings allocate independently existing resources, never
+              the mission. Mission continues to own its record schemas and
+              operations.
+            </li>
+            <li>
+              <strong>Graph and records:</strong> The Mission graph holds nodes
+              and their dependency edges. An <code>implement</code> node holds
+              its tasks. Revisions, attempts, criteria, evidence, external
+              objects, assessments and outcomes remain distinct records. Only
+              nodes are scheduled; tasks run inside an execution.
+            </li>
+            <li>
+              <strong>Queue and claim:</strong> Queue order suggests work. The
+              atomic claim operation rechecks admission and creates the
+              execution record and lease. A waiting node holds no job and keeps
+              no instance busy.
+            </li>
+            <li>
+              <strong>Registration and claim:</strong> Worker owns runtime
+              identities and registration heartbeat. Scheduler owns execution
+              claims and leases. Neither a registration nor a healthcheck is a
+              claim.
+            </li>
+            <li>
+              <strong>Agents and tools:</strong> The prompt composer provides
+              instructions, not permissions. Native agents use model and
+              repository connectors; MCP exposes permitted platform reads and
+              the controlled action tool for external reviewers.
+            </li>
+            <li>
+              <strong>Acquisition and interpretation:</strong> Intake owns
+              webhook/poll/stream transport. [Repository platform
+              implementations][repository-platform] decode platform payloads.
+              Scheduler admission owns their business effects.
+            </li>
+            <li>
+              <strong>Evidence and telemetry:</strong> Mission evidence supports
+              assessment. Tracking telemetry explains behavior and expires at
+              the end of its retention. Operational logs are a third, separate
+              facility.
+            </li>
+          </ul>
+          <h2 id="persistence-and-deployment">Persistence and deployment</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Ownership and location</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Operational store</td>
+                  <td>
+                    Owns the SQLite connection, exclusive lock and migration
+                    runner for <code>kanthord.db</code>. Services own their
+                    tables; peers call interfaces rather than reading peer
+                    tables.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Credential custody</td>
+                  <td>
+                    Custody owns credential access, and the service that owns
+                    the entity of a release authorizes it. Its protected records
+                    use authenticated encryption derived from the
+                    installation&#39;s master key. Credentials are not evidence
+                    or telemetry.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Delivery store</td>
+                  <td>
+                    Intake owns <code>intake_inbound</code> and
+                    <code>intake_inbound_event</code> in
+                    <code>kanthord.db</code>, under
+                    <a href="../reference/erd/03-integration.html">ERD 3</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Tracking store</td>
+                  <td>
+                    Tracking owns <code>tracking.db</code>, independent
+                    migrations and telemetry retention. The server opens
+                    <code>tracking.db</code> at every start.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Configuration files</td>
+                  <td>
+                    The XDG configuration directory holds
+                    <code>kanthord.yaml</code> and client <code>cli.yaml</code>.
+                    The server never reads the client configuration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>State files</td>
+                  <td>
+                    The XDG state directory holds operational logs and execution
+                    workspaces. A native worker&#39;s workspace lives on its
+                    execution host.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Cache</td>
+                  <td>
+                    Rebuildable artifacts belong here. The current server
+                    creates no cache files.
+                  </td>
+                </tr>
+                <tr>
+                  <td>External telemetry capture</td>
+                  <td>
+                    Harness extensions own their local capture logs, segments
+                    and ingestion cursors. These are not server-side Tracking
+                    components.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <strong>No distributed transaction is implied.</strong> Ordinary
+            operations commit their own work. Project–Mission creation and
+            Mission–Scheduler state/queue collaborations explicitly share
+            synchronous transactions to preserve their invariants. Remote
+            effects cannot commit atomically with SQLite.
+          </p>
+          <p>
+            <strong>No service split is implied.</strong> All seven services
+            target one server process. The platform connector, action performer
+            and MCP server stay server-side. Native model/repository calls can
+            run on a trusted worker host after the required authorization and
+            credential handover.
+          </p>
+          <p>
+            Read <a href="healthchecks.html">healthchecks</a> for diagnostics.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>

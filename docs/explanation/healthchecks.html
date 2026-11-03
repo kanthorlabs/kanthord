@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How healthchecks work · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li>
+            <a href="#from-request-to-combined-report"
+              >From request to combined report</a
+            >
+          </li>
+          <li>
+            <a href="#how-services-collect-component-health"
+              >How services collect component health</a
+            >
+          </li>
+          <li><a href="#read-the-whole-report">Read the whole report</a></li>
+          <li>
+            <a href="#one-failure-does-not-hide-the-others"
+              >One failure does not hide the others</a
+            >
+          </li>
+          <li>
+            <a href="#fresh-observations-not-an-atomic-snapshot"
+              >Fresh observations, not an atomic snapshot</a
+            >
+          </li>
+          <li>
+            <a href="#reporting-is-not-recovery">Reporting is not recovery</a>
+          </li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="how-healthchecks-work">How healthchecks work</h1>
+          <p>
+            A listening HTTP server does not prove that its database or other
+            dependencies work. KanthorD&#39;s liveness read collects component
+            reports and returns a combined view. The
+            <a href="../reference/gateway/liveness.html">liveness reference</a>
+            defines requests, response examples, status codes, and timeouts. The
+            <a href="../reference/gateway/healthcheck.html"
+              >resource healthcheck</a
+            >
+            is a separate read that checks remote resources, such as
+            repositories and credentials.
+          </p>
+          <h2 id="from-request-to-combined-report">
+            From request to combined report
+          </h2>
+          <ol>
+            <li>
+              <strong>Register.</strong> During construction or start, each
+              service registers a health callback with the shared
+              <code>HealthRegistry</code>.
+            </li>
+            <li>
+              <strong>Collect.</strong> A monitor requests
+              <code>GET /api/liveness</code>. Once Gateway admits the request,
+              the registry snapshots the registered callbacks and starts them
+              concurrently.
+            </li>
+            <li>
+              <strong>Inspect.</strong> Each service checks its own components
+              and returns a component map. These are in-process calls, not HTTP
+              requests to other services.
+            </li>
+            <li>
+              <strong>Respond.</strong> The registry preserves every
+              service&#39;s result. Gateway returns HTTP <code>200</code> only
+              when at least one service reports and every component is healthy;
+              otherwise it returns HTTP <code>503</code> with the complete
+              report.
+            </li>
+          </ol>
+          <p>
+            The rightmost lifeline groups the independent service probes, not a
+            single service. Gateway&#39;s HTTP handling and its component probe
+            appear separately to distinguish their roles. The component checks
+            are expanded in the next diagram.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "labelBoxBkgColor": "#ececec", "labelBoxBorderColor": "#bfc0c0", "labelTextColor": "#2d3142", "loopTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "&amp; { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
+sequenceDiagram
+    accTitle: KanthorD healthcheck collection
+    accDescr: Gateway asks the shared health registry to collect concurrent reports from every registered service, then returns a complete healthy or unhealthy response.
+    autonumber
+    participant M as Monitor
+    participant G as Gateway endpoint
+    participant R as HealthRegistry
+    participant S as Registered&lt;br/&gt;services
+
+    M-&gt;&gt;G: GET /api/liveness
+    G-&gt;&gt;R: check(request context)
+    R-&gt;&gt;R: Snapshot registered probes
+    rect rgb(251, 234, 225)
+        Note over R,S: Start all probes concurrently&lt;br/&gt;Each has a 5-second deadline
+        R-&gt;&gt;S: Invoke each registered healthcheck
+        activate S
+        S--&gt;&gt;R: Per-service component maps&lt;br/&gt;component name → 200 or 503
+        deactivate S
+        Note over R,S: Throw, rejection, invalid or empty map, timeout:&lt;br/&gt;use {healthcheck: 503} for that service
+    end
+    R--&gt;&gt;G: Complete service map
+    alt Nonempty report, all components healthy
+        G--&gt;&gt;M: HTTP 200&lt;br/&gt;{status: "ok", services: ...}
+    else Any unavailable component or no services
+        G--&gt;&gt;M: HTTP 503 · gateway.liveness.unhealthy&lt;br/&gt;Complete map in error.details
+    end
+</pre>
+          <p>
+            <strong>Palette:</strong> neutral gray identifies participants and
+            messages; orange highlights collection. Solid arrows are calls, and
+            dashed arrows are replies. Color does not indicate health: the
+            component codes do.
+          </p>
+          <h2 id="how-services-collect-component-health">
+            How services collect component health
+          </h2>
+          <p>
+            The <code>server</code> probe illustrates nested collection. It asks
+            Gateway for a component report, reduces that report to one
+            <code>gateway</code> status, then checks SQLite and the operational
+            log. This diagram shows a running server; Gateway&#39;s internal
+            state checks are summarized, and its database accesses are grouped.
+          </p>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "&amp; { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
+sequenceDiagram
+    accTitle: Server and Gateway component healthchecks
+    accDescr: Server obtains Gateway component health, summarizes it, probes SQLite and the log descriptor, and returns three component statuses to the registry.
+    autonumber
+    participant R as HealthRegistry
+    participant S as Server
+    participant G as Gateway
+    participant D as SQLite store
+    participant L as Operational log
+
+    R-&gt;&gt;S: healthcheck()
+    S-&gt;&gt;G: healthcheck()
+    Note over G: Check listener, authentication,&lt;br/&gt;idempotency, registry, invocation
+    G-&gt;&gt;D: Authentication: read token denylist&lt;br/&gt;Invocation: store health query
+    D--&gt;&gt;G: Query results or failures
+    G--&gt;&gt;S: Five component statuses
+    rect rgb(251, 234, 225)
+        S-&gt;&gt;S: Summarize Gateway map:&lt;br/&gt;all 200 → 200, otherwise 503
+    end
+    S-&gt;&gt;D: store.healthcheck()&lt;br/&gt;SELECT ? AS ok
+    D--&gt;&gt;S: Query succeeds with expected value?&lt;br/&gt;true / false
+    S-&gt;&gt;L: log.healthcheck()&lt;br/&gt;Check descriptor with fstat
+    L--&gt;&gt;S: Descriptor is open and accessible?&lt;br/&gt;true / false
+    S--&gt;&gt;R: {gateway: 200 or 503,&lt;br/&gt;store: 200 or 503, log: 200 or 503}
+</pre>
+          <p>
+            The registry also calls Gateway&#39;s probe independently to
+            populate <code>gateway</code>. This is not recursion: Gateway&#39;s
+            component probe does not invoke the HTTP endpoint or collect other
+            services&#39; reports.
+          </p>
+          <h2 id="read-the-whole-report">Read the whole report</h2>
+          <p>The current composed server reports ten groups:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Components</th>
+                  <th>What the probe checks</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>server</code></td>
+                  <td>
+                    <code>gateway</code>, <code>store</code>, <code>log</code>
+                  </td>
+                  <td>
+                    Gateway&#39;s aggregate status, a SQLite query, and the log
+                    descriptor.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway</code></td>
+                  <td>
+                    <code>listener</code>, <code>authentication</code>,
+                    <code>idempotency</code>, <code>registry</code>,
+                    <code>invocation</code>
+                  </td>
+                  <td>
+                    Listener readiness, signing-key and denylist access,
+                    in-memory idempotency state, operation registry state, and
+                    invocation/store availability.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>custody</code></td>
+                  <td><code>credential</code></td>
+                  <td>Custody Service lifecycle: started and not stopped.</td>
+                </tr>
+                <tr>
+                  <td><code>scheduler</code></td>
+                  <td><code>queue</code></td>
+                  <td>Scheduler Service lifecycle: started and not stopped.</td>
+                </tr>
+                <tr>
+                  <td><code>worker</code></td>
+                  <td><code>registrations</code></td>
+                  <td>Worker Service lifecycle: started and not stopped.</td>
+                </tr>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td><code>toolchain</code></td>
+                  <td>
+                    The version commands of the required repository tools.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project</code></td>
+                  <td><code>bindings</code></td>
+                  <td>Project Service lifecycle: started and not stopped.</td>
+                </tr>
+                <tr>
+                  <td><code>mission</code></td>
+                  <td><code>operations</code></td>
+                  <td>Mission Service lifecycle: started and not stopped.</td>
+                </tr>
+                <tr>
+                  <td><code>intake</code></td>
+                  <td><code>events</code></td>
+                  <td>
+                    Intake Service dispatcher lifecycle: started and not
+                    stopped.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tracking</code></td>
+                  <td><code>store</code></td>
+                  <td>Tracking Service lifecycle and its SQLite store.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The domain services report lifecycle health, not end-to-end binding
+            resolution, provider reachability, or remote worker-instance health.
+            The endpoint does not poll remote worker applications or external
+            providers. The
+            <a href="../reference/gateway/healthcheck.html"
+              >resource healthcheck</a
+            >
+            checks those resources.
+          </p>
+          <p>
+            The server summary and Gateway details can observe slightly
+            different moments because they run separate probes. Additional
+            services must explicitly register their own health callbacks;
+            registering an API operation alone does not add a health probe. An
+            absent service is not an implicit healthy service.
+          </p>
+          <h2 id="one-failure-does-not-hide-the-others">
+            One failure does not hide the others
+          </h2>
+          <p>
+            An unavailable component makes the overall response unhealthy, but
+            healthy siblings remain in the report. For example, an unavailable
+            log does not erase a healthy database result.
+          </p>
+          <p>
+            A failed probe is different from an unavailable component: the
+            server has no trustworthy component report. It returns a
+            <code>healthcheck: 503</code> marker under that service, rather than
+            guessing which component failed or exposing exception text. An empty
+            report cannot prove health.
+          </p>
+          <h2 id="fresh-observations-not-an-atomic-snapshot">
+            Fresh observations, not an atomic snapshot
+          </h2>
+          <p>
+            Each request collects fresh reports concurrently. The aggregator has
+            no background polling or result cache. Components may change while
+            collection runs, so the combined report is not an atomic snapshot of
+            the whole system.
+          </p>
+          <p>
+            Probe deadlines bound waiting. A client disconnect or server
+            shutdown cancels collection instead of producing a successful
+            report.
+          </p>
+          <h2 id="reporting-is-not-recovery">Reporting is not recovery</h2>
+          <p>
+            A healthcheck does not restart workers, repair logs, reopen
+            databases, or retry work. Before readiness, the Gateway rejects the
+            request without collecting reports. An unreachable listener cannot
+            return diagnostics at all.
+          </p>
+          <p>
+            Treat this endpoint as operational evidence, not proof that a job
+            succeeded or that every proposed service has been implemented.
+          </p>
+          <p>
+            <a href="index.html">Explanations</a> ·
+            <a href="../index.html">Documentation home</a>
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>

@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Error codes · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html" aria-current="true">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#api-failures">API failures</a></li>
+          <li>
+            <a href="#failure-reasons-of-a-health-entry"
+              >Failure reasons of a health entry</a
+            >
+          </li>
+          <li><a href="#cli-diagnostics">CLI diagnostics</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="error-codes">Error codes</h1>
+          <p>
+            Engine-defined error codes use at least three nonempty,
+            dot-separated parts:
+          </p>
+          <pre><code class="language-text">&lt;namespace&gt;.&lt;component&gt;[.&lt;component&gt;...].&lt;error&gt;</code></pre>
+          <ul>
+            <li>
+              The namespace is the owning service name, <code>system</code> for
+              shared server mechanisms, or <code>cli</code> for CLI-local
+              failures.
+            </li>
+            <li>
+              One or more components identify the location, from broadest to
+              most specific.
+            </li>
+            <li>The final part identifies the failure condition.</li>
+            <li>
+              Each part starts with a lower-case ASCII letter and contains
+              lower-case letters or digits, with single underscores between
+              words. Spaces, hyphens, empty parts and trailing dots are invalid.
+            </li>
+            <li>
+              Codes identify fixed conditions, never request values, entity IDs
+              or secrets.
+            </li>
+          </ul>
+          <p>Examples used by the implementation:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>system.config.not_found</code></td>
+                  <td>The server configuration file is absent.</td>
+                </tr>
+                <tr>
+                  <td><code>system.config.version_behind</code></td>
+                  <td>
+                    The configuration version is older than the binary. Run
+                    <code>kanthord upgrade</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.version_ahead</code></td>
+                  <td>The configuration version is newer than the binary.</td>
+                </tr>
+                <tr>
+                  <td><code>system.database.migration.pending</code></td>
+                  <td>
+                    The database has a pending migration. Run
+                    <code>kanthord upgrade</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>system.database.migration.incompatible_history</code>
+                  </td>
+                  <td>
+                    The recorded migration history cannot be applied by this
+                    binary.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>system.database.migration.schema_mismatch</code>
+                  </td>
+                  <td>
+                    The schema of a recorded service differs from its migration
+                    text. Stop the server, delete <code>kanthord.db</code>,
+                    <code>tracking.db</code> and their <code>-wal</code> and
+                    <code>-shm</code> files, then start the server. See the
+                    <a href="upgrade.html#reset-a-pre-release-database"
+                      >reset procedure</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.master_key_mismatch</code></td>
+                  <td>
+                    <code>master_key</code> does not match the database. Restore
+                    the backups.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.context.deadline_exceeded</code></td>
+                  <td>A context&#39;s deadline expired.</td>
+                </tr>
+                <tr>
+                  <td><code>system.config.invalid_yaml</code></td>
+                  <td>
+                    A configuration file, <code>kanthord.yaml</code> or
+                    <code>cli.yaml</code>, is not valid YAML with unique string
+                    keys.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.invalid_mapping</code></td>
+                  <td>
+                    A configuration file is empty or holds no YAML mapping.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.files.invalid_permissions</code></td>
+                  <td>
+                    A private file or directory has the wrong type, owner or
+                    mode. A file needs the mode <code>0600</code>, a directory
+                    the mode <code>0700</code>, and the user of the process as
+                    owner. A symlink is refused. The diagnostic prints the row
+                    <code>path</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.config.invalid</code></td>
+                  <td>
+                    <code>cli.yaml</code> does not match the client schema, for
+                    example with an unknown field or a
+                    <code>master_key</code> field. The diagnostic prints the row
+                    <code>path</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.config.invalid_endpoint</code></td>
+                  <td>Client endpoint validation failed.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.config.invalid_allowed_host</code></td>
+                  <td>
+                    An <code>--gateway-allowed-host</code> value is not a host
+                    with an optional port.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.register.indeterminate</code></td>
+                  <td>The CLI cannot determine the registration result.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.gateway.liveness.indeterminate</code></td>
+                  <td>
+                    <code>kanthord gateway liveness</code> gets no usable HTTP
+                    answer: a refused connection, a transport failure, a
+                    deadline, invalid JSON, a redirect, or an answer other than
+                    <code>200</code> with no error envelope. See
+                    <a href="gateway/liveness.html#cli-shape">liveness</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.http.host_not_allowed</code></td>
+                  <td>
+                    HTTP <code>403</code>. The <code>Host</code> header is
+                    absent or not in <code>gateway.allowed_hosts</code>. The
+                    message is &quot;Host is not allowed. Add it to
+                    gateway.allowed_hosts.&quot; <code>details.host</code> holds
+                    the received <code>Host</code> header in lower case, at most
+                    255 characters, or <code>null</code> when the header is
+                    absent or empty. <code>details.field</code> holds
+                    <code>gateway.allowed_hosts</code>. The answer never lists
+                    the allowed hosts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.authentication.unauthorized</code></td>
+                  <td>Authentication or caller access was rejected.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.registration.stale</code></td>
+                  <td>
+                    The recorded registration has ended and cannot be replayed.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.request.validation_failed</code></td>
+                  <td>Operation input validation failed.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.client.answer_invalid</code></td>
+                  <td>
+                    An answer with the expected status fails the operation
+                    output schema.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.idempotency.conflict</code></td>
+                  <td>The key cannot be replayed for this request.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.routing.not_found</code></td>
+                  <td>No route matches the request.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.openapi.not_found</code></td>
+                  <td>The requested OpenAPI fragment is not allowlisted.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.liveness.unhealthy</code></td>
+                  <td>
+                    HTTP <code>503</code>. A registered service is unavailable,
+                    or no service is registered. <code>details</code> holds the
+                    complete service map. See
+                    <a href="gateway/liveness.html">liveness</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.healthcheck.inventory_failed</code></td>
+                  <td>
+                    HTTP <code>503</code>. A resource owner cannot supply its
+                    inventory. <code>details.missing_inventories</code> names
+                    each owner. See
+                    <a href="gateway/healthcheck.html">resource health</a>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-failures">API failures</h2>
+          <p>HTTP and direct clients use the same failure envelope:</p>
+          <pre><code class="language-json">{
+  "error": {
+    "code": "gateway.authentication.unauthorized",
+    "message": "Authentication required.",
+    "details": null
+  },
+  "request_id": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}</code></pre>
+          <p>
+            A declared failure preserves its originating code, HTTP status and
+            safe details. Unknown exceptions become
+            <code>gateway.invocation.unknown</code> with status
+            <code>500</code> and no exception text or details. A malformed error
+            envelope, including an invalid error code or a request ID outside
+            the <a href="identities.html#request-ids">identity contract</a>,
+            produces an indeterminate client result rather than a declared
+            failure. An answer with the expected status whose body fails the
+            operation output schema produces the declared failure
+            <code>gateway.client.answer_invalid</code> with the received status.
+          </p>
+          <p>
+            A request with a <code>Host</code> header outside
+            <code>gateway.allowed_hosts</code> gets this answer:
+          </p>
+          <pre><code class="language-json">{
+  "error": {
+    "code": "gateway.http.host_not_allowed",
+    "message": "Host is not allowed. Add it to gateway.allowed_hosts.",
+    "details": {
+      "host": "kanthord.example.com",
+      "field": "gateway.allowed_hosts"
+    }
+  },
+  "request_id": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}</code></pre>
+          <p>
+            To accept the host, add it to <code>gateway.allowed_hosts</code> in
+            <code>kanthord.yaml</code>, or create the file with
+            <code>kanthord config init --gateway-allowed-host &lt;host&gt;</code
+            >. Then restart the server.
+          </p>
+          <p>
+            Responses and OpenAPI use the same error-code format. Bare uppercase
+            codes are not accepted; there are no legacy aliases.
+          </p>
+          <h2 id="failure-reasons-of-a-health-entry">
+            Failure reasons of a health entry
+          </h2>
+          <p>
+            A health entry is the object
+            <code>{ status, capability, failure_reason }</code>. The
+            <a href="gateway/healthcheck.html">resource healthcheck</a>, the
+            <a
+              href="project/binding.html#project-binding-verify-and-project-binding-check"
+              >binding verify and check</a
+            >
+            and the credential <code>verify</code> and <code>check</code> answer
+            it. <code>details.failure_reason</code> of
+            <code>project.bindings.repository.ssh_unreachable</code> carries the
+            same values.
+          </p>
+          <p>
+            <code>failure_reason</code> is <code>null</code> if and only if
+            <code>status</code> is <code>healthy</code>. Every entry that is not
+            healthy carries a value. A failure with no reported cause carries
+            <code>unclassified</code>. A check of any kind that exceeds its
+            deadline reports <code>unknown</code> with
+            <code>deadline_exceeded</code>. A cancel by the caller is not a
+            deadline.
+          </p>
+          <p>
+            A failure reason is not an error code. It is a value of one closed
+            list:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Value</th>
+                  <th>Kind</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>address_invalid</code></td>
+                  <td>git</td>
+                  <td>
+                    The repository address host is outside the SSH host set of
+                    the platform. No read runs.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_key_unknown</code></td>
+                  <td>git</td>
+                  <td>
+                    The repository host holds no
+                    <a href="repository/host-key.html">host key pin</a>, or ssh
+                    does not accept its host key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_key_changed</code></td>
+                  <td>git</td>
+                  <td>
+                    The repository host presented a key other than its pin. It
+                    can mean an interception.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>key_refused</code></td>
+                  <td>git</td>
+                  <td>The repository host refuses the SSH key.</td>
+                </tr>
+                <tr>
+                  <td><code>repository_not_found</code></td>
+                  <td>git</td>
+                  <td>
+                    The repository host does not find the repository, or the key
+                    has no access to it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>host_unreachable</code></td>
+                  <td>git</td>
+                  <td>ssh cannot resolve or reach the repository host.</td>
+                </tr>
+                <tr>
+                  <td><code>identity_unavailable</code></td>
+                  <td>git</td>
+                  <td>
+                    The server cannot load the
+                    <a href="repository/ssh-key.html">SSH key</a>: a legacy
+                    <code>ssh</code> credential, a key that does not parse, or
+                    an SSH agent that does not start or load.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>deadline_exceeded</code></td>
+                  <td>all</td>
+                  <td>
+                    A check or a git read exceeds its deadline, or the report
+                    deadline ends before the check ends. The remote host or
+                    service answers too slowly or not at all, or the server runs
+                    too many checks.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>held_by_instance</code></td>
+                  <td>none</td>
+                  <td>
+                    Only worker instances hold live copies of the LLM
+                    credential, so the server holds no secret to check. No read
+                    runs. See
+                    <a href="llm/credential.html#instance-copies"
+                      >instance copies</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unauthorized</code></td>
+                  <td>HTTP</td>
+                  <td>
+                    The remote answers <code>401</code>, the
+                    <a href="llm/credential.html#oauth-refresh"
+                      >OAuth refresh</a
+                    >
+                    fails, or a stored OAuth access token that the check cannot
+                    refresh expires within 5 minutes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>forbidden</code></td>
+                  <td>HTTP</td>
+                  <td>The remote answers <code>403</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>rate_limited</code></td>
+                  <td>HTTP</td>
+                  <td>The remote answers <code>429</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>invalid_response</code></td>
+                  <td>HTTP</td>
+                  <td>
+                    The remote answers another status, or a body that the check
+                    cannot read.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unreachable</code></td>
+                  <td>HTTP</td>
+                  <td>The request fails before an HTTP answer.</td>
+                </tr>
+                <tr>
+                  <td><code>unclassified</code></td>
+                  <td>all</td>
+                  <td>Any other failure.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The same value can map to a different status for each check. For
+            example, <code>rate_limited</code> is <code>unhealthy</code> for a
+            <code>github</code> credential and <code>unknown</code> for an
+            <code>s3</code> credential. Each check page states its own mapping:
+            <a href="project/binding.html#failure-reasons-of-the-address-entry"
+              >project binding</a
+            >,
+            <a href="llm/credential.html#check-and-verify-answer"
+              >LLM credential</a
+            >,
+            <a href="repository/credential.html#verify-and-check"
+              >repository credential</a
+            >
+            and
+            <a href="storage/credential.html#verify-and-check"
+              >storage credential</a
+            >. No answer holds remote text. The server log keeps the redacted
+            remote text under <code>reason</code>.
+          </p>
+          <h2 id="cli-diagnostics">CLI diagnostics</h2>
+          <p>
+            Safe diagnostics print <code>&lt;code&gt;: &lt;message&gt;</code> to
+            standard error and exit nonzero. Line 1 starts with the code, and
+            the message holds no value. Each value goes to its own
+            <code>name: value</code> row after line 1. A remote declared failure
+            retains its API code. The CLI reports safe local context and does
+            not display the remote message.
+          </p>
+          <p>
+            The rows after line 1 align with each other. Line 1 takes no part in
+            the alignment. A row name is lower snake_case.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>status</code></td>
+                  <td>HTTP status of a declared remote failure.</td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td>
+                    Idempotency key of a mutation. The operator uses it to
+                    retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>command</code></td>
+                  <td>Command that the operator runs next.</td>
+                </tr>
+                <tr>
+                  <td><code>config</code></td>
+                  <td>Configuration path of a configuration failure.</td>
+                </tr>
+                <tr>
+                  <td><code>database</code></td>
+                  <td>Database path of a <code>master_key</code> mismatch.</td>
+                </tr>
+                <tr>
+                  <td><code>path</code></td>
+                  <td>
+                    File path of a file, client configuration or database
+                    failure.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>key</code></td>
+                  <td>JSON key that the file repeats.</td>
+                </tr>
+                <tr>
+                  <td><code>option</code></td>
+                  <td>Option that the command receives more than once.</td>
+                </tr>
+                <tr>
+                  <td><code>field</code></td>
+                  <td>
+                    Configuration field that holds an invalid or missing value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>old_key</code></td>
+                  <td>Old configuration key of a rename conflict.</td>
+                </tr>
+                <tr>
+                  <td><code>new_key</code></td>
+                  <td>New configuration key of a rename conflict.</td>
+                </tr>
+                <tr>
+                  <td><code>config_version</code></td>
+                  <td>Configuration version that the file holds.</td>
+                </tr>
+                <tr>
+                  <td><code>supported_version</code></td>
+                  <td>Configuration version of the binary.</td>
+                </tr>
+                <tr>
+                  <td><code>bind</code></td>
+                  <td>Listener address that the gateway cannot bind.</td>
+                </tr>
+                <tr>
+                  <td><code>port</code></td>
+                  <td>Listener port that the gateway cannot bind.</td>
+                </tr>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>Package version of the worker.</td>
+                </tr>
+                <tr>
+                  <td><code>server_version</code></td>
+                  <td>Package version that the server publishes.</td>
+                </tr>
+                <tr>
+                  <td><code>tool_version</code></td>
+                  <td>Version of a repository tool.</td>
+                </tr>
+                <tr>
+                  <td><code>minimum_version</code></td>
+                  <td>
+                    Lowest repository tool version that the binary accepts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>variables</code></td>
+                  <td>
+                    Directory variables of a worker thread that hold no absolute
+                    path.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tool</code></td>
+                  <td>
+                    Repository tool or pi tool that cannot run or install.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>target</code></td>
+                  <td>Host target that the pi tool manifest does not hold.</td>
+                </tr>
+                <tr>
+                  <td><code>license</code></td>
+                  <td>License file of a pi tool that has no source.</td>
+                </tr>
+                <tr>
+                  <td><code>exit_status</code></td>
+                  <td>Exit status of a tool that exits with an error.</td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td>Reason that a pi tool cannot install or run.</td>
+                </tr>
+                <tr>
+                  <td><code>step</code></td>
+                  <td>Step of the SSH agent of an operation that fails.</td>
+                </tr>
+                <tr>
+                  <td><code>details</code></td>
+                  <td>
+                    Compact JSON of the <code>details</code> of the error body.
+                    The row is absent for <code>null</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A read prints <code>&lt;code&gt;: request failed</code> and the row
+            <code>status</code>. A mutation prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status</code> and <code>idempotency_key</code>.
+            <code>gateway verify</code>, <code>worker register</code> and
+            <code>worker handover</code> put the command name before
+            <code>request failed</code>.
+          </p>
+          <pre><code class="language-text">credential.name.conflict: request failed
+status:          409
+idempotency_key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
+details:         {"id":"credential_01K6ZB3Q8X2M4N5P6R7S8T9V0W"}</code></pre>
+          <p>
+            A transport failure, a timeout or a malformed answer is
+            indeterminate. A mutation prints
+            <code
+              >&lt;code&gt;: the result is unknown; retry with the same
+              idempotency key</code
+            >
+            and the row <code>idempotency_key</code>. A read prints
+            <code>&lt;code&gt;: the result is unknown; retry the command</code>.
+            A scheduler release prints
+            <code
+              >&lt;code&gt;: the result is unknown; read the execution before
+              any retry</code
+            >
+            and the row <code>command</code>. The three commands
+            <code>gateway verify</code>, <code>worker register</code> and
+            <code>worker handover</code> also put the command name before the
+            indeterminate message. <code>gateway verify</code> says
+            <code>retry the command</code>. <code>worker register</code> says
+            <code>retry with the same idempotency key</code> and prints the row
+            <code>idempotency_key</code>. <code>worker handover</code> says
+            <code>retry with a new idempotency key</code>, because a repeated
+            handover key conflicts. The handover indeterminate message prints no
+            row.
+          </p>
+          <p>
+            An absent configuration prints
+            <code>&lt;code&gt;: configuration is absent</code> and the rows
+            <code>config</code> and <code>command</code>. A
+            <code>cli.file.*</code> failure that names a path prints the row
+            <code>path</code>. <code>cli.file.duplicate_key</code> prints the
+            row <code>key</code>. <code>cli.file.schema_invalid</code> prints
+            <code>the file does not match the schema</code> and a
+            <code>details</code> row of <code>{path, code}</code> issues.
+            <code>cli.file.not_json</code> and
+            <code>cli.file.invalid_path</code> print no row. A repeated option
+            prints
+            <code>cli.option.duplicate: option may not be repeated</code> and
+            the row <code>option</code>.
+          </p>
+          <p>A system diagnostic puts its values in rows:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Message and rows</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>system.config.version_behind</code></td>
+                  <td>
+                    The message says that the configuration version is older
+                    than the binary. The rows are <code>config_version</code>,
+                    <code>supported_version</code> and
+                    <code>command: kanthord upgrade</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.version_ahead</code></td>
+                  <td>
+                    The message says that the configuration version is newer
+                    than the binary. The rows are
+                    <code>config_version</code> and
+                    <code>supported_version</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.invalid_field</code></td>
+                  <td>
+                    <code>invalid configuration fields</code>, with the issues
+                    as a JSON list in the <code>details</code> row. A bad
+                    <code>version</code> field prints the row
+                    <code>field</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.rename_conflict</code></td>
+                  <td>
+                    The rows are <code>old_key</code> and <code>new_key</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.config.master_key_mismatch</code></td>
+                  <td>
+                    The rows are <code>database</code> and <code>config</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.database.migration.pending</code></td>
+                  <td>
+                    The rows are <code>path</code> and
+                    <code>command: kanthord upgrade</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>system.database.migration.schema_mismatch</code>
+                  </td>
+                  <td>
+                    The message says that the schema of this service differs
+                    from its migration text and names the reset. The rows are
+                    <code>path</code>, <code>service</code> and
+                    <code>object</code>. <code>object</code> is the name of the
+                    first differing schema object, in the order of the type and
+                    then the name.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>system.database.migration.incompatible_history</code>
+                  </td>
+                  <td>
+                    The row is <code>path</code>.
+                    <code>system.database.open_failed</code>,
+                    <code>system.database.initialization_failed</code> and
+                    <code>system.database.backup_failed</code> also print the
+                    row <code>path</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.files.*</code></td>
+                  <td>The row is <code>path</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>gateway.listener.bind_failed</code></td>
+                  <td>
+                    <code>gateway: cannot bind the listener address.</code> The
+                    rows are <code>bind</code> and <code>port</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.version.mismatch</code></td>
+                  <td>
+                    <code
+                      >worker: the package version differs from the server
+                      version.</code
+                    >
+                    The rows are <code>version</code> and
+                    <code>server_version</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.thread.directory_invalid</code></td>
+                  <td>
+                    <code
+                      >worker: the directory variables must be absolute
+                      paths.</code
+                    >
+                    The row is <code>variables</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.slot.init_absent</code></td>
+                  <td>
+                    <code
+                      >slot: no init frame arrived before the deadline.</code
+                    >
+                    No row.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.slot.frame_invalid</code></td>
+                  <td>
+                    <code
+                      >slot: a line of the slot channel is no valid frame.</code
+                    >
+                    The row is <code>reason</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.slot.channel_closed</code></td>
+                  <td>
+                    <code>slot: the slot channel closed.</code> The row is
+                    <code>reason</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.handover.sealed_unopened</code></td>
+                  <td>
+                    <code
+                      >worker: the sealed credential copy cannot be opened with
+                      the instance key.</code
+                    >
+                    No row.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repository.connector.tool_missing</code></td>
+                  <td>
+                    The row is <code>tool</code>. An exit with an error also
+                    prints the row <code>exit_status</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repository.connector.tool_version</code></td>
+                  <td>
+                    <code>tool version is below the minimum version</code>. The
+                    rows are <code>tool</code>, <code>tool_version</code> and
+                    <code>minimum_version</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repository.connector.ssh_agent_failed</code></td>
+                  <td>
+                    <code>&lt;step&gt;: SSH agent failed.</code> The row is
+                    <code>step</code>: <code>directory</code>,
+                    <code>socket_path</code>, <code>files</code>,
+                    <code>agent</code> or <code>load</code>.
+                    <a href="repository/ssh-key.html#the-agent-of-one-operation"
+                      >SSH keys</a
+                    >
+                    states each step.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.start.tool_missing</code></td>
+                  <td>
+                    The row is <code>tool</code>. The rows <code>target</code>,
+                    <code>license</code>, <code>reason</code> and
+                    <code>exit_status</code> name the failed step when it has a
+                    value.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An operational log record that holds a diagnostic as
+            <code>reason</code> also holds its rows as <code>fields</code>, an
+            object of row name to value. The record holds no
+            <code>fields</code> when the diagnostic has no rows.
+          </p>
+          <p>
+            Unexpected exceptions use
+            <code>system.operation.unknown: Operation failed.</code> without
+            disclosing their message or cause.
+          </p>
+          <p>
+            Native and dependency codes, such as <code>ENOENT</code>,
+            Commander&#39;s parser codes and Zod issue codes inside validation
+            details, keep their upstream representation. They are not
+            engine-defined error codes. HTTP statuses, process exit codes and
+            integer health statuses are also separate from this naming rule.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

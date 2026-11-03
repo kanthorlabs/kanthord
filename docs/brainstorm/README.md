@@ -27,6 +27,6 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 
 ## Turning discussion into documentation
 
-Validate a settled decision against source and tests before describing it as implemented. Publish user-facing behavior in [public documentation](../README.md); document engine mechanisms and technical decisions in [engine implementation notes](../../engine/docs/README.md). Do not make either audience depend on this discussion history.
+Validate a settled decision against source and tests before describing it as implemented. Publish user-facing behavior in [public documentation](../index.html); document engine mechanisms and technical decisions in [engine implementation notes](../../engine/docs/README.md). Do not make either audience depend on this discussion history.
 
 “Internal” describes the intended audience and publication policy, not access control. These files remain visible to anyone with repository access. Never put secrets here.

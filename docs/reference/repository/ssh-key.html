@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SSH keys · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="ssh-keys">SSH keys</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            An SSH key is a
+            <a href="credential.html">repository credential</a> of the platform
+            <code>ssh</code>. The server generates the key and keeps it. A
+            repository binding names the credential in
+            <code>ssh_credential</code>. KanthorD uses the key for every network
+            git operation of that binding: the binding apply, check and verify,
+            the clone, fetch and push of a worker, and the
+            <code>git.merge_push</code> action.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fact</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Key type</td>
+                  <td>
+                    ed25519. The server generates the key; no command accepts a
+                    key.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Secret</td>
+                  <td>
+                    <code>{ &quot;private_key&quot; }</code>, an unencrypted
+                    <code>openssh-key-v1</code> text of at most 4096 bytes.
+                    Custody encrypts it with AES-256-GCM in the credential
+                    store. No answer and no log holds it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Metadata</td>
+                  <td>
+                    <code
+                      >{ &quot;public_key&quot;, &quot;fingerprint&quot; }</code
+                    >. The server derives both fields.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>public_key</code></td>
+                  <td>
+                    <code
+                      >ssh-ed25519 &lt;base64&gt; kanthord-&lt;credential
+                      name&gt;</code
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fingerprint</code></td>
+                  <td>
+                    <code>SHA256:</code> and 43 base64 characters: the SHA-256
+                    of the key blob, the form of <code>ssh-keygen -l</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Host</td>
+                  <td>
+                    None. The record names no host. The
+                    <a href="host-key.html">host key pin</a> of the address host
+                    and the deploy key of the repository decide the access.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Entry</td>
+                  <td>
+                    Only <code>ssh-key-create</code> creates an
+                    <code>ssh</code> credential, and only
+                    <code>ssh-key-rotate</code> adds a revision.
+                    <code>list</code>, <code>get</code>, <code>verify</code>,
+                    <code>revoke</code> and <code>archive</code> of
+                    <a href="credential.html">repository credentials</a> apply.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The generic <code>create</code>, <code>rotate</code> and
+            <code>update-metadata</code> of an <code>ssh</code> credential
+            answer <code>400 credential.entry.unsupported</code>. The generic
+            <code>check</code> of the platform <code>ssh</code> answers
+            <code>400 credential.check.unsupported</code>.
+          </p>
+          <h3 id="ssh-key-create">ssh-key-create</h3>
+          <p>
+            <code>ssh-key-create</code> generates a key and stores it as
+            revision 1 of a new <code>ssh</code> credential. The name follows
+            the rule of
+            <a href="credential.html#function-description"
+              >repository credentials</a
+            >. The answer holds the public key and the fingerprint. Custody logs
+            the human identity and the revision identity, never the key.
+          </p>
+          <p>Add the public key to the repository as a deploy key:</p>
+          <ol>
+            <li>
+              In the repository, open Settings &gt; Deploy keys &gt; Add deploy
+              key.
+            </li>
+            <li>Paste the key.</li>
+            <li>Select Allow write access.</li>
+          </ol>
+          <p>
+            One deploy key serves one repository. Create one SSH key for each
+            repository. An account SSH key serves every repository of the
+            account and gives the server write access to all of them.
+          </p>
+          <p>To connect a new repository, do these steps in order:</p>
+          <ol>
+            <li>
+              Create the SSH key with <code>ssh-key-create</code>, or with
+              Create SSH key in the dashboard.
+            </li>
+            <li>
+              Add its public key as a deploy key with write access, as above.
+            </li>
+            <li>
+              Pin the host key of the address host with
+              <a href="host-key.html#pin"><code>host-key pin</code></a
+              >. The dashboard binding sheet pins <code>github.com</code> and
+              <code>ssh.github.com</code> itself.
+            </li>
+            <li>
+              Optional: run
+              <a href="../project/binding.html#project-binding-check"
+                ><code>project binding check</code></a
+              >. Its <code>address</code> entry answers
+              <code>healthy</code> when the host, the pin and the deploy key are
+              correct.
+            </li>
+            <li>
+              Save the repository binding:
+              <a href="../project/binding.html#project-binding-export"
+                >export</a
+              >
+              the binding set, add the binding with the address
+              <code>git@&lt;host&gt;:&lt;owner&gt;/&lt;repository&gt;.git</code>
+              and the credential name in <code>ssh_credential</code>, then
+              <a href="../project/binding.html#project-binding-apply">apply</a>
+              it with the exported version. The dashboard binding sheet does the
+              same with Save.
+            </li>
+          </ol>
+          <p>
+            In the dashboard, open Credentials &gt; Git and select Create SSH
+            key. The sheet asks for the name only. It then shows the public key
+            with Copy, the fingerprint and the deploy key steps.
+          </p>
+          <h3 id="ssh-key-rotate">ssh-key-rotate</h3>
+          <p>
+            <code>ssh-key-rotate</code> generates a new key and inserts the next
+            revision in one transaction. The same transaction drains each older
+            live revision that no live execution pins. A drained revision gets
+            <code>ended_at</code> at once. An execution that pins an older
+            revision keeps that key until the execution ends.
+          </p>
+          <p>
+            Every new operation uses the new key at once. Until the repository
+            holds the new public key as a deploy key, the remote refuses the
+            key. Between steps 1 and 2 below, every network git operation of
+            those bindings fails, and the binding check answers
+            <code>failure_reason</code> <code>key_refused</code>. Keep that
+            window short. Rotate in this order:
+          </p>
+          <ol>
+            <li>Rotate the key and copy the new public key.</li>
+            <li>
+              Add the new public key as a deploy key of each repository that a
+              binding of the credential names. <code>get</code> lists the
+              bindings.
+            </li>
+            <li>Verify each binding.</li>
+            <li>
+              Wait until the older revision shows <code>ended_at</code>. It
+              shows it at once when no live execution pins it, else at the first
+              drain after the last pinning execution ends, for example a
+              <code>get</code> of the credential.
+            </li>
+            <li>Delete the old deploy key at the repository host.</li>
+          </ol>
+          <p>
+            To end a compromised key, rotate it,
+            <a href="credential.html#revoke">revoke</a> the older revision if it
+            is still live, then delete its deploy key. A revoke of a revision
+            that the rotation already drained answers
+            <code>409 credential.revision.ended</code>.
+          </p>
+          <p>
+            In the dashboard, the row of an <code>ssh</code> credential holds
+            <code>Rotate key</code>. The dialog shows the new public key and the
+            bindings of the credential.
+          </p>
+          <h3 id="a-legacy-credential">A legacy credential</h3>
+          <p>
+            A legacy credential is an <code>ssh</code> credential whose newest
+            live revision holds no generated key, for example a credential of
+            the earlier SSH alias model. A binding apply, the handover and every
+            git operation refuse a legacy credential with
+            <code>409 repository.credential.ssh_key_legacy</code> and
+            <code>details.credential</code>. A binding check or verify reports
+            <code>failure_reason</code> <code>identity_unavailable</code> in the
+            <code>address</code> entry. The <code>verify</code> of the
+            credential answers <code>unhealthy</code> with
+            <code>failure_reason</code> <code>identity_unavailable</code>.
+            <code>ssh-key-rotate</code> accepts a legacy credential and replaces
+            it with a generated key. Then add the new deploy key.
+          </p>
+          <h3 id="the-agent-of-one-operation">The agent of one operation</h3>
+          <p>
+            Each network git operation runs its own SSH agent. Steps 2 to 8 run
+            on the server and on a worker host:
+          </p>
+          <ol>
+            <li>
+              The server reads the pinned host key of the address host. For a
+              worker, the execution setup carries it. A host with no pin refuses
+              with <code>409 repository.host_key.unpinned</code> before any
+              process starts.
+            </li>
+            <li>
+              Delete each expired agent directory of the same user. A directory
+              is expired when its deadline lies more than 60 seconds in the past
+              and its socket accepts no connection.
+            </li>
+            <li>
+              Create the directory
+              <code>kd-ssh-&lt;deadline&gt;-&lt;6 characters&gt;</code> in the
+              temporary directory of the host, with mode <code>0700</code>.
+              <code>&lt;deadline&gt;</code> is the deadline in Unix
+              milliseconds, in base 36.
+            </li>
+            <li>
+              Write <code>id.pub</code> (the public key) and
+              <code>known_hosts</code> (the pinned line), each with mode
+              <code>0600</code>. The line is
+              <code>&lt;host&gt; &lt;key&gt;</code> for a host on port 22 and
+              <code>[&lt;host&gt;]:443 &lt;key&gt;</code> for a host on port
+              443; see
+              <a href="host-key.html#function-description">SSH host keys</a>.
+              The directory holds no private key file.
+            </li>
+            <li>
+              Start <code>sh</code>. It starts
+              <code>ssh-agent -D -a &lt;directory&gt;/a</code> and a
+              <code>cat</code> in the background, then waits for the agent.
+              <code>-D</code> stops the agent from forking into a daemon, so it
+              stays a child of <code>sh</code>. KanthorD holds the standard
+              input of <code>cat</code>. When that input closes,
+              <code>cat</code> ends, and the agent stops with
+              <code>SIGTERM</code>. An agent that fails at its start, for
+              example on a bind error, ends <code>sh</code> at once, so the git
+              operation fails at once with
+              <code>repository.connector.ssh_agent_failed</code>. A crash of
+              KanthorD closes the input, so the agent ends at once. KanthorD
+              does not start the agent as its own direct child, because such an
+              agent keeps running after a crash of KanthorD.
+            </li>
+            <li>
+              Wait until the socket of the agent accepts a connection. The agent
+              creates the socket file before it accepts connections, so the file
+              alone does not end the wait. Then load the key through the
+              standard input of <code>ssh-add -t &lt;seconds&gt; -</code>.
+              <code>&lt;seconds&gt;</code> is the remaining deadline of the
+              operation, rounded up, at least 1.
+            </li>
+            <li>
+              Run git with <code>GIT_SSH_COMMAND</code>. The command starts
+              <code>ssh -F none</code> with <code>Port=&lt;port&gt;</code>, the
+              SSH port of the address host from
+              <a href="host-key.html#function-description">the port table</a>,
+              <code>IdentitiesOnly=yes</code>,
+              <code>StrictHostKeyChecking=yes</code>,
+              <code>BatchMode=yes</code>,
+              <code>GlobalKnownHostsFile=/dev/null</code> and the three files of
+              the directory.
+            </li>
+            <li>
+              Remove the key from the agent. Close the standard input of
+              <code>cat</code>, and wait until <code>sh</code> and the agent
+              exit. Delete the directory.
+            </li>
+          </ol>
+          <p>
+            <code>-F none</code> stops the read of
+            <code>~/.ssh/config</code> and <code>/etc/ssh/ssh_config</code>. ssh
+            therefore reads no SSH configuration, no
+            <code>~/.ssh/known_hosts</code> and no default key file of the host
+            user. Every git child of KanthorD also runs without
+            <code>SSH_AUTH_SOCK</code>, <code>SSH_AGENT_PID</code>,
+            <code>GIT_SSH</code> and <code>GIT_SSH_COMMAND</code> of the host.
+            KanthorD reads and writes no file under <code>~/.ssh</code>. These
+            rules cover the git children of KanthorD only. A
+            <code>bash</code> command of an LLM agent keeps the SSH
+            configuration of the host user; see
+            <a href="../../explanation/coder-worker.html#limits"
+              >the agent can use git</a
+            >.
+          </p>
+          <p>
+            A failure of steps 3 to 6 fails the operation with
+            <code>repository.connector.ssh_agent_failed</code>. Its
+            <code>step</code> field names the step, and its cause holds the text
+            of the tool, never the key. A worker execution fails with this
+            diagnostic. A binding operation reports only a
+            <code>failure_reason</code>; see below.
+          </p>
+          <p>
+            The deadline of the operation also covers the agent. When the
+            deadline ends before the agent starts, or before its socket accepts
+            a connection, the operation fails with
+            <code>system.context.deadline_exceeded</code> and starts no git
+            process. A binding check and verify report it in the
+            <code>address</code> entry with <code>failure_reason</code>
+            <code>deadline_exceeded</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>step</code></th>
+                  <th>Cause</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>directory</code></td>
+                  <td>
+                    The directory cannot be created, or its mode is not
+                    <code>0700</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>socket_path</code></td>
+                  <td>
+                    The socket path is longer than 100 bytes, or it holds a
+                    character outside <code>A-Za-z0-9/._-</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>files</code></td>
+                  <td>
+                    <code>id.pub</code> or <code>known_hosts</code> cannot be
+                    written.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent</code></td>
+                  <td>
+                    The agent exits before its socket accepts a connection.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>load</code></td>
+                  <td><code>ssh-add</code> refuses the key.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A binding apply reports this failure as
+            <code>422 project.bindings.repository.ssh_unreachable</code> with
+            <code>details.failure_reason</code>
+            <code>identity_unavailable</code>. A binding check and verify report
+            it in the <code>address</code> entry with the same value.
+          </p>
+          <h3 id="the-temporary-directory-limit">
+            The temporary directory limit
+          </h3>
+          <p>
+            The socket path is the temporary directory, then
+            <code>/kd-ssh-&lt;8 characters&gt;-&lt;6 characters&gt;/a</code>: 25
+            bytes more. <code>ssh-agent</code> fails without a message on a
+            socket path above the <code>sun_path</code> limit of the host, 104
+            bytes on macOS. KanthorD therefore refuses a socket path above 100
+            bytes. A temporary directory path above 75 bytes makes every SSH
+            operation fail with
+            <code>repository.connector.ssh_agent_failed</code>, step
+            <code>socket_path</code>. A binding check or verify then reports
+            <code>failure_reason</code> <code>identity_unavailable</code> in the
+            <code>address</code> entry, while the
+            <code>ssh_credential</code> entry stays <code>healthy</code>. Today
+            the answer and the server log name no step for a binding operation.
+          </p>
+          <p>
+            Node.js takes the temporary directory from <code>TMPDIR</code>, then
+            <code>TMP</code>, then <code>TEMP</code>, else <code>/tmp</code>. It
+            drops a trailing <code>/</code>. To repair a long path, set
+            <code>TMPDIR</code> to a short path such as <code>/tmp</code> for
+            the server or worker process, then restart it. The limit applies to
+            the server host and to each worker host.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            Both commands return HTTP <code>200</code> with a
+            <a href="credential.html#credential-answer">credential answer</a>.
+            The CLI writes the same object as one JSON line to stdout, adds
+            <code>idempotency_key</code> and exits <code>0</code>.
+          </p>
+          <pre><code class="language-json">{
+  "name": "deploy-api",
+  "platform": "ssh",
+  "revisions": [
+    {
+      "id": "credential_01M34JC4BJ66JHP41M4MYY6PST",
+      "revision": 1,
+      "metadata": {
+        "public_key": "ssh-ed25519 &lt;base64&gt; kanthord-deploy-api",
+        "fingerprint": "SHA256:&lt;43-base64-characters&gt;"
+      },
+      "created_at": 1791441600000,
+      "ended_at": null
+    }
+  ],
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>Credential name.</td>
+                </tr>
+                <tr>
+                  <td><code>platform</code></td>
+                  <td>string</td>
+                  <td>Always <code>ssh</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>revisions</code></td>
+                  <td>array</td>
+                  <td>Every revision, newest first.</td>
+                </tr>
+                <tr>
+                  <td><code>revisions[].metadata.public_key</code></td>
+                  <td>string</td>
+                  <td>Public key of the revision. Add it as a deploy key.</td>
+                </tr>
+                <tr>
+                  <td><code>revisions[].metadata.fingerprint</code></td>
+                  <td>string</td>
+                  <td><code>SHA256:</code> fingerprint of the public key.</td>
+                </tr>
+                <tr>
+                  <td><code>revisions[].ended_at</code></td>
+                  <td>integer or <code>null</code></td>
+                  <td>
+                    End time in Unix milliseconds; <code>null</code> while it is
+                    live.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only; key of the request, for a retry.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The other revision properties are those of the
+            <a href="credential.html#credential-answer">credential answer</a>.
+            After a rotation, <code>revisions</code> holds the new revision
+            first. An older revision that no live execution pins shows
+            <code>ended_at</code>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Both</td>
+                  <td>
+                    The body is not <code>{ &quot;name&quot; }</code> or
+                    <code>{ &quot;expected_revision&quot; }</code> with a
+                    positive integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>Both</td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>Both</td>
+                  <td>The body is not <code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>Both</td>
+                  <td>The body exceeds 1 KiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>Both</td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>Both</td>
+                  <td>The key cannot be replayed for this request.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>Both</td>
+                  <td>
+                    The 30-second operation timeout expired; the write can still
+                    complete.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.input.invalid</code></td>
+                  <td><code>ssh-key-create</code></td>
+                  <td>
+                    The name breaks the name rule or is reserved:
+                    <code>login</code>, <code>platform</code>,
+                    <code>check</code> or <code>ssh</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.name.conflict</code></td>
+                  <td><code>ssh-key-create</code></td>
+                  <td>
+                    The name is taken, also by an archived credential;
+                    <code>details.id</code> holds the newest revision identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.name.platform_conflict</code></td>
+                  <td><code>ssh-key-create</code></td>
+                  <td>
+                    A worker instance holds an LLM copy of the name.
+                    <code>details.platform</code> holds its platform.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 credential.credential.not_found</code></td>
+                  <td><code>ssh-key-rotate</code></td>
+                  <td>
+                    The name is unknown, or its platform belongs to another
+                    component.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.credential.archived</code></td>
+                  <td><code>ssh-key-rotate</code></td>
+                  <td>The credential is archived.</td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.revision.conflict</code></td>
+                  <td><code>ssh-key-rotate</code></td>
+                  <td>
+                    <code>expected_revision</code> is not the newest live
+                    revision; <code>details.revision</code> holds it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.entry.unsupported</code></td>
+                  <td><code>ssh-key-rotate</code></td>
+                  <td>
+                    The credential is not an <code>ssh</code> credential, for
+                    example a <code>github</code> credential.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI exits <code>1</code> for every failure and writes a
+            diagnostic line <code>&lt;code&gt;: &lt;message&gt;</code> to
+            stderr, as
+            <a href="credential.html#failures">repository credentials</a>
+            states.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.repository.credential.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>Both</td>
+                  <td>
+                    The resolved token is absent or blank. The CLI sends no
+                    request.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.repository.credential.&lt;command&gt;.indeterminate</code
+                    >
+                  </td>
+                  <td>Both</td>
+                  <td>
+                    Transport failure, timeout or malformed response; retry with
+                    the key.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.repository.credential.ssh_key_rotate.invalid_revision</code
+                    >
+                  </td>
+                  <td><code>ssh-key-rotate</code></td>
+                  <td>
+                    <code>--expected-revision</code> is not a positive safe
+                    integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>Both</td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>Both</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>&lt;command&gt;</code> is <code>ssh_key_create</code> or
+            <code>ssh_key_rotate</code>.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <p>
+            Both operations use the <code>human</code> access policy, a
+            30-second timeout and a 1 KiB body limit. Both are mutations and
+            need <code>Idempotency-Key</code>. The workbench agent has no tool
+            for either operation.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; reuse the same
+                    key to retry the same request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="ssh-key-create-1">ssh-key-create</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/repository/credential/ssh/key</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>repository.credential.ssh_key_create</code></td>
+                </tr>
+                <tr>
+                  <td>Parameters</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Required</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>Yes</td>
+                  <td>Credential name.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/repository/credential/ssh/key \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"deploy-api"}'</code></pre>
+          <p>
+            The static path <code>/ssh/key</code> takes precedence over
+            <code>/:credential_name</code>, so <code>ssh</code> is a reserved
+            name.
+          </p>
+          <h3 id="ssh-key-rotate-1">ssh-key-rotate</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >POST
+                      /api/repository/credential/:credential_name/ssh/key</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>repository.credential.ssh_key_rotate</code></td>
+                </tr>
+                <tr>
+                  <td>Parameters</td>
+                  <td><code>credential_name</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body field</th>
+                  <th>Required</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>expected_revision</code></td>
+                  <td>Yes</td>
+                  <td>
+                    Positive integer; the newest live revision that the caller
+                    read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/repository/credential/deploy-api/ssh/key \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision":1}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord repository credential ssh-key-create &lt;name&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord repository credential ssh-key-rotate &lt;name&gt; --expected-revision &lt;n&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord repository credential ssh-key-create deploy-api
+kanthord repository credential ssh-key-rotate deploy-api --expected-revision 1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Argument</th>
+                  <th>Commands</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;name&gt;</code></td>
+                  <td>Both</td>
+                  <td>
+                    Credential name; sent as <code>body.name</code> by
+                    <code>ssh-key-create</code> and as
+                    <code>credential_name</code> by <code>ssh-key-rotate</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--expected-revision &lt;n&gt;</code></td>
+                  <td><code>ssh-key-rotate</code></td>
+                  <td>Required; no default</td>
+                  <td>
+                    Sets <code>body.expected_revision</code>. The CLI checks it
+                    before the token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>Both</td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key when you retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>Both</td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    token is required
+                  </td>
+                  <td>
+                    Human JWT sent in the <code>Authorization</code> header.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>Both</td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each option is single-use. The commands take no file and read no
+            standard input. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

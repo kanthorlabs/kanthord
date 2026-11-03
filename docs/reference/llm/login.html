@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log in to a subscription LLM platform · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="log-in-to-a-subscription-llm-platform">
+            Log in to a subscription LLM platform
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            The login flow creates an LLM credential for a platform with the
+            secret shape <code>oauth</code>. The human signs in to the platform
+            account; the server stores the OAuth tokens. No answer and no
+            session status exposes a token.
+          </p>
+          <p>The flow has three commands:</p>
+          <ul>
+            <li>
+              <code>login</code> starts a login session and returns an address,
+              an optional user code, and an expiry.
+            </li>
+            <li>
+              <code>login-code</code> supplies a value that the session awaits,
+              for example a code or a redirect URL.
+            </li>
+            <li>
+              <code>login-status</code> reads the state of a session. It does
+              not wait for completion and does not change the session.
+            </li>
+          </ul>
+          <h3 id="login-on-a-worker-instance">Login on a worker instance</h3>
+          <p>
+            <code>login --holder &lt;instance&gt;</code> runs the flow on a
+            worker instance, not on the server. The new credential is the copy
+            of that holder. The default holder is <code>server</code>.
+          </p>
+          <ul>
+            <li>
+              The instance must hold a current connection: its last heartbeat is
+              at most 60 seconds old. Start
+              <code>kanthord serve worker --instance &lt;instance&gt;</code>
+              first.
+            </li>
+            <li>
+              The instance receives the session in its next heartbeat answer, at
+              most 15 seconds later. While a session is pending, the instance
+              sends a heartbeat every 2 seconds.
+            </li>
+            <li>
+              <code>anthropic-subscription</code> uses
+              <code>copy_code</code> mode. <code>openai-codex</code> and
+              <code>github-copilot</code> use <code>device</code> mode. An
+              instance session never uses <code>browser</code> mode.
+            </li>
+            <li>
+              The instance reports the address and the code. The human submits
+              the <code>code#state</code> value with <code>login-code</code>,
+              and the value reaches the instance in its next heartbeat.
+            </li>
+            <li>
+              The instance seals the OAuth tokens to its own key. The server
+              stores only the sealed copy, with <code>sealed_to</code> set to
+              the instance key fingerprint. The server never holds the plaintext
+              tokens.
+            </li>
+            <li>
+              A new copy gets revision 1. A copy sealed to an ended key, for
+              example after Reset key, gets the next revision. The older
+              revisions then end as after a rotation.
+            </li>
+            <li>
+              A copy that holds a live revision sealed to the current key
+              refuses a new login. An archived copy refuses a new login.
+            </li>
+            <li>
+              The instance refreshes its own copy in an execution and reports
+              the refreshed copy sealed.
+            </li>
+          </ul>
+          <h3 id="platforms-and-modes">Platforms and modes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Platform</th>
+                  <th>Login modes</th>
+                  <th>Default mode</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>github-copilot</code></td>
+                  <td><code>device</code></td>
+                  <td><code>device</code></td>
+                </tr>
+                <tr>
+                  <td><code>openai-codex</code></td>
+                  <td><code>browser</code>, <code>device</code></td>
+                  <td><code>browser</code></td>
+                </tr>
+                <tr>
+                  <td><code>anthropic-subscription</code></td>
+                  <td><code>copy_code</code></td>
+                  <td><code>copy_code</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A platform with one mode ignores the requested mode. In
+            <code>browser</code> mode, the address is an authorization URL and
+            the code is <code>null</code>. In <code>device</code> mode, the
+            address is a verification URL and the code is the user code. In
+            <code>copy_code</code> mode, the address is an authorization URL,
+            the code is <code>null</code>, and the human submits the
+            <code>code#state</code> value that the provider shows.
+          </p>
+          <h3 id="session-rules">Session rules</h3>
+          <ul>
+            <li>A session expires 15 minutes after its start.</li>
+            <li>
+              One human has at most one <code>pending</code> session for each
+              platform, over every holder.
+            </li>
+            <li>
+              The credential name follows the
+              <a href="credential.html#credential-names"
+                >credential name rules</a
+              >. The name must be free at the start and again at completion.
+            </li>
+            <li>
+              Sessions live in the memory of the server process. A restart or a
+              shutdown ends them; a shutdown fails every
+              <code>pending</code> session.
+            </li>
+            <li>
+              The <code>login</code> request returns when the platform supplies
+              the address. The session then continues on the server.
+            </li>
+          </ul>
+          <p>
+            On completion, the server stores the credential as revision 1 with
+            <code>metadata: null</code>, and the session state becomes
+            <code>completed</code>. A failed or expired session stores nothing.
+            The new credential then appears in
+            <a href="credential.html"><code>llm credential get</code></a
+            >.
+          </p>
+          <h3 id="session-states">Session states</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>pending</code></td>
+                  <td>
+                    The session waits for the human to finish the platform
+                    interaction.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>completed</code></td>
+                  <td>The server stored the credential.</td>
+                </tr>
+                <tr>
+                  <td><code>failed</code></td>
+                  <td>
+                    The flow stopped without a credential.
+                    <code>failure_reason</code> holds an engine error code or
+                    <code>login failed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>expired</code></td>
+                  <td>
+                    The session reached its expiry while <code>pending</code>.
+                    The server stored nothing.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A session that a restart lost answers
+            <code>404 credential.login.not_found</code>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="login">login</h3>
+          <p>The API returns HTTP <code>200</code>:</p>
+          <pre><code class="language-json">{
+  "session_id": "login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W",
+  "address": "&lt;verification-url&gt;",
+  "code": "&lt;user-code&gt;",
+  "expires_at": 1791418500000
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>session_id</code></td>
+                  <td><code>login_session_&lt;ulid&gt;</code></td>
+                  <td>
+                    <a href="../identities.html">Identity</a> of the login
+                    session.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>address</code></td>
+                  <td>string</td>
+                  <td>URL that the human opens.</td>
+                </tr>
+                <tr>
+                  <td><code>code</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    User code to enter at the address; <code>null</code> in
+                    <code>browser</code> and <code>copy_code</code> mode.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>expires_at</code></td>
+                  <td>integer</td>
+                  <td>Session expiry in Unix milliseconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI writes <code>name: value</code> rows to stdout, not JSON,
+            and exits <code>0</code>. The rows are <code>session_id</code>,
+            <code>code</code>, <code>expires_at</code> and
+            <code>idempotency_key</code>. The row <code>code</code> is absent
+            when the code is <code>null</code>. The value of
+            <code>expires_at</code> is an ISO 8601 UTC time. The rows align.
+            After one empty line, the label row <code>address:</code> follows,
+            and the next line holds the bare URL.
+          </p>
+          <pre><code class="language-text">session_id:      login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W
+code:            &lt;user-code&gt;
+expires_at:      2026-10-08T00:15:00.000Z
+idempotency_key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST
+
+address:
+&lt;verification-url&gt;</code></pre>
+          <h3 id="login-code">login-code</h3>
+          <p>
+            The API returns HTTP <code>200</code> with
+            <code
+              >{ &quot;session_id&quot;: &quot;&lt;login-session-id&gt;&quot;
+              }</code
+            >. The CLI adds the retry key and writes one JSON line:
+          </p>
+          <pre><code class="language-json">{
+  "session_id": "login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W",
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>session_id</code></td>
+                  <td><code>login_session_&lt;ulid&gt;</code></td>
+                  <td>API and CLI</td>
+                  <td>Session that received the value.</td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>Key of the request; keep it for a retry.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="login-status">login-status</h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line:
+          </p>
+          <pre><code class="language-json">{
+  "session_id": "login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W",
+  "state": "pending",
+  "last_message": null,
+  "failure_reason": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>session_id</code></td>
+                  <td><code>login_session_&lt;ulid&gt;</code></td>
+                  <td>Session identity.</td>
+                </tr>
+                <tr>
+                  <td><code>state</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>pending</code>, <code>completed</code>,
+                    <code>failed</code> or <code>expired</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>last_message</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Last progress or information message from the platform flow.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>failure_reason</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Reason of a <code>failed</code> session; otherwise
+                    <code>null</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>. The shared
+            gateway failures of the
+            <a href="credential.html#failures">credential page</a> also apply:
+            authentication, request validation, body limit, media type, timeout,
+            and the idempotency failures of <code>login</code> and
+            <code>login-code</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>400 credential.platform.unsupported</code></td>
+                  <td><code>login</code></td>
+                  <td>The platform is not an LLM platform.</td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.entry.unsupported</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    The platform has the secret shape <code>api_key</code>; use
+                    <code>llm credential create</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.input.invalid</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    Invalid or reserved name, or a <code>mode</code> other than
+                    <code>browser</code>, <code>device</code> or
+                    <code>copy_code</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 credential.login.browser_unavailable</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    <code>browser</code> mode through a non-loopback
+                    <code>Host</code>, or for an instance holder.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 llm.credential.instance_unknown</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    <code>holder</code> names no live worker instance at the
+                    <code>worker</code> placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 credential.login.instance_unavailable</code>
+                  </td>
+                  <td><code>login</code></td>
+                  <td>
+                    The instance holds no current connection, or its last
+                    heartbeat is older than 60 seconds.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.name.conflict</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    The name is taken. For an instance holder: the copy holds a
+                    live revision sealed to the current key.
+                    <code>details.id</code> holds the identity of that revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.credential.archived</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    The copy of the instance holder is archived. An archive is
+                    final.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.login.pending</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    The human already has a <code>pending</code> session for
+                    this platform.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>503 credential.login.failed</code></td>
+                  <td><code>login</code></td>
+                  <td>The flow failed before an address.</td>
+                </tr>
+                <tr>
+                  <td><code>503 llm.lifecycle.stopped</code></td>
+                  <td><code>login</code></td>
+                  <td>The LLM component stopped and accepts no login.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    The platform supplied no address within the 30-second
+                    timeout. For an instance holder, the 30 seconds include the
+                    wait for the next heartbeat of the instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 credential.login.not_found</code></td>
+                  <td><code>login-code</code>, <code>login-status</code></td>
+                  <td>The session is unknown, or a restart lost it.</td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.login.value_not_awaited</code></td>
+                  <td><code>login-code</code></td>
+                  <td>
+                    The session does not await a value, or the session is no
+                    longer <code>pending</code>. An instance session takes one
+                    value, in <code>copy_code</code> mode only, after the
+                    instance reported the address.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. For
+            <code>login</code> and <code>login-code</code>, the CLI prints
+            <code>&lt;code&gt;: request failed</code> and the rows
+            <code>status: &lt;status&gt;</code> and
+            <code>idempotency_key: &lt;key&gt;</code> instead. A transport
+            failure, timeout or malformed response exits <code>1</code> with
+            <code>cli.llm.credential.login.indeterminate</code>,
+            <code>cli.llm.credential.login_code.indeterminate</code> or
+            <code>cli.llm.credential.login_status.indeterminate</code>.
+          </p>
+          <p>Local CLI failures exit <code>1</code> before a request:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.llm.credential.login.invalid_mode</code></td>
+                  <td>
+                    <code>--mode</code> is not <code>browser</code>,
+                    <code>device</code> or <code>copy_code</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.llm.credential.login.token_required</code>,
+                    <code>cli.llm.credential.login_code.token_required</code>,
+                    <code>cli.llm.credential.login_status.token_required</code>
+                  </td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>A single-use option appears twice.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Mutation</th>
+                  <th>Body limit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>login</code></td>
+                  <td><code>POST /api/llm/credential/login</code></td>
+                  <td><code>llm.credential.login</code></td>
+                  <td>Yes</td>
+                  <td>16 KiB</td>
+                </tr>
+                <tr>
+                  <td><code>login-code</code></td>
+                  <td>
+                    <code>POST /api/llm/credential/login/:session_id/code</code>
+                  </td>
+                  <td><code>llm.credential.login_code</code></td>
+                  <td>Yes</td>
+                  <td>16 KiB</td>
+                </tr>
+                <tr>
+                  <td><code>login-status</code></td>
+                  <td>
+                    <code>GET /api/llm/credential/login/:session_id</code>
+                  </td>
+                  <td><code>llm.credential.login_status</code></td>
+                  <td>No</td>
+                  <td>No body</td>
+                </tr>
+                <tr>
+                  <td>none</td>
+                  <td>
+                    <code
+                      >POST /api/llm/credential/login/:session_id/report</code
+                    >
+                  </td>
+                  <td><code>llm.credential.login_report</code></td>
+                  <td>Yes</td>
+                  <td>64 KiB</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every command uses human access and has a 30-second timeout.
+            <code>llm.credential.login_report</code> uses
+            <code>worker</code> access: only the worker instance of the session
+            calls it, and it answers <code>204</code>. Its failures are
+            <code>404 credential.login.not_found</code> for an unknown, ended or
+            expired session or a session of another instance, and
+            <code>400 credential.input.invalid</code> for a
+            <code>completed</code> report without <code>sealed</code>, another
+            report with <code>sealed</code>, an address that is no
+            <code>https:</code> URL, or a second address. A refused write fails
+            the session with its code, for example
+            <code>400 credential.sealed.invalid</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td><code>login</code>, <code>login-code</code></td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td><code>login</code>, <code>login-code</code></td>
+                  <td>
+                    Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new
+                    request; reuse it only for a retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A retry with the same key, caller and request replays the recorded
+            answer within the process-local idempotency TTL. A replay of
+            <code>login</code> returns the recorded session and starts no new
+            session.
+          </p>
+          <h3 id="login-1">login</h3>
+          <p>
+            The body is <code>{ platform, name, mode?, holder? }</code>.
+            <code>platform</code> and <code>name</code> are required strings.
+            <code>mode</code> is <code>browser</code>, <code>device</code> or
+            <code>copy_code</code>. <code>holder</code> is
+            <code>server</code> or a worker instance name, and defaults to
+            <code>server</code>.
+          </p>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/llm/credential/login \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -d '{"platform":"openai-codex","name":"team-codex","mode":"device"}'</code></pre>
+          <h3 id="login-code-1">login-code</h3>
+          <p>
+            The path parameter <code>session_id</code> is required. The body is
+            <code>{ value }</code>, a nonempty string.
+          </p>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/llm/credential/login/login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W/code \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -d '{"value":"&lt;redirect-url-or-code&gt;"}'</code></pre>
+          <h3 id="login-status-1">login-status</h3>
+          <p>The path parameter <code>session_id</code> is required.</p>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/llm/credential/login/login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord llm credential login &lt;platform&gt; --name &lt;name&gt; [--mode browser|device|copy_code] [--holder &lt;name&gt;] [--idempotency-key &lt;key&gt;]
+kanthord llm credential login-code &lt;session&gt; &lt;value&gt; [--idempotency-key &lt;key&gt;]
+kanthord llm credential login-status &lt;session&gt;</code></pre>
+          <p>
+            Every command also accepts <code>--token &lt;jwt&gt;</code> and
+            <code>--endpoint &lt;url&gt;</code>.
+          </p>
+          <pre><code class="language-sh">kanthord llm credential login github-copilot --name team-copilot
+kanthord llm credential login anthropic-subscription --name claude --holder e2e-coder-1
+kanthord llm credential login-status login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W
+kanthord llm credential login-code login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W '&lt;redirect-url-or-code&gt;'</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Commands</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;platform&gt;</code></td>
+                  <td><code>login</code></td>
+                  <td>
+                    OAuth platform: <code>github-copilot</code>,
+                    <code>openai-codex</code> or
+                    <code>anthropic-subscription</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;session&gt;</code></td>
+                  <td><code>login-code</code>, <code>login-status</code></td>
+                  <td>
+                    Login session ID; sent as the <code>session_id</code> path
+                    parameter.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;value&gt;</code></td>
+                  <td><code>login-code</code></td>
+                  <td>
+                    Code, redirect URL or <code>code#state</code> value that the
+                    session awaits.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>All</td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+                <tr>
+                  <td><code>--name &lt;name&gt;</code></td>
+                  <td><code>login</code></td>
+                  <td>Required</td>
+                  <td>Name of the new credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--mode &lt;mode&gt;</code></td>
+                  <td><code>login</code></td>
+                  <td>Absent; the platform default applies</td>
+                  <td>
+                    <code>browser</code>, <code>device</code> or
+                    <code>copy_code</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--holder &lt;name&gt;</code></td>
+                  <td><code>login</code></td>
+                  <td><code>server</code></td>
+                  <td>
+                    Holder of the new copy: <code>server</code> or a worker
+                    instance name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td><code>login</code>, <code>login-code</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets the <code>Idempotency-Key</code> header; supply the
+                    same key for a retry.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence. See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the private <code>cli.yaml</code> file. Each option is
+            single-use. <code>login-status</code> rejects
+            <code>--idempotency-key</code> as an unknown option. No command
+            prompts for input or waits for completion; call
+            <code>login-status</code> again to follow the session.
+          </p>
+          <p>
+            The HTTP client has a 31-second deadline for these 30-second
+            operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

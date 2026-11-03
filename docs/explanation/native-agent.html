@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How the native agent works · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#in-short">In short</a></li>
+          <li><a href="#the-two-agents">The two agents</a></li>
+          <li><a href="#two-consumers">Two consumers</a></li>
+          <li>
+            <a href="#configuration-which-model-answers"
+              >Configuration: which model answers</a
+            >
+          </li>
+          <li>
+            <a href="#from-configuration-to-a-running-session"
+              >From configuration to a running session</a
+            >
+          </li>
+          <li><a href="#the-prompt">The prompt</a></li>
+          <li><a href="#tools">Tools</a></li>
+          <li>
+            <a href="#a-session-inside-a-worker-execution"
+              >A session inside a Worker execution</a
+            >
+          </li>
+          <li>
+            <a href="#a-session-inside-the-workbench"
+              >A session inside the Workbench</a
+            >
+          </li>
+          <li><a href="#limitations">Limitations</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="how-the-native-agent-works">How the native agent works</h1>
+          <p>
+            A native agent is an LLM agent that KanthorD runs inside its own
+            process. A worker drives it: the worker sends it a task, and the
+            agent edits files with its tools. <code>reviewer@1</code> and an
+            <code>examine</code> execution read the last reply of the agent. An
+            external harness, for example <code>claude-code@1</code>, runs a
+            third-party agent program instead.
+          </p>
+          <p>
+            Read <a href="worker.html">How a worker works</a> first. That page
+            explains where the agent sits in an execution. This page explains
+            how KanthorD builds the agent, what the agent can see and do, and
+            where its limits are.
+          </p>
+          <p>
+            KanthorD does not implement the agent loop itself. It embeds
+            <a
+              href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"
+              >pi</a
+            >
+            (<code>@earendil-works/pi-coding-agent</code> 1.1.0) as the runtime.
+            pi supplies the loop, the built-in tools, the session file and the
+            resume. KanthorD supplies the configuration, the credentials, the
+            prompt, the tool set and the budget. KanthorD builds only what pi
+            does not serve.
+          </p>
+          <h2 id="in-short">In short</h2>
+          <ul>
+            <li>
+              Two agents exist: <code>swe@1</code> writes code, and
+              <code>re@1</code> reviews code with read-only tools.
+            </li>
+            <li>
+              A human picks the provider, the model and the reasoning effort of
+              each agent. The agent itself holds none of these values.
+            </li>
+            <li>
+              When a provider is busy, the next execution uses the next model of
+              a fallback chain.
+            </li>
+            <li>
+              A human controls two prompts: the Agent prompt, which is a set of
+              files, and the Binding prompt of each repository binding. KanthorD
+              composes both into the system prompt, and the task comes last.
+            </li>
+            <li>
+              The tool set, not the prompt, limits what an agent can do. A tool
+              outside the set does not exist for the agent.
+            </li>
+            <li>
+              In a worker execution, the agent has a budget of 200 model turns
+              and 2 hours. pi persists its conversation to a session file, and
+              the Tracking Service holds its entries.
+            </li>
+          </ul>
+          <h2 id="the-two-agents">The two agents</h2>
+          <p>
+            The agent catalog is static and holds two declarations. An agent
+            name names a role, not a worker.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Role</th>
+                  <th>Built-in tools</th>
+                  <th>Host tools</th>
+                  <th>Used by</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>swe@1</code></td>
+                  <td>Software engineer</td>
+                  <td>
+                    <code>read</code>, <code>edit</code>, <code>write</code>,
+                    <code>grep</code>, <code>find</code>, <code>ls</code>,
+                    <code>bash</code>
+                  </td>
+                  <td><code>evidence-upload</code></td>
+                  <td>Worker <code>coder@1</code>, the Workbench</td>
+                </tr>
+                <tr>
+                  <td><code>re@1</code></td>
+                  <td>Reviewer</td>
+                  <td>
+                    <code>read</code>, <code>grep</code>, <code>find</code>,
+                    <code>ls</code>
+                  </td>
+                  <td>none</td>
+                  <td>Worker <code>reviewer@1</code>, the Workbench</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>re@1</code> has no tool that writes a file or runs a command.
+            Its prompt also forbids a change to the repository. The tool set
+            enforces that rule; the prompt only states it.
+          </p>
+          <p>
+            Each declaration holds a shipped agent prompt and its tool set. A
+            declaration holds no provider, no model and no reasoning effort. A
+            human selects those values.
+          </p>
+          <h2 id="two-consumers">Two consumers</h2>
+          <p>
+            The Agent component belongs to no service. A consumer opens an agent
+            session for its own purpose, under its own authority:
+          </p>
+          <ul>
+            <li>
+              <strong>Worker execution.</strong> A Worker execution of
+              <code>coder@1</code> or <code>reviewer@1</code> opens a session to
+              do or to judge the work of one node. No human is present during
+              the run.
+            </li>
+            <li>
+              <strong>Workbench session.</strong> A human opens a session from
+              the dashboard and talks to the agent. The agent can call KanthorD
+              operations for the human.
+            </li>
+          </ul>
+          <p>
+            Both consumers use the same open path. They differ in these points:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>Worker execution</th>
+                  <th>Workbench session</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Working directory</td>
+                  <td>The workspace of the execution</td>
+                  <td>
+                    <code
+                      >~/.local/state/kanthord/workbench/&lt;agent_name&gt;</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Last pinned message</td>
+                  <td>The work prompt of the task or the node</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Extra tools</td>
+                  <td><code>evidence-upload</code> for <code>swe@1</code></td>
+                  <td>KanthorD operation tools</td>
+                </tr>
+                <tr>
+                  <td>Approval of a change</td>
+                  <td>None, because no human is present</td>
+                  <td>The human approves each operation that changes state</td>
+                </tr>
+                <tr>
+                  <td>Budget</td>
+                  <td>200 model turns and 2 hours</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Conversation storage</td>
+                  <td>
+                    A pi session file of the execution, and the session entries
+                    of its trace
+                  </td>
+                  <td>A pi session file that survives a restart</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="configuration-which-model-answers">
+            Configuration: which model answers
+          </h2>
+          <p>
+            An agent is usable only when a human enables it. The
+            <strong>agent enablement</strong> is global to the server and keyed
+            by agent name. It holds:
+          </p>
+          <ul>
+            <li>
+              One or more <strong>agent providers</strong>. Each one pairs a
+              provider platform, for example <code>anthropic</code> or
+              <code>openai-compatible</code>, with one credential.
+            </li>
+            <li>
+              One <strong>default configuration</strong>: an agent provider, a
+              model identifier and a reasoning effort.
+            </li>
+            <li>
+              A <strong>fallback list</strong>: up to 7 more configurations,
+              tried in order when a provider is busy. An empty list means no
+              fallback.
+            </li>
+          </ul>
+          <p>
+            A consumer can supply an <strong>entry</strong> that overrides any
+            of these fields. A Worker execution takes the entry from its worker
+            binding. A Workbench session takes the values that the human picked.
+            The Agent component merges the entry over the default and validates
+            the whole result:
+          </p>
+          <ul>
+            <li>The agent provider exists in the enablement.</li>
+            <li>Custody accepts the credential for the platform.</li>
+            <li>
+              The model belongs to the built-in model list of the platform. For
+              <code>openai-compatible</code>, the model belongs to the approved
+              models of the credential.
+            </li>
+            <li>
+              The reasoning effort is one of the levels that the model supports.
+            </li>
+          </ul>
+          <p>
+            The result is the <strong>effective configuration</strong>. The same
+            check runs at enablement write, at worker binding write and at
+            resolution. A configuration that passes once can therefore fail
+            later only when a human changes the enablement or the credential. An
+            enablement change that breaks a worker binding is refused, so that
+            case does not occur in practice. Disablement is the only stop
+            switch: it refuses every later resolution.
+          </p>
+          <h3 id="the-fallback-chain">The fallback chain</h3>
+          <p>
+            The effective configuration is the head of a
+            <strong>fallback chain</strong>. The fallback list is its tail. A
+            worker binding entry that names its own fallback list replaces the
+            list of the enablement whole; the two lists never merge.
+          </p>
+          <ol>
+            <li>
+              At each claim, the Scheduler picks the first chain entry whose
+              credential has no live cooldown. The execution record pins the
+              chain position and the enablement revision of that entry, and the
+              execution uses that selection until it ends.
+            </li>
+            <li>
+              A worker execution that stops with
+              <code>provider_failed</code> and the code
+              <code>rate_limited</code>, <code>quota_exhausted</code> or
+              <code>unavailable</code> puts the credential of its selection into
+              a <strong>cooldown</strong>. The cooldown covers every model of
+              that credential.
+            </li>
+            <li>
+              The next claim skips every entry of a cooling credential. When the
+              cooldown ends, the next claim returns to the earlier entry.
+            </li>
+            <li>
+              A repeated failure on the same credential doubles the cooldown, up
+              to one day. A release with no provider failure clears it, whatever
+              model the execution used.
+            </li>
+            <li>
+              When the credential of every entry cools down, the work pull
+              answers &quot;no work&quot;. No node blocks or pauses.
+            </li>
+          </ol>
+          <p>
+            A busy provider therefore does not count as a failure of the node.
+            The codes <code>bad_request</code> and <code>unauthorized</code> do
+            not advance the chain: they point to a broken configuration, and
+            they count toward the failure limit of the node. The
+            <strong>Cooldown</strong> section of the LLM credential page in the
+            dashboard shows the cooldown of that credential: its strike and its
+            end time. The <strong>Details</strong> tab of an
+            <code>Available</code> node names each agent of the project whose
+            every chain credential cools down, with the end time.
+            <code>kanthord agent cooldown list</code> shows the cooldowns, and
+            <code>kanthord agent cooldown clear &lt;credential&gt;</code> clears
+            one. The design adds a cooldown badge and a Clear action to the
+            agent page. Until then, use the CLI to clear a cooldown.
+          </p>
+          <h2 id="from-configuration-to-a-running-session">
+            From configuration to a running session
+          </h2>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "&amp; { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
+sequenceDiagram
+    accTitle: Opening a native agent session
+    accDescr: A consumer resolves the effective configuration, builds a model runtime from a credential, composes the prompt, selects the tools and opens a pi agent session.
+    autonumber
+    participant C as Consumer&lt;br/&gt;(Worker / Workbench)
+    participant A as Agent component
+    participant L as LLM component
+    participant P as pi runtime
+
+    C-&gt;&gt;A: Resolve effective configuration
+    A--&gt;&gt;C: agent_provider, provider, credential,&lt;br/&gt;model_identifier, reasoning_effort
+    C-&gt;&gt;L: Build model runtime (credential, configuration)
+    L--&gt;&gt;C: Model runtime and model,&lt;br/&gt;or setup refusal
+    C-&gt;&gt;C: Compose the system prompt
+    C-&gt;&gt;C: Select tools from the declaration
+    C-&gt;&gt;P: createAgentSession(cwd, model, tools, prompt, hooks)
+    P--&gt;&gt;C: Agent session
+    Note over C,P: Each setup step has a 30-second deadline
+</pre>
+          <p>
+            For a Worker execution, the server resolves the configuration at the
+            claim. The worker process receives the credentials through the
+            credential handover, and the configuration and the composed prompt
+            through its execution setup.
+          </p>
+          <h3 id="model-runtime">Model runtime</h3>
+          <p>
+            The LLM component turns the effective configuration into a pi
+            <code>ModelRuntime</code> and one model:
+          </p>
+          <ul>
+            <li>
+              The runtime reads secrets through a credential store that custody
+              hands over for this one session. The agent never sees the secret
+              as a value.
+            </li>
+            <li>
+              The runtime makes no network call to refresh model lists (<code
+                >allowModelNetwork: false</code
+              >). The model must already be known.
+            </li>
+            <li>
+              For <code>openai-compatible</code>, KanthorD registers a provider
+              from the credential metadata: its base URL, its models and the
+              reasoning levels of each model. These models use the OpenAI
+              Responses API and report zero cost.
+            </li>
+            <li>
+              Some platforms need extra values, for example
+              <code>AWS_REGION</code> for Amazon Bedrock. KanthorD takes these
+              values from the credential metadata, not from the server
+              environment.
+            </li>
+          </ul>
+          <p>
+            The runtime refuses the setup when the credential does not match the
+            configuration or when the model or the effort is unknown. The
+            refusal reasons are <code>credential_absent</code>,
+            <code>credential_revision_mismatch</code>,
+            <code>model_unknown</code> and
+            <code>reasoning_effort_unsupported</code>.
+          </p>
+          <h3 id="isolation-from-the-host-pi-installation">
+            Isolation from the host pi installation
+          </h3>
+          <p>
+            The host can have its own pi installation with extensions, skills
+            and settings. The native agent ignores all of them:
+          </p>
+          <ul>
+            <li>
+              pi runs with its own agent directory, through
+              <code>PI_CODING_AGENT_DIR</code>. On the server, the directory is
+              <code>~/.local/state/kanthord/pi</code>. A worker instance at the
+              <code>worker</code> placement uses <code>pi/</code> of its data
+              directory,
+              <code>$XDG_DATA_HOME/kanthord/workers/&lt;name&gt;/pi/</code>, by
+              default
+              <code>~/.local/share/kanthord/workers/&lt;name&gt;/pi/</code>.
+            </li>
+            <li>
+              pi runs offline (<code>PI_OFFLINE=1</code>), with telemetry and
+              analytics off.
+            </li>
+            <li>
+              The session loads no extension, no skill, no prompt template, no
+              theme and no context file. KanthorD supplies the system prompt and
+              its own hooks only.
+            </li>
+            <li>
+              The system prompt shows the working directory relative to the home
+              directory, for example <code>~/work/repo</code>, not the absolute
+              path.
+            </li>
+          </ul>
+          <h2 id="the-prompt">The prompt</h2>
+          <h3 id="what-the-model-reads">What the model reads</h3>
+          <p>
+            Start with the result. A worker execution of <code>swe@1</code> on a
+            node with one repository binding sends the model this sequence of
+            messages:
+          </p>
+          <pre><code class="language-text">[system]
+…the text of base.md…
+
+…the text of swe@1.md…
+
+Instructions of repository app:
+
+…the binding prompt of swe@1 for the binding app…
+
+…the framing…
+
+[user]
+…the task…</code></pre>
+          <p>
+            The system prompt holds the Standard, the role of the agent, the
+            binding prompts and a fixed paragraph, the <strong>framing</strong>.
+            The framing states the precedence and the protocol of the worker.
+            The task comes last, as a message.
+          </p>
+          <p>The same order, as a table:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Part</th>
+                  <th>Worker execution</th>
+                  <th>Workbench session</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>System prompt</td>
+                  <td><code>base.md</code></td>
+                  <td><code>base.md</code></td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>System prompt</td>
+                  <td><code>&lt;agent&gt;.md</code></td>
+                  <td><code>&lt;agent&gt;.md</code></td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>System prompt</td>
+                  <td>None</td>
+                  <td><code>workbench.md</code></td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>System prompt</td>
+                  <td>
+                    One part for each repository binding with a nonblank binding
+                    prompt
+                  </td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td>System prompt</td>
+                  <td><code>framing-worker.md</code></td>
+                  <td><code>framing-workbench.md</code></td>
+                </tr>
+                <tr>
+                  <td>6</td>
+                  <td>Pinned message</td>
+                  <td>Work prompt</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>7</td>
+                  <td>Conversation</td>
+                  <td>Later instructions and replies</td>
+                  <td>Human messages and replies</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <strong>work prompt</strong> is the task message of a Worker
+            execution: the name, the requirement, the criterion and the
+            verification commands of one pinned node revision. For an
+            <code>implement</code> node, it also holds the section
+            <code>## Affected tests</code>. That section lists the
+            <a href="coder-worker.html#the-affected-test-run"
+              >affected test command</a
+            >
+            of each repository with a valid declaration. The model receives it
+            once, at row 6. Row 7 holds what comes after it: the revision
+            instructions, the judgement instructions of
+            <code>reviewer@1</code> and the replies of the agent.
+          </p>
+          <p>
+            The agent <code>env@1</code> repairs a failed environment of a
+            repository binding on the server. Its system prompt holds
+            <code>base.md</code>, <code>env@1.md</code>, the binding prompt of
+            its own binding and the worker framing. Its first message holds the
+            failure. It has no Workbench session.
+          </p>
+          <h3 id="the-two-prompts-that-a-human-controls">
+            The two prompts that a human controls
+          </h3>
+          <p>
+            A human controls the prompt of a native agent through two prompts.
+            The framing and the templates of the framing belong to the KanthorD
+            protocol, not to a prompt of a human.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Prompt</th>
+                  <th>Purpose</th>
+                  <th>Owner</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Agent prompt</td>
+                  <td>
+                    The Standard, the role of the agent and the Workbench
+                    behavior
+                  </td>
+                  <td>The server host</td>
+                  <td>
+                    The files <code>base.md</code>,
+                    <code>&lt;agent_name&gt;.md</code> and
+                    <code>workbench.md</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Binding prompt</td>
+                  <td>
+                    The language and the conventions of one repository for one
+                    agent
+                  </td>
+                  <td>The repository binding of the project</td>
+                  <td>
+                    The field <code>prompts</code> of the repository binding,
+                    with one text for each of <code>swe@1</code>,
+                    <code>re@1</code> and <code>env@1</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <strong>Agent prompt.</strong> Each file has a shipped text that is
+            embedded in the binary. An upgrade replaces it together with the
+            code that depends on it.
+          </p>
+          <ul>
+            <li>
+              <code>base.md</code> is the Standard. Every agent reads it. It
+              holds only the rules that every agent shares, so it holds no code
+              rule.
+            </li>
+            <li>
+              The code, test and finding rules stand in both
+              <code>swe@1.md</code> and <code>re@1.md</code>, in the same words,
+              because <code>re@1</code> judges the work of <code>swe@1</code>.
+            </li>
+            <li>
+              <code>&lt;agent_name&gt;.md</code> is the Role, for example
+              <code>swe@1.md</code>.
+            </li>
+            <li>
+              <code>workbench.md</code> is the Workbench behavior. Only a
+              Workbench session reads it, and it is part of the system prompt.
+            </li>
+          </ul>
+          <p>
+            A file of the same name in the directory
+            <code>agent.prompt.agent_directory</code> replaces the shipped text
+            of that file whole. The default directory is <code>agents</code> in
+            the data directory of the server host, and an empty value selects
+            the shipped texts only. The subdirectory <code>prompts</code> of the
+            agent directory holds replacements of the shipped prompt templates,
+            for example <code>prompts/framing-worker.md</code>. The worker
+            process reads no prompt file. The server reads the files and sends
+            the composed text.
+          </p>
+          <p>
+            <strong>Binding prompt.</strong> A human sets
+            <code>prompts</code> in the configuration of a repository binding,
+            for example
+            <code
+              >{ &quot;swe@1&quot;: &quot;Write comments in English.&quot;
+              }</code
+            >. Each key is the name of an agent of the catalog, and each text is
+            optional. A text renders as
+            <code>Instructions of repository &lt;name&gt;:</code> and the text.
+            A missing key, an empty text and a blank text add nothing.
+          </p>
+          <ul>
+            <li>
+              <code>swe@1</code> and <code>re@1</code> read the binding prompts
+              of every repository binding of the node, at the binding revision
+              that the node pins.
+            </li>
+            <li>
+              <code>env@1</code> reads the binding prompt of the binding of its
+              environment run.
+            </li>
+          </ul>
+          <p>
+            The binding prompt of one agent is an independent text.
+            <code>re@1</code> does not read the prompt of <code>swe@1</code>. A
+            rule that relaxes the default standard must go into the prompts of
+            both <code>swe@1</code> and <code>re@1</code>, or the reviewer
+            judges the work against the default standard that the rule relaxes.
+          </p>
+          <p>
+            KanthorD reads no <code>CLAUDE.md</code>, <code>AGENTS.md</code> or
+            <code>*.local.md</code> file, neither in a repository nor in a home
+            directory. A native agent takes its conventions from the two prompts
+            only. <code>claude-code@1</code> receives no KanthorD text. Claude
+            Code loads its own <code>CLAUDE.md</code> files as behavior of its
+            harness, not as KanthorD support.
+          </p>
+          <h3 id="precedence">Precedence</h3>
+          <p>Two rules decide which text wins a conflict:</p>
+          <ol>
+            <li>The system prompt outranks every message after it.</li>
+            <li>
+              A later text wins over an earlier text, inside the system prompt
+              and among the messages.
+            </li>
+          </ol>
+          <p>
+            The precedence inside the system prompt, from highest to lowest, is:
+            the framing, the binding prompts, <code>workbench.md</code>, the
+            role and the Standard. Then come the messages: a later message
+            governs an earlier one.
+          </p>
+          <p>
+            An instruction of one repository governs only the work on the files
+            of that repository. It never governs the reply format that a message
+            demands. The reason is that a binding prompt belongs to a
+            repository, and a message belongs to the consumer that drives the
+            agent.
+          </p>
+          <p>
+            No prompt authorizes an operation: the tool set and the authority of
+            the consumer decide what the agent can do.
+          </p>
+          <h3 id="where-the-prompt-is-composed">
+            Where the prompt is composed
+          </h3>
+          <p>The server composes the whole system prompt for every consumer:</p>
+          <ul>
+            <li>
+              A Worker execution receives it as <code>prompt.final</code> in its
+              execution setup. The worker application reads no prompt file. It
+              pins only the work prompt.
+            </li>
+            <li>
+              A Workbench session and an <code>env@1</code> run take it from the
+              server process.
+            </li>
+          </ul>
+          <p>
+            An invalid file is a refusal, not a fallback. A file in the agent
+            directory that is not a regular UTF-8 file, that is larger than 32
+            KiB, or that holds a control character other than a tab and a
+            newline answers <code>409 agent.prompt.template_invalid</code>, and
+            <code>details.file</code> names the file. Every reader refuses in
+            this way: <code>agent.get</code>, the execution setup, the Workbench
+            session open and the <code>env@1</code> run. A reader never replaces
+            the invalid file with the shipped text, because that would run an
+            agent with other rules than the rules that the operator wrote. The
+            same limits apply to a binding prompt, and a violation answers
+            <code>400 project.bindings.repository.prompt_invalid</code> at the
+            binding write.
+          </p>
+          <h3 id="why-the-work-prompt-is-pinned">
+            Why the work prompt is pinned
+          </h3>
+          <p>
+            The work prompt is <strong>pinned</strong>. Before each model call,
+            a pi <code>context</code> hook inserts it as a message directly
+            after the system prompt. A second guard on the stream function
+            re-inserts the system prompt and the work prompt when a request
+            lacks them.
+          </p>
+          <p>
+            Pinning has two effects. A pinned text survives when pi compacts a
+            long conversation, because KanthorD inserts it again on each call.
+            The work prompt can also change between tasks without a new session:
+            each <code>prompt</code> or <code>instruct</code> call sets the
+            current work, and the next model call carries it.
+          </p>
+          <h3 id="what-a-change-of-a-prompt-does">
+            What a change of a prompt does
+          </h3>
+          <ul>
+            <li>
+              <strong>A change of an agent file</strong> takes effect at the
+              next read of the server. A running execution keeps the system
+              prompt of its setup.
+            </li>
+            <li>
+              <strong>A change of a binding prompt</strong> is a change of the
+              binding configuration. It stores the next binding revision. A node
+              keeps the text of the binding revision that it pins. Run
+              <code>mission node rebind</code> to move the node to the current
+              revision.
+            </li>
+            <li>
+              <strong>Environment onboarding</strong> treats the new binding ID
+              of the revision as a changed binding. It clears
+              <code>environment_from_agent</code>, the mark that a stored
+              environment came from a session of <code>env@1</code>.
+            </li>
+            <li>
+              <strong>Both agents</strong> can need the same change. The binding
+              prompts of <code>swe@1</code> and <code>re@1</code> diverge by
+              design, so a human edits both.
+            </li>
+            <li>
+              <strong>A deploy</strong> upgrades the server and every worker
+              host together, because they run the same execution setup contract.
+            </li>
+          </ul>
+          <h3 id="reading-the-composed-prompt">Reading the composed prompt</h3>
+          <p>
+            <code>agent.get</code> answers every part of the system prompt, plus
+            the final prompt:
+          </p>
+          <ul>
+            <li>
+              Each part holds <code>part</code> (<code>standard</code>,
+              <code>role</code>, <code>workbench</code> or
+              <code>binding</code>), <code>name</code>,
+              <code>origin</code> (<code>binary</code>, <code>file</code> or
+              <code>database</code>), <code>path</code>, <code>digest</code> and
+              <code>text</code>.
+            </li>
+            <li>
+              For <code>binary</code>, <code>path</code> is the override
+              location that the server looked up. For a
+              <code>binding</code> part, <code>path</code> is <code>null</code>.
+            </li>
+            <li>
+              The query <code>view=final</code> answers the final prompt only.
+            </li>
+            <li>
+              The queries <code>project_id</code> and
+              <code>binding_id</code> add the binding prompt of one repository
+              binding. Without them, a Workbench agent answers the Workbench
+              system prompt, and <code>env@1</code> answers the worker system
+              prompt.
+            </li>
+            <li>
+              The CLI reads it with <code>kanthord agent get swe@1</code>, adds
+              <code>--view final</code> for the final prompt only, or
+              <code
+                >--project &lt;project-id&gt; --binding-id
+                &lt;binding-id&gt;</code
+              >
+              for a binding.
+            </li>
+          </ul>
+          <h2 id="tools">Tools</h2>
+          <p>
+            The agent receives only the tools of its declaration. A tool outside
+            the allowlist does not exist for the agent.
+          </p>
+          <ul>
+            <li>
+              <strong>Built-in tools</strong> are the pi tools
+              <code>read</code>, <code>edit</code>, <code>write</code>,
+              <code>grep</code>, <code>find</code>, <code>ls</code> and
+              <code>bash</code>. They act on the working directory.
+              <code>grep</code> and <code>find</code> run <code>rg</code> and
+              <code>fd</code>. The worker and the server install pinned copies
+              into <code>bin/</code> of the pi agent directory at startup and
+              never take them from <code>PATH</code>.
+            </li>
+            <li>
+              <strong><code>bash</code></strong> runs commands on the host, as
+              the user of the KanthorD process. KanthorD removes every provider
+              API key, <code>SSH_AUTH_SOCK</code> and
+              <code>SSH_AGENT_PID</code> from the environment of each command,
+              so a command cannot read the credentials of the agent or reach an
+              SSH agent of the host user. During a network git operation of
+              KanthorD on the same host, a command can still sign through the
+              SSH agent socket of that operation, because it runs as the same
+              user. In a Worker execution, the timeout of each command is capped
+              at the remaining budget and at 10 minutes.
+            </li>
+            <li>
+              <strong><code>evidence-upload</code></strong> (<code>swe@1</code>
+              in a Worker execution) uploads a workspace file as evidence of the
+              attempt and returns its <code>evidence_id</code>,
+              <code>asset_id</code> and <code>uri</code>.
+            </li>
+            <li>
+              <strong>Operation tools</strong> (Workbench only) expose KanthorD
+              operations. Each call runs with the identity of the human who sent
+              the last message. The
+              <a href="../reference/workbench/tools.html"
+                >operation tool reference</a
+              >
+              lists every tool.
+            </li>
+          </ul>
+          <p>
+            An operation becomes a tool when it meets all of these conditions:
+          </p>
+          <ul>
+            <li>
+              Its access is <code>human</code>. A worker or machine operation is
+              never a tool.
+            </li>
+            <li>It is not a stream.</li>
+            <li>It handles no secret.</li>
+          </ul>
+          <p>
+            The tool name is the operation id with each <code>.</code> replaced
+            by <code>--</code>, for example <code>mission--node--create</code>.
+          </p>
+          <p>
+            The agent cannot call these 13 human operations. Twelve of them
+            handle a secret. <code>repository.host_key.pin</code> confirms the
+            trust of an SSH host, and only a human confirms a host key.
+          </p>
+          <ul>
+            <li>
+              <code>llm.credential.create</code>,
+              <code>llm.credential.rotate</code>,
+              <code>llm.credential.check</code>,
+              <code>llm.credential.login_code</code>
+            </li>
+            <li>
+              <code>repository.credential.create</code>,
+              <code>repository.credential.rotate</code>,
+              <code>repository.credential.check</code>,
+              <code>repository.credential.ssh_key_create</code>,
+              <code>repository.credential.ssh_key_rotate</code>,
+              <code>repository.host_key.pin</code>
+            </li>
+            <li>
+              <code>storage.credential.create</code>,
+              <code>storage.credential.rotate</code>,
+              <code>storage.credential.check</code>
+            </li>
+          </ul>
+          <p>
+            The agent therefore cannot create a credential, change a secret, pin
+            a host key, or finish an OAuth login. A human does that in the
+            dashboard or the CLI.
+          </p>
+          <p>
+            A Workbench operation tool that changes state waits for the human.
+            The dashboard shows the pending call, and the human approves or
+            rejects it. A rejection, an abort or the end of the run counts as a
+            rejection. A read operation and a built-in tool run without
+            approval. A Worker execution has no approval step, because no human
+            is present.
+          </p>
+          <h2 id="a-session-inside-a-worker-execution">
+            A session inside a Worker execution
+          </h2>
+          <p>
+            A Worker execution opens one session per claim, in a workspace that
+            the worker prepares. The worker method then drives the session with
+            two calls:
+          </p>
+          <ul>
+            <li>
+              <code>prompt(work)</code> sends the work prompt as the user
+              message.
+            </li>
+            <li>
+              <code>instruct(work, text)</code> pins the work prompt and sends
+              another instruction, for example a revision request.
+            </li>
+          </ul>
+          <p>
+            The worker, not the agent, decides when the work is done. Only
+            <code>reviewer@1</code> asks its agent for a decision: a judgement
+            of a criterion. That instruction asks for one last line that starts
+            with <code>kanthord-judgement:</code> and holds JSON. A reply that
+            does not parse gets one repair turn. A second invalid reply ends the
+            execution with <code>judgement_invalid</code>.
+            <code>coder@1</code> reads no reply of <code>swe@1</code> in an
+            <code>implement</code> execution, and reads the last reply of an
+            <code>examine</code> execution as the report.
+          </p>
+          <p>Each method uses the session in its own way:</p>
+          <ul>
+            <li>
+              <strong>Steps</strong> (<code>coder@1</code> with
+              <code>swe@1</code>). The agent works on each unit of the node.
+              After each turn, the worker commits the change and verifies the
+              unit itself.
+              <a href="coder-worker.html#step-7-the-unit-loop"
+                >How the coder@1 worker works</a
+              >
+              shows the loop.
+            </li>
+            <li>
+              <strong>Evaluation</strong> (<code>reviewer@1</code> with
+              <code>re@1</code>). The worker runs the verification commands
+              first. A failure ends the evaluation without the agent. On
+              success, the agent receives the evidence and returns a JSON
+              judgement.
+            </li>
+            <li>
+              <strong>Examine</strong> (<code>coder@1</code> with
+              <code>swe@1</code>). The agent checks out the base-branch head of
+              each repository binding of the node. It runs tools and the
+              verifications, and reads the outcome and the evidence of each
+              direct dependency. It writes its findings as produced evidence.
+            </li>
+          </ul>
+          <h3 id="budget">Budget</h3>
+          <p>
+            Each native worker has a resource budget of 200 model turns and 2
+            hours of wall time. A worker binding can override both values. One
+            model turn is one reply of the model with the tool calls of that
+            reply. The wall time counts from the claim, and the wall deadline is
+            also capped by the expiry of the claim. When the budget ends:
+          </p>
+          <ul>
+            <li>
+              pi stops after the current turn, and KanthorD aborts the session.
+            </li>
+            <li>Each later <code>bash</code> command is refused.</li>
+            <li>The worker method stops and releases or ends the execution.</li>
+          </ul>
+          <p>
+            A cancellation of the execution, for example a revoked claim or a
+            server shutdown, also aborts the session.
+          </p>
+          <h2 id="a-session-inside-the-workbench">
+            A session inside the Workbench
+          </h2>
+          <p>
+            A Workbench session is a conversation between one human and one
+            agent, stored as a pi JSONL session file:
+          </p>
+          <ul>
+            <li>
+              The working directory is
+              <code>~/.local/state/kanthord/workbench/&lt;agent_name&gt;</code>.
+            </li>
+            <li>
+              The session files live under
+              <code
+                >~/.local/state/kanthord/pi/sessions/workbench/&lt;agent_name&gt;</code
+              >.
+            </li>
+            <li>
+              The session identity that KanthorD assigns is also the pi session
+              id.
+            </li>
+          </ul>
+          <p>
+            KanthorD keeps no copy of the conversation. The session list, the
+            history and the resume all come from pi. When the server restarts,
+            KanthorD reopens the file by its session id; every completed turn is
+            restored, and a turn that was running at the restart is lost. The
+            session also answers a
+            <code>pi --session &lt;file&gt;</code> command, so a human can
+            continue the same conversation in a terminal.
+          </p>
+          <p>
+            The human can change the agent provider, the model and the reasoning
+            effort between runs. KanthorD writes each change into the session
+            file as a pi entry, so the file records which model answered which
+            turn.
+          </p>
+          <h2 id="limitations">Limitations</h2>
+          <ul>
+            <li>
+              <strong>No resume of a conversation.</strong> A Worker execution
+              persists its pi session to a file, but it never opens that file
+              again. When the worker process ends, a resumed execution starts a
+              new session.
+            </li>
+            <li>
+              <strong>Transcript in the Tracking Service.</strong> pi persists
+              each session entry to
+              <code>pi/sessions/execution/&lt;execution_id&gt;/</code> of the
+              data directory of the instance, and the instance keeps the newest
+              50 directories. The worker sends each entry to the Tracking
+              Service when pi appends it, with the secrets of the LLM credential
+              of the agent removed. The spans <code>agent.turn</code> and
+              <code>agent.tool</code> reference the entries and embed no
+              content.
+            </li>
+            <li>
+              <strong>No sandbox.</strong> <code>bash</code> and the file tools
+              run on the host with the rights of the KanthorD process. The tool
+              set of <code>re@1</code> limits what the reviewer can do. The
+              working directory of <code>swe@1</code> is only its default
+              location, not a boundary.
+            </li>
+            <li>
+              <strong>No approval in a Worker execution.</strong> Only the
+              Workbench asks a human before a call that changes state.
+            </li>
+            <li>
+              <strong>Static catalog.</strong> A new agent or a change of a tool
+              set requires a new KanthorD release. A prompt change does not: a
+              file in the agent directory and a binding prompt override the
+              shipped text.
+            </li>
+          </ul>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>

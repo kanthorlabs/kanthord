@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Run kanthord on a Mac with Tailscale · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li><a href="#1-install-the-binary">1. Install the binary</a></li>
+          <li>
+            <a href="#2-find-the-tailnet-name-of-the-mac"
+              >2. Find the tailnet name of the Mac</a
+            >
+          </li>
+          <li>
+            <a href="#3-create-the-configuration"
+              >3. Create the configuration</a
+            >
+          </li>
+          <li><a href="#4-start-the-server">4. Start the server</a></li>
+          <li>
+            <a href="#5-publish-the-server-to-your-tailnet"
+              >5. Publish the server to your tailnet</a
+            >
+          </li>
+          <li><a href="#6-get-a-token">6. Get a token</a></li>
+          <li>
+            <a href="#7-sign-in-from-the-phone">7. Sign in from the phone</a>
+          </li>
+          <li>
+            <a href="#run-macos-nodes-on-this-mac"
+              >Run macOS nodes on this Mac</a
+            >
+          </li>
+          <li>
+            <a href="#run-worker-instances-in-containers"
+              >Run worker instances in containers</a
+            >
+          </li>
+          <li>
+            <a href="#run-a-worker-on-another-host"
+              >Run a worker on another host</a
+            >
+          </li>
+          <li>
+            <a href="#stop-sharing-the-server">Stop sharing the server</a>
+          </li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="run-kanthord-on-a-mac-with-tailscale">
+            Run kanthord on a Mac with Tailscale
+          </h1>
+          <p>
+            Run the kanthord single binary on your Mac. Then open the dashboard
+            from a phone or a tablet on your tailnet. The binary contains the
+            server, the CLI and the dashboard. It needs no Node.js and no web
+            server.
+          </p>
+          <p>
+            The daemon listens on <code>127.0.0.1</code> only.
+            <code>tailscale serve</code> gives the daemon an HTTPS address that
+            only your tailnet can reach.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>A Mac with Apple silicon.</li>
+            <li>
+              Tailscale installed and signed in on the Mac and on the phone or
+              tablet.
+            </li>
+            <li>
+              MagicDNS and HTTPS certificates turned on for your tailnet in the
+              Tailscale admin console.
+            </li>
+            <li>
+              The binary <code>kanthord-darwin-arm64</code> and
+              <code>SHA256SUMS</code> from the
+              <a href="https://github.com/kanthorlabs/kanthord/releases"
+                >releases page</a
+              >. To build the binary from a checkout of this repository instead,
+              run <code>make release-build</code>. The file is then in
+              <code>dist/</code>.
+            </li>
+          </ul>
+          <h2 id="1-install-the-binary">1. Install the binary</h2>
+          <p>
+            If you downloaded the file, check it against
+            <code>SHA256SUMS</code>:
+          </p>
+          <pre><code class="language-sh">shasum -a 256 --ignore-missing -c SHA256SUMS</code></pre>
+          <p>
+            Then remove the macOS quarantine flag. Otherwise macOS refuses to
+            start it.
+          </p>
+          <pre><code class="language-sh">xattr -d com.apple.quarantine kanthord-darwin-arm64</code></pre>
+          <p>Copy the binary to a directory on your <code>PATH</code>:</p>
+          <pre><code class="language-sh">sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord
+kanthord --help</code></pre>
+          <h2 id="2-find-the-tailnet-name-of-the-mac">
+            2. Find the tailnet name of the Mac
+          </h2>
+          <p>
+            The Tailscale app for macOS keeps its CLI inside the application
+            bundle:
+          </p>
+          <pre><code class="language-sh">alias tailscale=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+tailscale status --self --json | grep '"DNSName"'</code></pre>
+          <p>
+            The name has the form
+            <code>&lt;mac&gt;.&lt;tailnet&gt;.ts.net</code>. Do not include the
+            final dot.
+          </p>
+          <h2 id="3-create-the-configuration">3. Create the configuration</h2>
+          <p>
+            Add the tailnet name to the host allowlist. The server refuses every
+            request with a <code>Host</code> header outside this list.
+          </p>
+          <pre><code class="language-sh">kanthord config init --gateway-allowed-host &lt;mac&gt;.&lt;tailnet&gt;.ts.net</code></pre>
+          <p>
+            The command writes <code>~/.config/kanthord/kanthord.yaml</code>.
+            See <a href="../reference/config/init.html">config init</a>.
+          </p>
+          <h2 id="4-start-the-server">4. Start the server</h2>
+          <pre><code class="language-sh">kanthord serve</code></pre>
+          <p>
+            Keep this terminal open. The server listens on
+            <code>http://127.0.0.1:31415</code>. Open
+            <code>http://localhost:31415</code> on the Mac to see the dashboard.
+          </p>
+          <h2 id="5-publish-the-server-to-your-tailnet">
+            5. Publish the server to your tailnet
+          </h2>
+          <p>In a second terminal:</p>
+          <pre><code class="language-sh">tailscale serve --bg 31415</code></pre>
+          <p>
+            Tailscale now forwards
+            <code>https://&lt;mac&gt;.&lt;tailnet&gt;.ts.net</code> to the
+            server. The first request can take some seconds, because Tailscale
+            gets the certificate.
+          </p>
+          <h2 id="6-get-a-token">6. Get a token</h2>
+          <pre><code class="language-sh">kanthord auth jwt generate &lt;your username&gt;</code></pre>
+          <p>
+            The command prints a human token on the terminal. See
+            <a href="../reference/auth/jwt.html">auth jwt generate</a>.
+          </p>
+          <h2 id="7-sign-in-from-the-phone">7. Sign in from the phone</h2>
+          <ol>
+            <li>
+              On the phone, open
+              <code>https://&lt;mac&gt;.&lt;tailnet&gt;.ts.net</code>.
+            </li>
+            <li>
+              Keep the Endpoint value. The dashboard fills it with the address
+              of the page.
+            </li>
+            <li>Paste the token, then select <strong>Login</strong>.</li>
+          </ol>
+          <h2 id="run-macos-nodes-on-this-mac">Run macOS nodes on this Mac</h2>
+          <p>
+            A node that needs macOS names the tag <code>platform.macos</code> in
+            its <code>tags</code> list. Only a worker binding with that tag
+            claims the node. The node needs a match in
+            <code>Available</code> and in <code>Waiting</code>, so give the tag
+            to a <code>coder@1</code> binding and to a
+            <code>reviewer@1</code> binding.
+          </p>
+          <ol>
+            <li>
+              <p>Export the binding set of the project:</p>
+              <pre><code class="language-sh">kanthord project binding export &lt;project-id&gt; &gt; bindings.json</code></pre>
+            </li>
+            <li>
+              <p>
+                In <code>bindings.json</code>, add
+                <code>&quot;tags&quot;: [&quot;platform.macos&quot;]</code> to
+                the <code>config</code> of each worker binding whose instances
+                run on this Mac.
+              </p>
+            </li>
+            <li>
+              <p>Apply the binding set:</p>
+              <pre><code class="language-sh">kanthord project binding apply &lt;project-id&gt; --file bindings.json</code></pre>
+            </li>
+            <li>
+              <p>
+                In the plan file of each node that needs macOS, add
+                <code>tags: [platform.macos]</code> to the front matter.
+              </p>
+            </li>
+            <li>
+              <p>
+                Import the plan. See
+                <a href="../reference/mission/import.html">mission import</a>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            Apply the tags before the import. An import that adds a node that no
+            worker binding of the project matches fails with
+            <code>mission.node.tags_unmatched</code>. See
+            <a href="../reference/project/binding.html">project bindings</a>.
+          </p>
+          <h2 id="run-worker-instances-in-containers">
+            Run worker instances in containers
+          </h2>
+          <p>
+            To run each worker instance in its own container on this Mac, see
+            <a href="isolate-worker-instances-in-containers.html"
+              >Isolate worker instances in containers</a
+            >.
+          </p>
+          <h2 id="run-a-worker-on-another-host">
+            Run a worker on another host
+          </h2>
+          <p>
+            A worker instance at the <code>worker</code> placement runs in a
+            <code>kanthord serve worker</code> process on another Linux host or
+            a Mac of your tailnet. It calls the server at
+            <code>https://&lt;mac&gt;.&lt;tailnet&gt;.ts.net</code>. The server
+            accepts the calls of a worker instance with any
+            <code>Host</code> header, so the allowlist of step 3 needs no
+            change.
+          </p>
+          <ol>
+            <li>
+              <p>
+                On the worker host, check that the host is signed in to the
+                tailnet of the server. On a Mac, set the alias of
+                <a href="#2-find-the-tailnet-name-of-the-mac"
+                  >2. Find the tailnet name of the Mac</a
+                >
+                first.
+              </p>
+              <pre><code class="language-sh">tailscale status</code></pre>
+              <p>
+                The command prints one line for each device of the tailnet. One
+                line holds <code>&lt;mac&gt;</code>, the Mac of the server.
+              </p>
+            </li>
+            <li>
+              <p>On the Mac of the server, read the version of the server:</p>
+              <pre><code class="language-sh">kanthord --version</code></pre>
+              <p>
+                The command prints the version, for example <code>28.0.1</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                Do steps 8.2 to 8.6 of
+                <a
+                  href="run-in-a-container.html#82-install-the-binary-on-the-worker-host"
+                  >Run kanthord in a container</a
+                >
+                on the worker host. Skip step 1 of 8.2. In step 8.3, set
+                <strong>Address</strong> to
+                <code>https://&lt;mac&gt;.&lt;tailnet&gt;.ts.net</code>. The
+                dashboard fills that value when you open the dashboard at that
+                address.
+              </p>
+            </li>
+          </ol>
+          <h2 id="stop-sharing-the-server">Stop sharing the server</h2>
+          <pre><code class="language-sh">tailscale serve --https=443 off</code></pre>
+          <p>Stop the server with <code>Ctrl-C</code> in its terminal.</p>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>403</code> with
+                    <code>gateway.http.host_not_allowed</code>
+                  </td>
+                  <td>
+                    The tailnet name is not in
+                    <code>gateway.allowed_hosts</code>. Add it to
+                    <code>~/.config/kanthord/kanthord.yaml</code>, then restart
+                    the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>macOS says that it cannot verify the binary</td>
+                  <td>Run the <code>xattr</code> command of step 1.</td>
+                </tr>
+                <tr>
+                  <td>The phone cannot open the address</td>
+                  <td>
+                    Make sure that Tailscale is connected on the phone, and that
+                    HTTPS certificates are turned on for the tailnet.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

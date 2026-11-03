@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inspect and release executions · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="inspect-and-release-executions">
+            Inspect and release executions
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            An execution records one claim of one node by one worker instance. A
+            <a href="work.html">work pull</a> creates it. These operations read
+            executions and end a running execution.
+          </p>
+          <ul>
+            <li>
+              <code>execution get</code> reads one execution, live or ended. Any
+              human identity can read any execution.
+            </li>
+            <li>
+              <code>execution list</code> returns one page of the executions of
+              a project, live and ended, newest <code>execution_id</code> first.
+              A <code>node_id</code> filter limits the page to one node. An
+              <code>attempt</code> filter limits it further to one attempt of
+              that node and requires <code>node_id</code>. A filter that matches
+              nothing returns an empty page.
+            </li>
+            <li>
+              <code>execution release</code> ends a running execution of the
+              caller and routes the node through the Mission Service.
+            </li>
+          </ul>
+          <p>
+            Each <code>execution list</code> call reads one page. The CLI does
+            not follow <code>next_cursor</code>.
+          </p>
+          <p>
+            <code>execution release</code> accepts only an execution that is
+            live and that belongs to the runtime identity of the caller. The
+            gateway proves this before the idempotency check and before the
+            handler. The release transaction checks it again. The Mission
+            Service then applies the release rule of the node state:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Node state</th>
+                  <th><code>further_work</code></th>
+                  <th>Requirement</th>
+                  <th>Node state after release</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Executing</code></td>
+                  <td><code>false</code></td>
+                  <td>
+                    A published evidence of the execution: for an
+                    <code>implement</code> node, a <code>repository</code> asset
+                    of the repository binding of the pinned revision; for an
+                    <code>examine</code> node, one <code>produced</code> asset.
+                    Otherwise <code>obligation</code> is <code>evidence</code>.
+                  </td>
+                  <td><code>Waiting</code></td>
+                </tr>
+                <tr>
+                  <td><code>Executing</code></td>
+                  <td><code>true</code></td>
+                  <td>None.</td>
+                  <td><code>Available</code></td>
+                </tr>
+                <tr>
+                  <td><code>Evaluating</code></td>
+                  <td>Either value</td>
+                  <td>
+                    A current successful assessment; otherwise
+                    <code>assessment</code>. No eligible action without a
+                    request; otherwise <code>request</code>.
+                  </td>
+                  <td><code>External.Requested</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The release body can carry a <code>stop</code>, which tells why the
+            execution ended early. A <code>stop</code> requires
+            <code>further_work: true</code>. A <code>stop</code> with a reason
+            other than <code>budget_end</code> counts as a failure toward
+            <code>mission.consecutive_failure_limit</code>, except a
+            <code>provider_failed</code> stop with <code>rate_limited</code>,
+            <code>quota_exhausted</code> or <code>unavailable</code>. Such a
+            stop neither counts nor ends the count. A lost claim also counts as
+            a failure. An execution that ends before
+            <code>expired_at</code> with no stop or with the stop
+            <code>budget_end</code> resets the failure count: a release with no
+            stop, a <code>budget_end</code> release and a revoked claim. An
+            <code>environment_failed</code> stop neither counts as a failure nor
+            ends the count. A <code>budget_end</code> stop counts toward
+            <code>mission.further_work_limit</code>. Any other end of an
+            execution resets that count: a release with no stop, a release with
+            any other stop, a revoked claim and a lost claim. A revoked claim,
+            for example after a human pause, ends the execution with no stop and
+            is no failure. <a href="../erd/02-execution.html">ERD 2</a> holds
+            the exact count rules.
+          </p>
+          <p>
+            A <code>stop</code> can also carry <code>detail</code>, the cause
+            text or the JSON facts of the stop. A native worker sets it from one
+            of these sources:
+          </p>
+          <ul>
+            <li>
+              the error text of a provider error reply, with the reason
+              <code>provider_failed</code>;
+            </li>
+            <li>
+              <code>&lt;error name&gt;: &lt;message&gt;</code> of an error with
+              no code that a prompt to the agent session or another step of the
+              execution throws, with the reason <code>operation_failed</code>;
+            </li>
+            <li>
+              the text of a git state violation after an agent turn, with the
+              reason <code>operation_failed</code> and a code
+              <code>worker.turn.*</code>;
+            </li>
+            <li>
+              the JSON result of a verification that failed twice because of the
+              infrastructure, with the reason <code>operation_failed</code> and
+              the code <code>worker.verification.infrastructure_failed</code>;
+            </li>
+            <li>
+              the redacted git stderr of a failed gate G commit, with the reason
+              <code>operation_failed</code> and the code
+              <code>worker.git.commit_failed</code>;
+            </li>
+            <li>
+              the JSON facts of the progress rule, with the reason
+              <code>no_progress</code>. The JSON holds no text, and the worker
+              does not cut it;
+            </li>
+            <li>
+              the JSON facts of an environment failure, with the reason
+              <code>environment_failed</code>. For
+              <code>affected_invalid</code> and
+              <code>affected_timeout</code> after the base check, the facts hold
+              <code>binding_id</code>, <code>commit</code> of the base head,
+              <code>command</code>, <code>exit_code</code>, and the parse
+              <code>error</code> or <code>time_limit_s</code>. For
+              <code>affected_timeout</code> at the node head, the facts hold
+              <code>binding_id</code>, <code>commit</code> of the node head,
+              <code>command</code> and <code>time_limit_s</code>. For
+              <code>command_absent</code> from the affected test run, the facts
+              hold <code>binding_id</code>, <code>commit</code> of the base
+              head, <code>command</code> and <code>exit_code</code>. An invalid
+              declaration gives <code>binding_id</code>, <code>commit</code>,
+              <code>file</code> and <code>error</code>. The worker adds
+              <code>digests</code>, the environment digest of each repository
+              binding that holds an environment.
+            </li>
+          </ul>
+          <p>
+            Any other error with a code, for example
+            <code>repository.node_branch.missing</code>, gives the code and no
+            <code>detail</code>. A <code>budget_end</code> stop and the code
+            <code>worker.merge.markers_left</code> carry no <code>detail</code>.
+            In a cause text, the worker removes the secrets of the credential,
+            bearer values, JWTs and tokens of 32 or more characters, and cuts
+            the text to 300 characters. A file path stays visible when it holds
+            at least three <code>/</code>, no segment of 32 or more characters,
+            and no <code>+</code> or <code>=</code>. <code>detail</code> is
+            optional, a nonempty string of at most 2048 characters, and changes
+            no count. The server stores <code>reason</code>,
+            <code>code</code> and <code>detail</code> of the
+            <code>stop</code> as JSON in the <code>stop</code> column of the
+            execution row, so <code>detail</code> needs no new column.
+          </p>
+          <p>
+            The JSON facts of a <code>no_progress</code> stop hold
+            <code>rule</code>, <code>count</code>, <code>limit</code> and
+            <code>verification</code>. <code>rule</code> is
+            <code>unchanged_revision</code> or <code>verdict_rule_unmet</code>.
+            <code>count</code> is the count of unchanged turns at the stop, and
+            <code>limit</code> is the count that stops the execution.
+            <code>verification</code> is <code>null</code>, or the last
+            verification of any unit of the execution. It holds
+            <code>passed</code>, <code>ran</code> (the count of commands that
+            ran), <code>exit_code</code> (the exit code of the last command that
+            ran) and <code>timed_out</code>. <code>exit_code</code> is
+            <code>null</code> when the command has no exit code or no command
+            ran. <code>timed_out</code> is <code>true</code> when the last
+            command that ran reached its command limit, and
+            <code>false</code> otherwise.
+          </p>
+          <p>
+            A <code>stop</code> can also carry <code>cause</code>, the cause of
+            the failure that the worker computes at record time.
+            <code>cause</code> is
+            <code>{ category, assigner, subcategory?, suspects? }</code>. A
+            <code>stop</code> with no <code>cause</code>, for example from an
+            external harness, gives the cause <code>unattributed</code> with no
+            suspects. <code>category</code> is <code>prompt</code>,
+            <code>plan</code>, <code>worker_action</code>,
+            <code>llm_provider</code>, <code>model</code>,
+            <code>environment</code>, <code>infrastructure</code>,
+            <code>human</code> or <code>unattributed</code>.
+            <code>assigner</code> is <code>rule</code> or <code>reviewer</code>.
+            <code>subcategory</code> is a value of the set of its category:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>category</code></th>
+                  <th><code>subcategory</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>prompt</code></td>
+                  <td>
+                    <code>context_missing</code>,
+                    <code>instruction_conflict</code>, <code>rule_absent</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>plan</code></td>
+                  <td>
+                    <code>criterion_unstated</code>,
+                    <code>requirement_conflict</code>, <code>dependency</code>,
+                    <code>verification_context</code>,
+                    <code>verification_insufficient</code>,
+                    <code>decomposition</code>, <code>oversized</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_action</code></td>
+                  <td>
+                    <code>gate_commit</code>, <code>merge_base</code>,
+                    <code>release_gate</code>, <code>review_flow</code>,
+                    <code>step_failed</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>llm_provider</code></td>
+                  <td>
+                    <code>rate_limited</code>, <code>quota_exhausted</code>,
+                    <code>unavailable</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>model</code></td>
+                  <td>
+                    <code>work_defect</code>, <code>standard_violation</code>,
+                    <code>verification_failed</code>, <code>no_progress</code>,
+                    <code>reply_invalid</code>, <code>protocol_violation</code>,
+                    <code>output_truncated</code>,
+                    <code>budget_exhausted</code>, <code>judgement_wrong</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>environment</code></td>
+                  <td>
+                    <code>setup_failed</code>, <code>command_absent</code>,
+                    <code>affected_invalid</code>,
+                    <code>affected_timeout</code>,
+                    <code>flaky_verification</code>,
+                    <code>verification_hang</code>, <code>repository_hook</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>infrastructure</code></td>
+                  <td>
+                    <code>verification_killed</code>, <code>network</code>,
+                    <code>execution_lost</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>human</code></td>
+                  <td><code>intervention</code>, <code>configuration</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>suspects</code> is a list of categories, the best guess first.
+            It stands only with the category <code>unattributed</code>, and
+            <code>subcategory</code> stands with every other category. The
+            Scheduler writes <code>cause</code> on the root span end as
+            <code>kanthord.cause.*</code>. The execution record stores no
+            <code>cause</code>, so <code>stop</code> in the record holds
+            <code>reason</code>, <code>code</code> and <code>detail</code> only.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>stop.reason</code></th>
+                  <th><code>stop.code</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>budget_end</code></td>
+                  <td><code>turns</code> or <code>wall_time</code></td>
+                </tr>
+                <tr>
+                  <td><code>provider_failed</code></td>
+                  <td>
+                    <code>rate_limited</code>, <code>quota_exhausted</code>,
+                    <code>unauthorized</code>, <code>bad_request</code>,
+                    <code>unavailable</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>no_progress</code></td>
+                  <td><code>null</code></td>
+                </tr>
+                <tr>
+                  <td><code>environment_failed</code></td>
+                  <td>
+                    <code>setup_failed</code>, <code>command_absent</code>,
+                    <code>affected_invalid</code>, <code>affected_timeout</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>operation_failed</code>,
+                    <code>judgement_invalid</code>, <code>report_absent</code>,
+                    <code>action_unsettled</code>,
+                    <code>assessment_absent</code>
+                  </td>
+                  <td>A nonempty string or <code>null</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A native steps execution sends <code>operation_failed</code> with
+            these codes of its own:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>stop.code</code></th>
+                  <th>Cause</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>repository.node_branch.missing</code></td>
+                  <td>
+                    The node branch is missing at the repository after a
+                    recorded push.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.branch_changed</code></td>
+                  <td>An agent turn left a checkout off the node branch.</td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.history_rewritten</code></td>
+                  <td>
+                    An agent turn moved the head to a commit that does not
+                    contain the head before the turn.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.git_in_progress</code></td>
+                  <td>
+                    An agent turn left a merge, <code>am</code>, cherry-pick or
+                    revert in progress on the node branch. An open rebase
+                    detaches <code>HEAD</code> and gives
+                    <code>worker.turn.branch_changed</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.turn.merge_missing</code></td>
+                  <td>A conflict turn ended with no open merge of the base.</td>
+                </tr>
+                <tr>
+                  <td><code>worker.merge.markers_left</code></td>
+                  <td>
+                    A conflicted file still holds a conflict marker after the
+                    conflict turn.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.git.commit_failed</code></td>
+                  <td>
+                    A gate G commit failed. <code>detail</code> holds the
+                    redacted git stderr cut to 300 characters.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>worker.verification.infrastructure_failed</code>
+                  </td>
+                  <td>
+                    A verification failed because of the infrastructure on its
+                    run and on its rerun.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A native evaluation execution also sends
+            <code>worker.verification.infrastructure_failed</code>.
+            <a href="../../explanation/coder-worker.html#how-the-execution-ends"
+              >How the coder@1 worker works</a
+            >
+            explains each end of a steps execution.
+          </p>
+          <p>
+            A successful release sets <code>ended_at</code>, so
+            <code>claim_state</code> becomes <code>finished</code>, and frees
+            the live count of the binding. It wakes the pulls that wait in the
+            project. A refused release changes no execution, node or job.
+          </p>
+          <p>
+            A release ends an execution at most once. The gateway stores no
+            receipt that it can replay after the end. A retry after a committed
+            release, with the same key or a new key, fails the execution proof
+            with <code>403</code>. To confirm the result after a lost answer,
+            read the execution with
+            <a href="claim.html"><code>claim get</code></a> or
+            <code>execution get</code>; <code>claim_state</code> is
+            <code>finished</code>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="execution-get"><code>execution get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with one
+            <code>ExecutionRecord</code>. The CLI writes the same object as one
+            JSON line to stdout and exits <code>0</code>.
+          </p>
+          <pre><code class="language-json">{
+  "execution_id": "execution_01JZ8R2B3C4D5E6F7G8H9J0K1M",
+  "project_id": "project_01JZ8PZ0A1B2C3D4E5F6G7H8J9",
+  "node_id": "node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
+  "claimant": {
+    "worker_binding_id": "binding_01JZ8PZ5N6P7Q8R9S0T1V2W3X4",
+    "resource_identity": "&lt;resource-identity&gt;",
+    "runtime_identity": "worker_registration_01JZ8R0Y1Z2A3B4C5D6E7F8G9H",
+    "client_id": "client_identity_01JZ8QZW2X3Y4Z5A6B7C8D9E0F",
+    "name": "Worker display name"
+  },
+  "attempt": 1,
+  "pinned_revision": 3,
+  "node_branch": "kanthord/node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
+  "credentials": [],
+  "agent_selections": [
+    {
+      "agent_name": "swe@1",
+      "position": 0,
+      "level": "enablement",
+      "agent_provider": "main",
+      "provider": "anthropic",
+      "credential": "&lt;credential-name&gt;",
+      "model_identifier": "claude-sonnet-4-5",
+      "reasoning_effort": "high"
+    }
+  ],
+  "claim_state": "finished",
+  "expired_at": 1791449400000,
+  "created_at": 1791447600000,
+  "ended_at": 1791448200000,
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "root_span_id": "00f067aa0ba902b7"
+}</code></pre>
+          <h3 id="execution-list"><code>execution list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code>.
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    { "execution_id": "execution_01JZ8R2B3C4D5E6F7G8H9J0K1M", "...": "..." }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array of <code>ExecutionRecord</code></td>
+                  <td>
+                    At most <code>limit</code> records,
+                    <code>execution_id</code> descending. An empty array is a
+                    successful result.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Opaque cursor for the next page. <code>null</code> ends the
+                    traversal.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-release"><code>execution release</code></h3>
+          <p>The API returns HTTP <code>200</code>:</p>
+          <pre><code class="language-json">{
+  "execution_id": "execution_01JZ8R2B3C4D5E6F7G8H9J0K1M",
+  "ended_at": 1791448200000
+}</code></pre>
+          <p>
+            The CLI adds the retry key, writes one JSON line to stdout, and
+            exits <code>0</code> (shown formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "execution_id": "execution_01JZ8R2B3C4D5E6F7G8H9J0K1M",
+  "ended_at": 1791448200000,
+  "idempotency_key": "idempotency_key_01M34JC4BJ66JHP41M4MYY6PST"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Surface</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td><code>execution_&lt;ulid&gt;</code></td>
+                  <td>API and CLI</td>
+                  <td>The released execution.</td>
+                </tr>
+                <tr>
+                  <td><code>ended_at</code></td>
+                  <td>timestamp</td>
+                  <td>API and CLI</td>
+                  <td>Time of the release.</td>
+                </tr>
+                <tr>
+                  <td><code>idempotency_key</code></td>
+                  <td><code>idempotency_key_&lt;ulid&gt;</code> string</td>
+                  <td>CLI only</td>
+                  <td>Key used for this request.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="executionrecord"><code>ExecutionRecord</code></h3>
+          <p>
+            Every timestamp is a safe integer of Unix epoch milliseconds in UTC.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td><code>execution_&lt;ulid&gt;</code></td>
+                  <td>Identity of the execution.</td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td><code>project_&lt;ulid&gt;</code></td>
+                  <td>Project of the claimed node.</td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Claimed Mission node.</td>
+                </tr>
+                <tr>
+                  <td><code>claimant.worker_binding_id</code></td>
+                  <td><code>binding_&lt;ulid&gt;</code></td>
+                  <td>Worker binding of the claimant at the claim.</td>
+                </tr>
+                <tr>
+                  <td><code>claimant.resource_identity</code></td>
+                  <td>nonempty string</td>
+                  <td>Resource identity of the claimant.</td>
+                </tr>
+                <tr>
+                  <td><code>claimant.runtime_identity</code></td>
+                  <td><code>worker_registration_&lt;ulid&gt;</code></td>
+                  <td>Runtime identity of the claimant.</td>
+                </tr>
+                <tr>
+                  <td><code>claimant.client_id</code></td>
+                  <td><code>client_identity_&lt;ulid&gt;</code>, optional</td>
+                  <td>
+                    Client identity of the registration. Absent when the runtime
+                    identity has no registered client.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>claimant.name</code></td>
+                  <td>string of 1 to 64 characters, optional</td>
+                  <td>
+                    Display name of the registration. Present together with
+                    <code>client_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>positive safe integer</td>
+                  <td>Attempt of the node that this execution serves.</td>
+                </tr>
+                <tr>
+                  <td><code>pinned_revision</code></td>
+                  <td>positive safe integer</td>
+                  <td>Node revision that the attempt pins.</td>
+                </tr>
+                <tr>
+                  <td><code>node_branch</code></td>
+                  <td>string</td>
+                  <td>
+                    Node branch of the attempt, which the server derives from
+                    the attempts of the node:
+                    <code>kanthord/&lt;node id&gt;</code>, or
+                    <code>kanthord/&lt;node id&gt;-a&lt;k&gt;</code> after an
+                    unblock with
+                    <code>start_point: &quot;base_branch&quot;</code> at attempt
+                    k. The execution reads and pushes only this branch.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credentials</code></td>
+                  <td>array of <code>credential_&lt;ulid&gt;</code></td>
+                  <td>
+                    Credentials that the execution pins; <code>[]</code> at the
+                    claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_selections</code></td>
+                  <td>array of objects</td>
+                  <td>
+                    Agent selections of the execution, one for each native agent
+                    of the worker. The claim health check refuses a claim when
+                    any agent configuration is invalid, so every native agent of
+                    a claimed execution holds a pin. The claim pins only the
+                    chain position and the enablement revision, and the server
+                    rebuilds each item from the pin. Each item holds
+                    <code>agent_name</code>, <code>position</code>,
+                    <code>level</code> (<code>enablement</code> or
+                    <code>binding</code>), <code>agent_provider</code>,
+                    <code>provider</code>, <code>credential</code>,
+                    <code>model_identifier</code> and
+                    <code>reasoning_effort</code>. <code>[]</code> for a worker
+                    with no native agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>claim_state</code></td>
+                  <td>
+                    <code>running</code>, <code>lost</code> or
+                    <code>finished</code>
+                  </td>
+                  <td>
+                    <code>running</code>: not ended and before
+                    <code>expired_at</code>. <code>finished</code>: ended before
+                    <code>expired_at</code>. <code>lost</code>: ended at or
+                    after <code>expired_at</code>, or not ended and
+                    <code>expired_at</code> has passed.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>expired_at</code></td>
+                  <td>timestamp</td>
+                  <td>Fixed deadline that the claim sets once.</td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>timestamp</td>
+                  <td>Time of the claim.</td>
+                </tr>
+                <tr>
+                  <td><code>ended_at</code></td>
+                  <td>timestamp or <code>null</code></td>
+                  <td>
+                    Time of the end; <code>null</code> while the execution has
+                    not ended.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>trace_id</code></td>
+                  <td>32 lower-case hexadecimal characters, not all zero</td>
+                  <td>Trace identity that the Scheduler mints at the claim.</td>
+                </tr>
+                <tr>
+                  <td><code>root_span_id</code></td>
+                  <td>16 lower-case hexadecimal characters, not all zero</td>
+                  <td>
+                    Root span identity that the Scheduler mints at the claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>stop</code></td>
+                  <td>
+                    <code>{ reason, code, detail? }</code> or <code>null</code>
+                  </td>
+                  <td>
+                    Stop of the release; <code>null</code> while the execution
+                    runs and after a release with no stop.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>
+                    Missing, invalid or expired token. <code>get</code> and
+                    <code>list</code> reject a machine token;
+                    <code>release</code> rejects a human token or a machine
+                    token whose binding does not resolve.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid path parameter, query field or body, a
+                    <code>stop</code> with an invalid
+                    <code>cause</code> included; also
+                    <code>attempt</code> without <code>node_id</code>, or
+                    <code>limit</code> outside 1 to 1000.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td><code>get</code>, <code>list</code></td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td><code>404 scheduler.execution.not_found</code></td>
+                  <td><code>get</code></td>
+                  <td>No execution has this identity.</td>
+                </tr>
+                <tr>
+                  <td><code>403 gateway.registration.required</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    The machine identity holds no live worker registration.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td><code>release</code></td>
+                  <td>
+                    The <code>Content-Type</code> is not
+                    <code>application/json</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    The body is not valid JSON, or an object repeats a member
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>403 gateway.invocation.execution_proof_failed</code>
+                  </td>
+                  <td><code>release</code></td>
+                  <td>
+                    The execution does not exist, has ended, has passed
+                    <code>expired_at</code>, or belongs to another runtime
+                    identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td><code>release</code></td>
+                  <td>Missing or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    The key is in use by a request that has not completed, or by
+                    a different request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 scheduler.execution.not_running</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    The execution is no longer a running claim of the caller
+                    when the release transaction checks it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.release.obligation_unmet</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    The release rule of the node fails.
+                    <code>details.obligation</code> is <code>evidence</code>,
+                    <code>assessment</code> or <code>request</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td><code>release</code></td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code
+                      >cli.scheduler.execution.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>get</code></td>
+                  <td>
+                    <code>&lt;execution-id&gt;</code> is not a canonical
+                    <code>execution_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.scheduler.execution.release.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>release</code></td>
+                  <td>
+                    <code>&lt;execution-id&gt;</code> is not a canonical
+                    <code>execution_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.execution.list.invalid_project_id</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>&lt;project-id&gt;</code> is not a canonical
+                    <code>project_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.execution.list.invalid_node_id</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--node</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.execution.list.invalid_attempt</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--attempt</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is outside 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.execution.get.token_required</code>
+                  </td>
+                  <td><code>get</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.execution.list.token_required</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.execution.release.token_required</code>
+                  </td>
+                  <td><code>release</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.*</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    The <code>--file</code> value fails a file check; the codes
+                    are in <a href="work.html#failures">pull work</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td><code>release</code></td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI does not check <code>--attempt</code> without
+            <code>--node</code>; the API rejects it with
+            <code>400 gateway.request.validation_failed</code>.
+          </p>
+          <p>
+            A declared API failure makes the CLI exit <code>1</code>. The
+            diagnostic starts with the error code of the API and holds the row
+            <code>status</code>; for <code>release</code> it also holds the row
+            <code>idempotency_key</code>. A transport failure, timeout or
+            malformed response exits <code>1</code> with
+            <code>cli.scheduler.execution.get.indeterminate</code>,
+            <code>cli.scheduler.execution.list.indeterminate</code> or
+            <code>cli.scheduler.execution.release.indeterminate</code>. For a
+            read, run the command again. For a release, the diagnostic is
+            <code
+              >&lt;code&gt;: the result is unknown; read the execution before
+              any retry</code
+            >. Its row
+            <code
+              >command: kanthord scheduler execution get
+              &lt;execution-id&gt;</code
+            >
+            names the command to run before any retry. A retry after a committed
+            release fails the execution proof, so read the execution first.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="execution-get-1"><code>execution get</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/scheduler/execution/:execution_id</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>scheduler.execution.get</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>execution_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-list-1"><code>execution list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >GET /api/scheduler/project/:project_id/execution</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>scheduler.execution.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>project_id</code> (path, required);
+                    <code>node_id</code> (query, optional);
+                    <code>attempt</code> (query, positive integer, requires
+                    <code>node_id</code>); <code>limit</code> (query, 1 to 1000,
+                    default <code>100</code>); <code>cursor</code> (query,
+                    optional)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>execution get</code> and <code>execution list</code> use one
+            header:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i http://127.0.0.1:31415/api/scheduler/execution/execution_01JZ8R2B3C4D5E6F7G8H9J0K1M \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5F6G7H8J9/execution?node_id=node_01JZ8Q0K4M6N8P0R2S4T6V8W0X&amp;attempt=1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h3 id="execution-release-1"><code>execution release</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >POST /api/scheduler/execution/:execution_id/release</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>scheduler.execution.release</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live worker
+                    registration and a live execution of that registration
+                  </td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>execution_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    Closed JSON object
+                    <code
+                      >{ &quot;further_work&quot;: &lt;boolean&gt;,
+                      &quot;stop&quot;: { &quot;reason&quot;, &quot;code&quot;,
+                      &quot;detail&quot;?, &quot;cause&quot;? } | null }</code
+                    >; <code>further_work</code> is required,
+                    <code>stop</code> defaults to <code>null</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>Bearer &lt;machine-jwt&gt;</code> of the instance that
+                    holds the claim.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code> for the release
+                    request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/scheduler/execution/execution_01JZ8R2B3C4D5E6F7G8H9J0K1M/release \
+  -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -d '{"further_work":false}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <h3 id="execution-get-2"><code>execution get</code></h3>
+          <pre><code class="language-text">kanthord scheduler execution get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord scheduler execution get execution_01JZ8R2B3C4D5E6F7G8H9J0K1M</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;execution-id&gt;</code></td>
+                  <td>Required <code>execution_&lt;ulid&gt;</code> to read.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-list-2"><code>execution list</code></h3>
+          <pre><code class="language-text">kanthord scheduler execution list &lt;project-id&gt; [--node &lt;node-id&gt;] [--attempt &lt;n&gt;] [--limit &lt;count&gt;] [--cursor &lt;opaque&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord scheduler execution list project_01JZ8PZ0A1B2C3D4E5F6G7H8J9 \
+  --node node_01JZ8Q0K4M6N8P0R2S4T6V8W0X --attempt 1</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>
+                    Required <code>project_&lt;ulid&gt;</code> of the
+                    executions.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--node &lt;node-id&gt;</code></td>
+                  <td>None; all nodes</td>
+                  <td>Sets the <code>node_id</code> filter.</td>
+                </tr>
+                <tr>
+                  <td><code>--attempt &lt;n&gt;</code></td>
+                  <td>None; all attempts</td>
+                  <td>
+                    Sets the <code>attempt</code> filter, a positive integer.
+                    Requires <code>--node</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum records on the page, from 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;opaque&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="execution-release-2"><code>execution release</code></h3>
+          <pre><code class="language-text">kanthord scheduler execution release &lt;execution-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">printf '{ "further_work": false }\n' &gt; release.json
+kanthord scheduler execution release execution_01JZ8R2B3C4D5E6F7G8H9J0K1M \
+  --file release.json --token '&lt;machine-jwt&gt;'</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;execution-id&gt;</code></td>
+                  <td>
+                    Required <code>execution_&lt;ulid&gt;</code> to release.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Required; no default</td>
+                  <td>
+                    JSON file that holds the request body. The file must be a
+                    regular UTF-8 file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>Sets the <code>Idempotency-Key</code> header.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="shared-options">Shared options</h3>
+          <p>Every command on this page accepts these options:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>
+                    Bearer credential: a human JWT for <code>get</code> and
+                    <code>list</code>, a machine JWT for <code>release</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>scheduler</code> group, and each leaf command accepts them.
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>List the models of a credential · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="list-the-models-of-a-credential">
+            List the models of a credential
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            List the models and reasoning efforts that one LLM credential offers
+            for one agent provider kind. The read needs no
+            <a href="enablement.html">enablement</a>. Use it to choose a
+            <code>model_identifier</code> and a
+            <code>reasoning_effort</code> before you write an enablement.
+          </p>
+          <p>
+            The credential must exist in custody, and its platform must equal
+            the provider kind. A built-in provider kind lists the models of
+            pi-ai 1.1.0 with the supported thinking levels of each model. The
+            <code>openai-compatible</code> kind lists the approved models in the
+            metadata of the credential. The read makes no remote call and
+            changes no state.
+          </p>
+          <p>
+            <a href="enablement-provider.html#list-the-models-of-a-provider"
+              >List the models of an enablement provider</a
+            >
+            answers the same shape for a provider that an enablement already
+            names.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code>. The
+            example below is shortened.
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "model_identifier": "claude-sonnet-4-5",
+      "reasoning_efforts": ["off", "minimal", "low", "medium", "high"]
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    Every model of the credential for the provider kind. The
+                    list has no pagination.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].model_identifier</code></td>
+                  <td>string</td>
+                  <td>
+                    Value for
+                    <code>default_configuration.model_identifier</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>items[].reasoning_efforts</code></td>
+                  <td>string array</td>
+                  <td>
+                    Reasoning efforts that the model supports, from
+                    <code>off</code>, <code>minimal</code>, <code>low</code>,
+                    <code>medium</code>, <code>high</code>,
+                    <code>xhigh</code> and <code>max</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An <code>openai-compatible</code> credential without approved models
+            answers an empty <code>items</code> array.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    <code>provider</code> is not an agent provider kind, or
+                    <code>credential</code> is absent or empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>400 agent.configuration.credential_unsuitable</code>
+                  </td>
+                  <td>
+                    The credential does not exist, or its platform differs from
+                    <code>provider</code>. <code>details</code> holds
+                    <code>provider</code> and <code>credential</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.agent.model.list.invalid_provider</code></td>
+                  <td>
+                    The <code>--provider</code> value is not an agent provider
+                    kind.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.agent.model.list.token_required</code></td>
+                  <td>
+                    No option, environment variable or client file supplies a
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.agent.model.list.indeterminate</code></td>
+                  <td>
+                    A transport failure, timeout or malformed response. Retry
+                    the command.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/agent/model</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>agent.model.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>provider</code></td>
+                  <td>query</td>
+                  <td>Yes</td>
+                  <td>
+                    Agent provider kind: <code>openai-compatible</code> or a
+                    built-in provider of pi-ai 1.1.0, for example
+                    <code>anthropic</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>query</td>
+                  <td>Yes</td>
+                  <td>Credential name in custody.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -s 'http://127.0.0.1:31415/api/agent/model?provider=anthropic&amp;credential=&lt;credential-name&gt;' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord agent model list --provider &lt;provider&gt; --credential &lt;credential&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord agent model list --provider anthropic --credential &lt;credential-name&gt;</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--provider &lt;provider&gt;</code></td>
+                  <td>Required</td>
+                  <td>Sets <code>provider</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--credential &lt;credential&gt;</code></td>
+                  <td>Required</td>
+                  <td>Sets <code>credential</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>agent</code> group declares <code>--token</code> and
+            <code>--endpoint</code>. Each option except
+            <code>--endpoint</code> accepts one occurrence only; a repeat fails
+            with <code>cli.option.duplicate</code>. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline for this 30-second
+            operation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

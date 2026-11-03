@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Run kanthord under a path prefix · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <main>
+        <article>
+          <h1 id="run-kanthord-under-a-path-prefix">
+            Run kanthord under a path prefix
+          </h1>
+          <p>
+            Run the kanthord single binary behind a reverse proxy, and reach it
+            under a path such as
+            <code>https://proxy.example.com/s/kanthord/</code>. Other services
+            can share the same host, each under its own path.
+          </p>
+          <p>
+            The daemon serves its whole HTTP surface under
+            <code>gateway.base_path</code>: the API, the dashboard and its
+            assets. The proxy forwards the full path unchanged, so the proxy
+            needs no rewrite and no custom header.
+          </p>
+          <ul>
+            <li>
+              <a href="#generic-setup">Generic setup</a> works with any reverse
+              proxy.
+            </li>
+            <li>
+              <a href="#homelab-with-cloudflare-tunnel-and-nginx"
+                >Homelab with Cloudflare Tunnel and nginx</a
+              >
+              applies the generic setup to a home server.
+            </li>
+          </ul>
+          <h2 id="generic-setup">Generic setup</h2>
+          <h3 id="before-you-start">Before you start</h3>
+          <ul>
+            <li>
+              A Linux server with systemd, on <code>x86_64</code> or
+              <code>arm64</code>.
+            </li>
+            <li>
+              The binary for the architecture of the server. See
+              <a href="run-on-a-vps.html#1-install-the-binary"
+                >Run kanthord on a VPS</a
+              >.
+            </li>
+            <li>
+              A reverse proxy that terminates HTTPS for the public host, for
+              example <code>proxy.example.com</code>.
+            </li>
+          </ul>
+          <h3 id="1-install-the-binary-and-create-a-service-user">
+            1. Install the binary and create a service user
+          </h3>
+          <p>
+            Do steps 1 and 2 of
+            <a href="run-on-a-vps.html">Run kanthord on a VPS</a>.
+          </p>
+          <h3 id="2-create-the-configuration">2. Create the configuration</h3>
+          <p>
+            Add the public host to the host allowlist, and set the base path:
+          </p>
+          <pre><code class="language-sh">sudo -u kanthord -H kanthord config init \
+  --gateway-allowed-host proxy.example.com \
+  --gateway-base-path /s/kanthord</code></pre>
+          <p>
+            The base path is <code>/</code> or one or more segments, each after
+            a <code>/</code>, with no trailing slash. The daemon then answers
+            only under <code>/s/kanthord</code>. See
+            <a href="../reference/config/init.html">config init</a>.
+          </p>
+          <h3 id="3-run-the-server-with-systemd">
+            3. Run the server with systemd
+          </h3>
+          <p>
+            Do step 4 of
+            <a href="run-on-a-vps.html#4-run-the-server-with-systemd"
+              >Run kanthord on a VPS</a
+            >.
+          </p>
+          <p>Check the server on the machine:</p>
+          <pre><code class="language-sh">curl -H 'Host: proxy.example.com' http://127.0.0.1:31415/s/kanthord/api/liveness</code></pre>
+          <h3 id="4-configure-the-reverse-proxy">
+            4. Configure the reverse proxy
+          </h3>
+          <p>
+            Route the base path and every path under it to
+            <code>http://127.0.0.1:31415</code>. The proxy must meet these
+            rules:
+          </p>
+          <ul>
+            <li>
+              Forward the full path unchanged. Do not remove the
+              <code>/s/kanthord</code> prefix.
+            </li>
+            <li>
+              Forward the original <code>Host</code> header, so that the
+              allowlist of step 2 matches.
+            </li>
+            <li>
+              Do not buffer a response, so that a stream reaches the client at
+              once.
+            </li>
+            <li>Allow a response time of at least 300 seconds.</li>
+          </ul>
+          <p>
+            The daemon answers <code>/s/kanthord</code> with a 301 to
+            <code>/s/kanthord/</code>, so the proxy needs no redirect.
+          </p>
+          <h3 id="5-get-a-token-and-sign-in">5. Get a token and sign in</h3>
+          <pre><code class="language-sh">sudo -u kanthord -H kanthord auth jwt generate &lt;your username&gt;</code></pre>
+          <ol>
+            <li>Open <code>https://proxy.example.com/s/kanthord/</code>.</li>
+            <li>
+              Keep the Endpoint value. The dashboard fills it with
+              <code>https://proxy.example.com/s/kanthord</code>.
+            </li>
+            <li>Paste the token, then select <strong>Login</strong>.</li>
+          </ol>
+          <p>
+            Every client endpoint carries the prefix. On the server, set
+            <code>KANTHORD_ENDPOINT=http://127.0.0.1:31415/s/kanthord</code> for
+            the CLI.
+          </p>
+          <h3 id="troubleshooting">Troubleshooting</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>403</code> with
+                    <code>gateway.http.host_not_allowed</code>
+                  </td>
+                  <td>
+                    The host is not in <code>gateway.allowed_hosts</code>. Add
+                    it to
+                    <code>/var/lib/kanthord/.config/kanthord/kanthord.yaml</code
+                    >, then run <code>sudo systemctl restart kanthord</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>404</code> with
+                    <code>gateway.routing.not_found</code> on
+                    <code>/api/...</code>
+                  </td>
+                  <td>
+                    The endpoint or the proxy drops the prefix. Add
+                    <code>/s/kanthord</code> to the endpoint, and make the proxy
+                    forward the full path.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>502</code> from the proxy</td>
+                  <td>
+                    The server is not running. Read
+                    <code>sudo journalctl -u kanthord</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="homelab-with-cloudflare-tunnel-and-nginx">
+            Homelab with Cloudflare Tunnel and nginx
+          </h2>
+          <p>
+            Reach kanthord at
+            <code>https://homelab.example.com/s/kanthord/</code> from a home
+            server with no open router port. One tunnel route sends every
+            request of the host to nginx. nginx routes each
+            <code>/s/&lt;service-name&gt;</code> path to its local service, so a
+            new service needs no new tunnel route.
+          </p>
+          <h3 id="before-you-start-1">Before you start</h3>
+          <ul>
+            <li>
+              A domain on Cloudflare, for example <code>example.com</code>.
+            </li>
+            <li>
+              A Cloudflare Tunnel that runs on the server as the
+              <code>cloudflared</code> systemd service. The Cloudflare dashboard
+              manages the routes of the tunnel.
+            </li>
+            <li>
+              nginx on the server, with no other site on
+              <code>127.0.0.1:80</code>.
+            </li>
+          </ul>
+          <h3 id="1-install-and-configure-kanthord">
+            1. Install and configure kanthord
+          </h3>
+          <p>
+            Do steps 1 to 3 of the <a href="#generic-setup">generic setup</a>,
+            with <code>homelab.example.com</code> as the public host.
+          </p>
+          <h3 id="2-route-the-path-with-nginx">2. Route the path with nginx</h3>
+          <p>Write <code>/etc/nginx/sites-available/homelab</code>:</p>
+          <pre><code class="language-nginx">limit_req_zone $binary_remote_addr zone=kanthord:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=kanthord_conn:10m;
+
+server {
+    listen 127.0.0.1:80;
+    server_name homelab.example.com;
+
+    server_tokens off;
+
+    set_real_ip_from 127.0.0.1;
+    real_ip_header CF-Connecting-IP;
+
+    absolute_redirect off;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    location = /s/kanthord {
+        return 301 /s/kanthord/;
+    }
+
+    location ^~ /s/kanthord/ {
+        limit_req zone=kanthord burst=40 nodelay;
+        limit_conn kanthord_conn 20;
+        limit_req_status 429;
+        limit_conn_status 429;
+        client_max_body_size 50m;
+
+        proxy_pass http://127.0.0.1:31415;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}</code></pre>
+          <ul>
+            <li>
+              <code>proxy_pass</code> has no URI after the port, so nginx keeps
+              the <code>/s/kanthord</code> prefix.
+            </li>
+            <li>
+              <code>listen 127.0.0.1:80</code> keeps nginx off the local
+              network. Only <code>cloudflared</code> reaches it.
+            </li>
+            <li>
+              <code>real_ip_header CF-Connecting-IP</code> gives the logs and
+              the limits the address of the client, not the address of
+              <code>cloudflared</code>.
+            </li>
+            <li>
+              <code>limit_req</code> and <code>limit_conn</code> answer
+              <code>429</code> to a client that sends more than 10 requests per
+              second after a burst of 40, or that holds more than 20
+              connections.
+            </li>
+            <li>
+              <code>client_max_body_size 50m</code> matches the largest request
+              body of the daemon.
+            </li>
+            <li><code>server_tokens off</code> hides the nginx version.</li>
+            <li>
+              <code>absolute_redirect off</code> keeps a redirect relative, so
+              the browser stays on HTTPS.
+            </li>
+            <li>
+              The <code>add_header</code> lines stop framing and MIME sniffing,
+              and keep the browser on HTTPS.
+            </li>
+            <li>
+              <code>location ~ /\.</code> refuses a hidden file of the web root.
+            </li>
+          </ul>
+          <p>Enable the site and reload nginx:</p>
+          <pre><code class="language-sh">sudo ln -s /etc/nginx/sites-available/homelab /etc/nginx/sites-enabled/homelab
+sudo nginx -t
+sudo systemctl reload nginx
+curl -H 'Host: homelab.example.com' http://127.0.0.1/s/kanthord/api/liveness</code></pre>
+          <p>
+            To add another service, add a
+            <code>location ^~ /s/&lt;service-name&gt;/</code> block. A service
+            that cannot serve under its prefix breaks behind a path.
+          </p>
+          <h3 id="3-add-the-tunnel-route">3. Add the tunnel route</h3>
+          <ol>
+            <li>
+              Open the Cloudflare dashboard, then go to
+              <strong>Networking</strong> &gt; <strong>Tunnels</strong>, and
+              select the tunnel.
+            </li>
+            <li>
+              Under <strong>Routes</strong>, select
+              <strong>Add route</strong> &gt;
+              <strong>Published application</strong>.
+            </li>
+            <li>
+              Under <strong>Hostname</strong>, set the subdomain to
+              <code>homelab</code> and the domain to <code>example.com</code>.
+              Leave the path empty.
+            </li>
+            <li>
+              Set <strong>Service URL</strong> to
+              <code>http://127.0.0.1:80</code>.
+            </li>
+            <li>Select <strong>Add route</strong>.</li>
+          </ol>
+          <p>
+            Cloudflare creates the DNS record of
+            <code>homelab.example.com</code>, and it terminates HTTPS.
+          </p>
+          <h3 id="4-protect-the-host-with-cloudflare-access">
+            4. Protect the host with Cloudflare Access
+          </h3>
+          <ol>
+            <li>
+              Go to <strong>Zero Trust</strong> &gt;
+              <strong>Access</strong> &gt; <strong>Applications</strong> &gt;
+              <strong>Add an application</strong> &gt;
+              <strong>Self-hosted</strong>.
+            </li>
+            <li>
+              Set the domain to <code>homelab.example.com</code>, and leave the
+              path empty. The application then covers every service on the host.
+            </li>
+            <li>
+              Add a policy with the action <strong>Allow</strong> and the rule
+              <strong>Emails</strong> with your address.
+            </li>
+            <li>Save the application.</li>
+          </ol>
+          <h3 id="5-sign-in">5. Sign in</h3>
+          <p>
+            Do step 5 of the <a href="#generic-setup">generic setup</a> with
+            <code>https://homelab.example.com/s/kanthord/</code>. Sign in to
+            Cloudflare Access before the dashboard opens.
+          </p>
+          <h3 id="troubleshooting-1">Troubleshooting</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>404</code> from nginx</td>
+                  <td>
+                    No <code>location</code> block matches the path. Check
+                    <code>/etc/nginx/sites-available/homelab</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>502</code> from Cloudflare</td>
+                  <td>
+                    nginx is not running. Read
+                    <code>sudo journalctl -u nginx</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>502</code> from nginx</td>
+                  <td>
+                    The server is not running. Read
+                    <code>sudo journalctl -u kanthord</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The CLI fails from another machine</td>
+                  <td>
+                    Cloudflare Access asks for a browser sign-in. Use the CLI on
+                    the server, or reach the server through another path such as
+                    Tailscale.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

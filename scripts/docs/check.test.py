@@ -31,5 +31,25 @@ class LinkScanTest(unittest.TestCase):
             self.scan('<a href="/">home</a>\n')
 
 
+class PublicPageTest(unittest.TestCase):
+    def scan(self, href):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            (root / "reference").mkdir()
+            (root / "reference/page.html").write_text(f'<a href="{href}">a</a>\n')
+            (root / "reference/target.html").write_text('<h2 id="known">K</h2>\n')
+            (root / "reference/target.md").write_text("# Known\n")
+            return check.check_tree(root, root, public=True)
+
+    def test_html_anchor_comes_from_id(self):
+        self.assertEqual(self.scan("target.html#known"), 2)
+        with self.assertRaisesRegex(ValueError, "missing anchor"):
+            self.scan("target.html#unknown")
+
+    def test_public_page_never_links_to_markdown(self):
+        with self.assertRaisesRegex(ValueError, "public link to Markdown"):
+            self.scan("target.md")
+
+
 if __name__ == "__main__":
     unittest.main()

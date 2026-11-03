@@ -1,0 +1,2337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Run kanthord in a container · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li><a href="#1-get-the-image">1. Get the image</a></li>
+          <li>
+            <a href="#2-create-the-configuration"
+              >2. Create the configuration</a
+            >
+          </li>
+          <li><a href="#3-start-the-server">3. Start the server</a></li>
+          <li><a href="#4-sign-in">4. Sign in</a></li>
+          <li><a href="#5-connect-a-repository">5. Connect a repository</a></li>
+          <li>
+            <a href="#6-sign-in-to-openai-codex">6. Sign in to OpenAI Codex</a>
+          </li>
+          <li>
+            <a href="#7-change-the-configuration"
+              >7. Change the configuration</a
+            >
+          </li>
+          <li>
+            <a href="#8-run-a-worker-on-another-host"
+              >8. Run a worker on another host</a
+            >
+          </li>
+          <li><a href="#use-a-newer-image">Use a newer image</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="run-kanthord-in-a-container">Run kanthord in a container</h1>
+          <p>
+            Run the published kanthord container image with Podman or Docker.
+            The image contains the server, the CLI and the dashboard. The guide
+            ends with a saved repository binding in the dashboard.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>Podman or Docker on the host.</li>
+            <li>A browser on the same host.</li>
+            <li>
+              A free host port for the dashboard, for example <code>8080</code>.
+            </li>
+            <li>
+              Host port <code>1455</code> free, only for the
+              <strong>Browser</strong> mode of the OpenAI Codex sign-in of step
+              6. Without that mode, remove
+              <code>-p 127.0.0.1:1455:1455</code> from the command of step 3.
+            </li>
+            <li>
+              A GitHub repository that you can administer, for the deploy key of
+              step 5.
+            </li>
+          </ul>
+          <p>
+            Run every command of this guide in a terminal on the host.
+            <code>podman run</code> and <code>podman exec</code> run the
+            <code>kanthord</code>, <code>sed</code>, <code>ls</code>,
+            <code>rm</code> and <code>chmod</code> parts inside a container.
+            Inside the container, <code>~</code> is
+            <code>/var/lib/kanthord</code>, the volume.
+          </p>
+          <p>
+            The commands use Podman. With Docker, write <code>docker</code> in
+            place of <code>podman</code> in each command. Where a Docker command
+            differs, the guide shows the Docker form.
+          </p>
+          <p>Replace each placeholder with your value:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Placeholder</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;version&gt;</code></td>
+                  <td>
+                    The image version, for example <code>28.0.1</code>, or
+                    <code>latest</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;port&gt;</code></td>
+                  <td>
+                    The host port of the dashboard, for example
+                    <code>8080</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;git name&gt;</code></td>
+                  <td>
+                    The name of the author of the agent commits, for example
+                    <code>Alice Smith</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;git email&gt;</code></td>
+                  <td>
+                    The email of that author, for example
+                    <code>alice@example.com</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;your username&gt;</code></td>
+                  <td>
+                    Your user name in the dashboard, for example
+                    <code>alice</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;owner&gt;</code></td>
+                  <td>
+                    The GitHub owner of the repository, for example
+                    <code>acme</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;repository&gt;</code></td>
+                  <td>
+                    The GitHub repository name, for example <code>app</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="1-get-the-image">1. Get the image</h2>
+          <pre><code class="language-sh">podman pull docker.io/kanthorlabs/kanthord:&lt;version&gt;</code></pre>
+          <p>
+            The image is on Docker Hub as
+            <code>docker.io/kanthorlabs/kanthord</code>. Each release has a
+            version tag, and <code>latest</code> names the newest release.
+          </p>
+          <h2 id="2-create-the-configuration">2. Create the configuration</h2>
+          <p>
+            The image holds no configuration, and the server does not start
+            without one. The default configuration also fails in a container:
+            <code>curl</code> and the browser get an empty reply. With only
+            <code>--gateway-bind ::</code>, a host port other than
+            <code>31415</code> gets <code>403</code>. The two options below fix
+            both.
+          </p>
+          <p>
+            Create the configuration once, in a new volume
+            <code>kanthord</code>:
+          </p>
+          <pre><code class="language-sh">podman run --rm -v kanthord:/var/lib/kanthord docker.io/kanthorlabs/kanthord:&lt;version&gt; config init --gateway-bind :: --gateway-allowed-host localhost:&lt;port&gt; --gateway-allowed-host 127.0.0.1:&lt;port&gt;</code></pre>
+          <p>
+            The command prints
+            <code>created: /var/lib/kanthord/config/kanthord/kanthord.yaml</code
+            >. The two options do these things:
+          </p>
+          <ul>
+            <li>
+              <code>--gateway-bind ::</code> makes the server listen on every
+              address inside the container. The default
+              <code>127.0.0.1</code> does not receive the traffic of a published
+              port.
+            </li>
+            <li>
+              <code>--gateway-allowed-host</code> adds a host to the host
+              allowlist. The server refuses every request with a
+              <code>Host</code> header outside this list. The default list holds
+              only <code>127.0.0.1:31415</code> and
+              <code>localhost:31415</code>, so a host port other than
+              <code>31415</code> gets <code>403</code>.
+            </li>
+          </ul>
+          <p>
+            <code>config init</code> does not replace an existing file. See
+            <a href="../reference/config/init.html">config init</a>.
+          </p>
+          <h2 id="3-start-the-server">3. Start the server</h2>
+          <pre><code class="language-sh">podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p 127.0.0.1:&lt;port&gt;:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;version&gt;</code></pre>
+          <ul>
+            <li>
+              <code>--cap-drop=ALL</code> removes every Linux capability.
+              <code>--security-opt=no-new-privileges</code> stops a process from
+              gaining privileges. The server runs as the user
+              <code>kanthord</code> and needs neither.
+            </li>
+            <li>
+              <code>--ulimit core=0</code> stops core dumps. A crash of the
+              server then writes no copy of its memory to disk. The memory can
+              hold the plaintext SSH key of a git operation.
+            </li>
+            <li>
+              <code>-p 127.0.0.1:&lt;port&gt;:31415</code> publishes the
+              dashboard and the API on the host loopback address only.
+            </li>
+            <li>
+              <code>-p 127.0.0.1:1455:1455</code> publishes the OpenAI Codex
+              sign-in callback. See step 6.
+            </li>
+            <li>
+              The <code>GIT_*</code> variables set the identity of the commits
+              that the agents make. Without them, a commit has the author
+              <code>kanthord &lt;kanthord@localhost&gt;</code>. To change them
+              later, remove the container with
+              <code>podman rm -f kanthord</code>, then run this command again.
+              The volume keeps the data.
+            </li>
+          </ul>
+          <p>Check the server:</p>
+          <pre><code class="language-sh">curl http://localhost:&lt;port&gt;/api/liveness</code></pre>
+          <p>
+            A running server answers HTTP <code>200</code> with a JSON service
+            map that starts with
+            <code>{&quot;status&quot;:&quot;ok&quot;</code>. If
+            <code>curl</code> fails, wait 2 s and run it again. See
+            <a href="../reference/gateway/liveness.html">liveness</a>.
+          </p>
+          <p>
+            The image also declares a container healthcheck. Every 30 s, Podman
+            or Docker runs <code>kanthord gateway liveness</code> inside the
+            container. That command sends no token. Podman runs the first check
+            at the start of the container. That check can fail, because the
+            server is not ready yet. Read the health status:
+          </p>
+          <pre><code class="language-sh">podman inspect --format '{{.State.Health.Status}}' kanthord</code></pre>
+          <ul>
+            <li>
+              <code>starting</code>: no check passed yet, and fewer than three
+              checks in a row failed after the start period. The start period is
+              the first 30 s after the start. A failed check in this period does
+              not count.
+            </li>
+            <li>
+              <code>healthy</code>: a check passed, and fewer than three checks
+              in a row failed after it. The first pass comes about 30 s after
+              the start.
+            </li>
+            <li>
+              <code>unhealthy</code>: three checks in a row failed after the
+              start period. A check that takes more than 5 s fails. With Podman,
+              a server that never passes a check becomes
+              <code>unhealthy</code> about 90 s after the start: the checks at
+              about 30 s, 60 s and 90 s fail.
+            </li>
+          </ul>
+          <p>
+            An <code>unhealthy</code> status does not stop or restart the
+            container.
+          </p>
+          <p>
+            To see the check output of the last five checks, run
+            <code
+              >podman inspect --format &#39;{{range
+              .State.Health.Log}}{{.Output}}{{end}}&#39; kanthord</code
+            >.
+          </p>
+          <p>
+            The check also reads the client file <code>cli.yaml</code> of the
+            volume, if the file exists. See
+            <a href="#troubleshooting">Troubleshooting</a>.
+          </p>
+          <p>
+            The check runs inside the container, so <code>healthy</code> does
+            not prove that the published port works. A server that listens on
+            <code>127.0.0.1</code>, or a host port that is not in
+            <code>gateway.allowed_hosts</code>, also reports
+            <code>healthy</code>. Use the <code>curl</code> command above for
+            the published port.
+          </p>
+          <p>
+            The volume keeps the configuration and the database.
+            <code>podman restart kanthord</code> keeps both.
+          </p>
+          <h2 id="4-sign-in">4. Sign in</h2>
+          <p>Get a human token:</p>
+          <pre><code class="language-sh">podman exec -it kanthord kanthord auth jwt generate &lt;your username&gt;</code></pre>
+          <p>
+            The command prints <code>token: &lt;jwt&gt;</code>. It prints a
+            token only to a terminal, so keep the <code>-t</code> option.
+          </p>
+          <ol>
+            <li>Open <code>http://localhost:&lt;port&gt;/</code>.</li>
+            <li>
+              Keep the Endpoint value. The dashboard fills it with the address
+              of the page.
+            </li>
+            <li>
+              Paste the token into <strong>JWT token</strong>, then select
+              <strong>Login</strong>.
+            </li>
+          </ol>
+          <p>See <a href="../reference/auth/jwt.html">auth jwt generate</a>.</p>
+          <p>
+            For the first task, follow
+            <a href="../tutorials/first-task.html"
+              >From a fresh install to the first task</a
+            >
+            from its
+            <a href="../tutorials/first-task.html#2-read-the-onboarding-page"
+              >step 2</a
+            >. The Onboarding page of the dashboard replaces steps 5 and 6 of
+            this guide. The tutorial links to them only for the screen details.
+            In a container, the <code>server</code> placement of the tutorial
+            runs each verification inside the server container. The image holds
+            <code>bash</code>, <code>git</code>, the OpenSSH client, the base
+            Debian tools and <code>kanthord</code>, and no language toolchain. A
+            verification such as <code>npm test</code> therefore fails with exit
+            code <code>127</code>. Use the sample plan or
+            <a
+              href="add-a-toolchain-to-the-worker-image.html#3-use-the-image-for-the-server-container"
+              >add a toolchain to the worker image</a
+            >. In a container, three more things differ from the tutorial. An
+            agent command reads the files of the volume
+            <code>/var/lib/kanthord</code>, the database and the configuration
+            included, but no file of your host. Run the cooldown commands as
+            <code
+              >podman exec kanthord kanthord agent cooldown list --token
+              &#39;&lt;human token&gt;&#39;</code
+            >. To restart the server, run <code>podman restart kanthord</code>.
+            For the OpenAI Codex sign-in, follow
+            <a href="#6-sign-in-to-openai-codex">step 6</a> of this guide.
+          </p>
+          <h2 id="5-connect-a-repository">5. Connect a repository</h2>
+          <p>
+            The server reads and pushes a repository over SSH. The server
+            creates the SSH key and keeps the private key encrypted in its
+            database. You copy only the public key. The server writes no file
+            under <code>~/.ssh</code>, that is
+            <code>/var/lib/kanthord/.ssh</code>, and reads none. A new volume
+            holds no SSH file.
+          </p>
+          <p>Create the SSH key in the dashboard:</p>
+          <ol>
+            <li>
+              Open <strong>Credentials</strong>, then <strong>Git</strong>, then
+              <strong>Create SSH key</strong>.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>app</code>. Start
+              with a lowercase letter. Use only lowercase letters, digits and
+              hyphens. Select <strong>Create SSH key</strong>.
+            </li>
+            <li>
+              The sheet shows the <strong>Public key</strong> and its
+              <strong>Fingerprint</strong>. Select <strong>Copy</strong> to copy
+              the public key. Then select <strong>Done</strong>.
+            </li>
+          </ol>
+          <p>The new SSH key is an SSH credential with that name.</p>
+          <p>Add the public key to GitHub as a deploy key:</p>
+          <ol>
+            <li>
+              In the repository, open <strong>Settings</strong>, then
+              <strong>Deploy keys</strong>, then
+              <strong>Add deploy key</strong>.
+            </li>
+            <li>
+              Enter a <strong>Title</strong>, for example
+              <code>kanthord-app</code>. Paste the key, and select
+              <strong>Allow write access</strong>. Then select
+              <strong>Add key</strong>.
+            </li>
+          </ol>
+          <p>
+            One deploy key serves one repository. GitHub refuses a deploy key
+            that another repository holds already, so create one SSH key for
+            each repository. Do not add the key as an account SSH key. An
+            account SSH key gives the server write access to every repository of
+            the account.
+          </p>
+          <p>Then, in the dashboard:</p>
+          <ol>
+            <li>
+              Open <strong>Projects</strong>, then <strong>New project</strong>.
+              Enter a name, then select <strong>Create project</strong>.
+            </li>
+            <li>
+              Open the <strong>Bindings</strong> tab. Select
+              <strong>Add</strong> in the <strong>Repositories</strong> section.
+            </li>
+            <li>
+              Enter a binding name in <strong>Name</strong>. Keep the
+              <strong>Platform</strong> <code>GitHub</code>.
+            </li>
+            <li>
+              The <strong>Address</strong> field starts with
+              <code>git@github.com:</code>. Complete it as
+              <code>git@github.com:&lt;owner&gt;/&lt;repository&gt;.git</code>.
+            </li>
+            <li>
+              The sheet reads the host key of <code>github.com</code> from
+              <code>api.github.com</code> and pins it. The row
+              <strong>Host key of github.com</strong> shows
+              <strong>Pinned</strong> and the fingerprint. On the first pin, it
+              also shows &quot;Host key pinned from api.github.com&quot;. Check
+              the fingerprint as the paragraph after this list shows.
+            </li>
+            <li>
+              Choose the SSH credential that you created, for example
+              <code>app</code>.
+            </li>
+            <li>
+              Keep <strong>Base branch</strong> <code>main</code>, or enter the
+              default branch of the repository.
+            </li>
+            <li>
+              Select <strong>Verify</strong>. Both lines show
+              <strong>Healthy</strong>: <strong>Address · Healthy</strong> and
+              <strong>SSH credential · Healthy</strong>.
+            </li>
+            <li>Select <strong>Save binding</strong>.</li>
+          </ol>
+          <p>
+            The pin is the host key that the server trusts for
+            <code>github.com</code>. Every binding with the host
+            <code>github.com</code> uses it. To compare it, open the
+            <a
+              href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints"
+              >SSH key fingerprints of GitHub</a
+            >. The pinned value equals the <code>ED25519</code> value. If the
+            values differ, do not save the binding. Select
+            <strong>Pin again</strong> in the <strong>Host keys</strong> panel,
+            and compare again. <strong>Credentials</strong>, then
+            <strong>Git</strong>, then the <strong>Host keys</strong> panel
+            lists each pin.
+          </p>
+          <h3 id="move-from-the-earlier-ssh-setup">
+            Move from the earlier SSH setup
+          </h3>
+          <p>
+            An earlier version of this guide created the key with
+            <code>ssh-keygen</code> in <code>/var/lib/kanthord/.ssh</code>. That
+            setup used the alias <code>github</code> and the address
+            <code>git@github:&lt;owner&gt;/&lt;repository&gt;.git</code>. The
+            server now accepts only <code>github.com</code> and
+            <code>ssh.github.com</code> as GitHub hosts. The credential
+            <code>github</code> holds no key that the server generated.
+            <strong>Verify</strong> on the binding row of the
+            <strong>Bindings</strong> tab shows
+            <strong>Address · Unhealthy</strong> and
+            <strong>SSH credential · Unhealthy</strong>.
+          </p>
+          <p>
+            First run a newer image with
+            <a href="#use-a-newer-image">Use a newer image</a>. Then do these
+            repair steps in the dashboard:
+          </p>
+          <ol>
+            <li>
+              Open <strong>Credentials</strong>, then <strong>Git</strong>. On
+              the row of the credential <code>github</code>, select
+              <strong>Rotate key</strong>. In the dialog, select
+              <strong>Rotate key</strong> again.
+            </li>
+            <li>
+              The dialog shows the new public key. Select <strong>Copy</strong>.
+              Then select <strong>Done</strong>.
+            </li>
+            <li>
+              Add the new public key to the repository as a deploy key with
+              write access, as above.
+            </li>
+            <li>
+              Open the project, then the <strong>Bindings</strong> tab. Select
+              <strong>Edit</strong> on the repository binding.
+            </li>
+            <li>
+              Change the address to
+              <code>git@github.com:&lt;owner&gt;/&lt;repository&gt;.git</code>.
+              The sheet pins the host key of <code>github.com</code>.
+            </li>
+            <li>
+              Select <strong>Verify</strong>. Both lines show
+              <strong>Healthy</strong>. Select <strong>Save binding</strong>.
+            </li>
+            <li>
+              At GitHub, delete the old deploy key of the repository. Keep the
+              key whose fingerprint equals the <strong>Fingerprint</strong> that
+              the dialog of step 2 shows.
+            </li>
+          </ol>
+          <p>
+            Repeat steps 1 to 7 for each SSH credential and repository binding
+            of the earlier setup, for example <code>github-lib</code>. If you
+            added the old key as an account SSH key, delete it in the SSH key
+            settings of the account.
+          </p>
+          <p>
+            The rotation makes a new revision of the credential. The binding
+            keeps the credential name, so the binding needs no other change. If
+            repair step 3 is not done, the <strong>Verify</strong> of repair
+            step 6 shows <strong>Address · Unhealthy</strong> with the hint
+            &quot;The repository host refused the SSH key.&quot;
+            <strong>SSH credential</strong> shows <strong>Healthy</strong>.
+          </p>
+          <p>
+            The old files stay in the volume. The server ignores them, but an
+            agent tool process of the server can still read them. After repair
+            step 7 for every credential, remove them:
+          </p>
+          <pre><code class="language-sh">podman exec kanthord rm -r /var/lib/kanthord/.ssh</code></pre>
+          <p>
+            On a worker host of step 8, remove the copy of
+            <code>kanthord_github</code> and the <code>Host github</code> block
+            of <code>~/.ssh/config</code>.
+          </p>
+          <h2 id="6-sign-in-to-openai-codex">6. Sign in to OpenAI Codex</h2>
+          <ol>
+            <li>
+              Open <strong>Credentials</strong>, then <strong>LLM</strong>, then
+              <strong>New credential</strong>.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>codex</code>.
+            </li>
+            <li>
+              Choose the platform <code>openai-codex</code>, then select
+              <strong>Start sign-in</strong>.
+            </li>
+            <li>
+              Select <strong>Open sign-in page</strong>, and sign in at the
+              provider.
+            </li>
+            <li>
+              The dashboard shows &quot;Signed in. Custody stored codex.&quot;
+              when the sign-in completes.
+            </li>
+          </ol>
+          <p>
+            In the <strong>Browser</strong> mode, the provider sends the browser
+            back to <code>http://localhost:1455/auth/callback</code>. The
+            published port 1455 carries that callback into the container.
+          </p>
+          <ul>
+            <li>
+              The provider fixes port 1455, so you cannot publish the callback
+              on another host port.
+            </li>
+            <li>
+              The Codex CLI uses the same port for its own sign-in. While the
+              container runs, a Codex CLI sign-in on the same host fails. While
+              a Codex CLI sign-in runs, the container start fails.
+            </li>
+            <li>
+              The <strong>Browser</strong> mode works only for a browser on the
+              container host.
+            </li>
+          </ul>
+          <p>
+            When the callback page does not load, copy the address of that page.
+            In the sign-in panel of the dashboard, select
+            <strong>The callback failed?</strong>. Paste the address into
+            <strong>Code or Redirect URL</strong>, then select
+            <strong>Send code</strong>.
+          </p>
+          <p>
+            When port 1455 is not free, or the browser is on another machine,
+            choose <strong>Headless (device code)</strong>. That mode needs no
+            port 1455. To free the port, remove the container with
+            <code>podman rm -f kanthord</code>. Then run the command of step 3
+            again without <code>-p 127.0.0.1:1455:1455</code>.
+          </p>
+          <p>
+            For the platform <code>anthropic-subscription</code>, you paste a
+            <code>code#state</code> value from the provider page into
+            <strong>Paste code</strong>. That sign-in needs no port 1455. See
+            <a href="../tutorials/first-task.html#3-add-the-llm-credential"
+              >Add the LLM credential</a
+            >
+            of the tutorial.
+          </p>
+          <h2 id="7-change-the-configuration">7. Change the configuration</h2>
+          <p>
+            No command edits an existing configuration file, and the image has
+            no text editor. Edit the file with <code>sed</code> in a one-off
+            container.
+          </p>
+          <p>
+            This example adds the host <code>kanthord.example.com</code> to the
+            host allowlist. The expression adds a line below the line
+            <code> allowed_hosts:</code> of the file:
+          </p>
+          <pre><code class="language-sh">podman run --rm -v kanthord:/var/lib/kanthord --entrypoint sed docker.io/kanthorlabs/kanthord:&lt;version&gt; -i 's/^  allowed_hosts:$/&amp;\n    - kanthord.example.com/' /var/lib/kanthord/config/kanthord/kanthord.yaml
+podman run --rm -v kanthord:/var/lib/kanthord docker.io/kanthorlabs/kanthord:&lt;version&gt; config validate
+podman restart kanthord</code></pre>
+          <p>
+            <code>config validate</code> prints
+            <code>valid: /var/lib/kanthord/config/kanthord/kanthord.yaml</code>.
+            The server reads the file only at its start, so restart it. To see
+            the result, run
+            <code
+              >podman run --rm -v kanthord:/var/lib/kanthord
+              docker.io/kanthorlabs/kanthord:&lt;version&gt; config show</code
+            >.
+          </p>
+          <p>
+            This example sets <code>gateway.bind</code> to <code>::</code> in an
+            existing volume:
+          </p>
+          <pre><code class="language-sh">podman run --rm -v kanthord:/var/lib/kanthord --entrypoint sed docker.io/kanthorlabs/kanthord:&lt;version&gt; -i 's/^  bind: .*/  bind: "::"/' /var/lib/kanthord/config/kanthord/kanthord.yaml</code></pre>
+          <p>
+            Then run <code>config validate</code> and
+            <code>podman restart kanthord</code> as above.
+          </p>
+          <p>
+            The file must keep mode <code>0600</code>. <code>sed -i</code> keeps
+            the mode. Check it with this command:
+          </p>
+          <pre><code class="language-sh">podman run --rm -v kanthord:/var/lib/kanthord --entrypoint ls docker.io/kanthorlabs/kanthord:&lt;version&gt; -l /var/lib/kanthord/config/kanthord/kanthord.yaml</code></pre>
+          <p>
+            The line starts with <code>-rw-------</code>. See
+            <a href="../reference/config/validate.html">config validate</a> and
+            <a href="../reference/config/show.html">config show</a>.
+          </p>
+          <h2 id="8-run-a-worker-on-another-host">
+            8. Run a worker on another host
+          </h2>
+          <p>
+            At the <code>worker</code> placement, a worker runs in a
+            <code>kanthord serve worker</code> process outside the server
+            container. One process is one worker instance. You add the instance
+            once in the dashboard, with the placement <code>Worker</code>. Then
+            a worker binding of a project lists the instance.
+          </p>
+          <ul>
+            <li>
+              An instance belongs to one worker, for example
+              <code>coder@1</code>. Only a binding of that worker can list it.
+            </li>
+            <li>
+              An instance runs one execution at a time. To run more work at
+              once, add another instance.
+            </li>
+            <li>
+              An instance holds its own copy of each LLM credential, sealed to
+              its key. The server hands no server-held credential to an
+              instance.
+            </li>
+            <li>
+              The <strong>Workers</strong> screen and step 8.6 need a project.
+              Without a project, <strong>Workers</strong> shows &quot;No
+              projects&quot;. To create one, open <strong>Projects</strong>,
+              then <strong>New project</strong>, as
+              <a href="#5-connect-a-repository">step 5</a> shows.
+            </li>
+            <li>
+              The first-task tutorial needs <code>coder@1</code> and
+              <code>reviewer@1</code>. To run both at the
+              <code>worker</code> placement, add one instance of each worker. Do
+              step 8 once for each instance. For a second instance on the same
+              worker host, skip steps 8.1 and 8.2.
+            </li>
+          </ul>
+          <p>Choose the steps for the place of the instance:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>The instance runs on</th>
+                  <th><strong>Where does it run?</strong></th>
+                  <th>Steps</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A Linux host of your local network</td>
+                  <td><code>Linux (systemd)</code></td>
+                  <td>8.1 to 8.6</td>
+                </tr>
+                <tr>
+                  <td>A Mac of your local network</td>
+                  <td><code>macOS (foreground)</code></td>
+                  <td>8.1 to 8.6</td>
+                </tr>
+                <tr>
+                  <td>A container platform with no volume</td>
+                  <td><code>Container</code></td>
+                  <td>
+                    8.1, then
+                    <a href="#run-a-worker-in-a-stateless-container"
+                      >Run a worker in a stateless container</a
+                    >, then 8.4 to 8.6
+                  </td>
+                </tr>
+                <tr>
+                  <td>A second container on the container host</td>
+                  <td><code>Container on this host</code></td>
+                  <td>
+                    <a href="#run-a-worker-in-a-container-on-the-same-host"
+                      >Run a worker in a container on the same host</a
+                    >, then 8.4 to 8.6
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The steps use these placeholders in addition to the table at the
+            start of this guide:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Placeholder</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;name&gt;</code></td>
+                  <td>
+                    The name of the worker instance, for example
+                    <code>builder-1</code>. You choose it in step 8.3.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;LAN address&gt;</code></td>
+                  <td>
+                    The address of the container host on your local network, for
+                    example <code>192.168.1.10</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;address&gt;</code></td>
+                  <td>
+                    The server address that the instance calls, for example
+                    <code>http://192.168.1.10:&lt;port&gt;</code>. Step 8.1
+                    makes it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;arch&gt;</code></td>
+                  <td>
+                    <code>x64</code> for an <code>x86_64</code> worker host,
+                    <code>arm64</code> for an <code>arm64</code> worker host.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>&lt;user&gt;</code></td>
+                  <td>Your user name on the worker host.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="what-the-worker-host-needs">What the worker host needs</h3>
+          <ul>
+            <li>
+              <code>bash</code>, <code>git</code> 2.40 or later, and the OpenSSH
+              9.0 or later client programs <code>ssh</code>,
+              <code>ssh-agent</code> and <code>ssh-add</code>. A missing program
+              stops the start of the instance with
+              <code>repository.connector.tool_missing</code>. A program below
+              its minimum version stops the start with
+              <code>repository.connector.tool_version</code>. The image holds
+              these programs.
+            </li>
+            <li>
+              No SSH key and no <code>~/.ssh</code> file. For each git
+              operation, the instance asks the server to sign through the SSH
+              signature relay. The private key stays on the server. An agent
+              command runs as the user of the instance and can read the SSH keys
+              of that user. Run the instance as a user with no
+              <code>~/.ssh</code>.
+            </li>
+            <li>
+              A network path to the SSH port of the repository host: port 22 for
+              <code>github.com</code>, <code>gitlab.com</code> and
+              <code>bitbucket.org</code>, port 443 for
+              <code>ssh.github.com</code>, <code>altssh.gitlab.com</code> and
+              <code>altssh.bitbucket.org</code>. The <strong>Verify</strong> of
+              step 5 runs on the server, so it does not prove this path.
+            </li>
+            <li>
+              A temporary directory path of 75 bytes or fewer that holds only
+              letters, digits, <code>/</code>, <code>.</code>,
+              <code>_</code> and <code>-</code>. The instance reads
+              <code>TMPDIR</code>, else <code>TMP</code> or <code>TEMP</code>,
+              else it uses <code>/tmp</code>. For each git operation, the
+              instance makes an SSH agent socket in that directory. A longer
+              path or another character fails every SSH operation with
+              <code>repository.connector.ssh_agent_failed</code>.
+            </li>
+            <li><code>curl</code>, for the downloads of step 8.2.</li>
+            <li><code>sudo</code>, for the install of step 8.2.</li>
+            <li>A network path to the server. Step 8.1 makes it.</li>
+          </ul>
+          <h3 id="81-open-the-server-to-your-network">
+            8.1 Open the server to your network
+          </h3>
+          <p>
+            The command of step 3 publishes the server on the loopback address
+            of the container host only. A worker host of your network needs the
+            <code>&lt;LAN address&gt;</code> of the container host. Skip this
+            step for an instance in a container on the container host.
+          </p>
+          <ol>
+            <li>
+              <p>
+                On the container host, remove the server container. The volume
+                keeps the configuration and the database.
+              </p>
+              <pre><code class="language-sh">podman rm -f kanthord</code></pre>
+              <p>The command prints <code>kanthord</code>.</p>
+            </li>
+            <li>
+              <p>
+                Start the server again. This is the command of step 3 with
+                <code>-p &lt;port&gt;:31415</code> in place of
+                <code>-p 127.0.0.1:&lt;port&gt;:31415</code>. If you removed
+                <code>-p 127.0.0.1:1455:1455</code> in step 3, remove it here
+                too.
+              </p>
+              <pre><code class="language-sh">podman run -d --name kanthord --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 -v kanthord:/var/lib/kanthord -p &lt;port&gt;:31415 -p 127.0.0.1:1455:1455 -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;version&gt;</code></pre>
+              <p>The command prints the ID of the new container.</p>
+              <p>
+                <code>-p &lt;port&gt;:31415</code> publishes the dashboard and
+                the API on every interface of the container host. On a Linux
+                host, you can keep the loopback and LAN form:
+                <code
+                  >-p 127.0.0.1:&lt;port&gt;:31415 -p &lt;LAN
+                  address&gt;:&lt;port&gt;:31415</code
+                >. Podman on macOS refuses that form with
+                <code>Error: rootlessport conflict with ID 2</code>.
+              </p>
+            </li>
+            <li>
+              <p>On the worker host, check the path to the server:</p>
+              <pre><code class="language-sh">curl http://&lt;LAN address&gt;:&lt;port&gt;/api/liveness</code></pre>
+              <p>
+                The answer starts with
+                <code>{&quot;status&quot;:&quot;ok&quot;</code>. If
+                <code>curl</code> fails, wait 2 s and run it again.
+              </p>
+            </li>
+          </ol>
+          <p>
+            <code>&lt;address&gt;</code> is now
+            <code>http://&lt;LAN address&gt;:&lt;port&gt;</code>. Keep the
+            dashboard on <code>http://localhost:&lt;port&gt;</code>. The server
+            accepts the calls of a worker instance with any
+            <code>Host</code> header, so
+            <code>gateway.allowed_hosts</code> needs no change.
+          </p>
+          <p>
+            Every host of your network can now reach the API over plain HTTP.
+            Use this setup only on a network that you trust. On another network,
+            give the server an HTTPS address, as
+            <a href="run-on-a-vps.html">Run kanthord on a VPS</a> or
+            <a href="run-on-a-mac-with-tailscale.html"
+              >Run kanthord on a Mac with Tailscale</a
+            >
+            shows. Then <code>&lt;address&gt;</code> is that HTTPS address.
+          </p>
+          <p>
+            <code>kanthord serve worker</code> refuses an
+            <code>http</code> address whose host does not resolve to a loopback
+            or private address. The refusal is
+            <code>worker.start.endpoint_insecure</code>. The private addresses
+            are <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>,
+            <code>192.168.0.0/16</code>, <code>100.64.0.0/10</code>,
+            <code>fc00::/7</code> and <code>fe80::/10</code>.
+          </p>
+          <h3 id="82-install-the-binary-on-the-worker-host">
+            8.2 Install the binary on the worker host
+          </h3>
+          <p>
+            The binary must have the version of the server. The instance refuses
+            another version with <code>worker.version.mismatch</code>.
+          </p>
+          <ol>
+            <li>
+              <p>On the container host, read the version of the server:</p>
+              <pre><code class="language-sh">podman exec kanthord kanthord --version</code></pre>
+              <p>
+                The command prints the version, for example <code>28.0.1</code>.
+                In the commands below, write it in place of
+                <code>&lt;version&gt;</code>.
+              </p>
+            </li>
+          </ol>
+          <p>On a Linux worker host:</p>
+          <ol start="2">
+            <li>
+              <p>Download the binary:</p>
+              <pre><code class="language-sh">curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v&lt;version&gt;/kanthord-linux-&lt;arch&gt;</code></pre>
+            </li>
+            <li>
+              <p>Download the checksum file:</p>
+              <pre><code class="language-sh">curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v&lt;version&gt;/SHA256SUMS</code></pre>
+            </li>
+            <li>
+              <p>Check the download:</p>
+              <pre><code class="language-sh">sha256sum --ignore-missing -c SHA256SUMS</code></pre>
+              <p>
+                The command prints <code>kanthord-linux-&lt;arch&gt;: OK</code>.
+              </p>
+            </li>
+            <li>
+              <p>Install the binary:</p>
+              <pre><code class="language-sh">sudo install -m 755 kanthord-linux-&lt;arch&gt; /usr/local/bin/kanthord</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Check the installed version:</p>
+              <pre><code class="language-sh">kanthord --version</code></pre>
+              <p>The command prints <code>&lt;version&gt;</code>.</p>
+            </li>
+          </ol>
+          <p>On a Mac:</p>
+          <ol start="2">
+            <li>
+              <p>Download the binary:</p>
+              <pre><code class="language-sh">curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v&lt;version&gt;/kanthord-darwin-arm64</code></pre>
+            </li>
+            <li>
+              <p>Download the checksum file:</p>
+              <pre><code class="language-sh">curl -fLO https://github.com/kanthorlabs/kanthord/releases/download/v&lt;version&gt;/SHA256SUMS</code></pre>
+            </li>
+            <li>
+              <p>Check the download:</p>
+              <pre><code class="language-sh">shasum -a 256 --ignore-missing -c SHA256SUMS</code></pre>
+              <p>The command prints <code>kanthord-darwin-arm64: OK</code>.</p>
+            </li>
+            <li>
+              <p>
+                Remove the macOS quarantine flag. Without this command, macOS
+                refuses to start a binary that a browser downloaded.
+              </p>
+              <pre><code class="language-sh">xattr -d com.apple.quarantine kanthord-darwin-arm64</code></pre>
+              <p>
+                After a <code>curl</code> download, the command prints
+                <code
+                  >xattr: kanthord-darwin-arm64: No such xattr:
+                  com.apple.quarantine</code
+                >. That message is expected.
+              </p>
+            </li>
+            <li>
+              <p>Install the binary:</p>
+              <pre><code class="language-sh">sudo install -m 755 kanthord-darwin-arm64 /usr/local/bin/kanthord</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Check the installed version:</p>
+              <pre><code class="language-sh">kanthord --version</code></pre>
+              <p>The command prints <code>&lt;version&gt;</code>.</p>
+            </li>
+          </ol>
+          <h3 id="83-add-the-instance-and-start-it">
+            8.3 Add the instance and start it
+          </h3>
+          <p>
+            The dashboard shows the instance configuration only once. It holds
+            the private key of the instance. Open a terminal on the worker host
+            before you start.
+          </p>
+          <ol>
+            <li>
+              In the dashboard, open <strong>Workers</strong>. Select the card
+              of the worker, for example <code>coder@1</code>.
+            </li>
+            <li>
+              In the <strong>Instances</strong> section, select
+              <strong>Add instance</strong>.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example <code>builder-1</code>.
+              Start with a lowercase letter. Use only lowercase letters, digits
+              and hyphens. This name is <code>&lt;name&gt;</code>.
+            </li>
+            <li>
+              In <strong>Placement</strong>, choose <code>Worker</code>. The
+              fields of the worker host appear.
+            </li>
+            <li>
+              In <strong>Where does it run?</strong>, choose
+              <code>Linux (systemd)</code> or <code>macOS (foreground)</code>.
+            </li>
+            <li>
+              In <strong>Address</strong>, enter <code>&lt;address&gt;</code>.
+              The field is empty when the dashboard runs on
+              <code>localhost</code>.
+            </li>
+            <li>
+              Select <strong>Create instance</strong>. The sheet shows the
+              <strong>Instance configuration</strong> and the copy block of the
+              host kind.
+            </li>
+            <li>
+              Select <strong>Copy</strong> next to
+              <strong>Instance configuration</strong>. Keep the sheet open.
+            </li>
+          </ol>
+          <p>
+            The copy block of the sheet repeats step 8.2 and the commands of the
+            list below, except the log command. If you close the sheet before
+            the paste, select <strong>Reset key</strong> on the instance page.
+            Reset key gives a new instance configuration.
+          </p>
+          <p>
+            On a Linux worker host, do these steps as <code>&lt;user&gt;</code>:
+          </p>
+          <ol>
+            <li>
+              <p>
+                Let the user units of <code>&lt;user&gt;</code> run without a
+                login session:
+              </p>
+              <pre><code class="language-sh">loginctl enable-linger</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                Write the instance file. The command reads the instance
+                configuration from standard input. Paste the value, press
+                <code>Enter</code>, then press <code>Ctrl-D</code>.
+              </p>
+              <pre><code class="language-sh">kanthord worker join</code></pre>
+              <p>
+                The command prints
+                <code
+                  >created:
+                  /home/&lt;user&gt;/.config/kanthord/workers/&lt;name&gt;.yaml</code
+                >. The file has mode <code>0600</code>.
+              </p>
+            </li>
+            <li>
+              <p>In the dashboard, select <strong>Done</strong>.</p>
+            </li>
+            <li>
+              <p>Create the directory of the user units:</p>
+              <pre><code class="language-sh">mkdir -p ~/.config/systemd/user</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                Write the template unit <code>kanthord-worker@.service</code>:
+              </p>
+              <pre><code class="language-sh">cat &gt; ~/.config/systemd/user/kanthord-worker@.service &lt;&lt;'EOF'
+[Unit]
+Description=KanthorD worker instance %i
+
+[Service]
+ExecStart=/usr/local/bin/kanthord serve worker --instance %i
+Restart=on-failure
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=default.target
+EOF</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Create the directory of the settings of this instance:</p>
+              <pre><code class="language-sh">mkdir -p ~/.config/systemd/user/kanthord-worker@&lt;name&gt;.service.d</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                Write the settings of this instance. They set the author of the
+                agent commits and turn off core dumps. The memory of the
+                instance holds the plaintext of its LLM credentials.
+              </p>
+              <pre><code class="language-sh">cat &gt; ~/.config/systemd/user/kanthord-worker@&lt;name&gt;.service.d/kanthord.conf &lt;&lt;'EOF'
+[Service]
+Environment="GIT_AUTHOR_NAME=&lt;git name&gt;" "GIT_AUTHOR_EMAIL=&lt;git email&gt;" "GIT_COMMITTER_NAME=&lt;git name&gt;" "GIT_COMMITTER_EMAIL=&lt;git email&gt;"
+LimitCORE=0
+EOF</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Load the new units:</p>
+              <pre><code class="language-sh">systemctl --user daemon-reload</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Start the instance, and start it again at each boot:</p>
+              <pre><code class="language-sh">systemctl --user enable --now kanthord-worker@&lt;name&gt;</code></pre>
+              <p>
+                The command prints one line that starts with
+                <code>Created symlink</code>.
+              </p>
+            </li>
+            <li>
+              <p>Read the log of the instance:</p>
+              <pre><code class="language-sh">journalctl --user -u kanthord-worker@&lt;name&gt; --no-pager -n 5</code></pre>
+              <p>
+                One line holds
+                <code>&quot;msg&quot;:&quot;Worker instance ready&quot;</code>
+                and <code>&quot;config_source&quot;:&quot;file&quot;</code>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            On a Mac, nothing restarts the process, so keep its terminal open:
+          </p>
+          <ol>
+            <li>
+              <p>
+                Write the instance file. The command reads the instance
+                configuration from standard input. Paste the value, press
+                <code>Enter</code>, then press <code>Ctrl-D</code>.
+              </p>
+              <pre><code class="language-sh">kanthord worker join</code></pre>
+              <p>
+                The command prints
+                <code
+                  >created:
+                  /Users/&lt;user&gt;/.config/kanthord/workers/&lt;name&gt;.yaml</code
+                >. The file has mode <code>0600</code>.
+              </p>
+            </li>
+            <li>
+              <p>In the dashboard, select <strong>Done</strong>.</p>
+            </li>
+            <li>
+              <p>Set the author of the agent commits for this terminal:</p>
+              <pre><code class="language-sh">export GIT_AUTHOR_NAME="&lt;git name&gt;" GIT_AUTHOR_EMAIL="&lt;git email&gt;" GIT_COMMITTER_NAME="&lt;git name&gt;" GIT_COMMITTER_EMAIL="&lt;git email&gt;"</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Start the instance:</p>
+              <pre><code class="language-sh">kanthord serve worker --instance &lt;name&gt;</code></pre>
+              <p>
+                The terminal shows a JSON line that holds
+                <code>&quot;msg&quot;:&quot;Worker instance ready&quot;</code>
+                and <code>&quot;config_source&quot;:&quot;file&quot;</code>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            After a restart of the Mac, open a terminal and do steps 3 and 4
+            again. Without the <code>GIT_*</code> variables, a commit has the
+            author <code>kanthord &lt;kanthord@localhost&gt;</code>.
+          </p>
+          <h3 id="84-check-the-connection">8.4 Check the connection</h3>
+          <ol>
+            <li>
+              In the dashboard, open <strong>Workers</strong>, then the card of
+              the worker. Select the instance <code>&lt;name&gt;</code> in the
+              <strong>Instances</strong> section.
+            </li>
+            <li>
+              The <strong>Connection</strong> row of the instance page shows
+              <code
+                >Connected · &lt;connection name&gt; · last heartbeat
+                &lt;time&gt;</code
+              >. <code>&lt;connection name&gt;</code> is the host name of the
+              worker host, or of the container. <code>&lt;time&gt;</code> is the
+              UTC time of the last heartbeat, for example
+              <code>2026-10-21 09:30 UTC</code>.
+            </li>
+          </ol>
+          <p>
+            When the row shows <code>Not connected</code>, read the log of the
+            instance. See <a href="#troubleshooting">Troubleshooting</a>.
+          </p>
+          <h3 id="85-give-the-instance-the-llm-credential">
+            8.5 Give the instance the LLM credential
+          </h3>
+          <p>
+            The agents of the worker call a model with an LLM credential, for
+            example <code>claude</code> of the
+            <a href="../tutorials/first-task.html#3-add-the-llm-credential"
+              >first-task tutorial</a
+            >. Each listed instance at the <code>worker</code> placement needs
+            its own copy of that credential, with the same name. Without the
+            copy, <strong>Save binding</strong> of step 8.6 fails with
+            <code>agent.configuration.credential_holder_mismatch</code>.
+          </p>
+          <p>For an API key platform, for example <code>anthropic</code>:</p>
+          <ol>
+            <li>
+              On the instance page, select <strong>Add credential</strong> in
+              the <strong>Credentials</strong> section.
+            </li>
+            <li>
+              Enter the <strong>Name</strong> of the credential, for example
+              <code>claude</code>.
+            </li>
+            <li>
+              Choose the <strong>Platform</strong> of that credential, for
+              example <code>anthropic</code>. A name holds one platform for
+              every copy.
+            </li>
+            <li>Paste the key into <strong>API Key</strong>.</li>
+            <li>
+              Select <strong>Create credential</strong>. The
+              <strong>Credentials</strong> section shows the row
+              <code>claude · anthropic (v1)</code>.
+            </li>
+          </ol>
+          <p>
+            The server seals the copy to the key of the instance and keeps no
+            plaintext. The server does not check an instance copy with the
+            provider. The connected instance checks the copy and reports the
+            result. The row then shows a health line, for example
+            <strong>Healthy</strong> and &quot;Reported by builder-1 at
+            &lt;time&gt;.&quot; A refused key shows
+            <strong>Unhealthy</strong> with a hint. After a server restart, the
+            row shows <strong>Unknown</strong> until the next report of the
+            instance.
+          </p>
+          <p>
+            For <code>anthropic-subscription</code>, the instance runs the
+            sign-in itself. The instance must show <code>Connected</code> in
+            step 8.4. Otherwise the sign-in fails with
+            <code>credential.login.instance_unavailable</code>.
+          </p>
+          <ol>
+            <li>
+              On the instance page, select <strong>Add credential</strong> in
+              the <strong>Credentials</strong> section.
+            </li>
+            <li>
+              Enter the <strong>Name</strong> of the credential, for example
+              <code>claude</code>.
+            </li>
+            <li>
+              Choose the <strong>Platform</strong>
+              <code>anthropic-subscription</code>, then select
+              <strong>Start sign-in</strong>. The instance takes the sign-in at
+              its next heartbeat, within 15 s. Then the panel shows the address
+              and the field <strong>Paste code</strong>.
+            </li>
+            <li>
+              Open the address in a browser. Sign in to the Anthropic account,
+              then approve the access.
+            </li>
+            <li>
+              The provider page shows a code of the form
+              <code>code#state</code>. Copy the whole value.
+            </li>
+            <li>
+              Paste the value into <strong>Paste code</strong>, then select
+              <strong>Send code</strong>.
+            </li>
+            <li>
+              The <strong>Credentials</strong> section shows the row
+              <code>claude · anthropic-subscription (v1)</code>.
+            </li>
+          </ol>
+          <p>
+            Do steps 3 to 6 within 15 minutes. For <code>openai-codex</code> and
+            <code>github-copilot</code>, the instance uses the device code mode.
+            The panel then shows an address and a code. Open the address, and
+            enter the code.
+          </p>
+          <p>
+            The CLI can also make a copy with the option <code>--holder</code>.
+            See
+            <a href="../reference/llm/credential.html">LLM credentials</a> and
+            <a href="../reference/llm/login.html#login-on-a-worker-instance"
+              >Login on a worker instance</a
+            >.
+          </p>
+          <h3 id="86-bind-the-instance">8.6 Bind the instance</h3>
+          <ol>
+            <li>
+              In the project, open the <strong>Bindings</strong> tab. Select
+              <strong>Add</strong> in the <strong>Workers</strong> section.
+            </li>
+            <li>
+              Enter a <strong>Name</strong>, for example
+              <code>coder-remote</code>. Use a name that the project does not
+              hold.
+            </li>
+            <li>
+              Choose the <strong>Worker</strong> of the instance, for example
+              <code>coder@1</code>.
+            </li>
+            <li>
+              The <strong>Agents</strong> section shows the agent of the worker,
+              for example <code>swe@1</code>. When the agent shows the badge
+              <code>Not enabled</code>, select <strong>Enable swe@1</strong>.
+              Enter an <strong>Agent provider name</strong>, for example
+              <code>claude</code>. Choose the
+              <strong>LLM credential</strong> and the
+              <strong>Model identifier</strong>. Then select
+              <strong>Enable agent</strong>. The badge then shows
+              <code>Enabled</code>.
+            </li>
+            <li>
+              In <strong>Instances</strong>, select
+              <code>&lt;name&gt; · worker</code>.
+            </li>
+            <li>Select <strong>Save binding</strong>.</li>
+          </ol>
+          <p>
+            Within about 15 s, the instance registers for the binding. Its log
+            shows a line that holds
+            <code>&quot;msg&quot;:&quot;Worker application ready&quot;</code>
+            and
+            <code
+              >&quot;resource_identity&quot;:&quot;worker:kanthord:&lt;binding
+              name&gt;&quot;</code
+            >. <code>&lt;binding name&gt;</code> is the name of step 2. The
+            <strong>Live registrations</strong> item of the
+            <strong>Readiness</strong> panel shows <code>Done</code>.
+          </p>
+          <p>
+            When the instance is not connected, the
+            <strong>Live registrations</strong> item shows &quot;Instance
+            &lt;name&gt; is not connected. Start kanthord serve worker with its
+            configuration.&quot;
+          </p>
+          <p>
+            One instance is one trust boundary over every project that it
+            serves. An agent command of any served binding can read the instance
+            key, its credential copies and its workspaces. The binding sheet and
+            the instance page show a notice when the instance serves bindings of
+            two or more projects. List an instance only in bindings of projects
+            that trust each other.
+          </p>
+          <h3 id="the-files-of-an-instance">The files of an instance</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>File or directory</th>
+                  <th>On a Linux host or a Mac</th>
+                  <th>In the image</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>The instance file, mode <code>0600</code></td>
+                  <td>
+                    <code>~/.config/kanthord/workers/&lt;name&gt;.yaml</code>
+                  </td>
+                  <td>
+                    None. The container reads
+                    <code>KANTHORD_WORKER_CONFIG</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The data directory: <code>workspaces/</code>,
+                    <code>pi/</code>
+                  </td>
+                  <td>
+                    <code>~/.local/share/kanthord/workers/&lt;name&gt;/</code>
+                  </td>
+                  <td>
+                    <code
+                      >/var/lib/kanthord/data/kanthord/workers/&lt;name&gt;/</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>The log</td>
+                  <td>The journal of the unit, or the terminal</td>
+                  <td><code>podman logs</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>XDG_CONFIG_HOME</code> and <code>XDG_DATA_HOME</code> move the
+            two directories. Each instance holds its own data directory, so two
+            instances on one host share no workspace. A restart with the same
+            configuration is the same instance. It keeps its workspaces, and it
+            resumes its <code>running</code> execution.
+          </p>
+          <p>
+            A second process with the same configuration takes the connection of
+            the instance. The first process then stops its agent commands and
+            exits with status <code>3</code> and
+            <code>worker.instance.superseded</code>. Until that exit, both
+            processes can act in the same workspace, for at most one heartbeat
+            interval of 15 s. Run one process for each instance.
+          </p>
+          <h3 id="run-a-worker-in-a-stateless-container">
+            Run a worker in a stateless container
+          </h3>
+          <p>
+            The host kind <code>Container</code> runs the instance on a
+            container platform with no writable configuration. The container
+            reads the instance configuration from the variable
+            <code>KANTHORD_WORKER_CONFIG</code>, so it needs no volume for its
+            identity. Use these settings on any platform:
+          </p>
+          <ul>
+            <li>
+              Store the instance configuration as a secret of the platform. Give
+              it to the container as the variable
+              <code>KANTHORD_WORKER_CONFIG</code>.
+            </li>
+            <li>
+              Use the image
+              <code>docker.io/kanthorlabs/kanthord:&lt;version&gt;</code> with
+              the command <code>serve worker</code>.
+            </li>
+            <li>Set the <code>GIT_*</code> variables of step 3.</li>
+            <li>
+              Run the container with no health check, for example with
+              <code>podman run --no-healthcheck</code>. The health check of the
+              image reads a server, and a worker container serves no server.
+            </li>
+            <li>
+              Set a memory limit, for example with
+              <code>podman run --memory=4g</code>. Without a limit, an
+              out-of-memory kill can stop any process of the host, the server
+              included. Give the host at least 1 GiB for the server plus the
+              limit of each instance. Two instances with
+              <code>--memory=4g</code> and one server need 9 GiB. On a rootless
+              host, the limit needs cgroup v2 with the memory controller
+              delegated to the user. Without it, Podman ignores the limit and
+              prints only a warning. To check the limit, run
+              <code
+                >podman inspect --format &#39;{{.HostConfig.Memory}}&#39;
+                kanthord-worker-&lt;name&gt;</code
+              >. The command prints <code>4294967296</code> for 4 GiB.
+            </li>
+            <li>
+              Run one replica. A second replica takes the connection, and the
+              first exits with status <code>3</code>. A restart loop with
+              <code>worker.instance.superseded</code> means two deployments of
+              one instance configuration.
+            </li>
+            <li>
+              Publish no port. The instance opens every connection to the
+              server.
+            </li>
+          </ul>
+          <p>
+            Without a volume, a new container starts with no workspace. The
+            identity, the credential copies and the bindings stay on the server.
+            A resumed execution clones the repository again and checks out the
+            pushed node branch. The work that the lost workspace did not push is
+            lost.
+          </p>
+          <p>
+            The image declares a health check that reads the server on
+            <code>127.0.0.1:31415</code>. A worker container serves no server,
+            so the worker commands of this guide pass
+            <code>--no-healthcheck</code>. The
+            <a href="#84-check-the-connection">instance page</a> of the
+            dashboard shows the health of the instance: the connection and the
+            last heartbeat.
+          </p>
+          <p>
+            This example runs the container with Podman or Docker on a host of
+            your network. Podman reads the configuration from a Podman secret.
+            Docker reads it from an env file of mode 0600 with
+            <code>--env-file</code>, and you delete the file after the start.
+          </p>
+          <p>
+            <code>docker inspect kanthord-worker-&lt;name&gt;</code> shows the
+            value of <code>KANTHORD_WORKER_CONFIG</code> to every user that can
+            run <code>docker</code>. A member of the <code>docker</code> group
+            can already read every volume on the host.
+          </p>
+          <ol>
+            <li>
+              <p>
+                Do steps 1 to 8 of the dashboard list of
+                <a href="#83-add-the-instance-and-start-it">8.3</a>. In
+                <strong>Where does it run?</strong>, choose
+                <code>Container</code>. In <strong>Container runtime</strong>,
+                choose <code>Podman</code> or <code>Docker</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                On the container host of the instance, store the instance
+                configuration as a Podman secret. Paste the value, press
+                <code>Enter</code>, then press <code>Ctrl-D</code>.
+              </p>
+              <pre><code class="language-sh">podman secret create kanthord-worker-&lt;name&gt; -</code></pre>
+              <p>The command prints the ID of the secret.</p>
+              <p>
+                With Docker, write the instance configuration to an env file of
+                mode 0600. Type <code>KANTHORD_WORKER_CONFIG=</code>, paste the
+                value, press <code>Enter</code>, then press <code>Ctrl-D</code>.
+              </p>
+              <pre><code class="language-sh">(umask 077 &amp;&amp; cat &gt; &lt;name&gt;.env)</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>In the dashboard, select <strong>Done</strong>.</p>
+            </li>
+            <li>
+              <p>Start the instance:</p>
+              <pre><code class="language-sh">podman run -d --name kanthord-worker-&lt;name&gt; --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-&lt;name&gt;,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;version&gt; serve worker</code></pre>
+              <p>The command prints the ID of the new container.</p>
+              <p>With Docker, start the instance with the env file:</p>
+              <pre><code class="language-sh">docker run -d --name kanthord-worker-&lt;name&gt; --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file &lt;name&gt;.env -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;version&gt; serve worker</code></pre>
+              <p>The command prints the ID of the new container.</p>
+              <p>
+                With Docker, delete the env file. The container keeps the value.
+              </p>
+              <pre><code class="language-sh">rm &lt;name&gt;.env</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Read the log of the instance:</p>
+              <pre><code class="language-sh">podman logs kanthord-worker-&lt;name&gt;</code></pre>
+              <p>
+                One line holds
+                <code>&quot;msg&quot;:&quot;Worker instance ready&quot;</code>
+                and <code>&quot;config_source&quot;:&quot;env&quot;</code>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            The image directory <code>/var/lib/kanthord</code> becomes an
+            anonymous volume. <code>podman restart</code> keeps the workspaces.
+            A new container starts with none.
+          </p>
+          <p>
+            Then do steps <a href="#84-check-the-connection">8.4</a> to
+            <a href="#86-bind-the-instance">8.6</a>.
+          </p>
+          <h3 id="run-a-worker-in-a-container-on-the-same-host">
+            Run a worker in a container on the same host
+          </h3>
+          <p>
+            The host kind <code>Container on this host</code> runs the instance
+            in a second container beside the server container
+            <code>kanthord</code>. The two containers share a container network.
+            The instance reaches the server by the container name, at
+            <code>http://kanthord:31415</code>. With Docker, write
+            <code>docker</code> in place of <code>podman</code> in steps 1, 2
+            and 7. Steps 4 and 6 show the Docker form.
+            <a href="#run-a-worker-in-a-stateless-container"
+              >Run a worker in a stateless container</a
+            >
+            states who can read the value with Docker.
+          </p>
+          <ol>
+            <li>
+              <p>Create a network:</p>
+              <pre><code class="language-sh">podman network create kanthord-net</code></pre>
+              <p>The command prints <code>kanthord-net</code>.</p>
+            </li>
+            <li>
+              <p>Connect the server container to the network:</p>
+              <pre><code class="language-sh">podman network connect kanthord-net kanthord</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                Do steps 1 to 8 of the dashboard list of
+                <a href="#83-add-the-instance-and-start-it">8.3</a>, but skip
+                step 6. In <strong>Where does it run?</strong>, choose
+                <code>Container on this host</code>.
+                <strong>Address</strong> then shows
+                <code>http://kanthord:31415</code>. In
+                <strong>Container runtime</strong>, choose
+                <code>Podman</code> or <code>Docker</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                Store the instance configuration as a Podman secret. Paste the
+                value, press <code>Enter</code>, then press <code>Ctrl-D</code>.
+              </p>
+              <pre><code class="language-sh">podman secret create kanthord-worker-&lt;name&gt; -</code></pre>
+              <p>The command prints the ID of the secret.</p>
+              <p>
+                With Docker, write the instance configuration to an env file of
+                mode 0600. Type <code>KANTHORD_WORKER_CONFIG=</code>, paste the
+                value, press <code>Enter</code>, then press <code>Ctrl-D</code>.
+              </p>
+              <pre><code class="language-sh">(umask 077 &amp;&amp; cat &gt; &lt;name&gt;.env)</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>In the dashboard, select <strong>Done</strong>.</p>
+            </li>
+            <li>
+              <p>Start the instance:</p>
+              <pre><code class="language-sh">podman run -d --name kanthord-worker-&lt;name&gt; --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-&lt;name&gt;,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;version&gt; serve worker</code></pre>
+              <p>The command prints the ID of the new container.</p>
+              <p>With Docker, start the instance with the env file:</p>
+              <pre><code class="language-sh">docker run -d --name kanthord-worker-&lt;name&gt; --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file &lt;name&gt;.env -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;version&gt; serve worker</code></pre>
+              <p>The command prints the ID of the new container.</p>
+              <p>
+                With Docker, delete the env file. The container keeps the value.
+              </p>
+              <pre><code class="language-sh">rm &lt;name&gt;.env</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>Read the log of the instance:</p>
+              <pre><code class="language-sh">podman logs kanthord-worker-&lt;name&gt;</code></pre>
+              <p>
+                One line holds
+                <code>&quot;msg&quot;:&quot;Worker instance ready&quot;</code>
+                and <code>&quot;config_source&quot;:&quot;env&quot;</code>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            Then do steps <a href="#84-check-the-connection">8.4</a> to
+            <a href="#86-bind-the-instance">8.6</a>.
+          </p>
+          <p>
+            The image holds <code>bash</code>, <code>git</code>, the OpenSSH
+            client and the <code>kanthord</code> binary of the server version.
+            The worker container keeps its workspaces in an anonymous volume.
+            <code>podman restart kanthord-worker-&lt;name&gt;</code> keeps them.
+            A new container starts with none, as
+            <a href="#run-a-worker-in-a-stateless-container"
+              >Run a worker in a stateless container</a
+            >
+            states.
+          </p>
+          <p>
+            <code>podman restart kanthord</code> keeps the network connection.
+            After <code>podman rm</code> of the server, do the worker steps of
+            <a href="#use-a-newer-image">Use a newer image</a>.
+          </p>
+          <h3 id="move-a-binding-to-a-worker-instance">
+            Move a binding to a worker instance
+          </h3>
+          <p>
+            The placement belongs to the instance, and it never changes. A
+            binding holds no placement, so it keeps its name. The tutorial
+            binding <code>coder</code> lists the <code>server</code> instance
+            <code>coder-1</code>. To move <code>coder</code> to a worker
+            instance:
+          </p>
+          <ol>
+            <li>
+              Add an instance of <code>coder@1</code> at the
+              <code>worker</code> placement, and give it the LLM credential. Do
+              steps 8.1 to 8.5, for example with the instance
+              <code>builder-1</code>.
+            </li>
+            <li>
+              In the project, open the <strong>Bindings</strong> tab, and open
+              the <code>coder</code> binding.
+            </li>
+            <li>
+              In <strong>Instances</strong>, select
+              <code>builder-1 · worker</code>, and clear
+              <code>coder-1 · server</code>.
+            </li>
+            <li>
+              Select <strong>Save binding</strong>. The registration of
+              <code>coder-1</code> shows <strong>Draining</strong> until its
+              live execution ends. Then <code>coder-1</code> takes no work of
+              the binding.
+            </li>
+            <li>
+              To stop <code>coder-1</code>, open its instance page, and select
+              <strong>Archive</strong>. The server still runs an instance that
+              no binding lists, until its archive.
+            </li>
+          </ol>
+          <p>
+            Do the same for <code>reviewer</code>, for example with the instance
+            <code>builder-reviewer-1</code>.
+          </p>
+          <h3 id="clean-up-a-worker-host-of-an-earlier-version">
+            Clean up a worker host of an earlier version
+          </h3>
+          <p>
+            An earlier version ran <code>kanthord serve worker</code> with a
+            machine token in <code>cli.yaml</code>. That setup does not work
+            with this version. On each such host, do these steps:
+          </p>
+          <ol>
+            <li>
+              <p>
+                Stop the old <code>kanthord serve worker</code> process. For a
+                container of the earlier guide, remove it with
+                <code>podman rm -f kanthord-&lt;binding name&gt;</code>.
+                <code>&lt;binding name&gt;</code> is the name of the old worker
+                binding.
+              </p>
+            </li>
+            <li>
+              <p>
+                Remove the old workspaces and transcripts. The instance keeps
+                its files in its own data directory now.
+              </p>
+              <pre><code class="language-sh">rm -rf ~/.local/state/kanthord/workspaces ~/.local/state/kanthord/transcripts</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                If the host runs no kanthord server, remove the old pi
+                directory. A server on the same host uses that directory.
+              </p>
+              <pre><code class="language-sh">rm -rf ~/.local/state/kanthord/pi</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                If <code>~/.config/kanthord/cli.yaml</code> holds a
+                <code>client_secret</code> line, remove the file. Every CLI
+                command that reads this file refuses it with
+                <code>cli.config.invalid</code>.
+              </p>
+              <pre><code class="language-sh">rm ~/.config/kanthord/cli.yaml</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>For a container of the earlier guide, remove its volume:</p>
+              <pre><code class="language-sh">podman volume rm kanthord-&lt;binding name&gt;</code></pre>
+              <p>
+                The command prints <code>kanthord-&lt;binding name&gt;</code>.
+              </p>
+            </li>
+          </ol>
+          <p>
+            With <code>XDG_STATE_HOME</code> or
+            <code>XDG_CONFIG_HOME</code> set, write
+            <code>$XDG_STATE_HOME/kanthord</code> or
+            <code>$XDG_CONFIG_HOME/kanthord</code> in place of the paths above.
+            Then add an instance on the host with step 8.
+          </p>
+          <h2 id="use-a-newer-image">Use a newer image</h2>
+          <p>
+            If the server runs a toolchain image, build the image of
+            <code>&lt;new version&gt;</code> first, and use it in the command of
+            step 3. See
+            <a href="add-a-toolchain-to-the-worker-image.html"
+              >Add a toolchain to the worker image</a
+            >.
+          </p>
+          <p>
+            <code>podman restart kanthord</code> keeps the old image. To run a
+            newer image on the same volume, write the new version in place of
+            <code>&lt;new version&gt;</code>:
+          </p>
+          <pre><code class="language-sh">podman pull docker.io/kanthorlabs/kanthord:&lt;new version&gt;
+podman stop kanthord
+podman run --rm -v kanthord:/var/lib/kanthord docker.io/kanthorlabs/kanthord:&lt;new version&gt; upgrade
+podman rm kanthord</code></pre>
+          <p>
+            Then run the command of step 3 again, with
+            <code>&lt;new version&gt;</code> in place of
+            <code>&lt;version&gt;</code> and the same <code>GIT_*</code> values.
+            If you did step 8.1, run the command of step 8.1 in its place. See
+            <a href="../reference/upgrade.html">upgrade</a>.
+          </p>
+          <p>
+            A worker instance checks the server version at its start and at each
+            heartbeat. After the upgrade of the server, an instance of the old
+            version exits with <code>worker.version.mismatch</code>. Upgrade
+            each instance to <code>&lt;new version&gt;</code>.
+          </p>
+          <p>
+            For an instance in a container on the same host, do these steps. See
+            <a href="#run-a-worker-in-a-container-on-the-same-host"
+              >Run a worker in a container on the same host</a
+            >. With Docker, write <code>docker</code> in place of
+            <code>podman</code> in steps 1 and 2. Steps 2 and 3 show the Docker
+            form.
+          </p>
+          <ol>
+            <li>
+              <p>
+                Connect the new server container to the network.
+                <code>podman rm kanthord</code> removed the old connection.
+              </p>
+              <pre><code class="language-sh">podman network connect kanthord-net kanthord</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+            <li>
+              <p>
+                With Docker, first copy the instance configuration of the old
+                container to an env file of mode 0600:
+              </p>
+              <pre><code class="language-sh">docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' kanthord-worker-&lt;name&gt; | grep '^KANTHORD_WORKER_CONFIG=' | (umask 077 &amp;&amp; cat &gt; &lt;name&gt;.env)</code></pre>
+              <p>
+                The command prints nothing. Check that the env file holds the
+                line:
+              </p>
+              <pre><code class="language-sh">grep -c '^KANTHORD_WORKER_CONFIG=' &lt;name&gt;.env</code></pre>
+              <p>
+                The command prints <code>1</code>. If it prints <code>0</code>,
+                stop. Do not remove the container, because it holds the only
+                copy of the value.
+              </p>
+              <p>
+                Remove the container of the instance and its anonymous volume:
+              </p>
+              <pre><code class="language-sh">podman rm -f -v kanthord-worker-&lt;name&gt;</code></pre>
+              <p>
+                The command prints <code>kanthord-worker-&lt;name&gt;</code>.
+              </p>
+            </li>
+            <li>
+              <p>
+                Start the instance with the new version. The Podman secret
+                <code>kanthord-worker-&lt;name&gt;</code> stays.
+              </p>
+              <pre><code class="language-sh">podman run -d --name kanthord-worker-&lt;name&gt; --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-&lt;name&gt;,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;new version&gt; serve worker</code></pre>
+              <p>The command prints the ID of the new container.</p>
+              <p>
+                With Docker, start the instance with the env file, then delete
+                the file:
+              </p>
+              <pre><code class="language-sh">docker run -d --name kanthord-worker-&lt;name&gt; --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file &lt;name&gt;.env -e GIT_AUTHOR_NAME="&lt;git name&gt;" -e GIT_AUTHOR_EMAIL="&lt;git email&gt;" -e GIT_COMMITTER_NAME="&lt;git name&gt;" -e GIT_COMMITTER_EMAIL="&lt;git email&gt;" docker.io/kanthorlabs/kanthord:&lt;new version&gt; serve worker
+rm &lt;name&gt;.env</code></pre>
+              <p>The command prints the ID of the new container.</p>
+            </li>
+          </ol>
+          <p>For an instance on a Linux host, do these steps on that host:</p>
+          <ol>
+            <li>
+              <p>
+                Install the binary of <code>&lt;new version&gt;</code> with
+                steps 2 to 6 of
+                <a href="#82-install-the-binary-on-the-worker-host">8.2</a>.
+                Write <code>&lt;new version&gt;</code> in place of
+                <code>&lt;version&gt;</code>.
+              </p>
+            </li>
+            <li>
+              <p>Start the instance again:</p>
+              <pre><code class="language-sh">systemctl --user restart kanthord-worker@&lt;name&gt;</code></pre>
+              <p>The command prints nothing.</p>
+            </li>
+          </ol>
+          <p>
+            For an instance on a Mac, install the binary of
+            <code>&lt;new version&gt;</code> with steps 2 to 7 of
+            <a href="#82-install-the-binary-on-the-worker-host">8.2</a>. Then do
+            steps 3 and 4 of the Mac list of
+            <a href="#83-add-the-instance-and-start-it">8.3</a> again. For an
+            instance in a stateless container, change the image tag to
+            <code>&lt;new version&gt;</code>. The instance keeps its
+            configuration, its credential copies and its bindings. See
+            <a href="../reference/upgrade.html#other-state">upgrade</a>.
+          </p>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <p>
+            In a <strong>Verify</strong> row, the value in parentheses is the
+            <code>failure_reason</code> of the check answer. The dashboard shows
+            the hint, not the value.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    The container stops at once, and
+                    <code>podman logs kanthord</code> shows
+                    <code>system.config.not_found</code>
+                  </td>
+                  <td>
+                    The volume holds no configuration. Run step 2, then run
+                    <code>podman start kanthord</code>. The message names the
+                    command <code>kanthord config init</code> for a host
+                    install. In a container, use the
+                    <code>podman run</code> form of step 2.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>curl</code> fails with
+                    <code>(52) Empty reply from server</code>,
+                    <code>(56) Connection reset by peer</code> or
+                    <code>(7) Failed to connect</code>
+                  </td>
+                  <td>
+                    The server listens on <code>127.0.0.1</code> inside the
+                    container. <code>podman logs kanthord</code> shows the start
+                    record with
+                    <code>&quot;bind&quot;:&quot;127.0.0.1&quot;</code> and the
+                    message &quot;Gateway Service started. A loopback bind
+                    accepts connections from this host only.&quot; Create the
+                    configuration with <code>--gateway-bind ::</code>. In an
+                    existing volume, use the <code>gateway.bind</code> example
+                    of step 7.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>403</code> with
+                    <code>gateway.http.host_not_allowed</code>, &quot;Host is
+                    not allowed. Add it to gateway.allowed_hosts.&quot;
+                  </td>
+                  <td>
+                    The <code>Host</code> header of the request is not in
+                    <code>gateway.allowed_hosts</code>. The JSON body of the
+                    answer holds that header in lower case at
+                    <code>error.details.host</code>, for example
+                    <code>localhost:8080</code>. Add that exact value with step
+                    7, with its port when it has one. The answer does not list
+                    the allowed hosts. <code>config init</code> does not replace
+                    an existing file.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The health status is <code>unhealthy</code>, and the check
+                    output shows <code>gateway.routing.not_found</code> and
+                    <code>status: 404</code>
+                  </td>
+                  <td>
+                    The configuration sets <code>gateway.base_path</code>, for
+                    example <code>/s/kanthord</code>. The check reads
+                    <code>http://127.0.0.1:31415</code> with no base path.
+                    Remove the container with
+                    <code>podman rm -f kanthord</code>. Run the command of step
+                    3 again, and add
+                    <code
+                      >-e
+                      KANTHORD_ENDPOINT=http://127.0.0.1:31415/s/kanthord</code
+                    >
+                    before the image name. Use your base path in that value.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The health status is <code>unhealthy</code>, the
+                    <code>curl</code> command of step 3 answers
+                    <code>200</code>, and the check output shows
+                    <code>cli.config.invalid</code>,
+                    <code>system.config.invalid_yaml</code> or
+                    <code>system.files.invalid_permissions</code>
+                  </td>
+                  <td>
+                    The check reads the client file
+                    <code>/var/lib/kanthord/config/kanthord/cli.yaml</code>
+                    before its request. An invalid file, a mode other than
+                    <code>0600</code>, a symlink or an owner other than the user
+                    <code>kanthord</code> fails the check while the server
+                    answers <code>200</code>. For invalid content, correct the
+                    file, or remove it with
+                    <code
+                      >podman exec kanthord rm
+                      /var/lib/kanthord/config/kanthord/cli.yaml</code
+                    >. For a wrong mode, run
+                    <code
+                      >podman exec kanthord chmod 0600
+                      /var/lib/kanthord/config/kanthord/cli.yaml</code
+                    >. For a symlink or a wrong owner, remove the file.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The health status is <code>unhealthy</code>, and the check
+                    output shows <code>cli.gateway.liveness.indeterminate</code>
+                  </td>
+                  <td>
+                    The check got no HTTP answer. An <code>endpoint</code> in
+                    <code>/var/lib/kanthord/config/kanthord/cli.yaml</code> or a
+                    <code>KANTHORD_ENDPOINT</code> value must reach the server
+                    from inside the container. For a
+                    <code>gateway.port</code> other than <code>31415</code>, add
+                    <code
+                      >-e KANTHORD_ENDPOINT=http://127.0.0.1:&lt;gateway
+                      port&gt;</code
+                    >
+                    to the command of step 3, and add
+                    <code>127.0.0.1:&lt;gateway port&gt;</code> to
+                    <code>gateway.allowed_hosts</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.output.terminal_required</code></td>
+                  <td>
+                    <code>auth jwt generate</code> prints a token only to a
+                    terminal. Add <code>-t</code> to <code>podman exec</code>,
+                    as step 4 shows.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;Open
+                    the binding. The sheet pins the host key, or shows Confirm
+                    host key.&quot; (<code>host_key_unknown</code>)
+                  </td>
+                  <td>
+                    The server holds no pinned host key for the address host.
+                    Open the binding with <strong>Edit</strong>. For
+                    <code>github.com</code>, the sheet pins the key. For another
+                    host, compare the fingerprint with the published one of the
+                    provider, then select <strong>Confirm host key</strong>.
+                    <strong>Save binding</strong> stays off until the host key
+                    is pinned.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;The
+                    host presented another key.&quot;
+                    (<code>host_key_changed</code>)
+                  </td>
+                  <td>
+                    The host presented a key other than the pinned key. The
+                    provider rotated its host key, or a network device
+                    intercepts the connection. Open
+                    <strong>Credentials</strong>, then <strong>Git</strong>. In
+                    the <strong>Host keys</strong> panel, select
+                    <strong>Pin again</strong> on the host. For
+                    <code>github.com</code> and <code>ssh.github.com</code>, the
+                    dashboard pins the key from <code>api.github.com</code>. For
+                    another host, a dialog shows the scanned and the pinned
+                    fingerprint. Compare the scanned fingerprint with the
+                    published one of the provider. Select
+                    <strong>Confirm host key</strong> only when they are equal.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;The
+                    repository host refused the SSH key.&quot;
+                    (<code>key_refused</code>)
+                  </td>
+                  <td>
+                    The repository does not hold the public key of the SSH
+                    credential. The binding sheet shows that public key below
+                    the hint. Add it as a deploy key with write access, as step
+                    5 shows. After a <strong>Rotate key</strong>, add the new
+                    public key.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;The
+                    repository host does not find the repository.&quot;
+                    (<code>repository_not_found</code>)
+                  </td>
+                  <td>
+                    The owner or the name in the address is wrong, or the deploy
+                    key belongs to another repository. Correct the address, or
+                    add the key to this repository.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;The
+                    server cannot reach the repository host.&quot;
+                    (<code>host_unreachable</code>)
+                  </td>
+                  <td>
+                    The server has no network path to the repository host on its
+                    SSH port: 443 for <code>ssh.github.com</code>,
+                    <code>altssh.gitlab.com</code> and
+                    <code>altssh.bitbucket.org</code>, 22 for every other host.
+                    Check the DNS and that outbound port of the container host.
+                    If the network blocks the outbound port 22, change the
+                    address host to <code>ssh.github.com</code>,
+                    <code>altssh.gitlab.com</code> or
+                    <code>altssh.bitbucket.org</code>, for example
+                    <code
+                      >git@ssh.github.com:&lt;owner&gt;/&lt;repository&gt;.git</code
+                    >, and pin its host key.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unknown</strong> and the hint &quot;The
+                    remote host or service did not answer before the
+                    deadline.&quot; (<code>deadline_exceeded</code>)
+                  </td>
+                  <td>
+                    The git read exceeded its deadline. Select
+                    <strong>Verify</strong> again. If the failure stays, check
+                    the network path from the server to the repository host.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;The
+                    check failed for an unknown cause.&quot;
+                    (<code>unclassified</code>)
+                  </td>
+                  <td>
+                    Select <strong>Verify</strong> again. If the failure stays,
+                    read <code>podman logs kanthord</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The binding sheet shows &quot;The host key of github.com was
+                    not read.&quot; and <strong>Save binding</strong> stays off
+                  </td>
+                  <td>
+                    The server cannot reach <code>api.github.com</code> over
+                    HTTPS. Check the network of the container host, then select
+                    <strong>Retry</strong>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>Address · Unhealthy</strong> and the hint &quot;The
+                    address is not valid, or its host is not a host of the
+                    platform.&quot; (<code>address_invalid</code>)
+                  </td>
+                  <td>
+                    The address does not have the form
+                    <code
+                      >git@&lt;host&gt;:&lt;owner&gt;/&lt;repository&gt;.git</code
+                    >, or its host is not <code>github.com</code> or
+                    <code>ssh.github.com</code> for GitHub. An address with the
+                    alias <code>github</code> of the earlier guide gets this
+                    result. In the binding sheet, the
+                    <strong>Address</strong> field also shows the host rule. See
+                    <a href="#move-from-the-earlier-ssh-setup"
+                      >Move from the earlier SSH setup</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Verify</strong> shows
+                    <strong>SSH credential · Unhealthy</strong> or
+                    <strong>Address · Unhealthy</strong>, and the hint &quot;The
+                    server cannot load the SSH key.&quot;
+                    (<code>identity_unavailable</code>)
+                  </td>
+                  <td>
+                    The SSH credential holds no key that the server generated,
+                    or the server cannot start its SSH agent. Open
+                    <strong>Credentials</strong>, then <strong>Git</strong>, and
+                    select <strong>Rotate key</strong> on the credential. Add
+                    the new public key as a deploy key. If the fault stays, read
+                    <code>podman logs kanthord</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The instance page shows <code>Not connected</code></td>
+                  <td>
+                    The process of the instance does not run, or it cannot reach
+                    <code>&lt;address&gt;</code>. Read the log of the instance:
+                    <code
+                      >journalctl --user -u kanthord-worker@&lt;name&gt;</code
+                    >, the terminal on a Mac, or
+                    <code>podman logs kanthord-worker-&lt;name&gt;</code>. The
+                    rows below name each code of that log.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>journalctl --user</code> prints &quot;No journal files
+                    were found&quot;
+                  </td>
+                  <td>
+                    The journal of the host keeps no user journal. Run
+                    <code
+                      >sudo journalctl
+                      _SYSTEMD_USER_UNIT=kanthord-worker@&lt;name&gt;.service</code
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.start.instance_config_absent</code></td>
+                  <td>
+                    The process finds no instance configuration. On a Linux host
+                    or a Mac, run <code>kanthord worker join</code> first, and
+                    pass the same <code>&lt;name&gt;</code> to
+                    <code>--instance</code>. In a container, give the secret as
+                    the variable <code>KANTHORD_WORKER_CONFIG</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.start.instance_config_conflict</code></td>
+                  <td>
+                    <code>KANTHORD_WORKER_CONFIG</code> is set while the
+                    instance file <code>workers/&lt;name&gt;.yaml</code> exists.
+                    Remove the variable, or remove the file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.instance.config_invalid</code></td>
+                  <td>
+                    The pasted value is not complete, or
+                    <code>--instance</code> differs from the name in the
+                    configuration. Paste the whole value again. If you lost the
+                    value, select <strong>Reset key</strong> on the instance
+                    page.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.join.config_exists</code></td>
+                  <td>
+                    The instance file of the name exists. After a
+                    <strong>Reset key</strong>, run
+                    <code>kanthord worker join --force</code> to replace it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.start.endpoint_insecure</code></td>
+                  <td>
+                    <code>&lt;address&gt;</code> uses <code>http</code>, and its
+                    host does not resolve to a loopback or private address. Use
+                    an HTTPS address, or an address of your local network. See
+                    <a href="#81-open-the-server-to-your-network">8.1</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.version.mismatch</code></td>
+                  <td>
+                    The binary or the image of the instance has another version
+                    than the server. Install the version of the server. See
+                    <a href="#82-install-the-binary-on-the-worker-host">8.2</a>
+                    and <a href="#use-a-newer-image">Use a newer image</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.instance.not_found</code></td>
+                  <td>
+                    A <strong>Reset key</strong> or an
+                    <strong>Archive</strong> ended the configuration of the
+                    instance. After a <strong>Reset key</strong>, write the new
+                    configuration with
+                    <code>kanthord worker join --force</code>, or replace the
+                    Podman secret. With Docker, write a new env file and run the
+                    container again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>loginctl enable-linger</code> asks for a password, or
+                    fails with &quot;Access denied&quot;
+                  </td>
+                  <td>
+                    The host allows the change only to an administrator. Run
+                    <code>sudo loginctl enable-linger &lt;user&gt;</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The process exits with status <code>3</code> and
+                    <code>worker.instance.superseded</code>
+                  </td>
+                  <td>
+                    A second process with the same instance configuration took
+                    the connection. The diagnostic names its
+                    <code>connection_name</code>. Run one process for each
+                    instance. systemd does not restart a process that exits with
+                    status <code>3</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Save binding</strong> fails with
+                    <code>agent.configuration.credential_holder_mismatch</code>
+                  </td>
+                  <td>
+                    A listed instance holds no live copy of a credential that
+                    the agents use. Do
+                    <a href="#85-give-the-instance-the-llm-credential">8.5</a>
+                    for each listed instance.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sign-in of an instance fails with
+                    <code>credential.login.instance_unavailable</code>
+                  </td>
+                  <td>
+                    The instance is not connected. Start it, and check
+                    <a href="#84-check-the-connection">8.4</a>. Then start the
+                    sign-in again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The health status of a worker container is
+                    <code>unhealthy</code>
+                  </td>
+                  <td>
+                    The container started without <code>--no-healthcheck</code>.
+                    The health check of the image reads a server on
+                    <code>127.0.0.1:31415</code>, and a worker container serves
+                    no server. The status does not stop the instance. Read the
+                    connection on the instance page. The start commands of this
+                    guide pass <code>--no-healthcheck</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

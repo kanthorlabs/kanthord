@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Check a model of an LLM credential · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="check-a-model-of-an-llm-credential">
+            Check a model of an LLM credential
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Check one model and one reasoning effort through a stored LLM
+            credential. The check runs one tool round trip: the model receives a
+            tool definition, calls the tool, receives the tool result and
+            answers. The API and <code>kanthord llm model check</code> perform
+            the same read operation.
+          </p>
+          <p>
+            The check uses the current revision of the credential. It builds the
+            model runtime that an execution builds, so the check covers every
+            LLM platform, <code>openai-compatible</code> included. It stores no
+            result, pins no revision, caches nothing, and creates no idempotency
+            record. It has no project or binding.
+          </p>
+          <p>
+            The check is a warning for the human. Run it before an agent
+            enablement write. The enablement write does not call it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Request</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>
+                    The user message asks the model to call the tool
+                    <code>check_tool</code> once.
+                  </td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>
+                    The model must answer with a call of
+                    <code>check_tool</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>
+                    The tool result <code>ready</code> goes back to the model.
+                  </td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>The model must answer without a provider failure.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The reasoning effort <code>off</code> sends no reasoning option.
+            Every other effort goes to the model call. The check has a 50-second
+            deadline. It refreshes an OAuth access token by the
+            <a href="credential.html#oauth-refresh">OAuth refresh</a>. The check
+            stores only a refreshed OAuth value.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with JSON. The CLI writes the
+            same object as one JSON line to stdout and exits <code>0</code>,
+            also when <code>result</code> is not <code>ok</code>. The example
+            below is formatted.
+          </p>
+          <pre><code class="language-json">{
+  "result": "rate_limited",
+  "message": "429 Rate limit exceeded"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>result</code></td>
+                  <td>string</td>
+                  <td>Check result; see the table below.</td>
+                </tr>
+                <tr>
+                  <td><code>message</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Failure text without secrets, cut to 300 characters;
+                    <code>null</code> when <code>result</code> is
+                    <code>ok</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>result</code></th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>ok</code></td>
+                  <td>
+                    The model called the tool and answered after the tool
+                    result.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>rate_limited</code></td>
+                  <td>The provider answered <code>429</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>quota_exhausted</code></td>
+                  <td>
+                    The error text names a quota, a usage limit, a billing state
+                    or a credit balance.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unauthorized</code></td>
+                  <td>
+                    The provider answered <code>401</code> or <code>403</code>,
+                    the
+                    <a href="credential.html#oauth-refresh">OAuth refresh</a>
+                    failed, or an OAuth access token that the check cannot
+                    refresh expires within 5 minutes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>bad_request</code></td>
+                  <td>
+                    The provider answered another <code>4xx</code>, or the model
+                    answered without a call of the tool.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>unavailable</code></td>
+                  <td>
+                    Every other failure: a <code>5xx</code> answer, a network
+                    failure, the deadline or a cancelled request.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>message</code> of a model that does not call the tool is
+            <code>The model did not call the tool.</code> The answer contains no
+            key or token.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Absent, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    The body is not exactly the three properties below, each a
+                    nonempty string.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 llm.model.credential_not_found</code></td>
+                  <td>
+                    Unknown name, archived credential, or a name of another
+                    component.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>409 credential.credential.held_by_instance</code>
+                  </td>
+                  <td>
+                    The name has live
+                    <a href="credential.html#instance-copies"
+                      >instance copies</a
+                    >
+                    and no live <code>server</code> copy.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 llm.model.model_unknown</code></td>
+                  <td>The model is not in the model list of the credential.</td>
+                </tr>
+                <tr>
+                  <td><code>400 llm.model.reasoning_unsupported</code></td>
+                  <td>The model does not support the reasoning effort.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>The request body is not valid JSON.</td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>The body exceeds 16 KiB.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    The request has no <code>application/json</code> content
+                    type.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>The 60-second operation timeout expired.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A provider failure is not an API failure; it appears in
+            <code>result</code>.
+          </p>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. A transport failure,
+            timeout or malformed response exits <code>1</code> with
+            <code>cli.llm.model.check.indeterminate</code>. Without a nonblank
+            token, the CLI exits <code>1</code> with
+            <code>cli.llm.model.check.token_required</code> before a request. A
+            repeated option exits <code>1</code> with
+            <code>cli.option.duplicate</code>.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/llm/model/check</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>llm.model.check</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>Human bearer JWT</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>60 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code
+                      >{ &quot;credential&quot;, &quot;model_identifier&quot;,
+                      &quot;reasoning_effort&quot; }</code
+                    >; 16 KiB limit
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>credential</code></td>
+                  <td>string</td>
+                  <td>Credential name.</td>
+                </tr>
+                <tr>
+                  <td><code>model_identifier</code></td>
+                  <td>string</td>
+                  <td>
+                    Model ID; the models of an
+                    <code>openai-compatible</code> credential come from its
+                    metadata.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>reasoning_effort</code></td>
+                  <td>string</td>
+                  <td>
+                    One level that the model supports, for example
+                    <code>off</code>, <code>low</code> or <code>high</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/llm/model/check \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -d '{"credential":"local-vllm","model_identifier":"qwen3-coder","reasoning_effort":"off"}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord llm model check --credential &lt;credential-name&gt; --model &lt;model-identifier&gt; --reasoning-effort &lt;level&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord llm model check --credential local-vllm --model qwen3-coder --reasoning-effort off
+kanthord llm model check --credential team-openai --model gpt-5.5 --reasoning-effort high \
+  --token '&lt;human-jwt&gt;' \
+  --endpoint http://127.0.0.1:31415</code></pre>
+          <p>There are no positional arguments.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--credential &lt;credential-name&gt;</code></td>
+                  <td>Required</td>
+                  <td>Credential name; sent as <code>credential</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--model &lt;model-identifier&gt;</code></td>
+                  <td>Required</td>
+                  <td>Model ID; sent as <code>model_identifier</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--reasoning-effort &lt;level&gt;</code></td>
+                  <td>Required</td>
+                  <td>
+                    Reasoning level; sent as <code>reasoning_effort</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Explicit options take precedence. See
+            <a href="../index.html#client-configuration"
+              >client configuration</a
+            >
+            for the private <code>cli.yaml</code> file. The command rejects
+            <code>--idempotency-key</code> as an unknown option. The HTTP client
+            has a 61-second deadline for this 60-second operation.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

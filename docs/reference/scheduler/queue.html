@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inspect the work queue · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="inspect-the-work-queue">Inspect the work queue</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Read the jobs in the work queue of one project. The queue holds one
+            job for each node that a worker can claim now. The Mission Service
+            writes the jobs; these operations only read them.
+          </p>
+          <ul>
+            <li>
+              <code>queue list</code> returns one page of jobs in queue order.
+            </li>
+            <li>
+              <code>queue peek</code> returns the first job in queue order, or
+              <code>null</code> for an empty queue.
+            </li>
+          </ul>
+          <p>
+            Queue order is <code>priority</code> descending, then
+            <code>job_id</code> ascending. Each job of a node keeps the
+            <code>job_id</code> of the first job of that node, so a rework keeps
+            the queue place of the node. <code>queued_at</code> states when the
+            current job entered the queue. A work pull uses the same order when
+            it selects a job. A read removes no job, reserves no node and does
+            not predict which instance claims a job. A job whose node no worker
+            binding of the project matches stays in the queue, and no claim
+            selects it.
+          </p>
+          <p>
+            Each <code>queue list</code> call reads one page. The CLI does not
+            follow <code>next_cursor</code>. The list is a live view and holds
+            no history.
+          </p>
+          <p>
+            Both operations accept any project identity in the canonical format.
+            A project that holds no jobs, or that does not exist, returns an
+            empty result.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="queue-list"><code>queue list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "job_id": "job_01JZ8Q4W5N2V7K3M9P0R1S2T3V",
+      "project_id": "project_01JZ8PZ0A1B2C3D4E5F6G7H8J9",
+      "node_id": "node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
+      "priority": 5,
+      "queued_at": 1751565717573
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array of <code>Job</code></td>
+                  <td>
+                    At most <code>limit</code> jobs in queue order. An empty
+                    array is a successful result.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Opaque cursor for the next page. <code>null</code> ends the
+                    traversal.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="queue-peek"><code>queue peek</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code>.
+          </p>
+          <pre><code class="language-json">{
+  "job": {
+    "job_id": "job_01JZ8Q4W5N2V7K3M9P0R1S2T3V",
+    "project_id": "project_01JZ8PZ0A1B2C3D4E5F6G7H8J9",
+    "node_id": "node_01JZ8Q0K4M6N8P0R2S4T6V8W0X",
+    "priority": 5,
+    "queued_at": 1751565717573
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>job</code></td>
+                  <td><code>Job</code> or <code>null</code></td>
+                  <td>
+                    First job in queue order; <code>null</code> when the queue
+                    is empty.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="job"><code>Job</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>job_id</code></td>
+                  <td><code>job_&lt;ulid&gt;</code></td>
+                  <td>
+                    Identity of the first job of the node. A priority change and
+                    a later job of the node keep this identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project_id</code></td>
+                  <td><code>project_&lt;ulid&gt;</code></td>
+                  <td>Project that owns the queue.</td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Mission node that the job represents.</td>
+                </tr>
+                <tr>
+                  <td><code>priority</code></td>
+                  <td>safe integer</td>
+                  <td>
+                    Priority of the node, copied from the Mission Service.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>queued_at</code></td>
+                  <td>integer</td>
+                  <td>Unix epoch milliseconds of the insert of this job.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>Both</td>
+                  <td>
+                    Missing, invalid or expired token, or a machine token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>Both</td>
+                  <td>
+                    Invalid <code>project_id</code>, <code>limit</code> outside
+                    1 to 1000, or an unknown query field.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>Both</td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>Both</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.queue.list.invalid_project_id</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>&lt;project-id&gt;</code> is not a canonical
+                    <code>project_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.scheduler.queue.peek.invalid_project_id</code>
+                  </td>
+                  <td><code>peek</code></td>
+                  <td>
+                    <code>&lt;project-id&gt;</code> is not a canonical
+                    <code>project_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.scheduler.queue.list.token_required</code></td>
+                  <td><code>list</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.scheduler.queue.peek.token_required</code></td>
+                  <td><code>peek</code></td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--limit</code> is outside 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>Both</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared API failure makes the CLI exit <code>1</code>. The
+            diagnostic starts with the error code of the API. A transport
+            failure, timeout or malformed response exits <code>1</code> with
+            <code>cli.scheduler.queue.list.indeterminate</code> or
+            <code>cli.scheduler.queue.peek.indeterminate</code>. These reads
+            change nothing, so run the command again.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <h3 id="queue-list-1"><code>queue list</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code>GET /api/scheduler/project/:project_id/queue</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>scheduler.queue.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>project_id</code> (path, required);
+                    <code>limit</code> (query, 1 to 1000, default
+                    <code>100</code>); <code>cursor</code> (query, optional)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="queue-peek-1"><code>queue peek</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >GET /api/scheduler/project/:project_id/queue/peek</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>scheduler.queue.peek</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>project_id</code> (path, required); no query fields
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Both operations use one header:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5F6G7H8J9/queue?limit=50' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i http://127.0.0.1:31415/api/scheduler/project/project_01JZ8PZ0A1B2C3D4E5F6G7H8J9/queue/peek \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <p>
+            To read the next page, send the <code>next_cursor</code> value as
+            the <code>cursor</code> query parameter with the same
+            <code>limit</code>.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <h3 id="queue-list-2"><code>queue list</code></h3>
+          <pre><code class="language-text">kanthord scheduler queue list &lt;project-id&gt; [--limit &lt;count&gt;] [--cursor &lt;opaque&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord scheduler queue list project_01JZ8PZ0A1B2C3D4E5F6G7H8J9 --limit 50</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>
+                    Required <code>project_&lt;ulid&gt;</code> of the queue to
+                    read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum jobs on the page, from 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;opaque&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="queue-peek-2"><code>queue peek</code></h3>
+          <pre><code class="language-text">kanthord scheduler queue peek &lt;project-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord scheduler queue peek project_01JZ8PZ0A1B2C3D4E5F6G7H8J9</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Positional argument</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>&lt;project-id&gt;</code></td>
+                  <td>
+                    Required <code>project_&lt;ulid&gt;</code> of the queue to
+                    read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>--token</code> and <code>--endpoint</code> belong to the
+            <code>scheduler</code> group, and each leaf command accepts them.
+            Explicit options take precedence; see
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The commands read no server configuration. The HTTP client has a
+            31-second deadline for these 30-second operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

@@ -20,8 +20,8 @@ if [ -e "$OUTPUT" ]; then
 fi
 
 test -f "$REPO/docs/CNAME"
-test -f "$REPO/docs/README.md"
+test -f "$REPO/docs/index.html"
 mkdir -p "$OUTPUT"
-rsync -a --exclude='/brainstorm/' --exclude='/serve.json' "$REPO/docs/" "$OUTPUT/"
+rsync -a --exclude='/brainstorm/' --exclude='/serve.json' --exclude='/.claude/' --exclude='/DESIGN.md' "$REPO/docs/" "$OUTPUT/"
 python3 "$REPO/scripts/docs/check.py" "$OUTPUT"
 echo "Public documentation built at $OUTPUT"
