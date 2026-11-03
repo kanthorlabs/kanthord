@@ -498,8 +498,8 @@ The route at the insert:
 - The read computes `attempt`, `round`, `source`, `status` and `created_at`.
 - `created_at` is `identityTime(id)`, the wall time of the ULID. `decided_at` is the service time.
 - `assessmentSchema` gets `round: number | null`, computed at the read. A human assessment reads null.
-- `mission.finding.list` and `review_round.findings` order by the round with a human finding last, then by `kind` with `blocker` first, then by the label number, then by `id`. The cursor of a page follows the same order.
-- `mission.finding.undecided.list` orders by `id`, with the last `id` as the cursor, as `listProposals` does. The page reads stored columns only, and it computes `attempt` and `round` for the rows of the page.
+- `mission.finding.list` and `review_round.findings` order by the attempt, then by the round with a human finding last, then by `kind` with `blocker` first, then by the label number, then by `id`. The cursor of a page follows the same order.
+- `mission.finding.undecided.list` orders by `id` from the newest to the oldest, with the last `id` as the cursor, as `listProposals` does. The page reads stored columns only, and it computes `attempt` and `round` for the rows of the page.
 
 ### The operations
 
