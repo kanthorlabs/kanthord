@@ -453,10 +453,13 @@ flowchart TB
                   <td><code>worker.phase</code></td>
                   <td>
                     <code>kanthord.task.id</code>: the task id, or the node id
-                    for the node unit. <code>kanthord.task.result</code>:
-                    <code>complete</code> or <code>budget_end</code>. A stop
-                    ends the span with the status <code>Error</code> and no
-                    result. A <code>no_progress</code> stop adds
+                    for the node unit. The node unit of a verdict with a rework
+                    assessment adds <code>kanthord.evaluation.round</code>: the
+                    review round of that assessment.
+                    <code>kanthord.task.result</code>: <code>complete</code> or
+                    <code>budget_end</code>. A stop ends the span with the
+                    status <code>Error</code> and no result. A
+                    <code>no_progress</code> stop adds
                     <code>kanthord.stop.reason</code>,
                     <code>kanthord.stop.rule</code>,
                     <code>kanthord.stop.count</code>,
@@ -553,10 +556,23 @@ flowchart TB
                     judgement, <code>kanthord.evaluation.stage</code>:
                     <code>setup</code>, <code>verification</code>,
                     <code>affected</code> or <code>judgement</code>,
+                    <code>kanthord.evaluation.unmet_ids</code>: the task id, or
+                    the node id, of each blocker of the judgement,
                     <code>kanthord.evaluation.unmet_grounds</code>: the
-                    <code>ground</code> of each unmet item, <code>stated</code>,
-                    <code>standard</code>, <code>unstated</code> or
-                    <code>conflict</code>,
+                    <code>ground</code> of each blocker of the judgement,
+                    <code>stated</code>, <code>standard</code>,
+                    <code>unstated</code> or <code>conflict</code>,
+                    <code>kanthord.evaluation.proposal_count</code>: the count
+                    of fix-node proposals,
+                    <code>kanthord.evaluation.round</code>: the review round,
+                    <code>kanthord.evaluation.final_round</code>: whether the
+                    round is final,
+                    <code>kanthord.evaluation.action_labels</code>: the label of
+                    each finding with <code>action: yes</code>,
+                    <code>kanthord.evaluation.fixed_count</code>: the count of
+                    <code>fixed_finding_ids</code>,
+                    <code>kanthord.judgement.repaired</code>: whether the
+                    judgement needed the repair turn, after a judgement,
                     <code>kanthord.evaluation.affected</code>: the affected
                     verdict of the node after an affected test run,
                     <code>absent</code> included

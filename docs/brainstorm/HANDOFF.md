@@ -50,6 +50,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] Added 2026-10-02 from the debate of the Intake redesign. A human-act admission invokes the Mission operation under the linked human identity, and since 2026-10-03 no admission row exists. A crash after the act lets a repeat of the same inbound event repeat the human act. Decide how the human act becomes idempotent by the event identity.
 
+- [ ] Added 2026-11-04 from the review of root PR #321. Accept in `mission.finding.create` only an assessment of the attempt that delivered the code. [mission-service.md](mission-service.md#review-finding) requires it. `requireNodeAssessment` of `engine/src/mission/finding-report.ts` accepts any assessment of the node. [The review finding reference](../reference/mission/finding.html#human-findings) states the gap.
+
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
 - [ ] POSTPONED 2026-09-28 by Ulrich until budgets or agent limits land. Design the handoff from one execution to the next execution of a node. `mission_run_output` is dropped on 2026-09-28; the human direction stays in the node revision, and the checkpoint commit stays the only carrier inside an attempt.
 - [ ] POSTPONED 2026-09-29 by Ulrich until a need for redaction arises. Design the redaction of evidence content and how an asset states it.

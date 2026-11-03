@@ -265,6 +265,32 @@
                     <a href="gateway/healthcheck.html">resource health</a>.
                   </td>
                 </tr>
+                <tr>
+                  <td><code>mission.finding.not_reported</code></td>
+                  <td>
+                    HTTP <code>409</code>. The route of the review finding is
+                    not <code>report</code>, so the finding does not wait for a
+                    human. <code>details</code> holds
+                    <code>finding_id</code> and <code>route</code>. See
+                    <a href="mission/finding.html#failures">review findings</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission.finding.decided</code></td>
+                  <td>
+                    HTTP <code>409</code>. The review finding already holds a
+                    decision. <code>details</code> holds
+                    <code>finding_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission.finding.not_human</code></td>
+                  <td>
+                    HTTP <code>409</code>. The update names a reviewer finding.
+                    Only a human finding takes an update.
+                    <code>details</code> holds <code>finding_id</code>.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

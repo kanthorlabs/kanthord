@@ -1133,7 +1133,7 @@ The binary embeds `engine/static/prompt/base.md` as the Standard, the Role files
 The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
 The source of the texts is the ideals file of Ulrich, split by single obligation: a rule that every agent shares goes to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor goes to `workbench.md`.
 `base.md` holds no rule that only code, a commit, a test, a repository or a review needs, because a non-coding agent also reads it.
-A rule for code, tests or findings goes to both `swe@1.md` and `re@1.md` in the same words, because `re@1` enforces it. Both files end with that block.
+A rule for code or tests goes to both `swe@1.md` and `re@1.md` in the same words, because `re@1` enforces it. The finding rule differs: `swe@1.md` writes each finding as a bullet of its reply, and `re@1.md` writes each finding only in the `findings` array of the judgement line. Both files end with the code, test and finding sections.
 A process rule that leaves no evidence in the work product goes to `swe@1.md` only. The rule that the prose style of a produced report is no ground for a blocker goes to `re@1.md`.
 The protocol conditions that hold for every native agent go to `framing-worker.md`. The `added_files` rule of the judgement goes to `template/evaluation.md`.
 The recommendation-first format of a confirmation request returns with the clarification interface.
@@ -1472,14 +1472,16 @@ The review bundle holds `added_files`: the files that each evidenced commit adds
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
 For a [review round](mission-service.md#rework-limit) with a review base, the review bundle holds the round files below, and it adds `round` (`{ number, review_base }`), `patch_paths` and `empty_patches`.
+`patch_paths` lists the path of each patch file, relative to the agent root. `empty_patches` lists the binding name of each binding with an empty patch.
 `B` is the review-base commit of a binding. The worker checks that `git rev-list --first-parent HEAD` contains `B`.
 When the binding has no review-base commit, or `B` is not on that first-parent chain, the binding uses the full change against `origin/<base branch>`. The worker logs `review base off the node history`.
+In a round with a review base, such a fallback binding writes the output of `git diff --no-color origin/<base branch>...HEAD --` as its round patch. The patch goes into `patch_paths` and into the patch evidence. An empty full change puts the binding in `empty_patches`.
 When `B` equals `HEAD`, the patch of the binding is empty. The bundle lists the binding in `empty_patches`, and the reviewer judges no change of that binding.
 The patch is the output of `git log --first-parent --diff-merges=remerge --patch --no-color --format=fuller B..HEAD --`. A merge commit shows only its conflict resolution, so a base merge adds nothing.
-`changed_files` of the round is the sorted union of `git log --first-parent --diff-merges=remerge --name-only --format= B..HEAD --`. `added_files` of the round is the same read with `--diff-filter=A`, minus each path that does not exist at `HEAD`.
+`changed_files` of the round is the sorted union of `git log --first-parent --diff-merges=remerge --name-only -z --no-renames --format= B..HEAD --`. `added_files` of the round is the same read with `--diff-filter=A`, minus each path that does not exist at `HEAD`.
 The worker writes each patch to `evidence/round-<k>-<binding name>.patch`. `--diff-merges=remerge` needs git 2.36, and the host start requires git 2.40.
 The worker submits one evidence for each binding with a nonempty patch, with the subject `Review round patch` (`ROUND_PATCH_SUBJECT`) and one `produced` asset of the media type `text/x-diff`. The assessment names each such evidence in `evidence_ids`.
-A patch over `INLINE_BYTES_MAX` (5 MiB) keeps its first part and ends with the line `[The patch exceeds 5 MiB and ends here.]`. The kept part and that line together hold at most `INLINE_BYTES_MAX` bytes. The reviewer still reads the full patch file.
+A patch over `INLINE_BYTES_MAX` (5 MiB) keeps its first part and ends with the trailer `\n[The patch exceeds 5 MiB and ends here.]\n`. The cut steps back to a UTF-8 character boundary. The kept part and the trailer together hold at most `INLINE_BYTES_MAX` bytes. The reviewer still reads the full patch file.
 `isSupportEvidence` excludes `ROUND_PATCH_SUBJECT`, as it excludes `AFFECTED_SUBJECT`, so a later round places no old patch.
 `prepareEvaluation` places only the newest evidence of the attempt with the subject `CODER_REPORT_SUBJECT`, by evidence identity. An earlier coder report describes an earlier round.
 The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is a blocker with the ground `stated`. The exception is a change that correct work needs for a criterion, a verification or an affected test.
@@ -1964,7 +1966,7 @@ A reviewer execution writes no commit and releases with the `stop` only.
 A failed push still releases with the `stop`, and the next execution starts from the pushed head.
 A failed release ends the execution with no release, and the loss settlement routes the node.
 A reply with no valid marker line gets one repair turn, for the evaluation judgement and the review reply of `reviewer@1`.
-The repair instruction is `The reply holds no valid <marker> line. Reply again with exactly one such line.`
+The repair instruction is `The reply holds no valid <marker> line. Reply again with exactly one such line.` With a nonempty `issues` list, it adds ` Correct each issue of the last line: <issues as JSON>`.
 A second invalid judgement stops the execution with `judgement_invalid`, and a second invalid review reply ends the review of that task.
 The steps method of `coder@1` parses no reply on an `implement` node.
 Tests stop a steps execution with each reason and assert the checkpoint commit, the push and the release with the `stop`. Tests stop a reviewer execution and assert the release with the `stop`. Tests send one invalid reply and assert the repair turn, and send two and assert the stop.
@@ -2028,7 +2030,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
   - `task_id` is null or one of `taskIds`, the tasks of the pinned revision.
   - The judgement holds at most `FINDING_MAX` findings. Each text is nonblank and holds at most `FINDING_TEXT_MAX_BYTES` bytes.
   - Each id of `fixed_finding_ids` is one of `priorIds`, the open findings of `review_round.findings`, and no id repeats. `priorBlockerIds` are the open blockers of the attempt among them.
-- `parseJudgement` returns the zod issues of a refused reply. The `repair` text takes `issues`, a list of `{ path, message }`, and names each issue of the last line. An absent marker line gives an empty list.
+- `parseJudgement` returns the zod issues of a refused reply. The `repair` text takes `issues`, a list of `{ path, message }`, and names each issue of the last line. An absent marker line gives an empty list. A JSON syntax error of the marker line gives one issue with the path `""` and the message of the JSON parser.
 - A `conflict` blocker names two stated requirements or criteria that the work cannot meet together. Its description quotes both as `"A" vs "B"`. For example, correct work fails a criterion, a verification or an affected test unless it changes a file that the requirement forbids. A failure that a defect of the work causes is no conflict and stays a `stated` blocker.
 - A `conflict` ground decides over an `unstated` ground. An `unstated` ground decides over `stated` and `standard` grounds, in any position. Otherwise the ground of the first blocker decides.
 - `judgementRationale` appends up to three blocks to the rationale and omits an empty block. The order is `Plan conflict:` for the `conflict` blockers, `Plan gap:` for the `unstated` blockers and `Unmet:` for the other blockers. Each block gives the `description` of a blocker as its reason.

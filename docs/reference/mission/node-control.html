@@ -232,6 +232,14 @@
               of the assessment that blocked it, in the same transaction.
             </li>
             <li>
+              An <code>override</code> or a <code>block</code> that closes the
+              attempt gives each open finding of the attempt with the route
+              <code>fix</code> the route <code>report</code>. A
+              <code>discard</code> that closes the attempt gives them the route
+              <code>record</code>. See
+              <a href="finding.html#route-and-status">route and status</a>.
+            </li>
+            <li>
               A <strong>human landing</strong> is an
               <code>External.Requested</code> node with only
               <code>branch_push</code> requests unresolved in the open attempt.
