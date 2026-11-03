@@ -1377,7 +1377,7 @@ The causal span:
 
 The evidence lines follow the category of the cause:
 
-- `prompt`: the `kanthord.prompt.parts` of the agent, the work prompt of the task and the reply of the causal turn.
+- `prompt`: the `kanthord.prompt.sources` of the agent, the work prompt of the task and the reply of the causal turn.
 - `plan`: the requirement, the criterion and the verifications at the attempt revision, the `rationale` text of a rework, and the turns of each task.
 - `worker_action`: the `error` text of `worker.gate` or `worker.git`, and `kanthord.stop.detail`.
 - `llm_provider`: `error.type` of the causal turn, `kanthord.stop.detail` of the root span, `gen_ai.provider.name` and the model.
@@ -1401,7 +1401,9 @@ The attempts block:
 - An execution row shows its kind from `kanthord.execution.kind` (`steps` or `evaluation`), its state, its cause line and its duration.
 - An execution whose cause equals the cause of the previous failed execution of the attempt shows `Repeat`. The current trace shows `This trace`.
 - A repeated `plan` or `prompt` cause shows "A retry does not fix this. Change the plan or the prompt."
-- The current execution shows `Prompt changed` when a `<part>:<name>` digest of `kanthord.prompt.parts` or `kanthord.prompt.templates_digest` differs from the previous execution.
+- A setup stop with `agent.prompt.source_invalid` and the stop detail `changed` has the cause `infrastructure.prompt_record`, because the next execution composes again from the current text. A stop with another stop detail, for example `too_large`, `not_utf8`, `unreadable` or `control_character`, has the cause `prompt.source_invalid`.
+- A stop with `project.bindings.repository.ssh_unreachable` has the cause `infrastructure.network`. A stop with `project.bindings.repository.base_branch_absent` has the cause `human.configuration`. A stop with `worker.execution.prompt_not_pinned` or `worker.execution.prompt_record_failed` has the cause `infrastructure.prompt_record`.
+- The current execution shows `Prompt changed` when the digest of a `part` and `name` pair of `kanthord.prompt.sources`, or `kanthord.prompt.templates_digest`, differs from the previous execution.
 - The comparison reads the spans of the previous execution once. No other execution carries the mark.
 - An execution row opens its trace on the `Summary` tab. A failed read shows its error and `Retry`.
 
@@ -1428,7 +1430,9 @@ The plan block:
 The prompt block:
 
 - The block `What the agent received` shows `System prompt <length> chars` with `Show`.
-- The block lists the layers of `kanthord.prompt.parts` as `<part> <name>` items, in reading order.
+- The block reads `agent.prompt.resolve` for each agent of the execution. It lists the parts in reading order. Each part shows its layer, its origin, its commit or path, its digest and its state. The block expands the text of each part.
+- Each layer 2 and layer 3 part carries the label `Default standard`.
+- With `Prompt changed`, each changed part shows `Diff`: a line diff of the two resolved texts.
 - The block shows one row `Work prompt <task id> <length> chars` for each task. The row shows the template of the first turn of the task and `Show`.
 - The page reads the session entries only when the block opens a prompt.
 - `Open in conversation` opens the Conversation tab at the entry.
@@ -1498,7 +1502,7 @@ The prompt block:
 - The Conversation tab shows the session entries of one agent session in order.
 - A user message shows its text. A model reply shows its text, its collapsed thinking, its tool calls, its tokens and `Est. cost`.
 - A tool result shows its tool name, its outcome badge and its first line. It expands to the full text.
-- A system message and each `kanthord.pinned_context` entry show collapsed, with their size. A pinned context entry shows `System prompt`. A system message of pi shows `System prompt update`. They expand to the prompt text and its sections.
+- A system message and each `kanthord.pinned_context` entry show collapsed. A pinned context entry shows `System prompt`, and it expands to the text and the parts that `agent.prompt.resolve` answers. A system message of pi shows `System prompt update` with its size, and it expands to the prompt text and its sections.
 - The user entry before the first `agent.turn` of each `worker.task` shows collapsed as `Work prompt <task id>`.
 - A compaction, a model change and a thinking level change show as one line each. An entry of another type shows its type as one line.
 - An entry with `truncated: true` shows the badge `Cut`. Its tooltip reads "The worker cut this entry to fit the entry bound of 60 KiB."

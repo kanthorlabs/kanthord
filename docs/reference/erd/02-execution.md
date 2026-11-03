@@ -88,6 +88,7 @@ erDiagram
         text opened_by "JSON Actor, execution for a claim, human for a ready act or an unblock"
         integer opened_at "Unix ms"
         integer closed_at "Unix ms or null"
+        text prompt_commits "JSON list of binding_id and commit, null until the first handover"
     }
 
     mission_evidence {
@@ -296,6 +297,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - Attempt numbers of a node start at 1 and have no gap. `mission_node.attempt` equals the highest number.
 - Three acts open an attempt: a claim of a node that holds no attempt, a human ready act on a node that holds no attempt, and a human unblock of a blocked attempt. `opened_by` names the actor of that act: the execution of the claim, or the human of the ready act or the unblock. An attempt of 2 or more always opens by an unblock.
 - An attempt pins `node_revision` at its opening and never changes it. The required external actions of the attempt are the policy of the `project_binding` row that its pinned revision names. An `examine` node requires none.
+- `prompt_commits` is nullable `TEXT`, a JSON list of `{ binding_id, commit }`. Each entry holds the base commit of the instruction file of one repository binding of the pinned node revision that names an instruction file. The first `worker.handover` of the attempt writes it only when it is null, and no later write changes it. No index serves it.
 - A human ready act opens attempt 1 when the node holds none, sets `Waiting` and inserts the evaluation job in one transaction.
 - A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition and the dependency closure. `Available` routes to `Pending` when the closure does not hold.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node, in one transaction. A closed attempt never reopens.

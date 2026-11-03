@@ -176,6 +176,17 @@ The set holds three kinds.
 The mission of a project is intrinsic to that project, so no binding allocates it.
 A repository binding of the node "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
 
+## prompt keys
+
+The keys of `prompts` in the configuration of a repository binding. The [Agent component](agent.md#prompt-composer) composes their texts.
+The set is closed and it holds three keys.
+
+- **instruction_file**: The repository path of the instruction file, for example `AGENTS.md`. It is absent by default.
+- **repository**: The stored Repository prompt, which every agent on the repository reads.
+- **agents**: One Binding prompt for each agent name of the catalog, for example `swe@1`, `re@1` and `env@1`.
+
+The repository binding `app` holds `prompts` with `instruction_file: AGENTS.md`, `repository` "A test file sits beside its source file." and `agents` with `re@1` set to "A missing changelog entry gives a suggestion, not a blocker."
+
 ## cardinality
 
 The number of bindings of one kind that a project holds for one resource.

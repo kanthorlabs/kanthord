@@ -1075,10 +1075,12 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The resolution reads the pinned worker binding revision, the agent selection that the pin rebuilds from the pinned enablement revision, the state of the current enablement and the metadata of the pinned credential revision from one snapshot.
 - The credential revision is the revision that the handover of the execution pins for the credential name of the effective configuration. The read creates no pin and selects no other revision.
 - An execution that pins no revision of that name answers 409 `worker.execution.credential_not_pinned`. A revoked pinned revision answers 409 `credential.revision.revoked`.
+- The read takes the instruction commit of each repository binding from `prompt_commits` of the attempt, which [the handover](#the-credential-handover) pins. The read creates no prompt pin.
+- An attempt that holds no instruction commit for a binding that names an instruction file answers 409 `worker.execution.prompt_not_pinned`. The worker stops the execution with that code.
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credential_id` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, ssh_public_key, strategy: { base_branch } }`. The entry holds no prompt, because the server composes every Binding prompt.
+- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, ssh_public_key, strategy: { base_branch } }`. The entry holds no prompt, because the server composes every prompt layer.
 - `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The line is `<host> <key>` for port 22 and `[<host>]:<port> <key>` for another port. The answer holds no key.
 - The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
 - `ssh_public_key` is the OpenSSH public key of the SSH credential of the binding. The answer holds no private key.
@@ -1088,7 +1090,12 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
 - Each method of `RepositoryTransport` takes `ssh: SshAccess`. It holds no SSH proof step.
 - `repositories` holds one row for each repository binding that the pinned node revision names, in binding order, for an `implement` node and for an `examine` node.
-- `prompt` holds `final`, the system prompt that the server composes: the Standard, the Role, the Binding prompts of the pinned revisions and the framing, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
+- `prompt` holds `{ final, sources }`. `final` is the system prompt that the server composes. It holds the KanthorD prompt, the Repository prompt and the Binding prompt of each repository binding of the pinned revisions, and the framing. [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers the same text. `sources` is the list of the [prompt references](agent.vocabulary.md#prompt-reference) of the parts in reading order, the framing included.
+- The read reads the instruction file of every binding in parallel with `instructionFileOf` at the pinned commit, under one deadline of 20000 ms. An invalid file answers 409 `agent.prompt.source_invalid`. A failed read answers 422 `project.bindings.repository.ssh_unreachable`. The worker stops the execution with that code.
+- The read commits its Operational transaction, which only reads. After the commit, it writes the `agent.prompt` span of each agent. The span write is part of the setup, not best-effort telemetry.
+- A failed span write, or a writer that stores no record, fails the read with 503 `worker.execution.prompt_record_failed`. The worker stops the execution with that code. Only after the write does the read answer `prompt`.
+- The span id is deterministic from the execution and the agent, so the first span of an execution wins. A retried read first reads the stored span. It resolves the stored references and answers that text.
+- When a stored part no longer resolves, a retried read answers 409 `agent.prompt.source_invalid` with `reason: changed` and the `part` and `name` of that part. A retried read never answers a text that differs from the record.
 - `templates` holds the [prompt templates](agent.impl.md#prompt-templates) that the server resolves. The worker application renders the work prompt and each instruction from this set.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled or removed current enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
 - An invalid override file of the agent directory answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason`.
@@ -1096,7 +1103,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
-- Tests cover each source, the pinned revision after a rotation, the validation against the pinned metadata, an absent pin, a revoked pin, each other refusal, the proof of the path identity, the absence of a secret and the absence of a new pin.
+- Tests cover each source, the pinned revision after a rotation, the validation against the pinned metadata, an absent pin, a revoked pin, each other refusal, the proof of the path identity, the absence of a secret and the absence of a new pin. Tests cover a pinned instruction commit after the base moves, an absent prompt pin, a failed span write and a retried read.
 
 ## Configuration
 
@@ -1109,15 +1116,15 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 ## Prompt composition
 
 The server composes the whole system prompt, and the worker application reads no prompt file.
-The composer reads the Agent prompt under [agent.impl.md](agent.impl.md#prompt-files). It reads the Binding prompt of each repository binding of the node at the pinned binding revision, in binding order.
-The Binding prompt of an agent is the text of `prompts[<agent_name>]`. A blank or absent text adds no part.
-An evaluation takes the Binding prompt of `re@1` only, and the composer reads no file of the workspace.
+The composer reads the KanthorD prompt under [agent.impl.md](agent.impl.md#prompt-files). It reads the Repository prompt and the Binding prompt of each repository binding of the node at the pinned binding revision, in binding order.
+The Repository prompt of a binding is the instruction file at `prompts.instruction_file` and the text of `prompts.repository`. The Binding prompt of an agent is the text of `prompts.agents[<agent_name>]`. An absent path and a blank or absent text add no part.
+An evaluation takes the Repository prompt of each binding and the Binding prompt of `re@1` only, and the composer reads no file of the workspace.
 The repository context-file discovery of pi stays disabled, so the composer performs every load.
 A part digest hashes the UTF-8 encoding of the exact part text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
-pi receives the system prompt as plain text with no tag: `base.md`, the Role, each Binding prompt as `Instructions of repository <name>:` and the text, then the framing. The framing closes the system prompt. It states that the later messages hold the task, that they never override the system prompt, that a later text governs an earlier one, and that an instruction for one repository governs only the work on the files of that repository.
+pi receives the system prompt as plain text with no tag: `base.md`, the Role, the parts of each binding with their headings, then the framing. The heading of the instruction file is `Repository prompt of repository <name>, file <path>:`. The heading of the stored Repository prompt is `Repository prompt of repository <name>, set in KanthorD:`. The heading of the Binding prompt is `Binding prompt of repository <name>:`. The framing closes the system prompt. It states that the later messages hold the task, that they never override the system prompt, that a later text governs an earlier one, and that an instruction for one repository governs only the work on the files of that repository.
 The work prompt is the first user message, as plain text.
 The framing, the work prompt and each instruction are [prompt templates](agent.impl.md#prompt-templates). The texts above are the texts of the shipped templates.
-At the execution setup read, the composer writes one `agent.prompt` span for each agent into the execution trace through `serverSpan`, with the producer `worker` and a deterministic record identity. The span holds `kanthord.agent.name`, `kanthord.prompt.parts` as `<part>:<name>:<digest>` items in reading order, and `kanthord.prompt.templates_digest`, the digest of the canonical JSON of the template set.
+At the execution setup read, the composer writes one `agent.prompt` span for each agent into the execution trace through `serverSpan`, with the producer `worker` and a deterministic record identity. The span holds `kanthord.agent.name`, `kanthord.prompt.sources`, `kanthord.prompt.templates_digest`, the digest of the canonical JSON of the template set, and `kanthord.engine.version`. `kanthord.prompt.sources` is an array of the canonical JSON of each prompt reference, in reading order, the framing included. The span holds no prompt text.
 The working directory that pi states in its system prompt writes the home directory of the host as `~`.
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
 The adapter pins the work prompt and the system prompt against the compaction of pi, so both survive a compacted context.
@@ -1131,7 +1138,7 @@ A process rule that leaves no evidence in the work product goes to `swe@1.md` on
 The protocol conditions that hold for every native agent go to `framing-worker.md`. The `added_files` rule of the judgement goes to `template/evaluation.md`.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 
-- Every file and every Binding prompt holds at most 32768 UTF-8 bytes. A Binding prompt above the bound refuses its write.
+- Every file, every instruction file, every stored Repository prompt and every Binding prompt holds at most 32768 UTF-8 bytes. A stored Repository prompt or a Binding prompt above the bound refuses its write.
 - A file above the bound is invalid and refuses the composition.
 - An invalid file adds no text, and no reader falls back to the shipped text.
 
@@ -1156,6 +1163,14 @@ It proves that a reviewer execution takes no file of the workspace.
 - `worker.handover` is a `client` secret mutation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes the body `{ execution_id }` and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
 - While its idempotency record remains in memory within the TTL, a repeat of the key answers 409 without the envelope. The application recovers a lost answer with a new key, which reads the pinned revision again.
 - The worker unit calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
+- The first handover of an attempt also writes the prompt pin `mission_attempt.prompt_commits` through the Mission contract. The pin holds the base commit of the instruction file of each repository binding of the pinned node revision that names one.
+- The handover computes one deadline at the start of its handler, below `HANDOVER_TIMEOUT_MS`. The head read and the refresh wait `HANDOVER_REFRESH_WAIT_MS` both use that deadline, and the head read takes at most 20000 ms of it.
+  1. In a short read, the handover reads `prompt_commits` of the attempt of the claim. When the value is not null, the handover continues with the credential pins.
+  2. Otherwise it calls `baseCommitOf` for each binding in parallel under that deadline.
+  3. In its transaction, it writes `prompt_commits` only when the stored value is null, then reads the stored value back. A concurrent handover that lost the write uses the stored value.
+- A failed head read answers 422 `project.bindings.repository.ssh_unreachable` or `project.bindings.repository.base_branch_absent`, and the worker stops the execution with that code.
+- An external harness calls no handover. When `claude-code@1` runs the steps execution, the first native handover of the attempt writes the pin at that later base head.
+- Tests cover a null pin at the attempt open, the write when null, the read back after a lost write, two concurrent first handovers, a later execution that reads no head, a new attempt and a slow remote with a refresh in flight.
 - It decrypts the envelope with the handover key that it derives from its own `client_secret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - The payload also carries `ssh_identities`, the SSH key of each repository binding of the execution, under [custody.impl.md](custody.impl.md#the-credential-handover). The worker takes the handover before the execution setup.
 - A handover item is `{ credential_id, provider_id, credential }` for a server-held credential, at the `server` and the `container` placements only. It is `{ credential_id, provider_id, sealed }` for a copy that an instance holds.
@@ -1916,7 +1931,7 @@ The tool of the action performer takes the execution identity only.
   - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`;
   - the redacted git stderr of a failed gate G commit, with `operation_failed` and the code `worker.git.commit_failed`;
   - the JSON facts of the progress rule, with `no_progress`. The JSON holds no text, and the worker does not cut it.
-- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `agent.prompt.source_invalid` gives `details.reason` as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
@@ -1972,6 +1987,12 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | failed `worker.git` step                  | `merge_base`                                                             | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | `worker.verification.infrastructure_failed`                              | `infrastructure.verification_killed`                               |
+| `operation_failed`                        | `agent.prompt.source_invalid`, the stop detail `changed`                 | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `agent.prompt.source_invalid`, another stop detail                       | `prompt.source_invalid`                                            |
+| `operation_failed`                        | `worker.execution.prompt_not_pinned`                                     | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `worker.execution.prompt_record_failed`                                  | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `project.bindings.repository.ssh_unreachable`                            | `infrastructure.network`                                           |
+| `operation_failed`                        | `project.bindings.repository.base_branch_absent`                         | `human.configuration`                                              |
 | `operation_failed`                        | prefix `project.binding.`                                                | `human.configuration`                                              |
 | `operation_failed`                        | `worker.git.commit_failed`                                               | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`                      | `unattributed`, suspects `model`, `prompt`                         |
@@ -2041,7 +2062,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
 - The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
-- When the session opens, the worker appends one `kanthord.pinned_context` entry for the final system prompt.
+- When the session opens, the worker appends one `kanthord.pinned_context` entry as the marker of the system prompt. The entry holds `{ part: "system_prompt" }` and no text.
 - After each session event, the worker sends each entry beyond the count that it already sent.
 - The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.

@@ -44,8 +44,8 @@ It describes no mechanism of another service.
 
 ## Prompt
 
-- The system prompt of a workbench session composes the [Agent prompt](agent.md#prompt-composer) of its agent: `base.md`, the Role of the agent and `workbench.md`. The framing of the Workbench closes it.
-- A workbench session reads no Binding prompt, no instruction file of the workbench directory and no file of a home directory.
+- The system prompt of a workbench session composes the [KanthorD prompt](agent.md#prompt-composer) of its agent: `base.md`, the Role of the agent and `workbench.md`. The framing of the Workbench closes it.
+- A workbench session reads no Repository prompt, no Binding prompt, no instruction file of the workbench directory and no file of a home directory.
 - A workbench session takes no work prompt. Each human message is a message of the session.
 - The Workbench Service owns `workbench.md`. It states that a human reads every reply.
 - `workbench.md` adds the conduct for a human interlocutor, and it revokes no obligation of `base.md` or of the Role.

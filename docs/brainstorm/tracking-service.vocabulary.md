@@ -193,13 +193,13 @@ A cause of an execution of project `Billing` with a setup that fails on the base
 A cause subcategory refines a cause category.
 The set of each category is closed. `unattributed` has no subcategory.
 
-- **prompt**: `context_missing`, `instruction_conflict`, `rule_absent`
+- **prompt**: `context_missing`, `instruction_conflict`, `rule_absent`, `source_invalid`
 - **plan**: `criterion_unstated`, `requirement_conflict`, `dependency`, `verification_context`, `verification_insufficient`, `decomposition`, `oversized`
 - **worker_action**: `gate_commit`, `merge_base`, `release_gate`, `review_flow`, `step_failed`
 - **llm_provider**: `rate_limited`, `quota_exhausted`, `unavailable`
 - **model**: `work_defect`, `standard_violation`, `verification_failed`, `no_progress`, `reply_invalid`, `protocol_violation`, `output_truncated`, `budget_exhausted`, `judgement_wrong`
 - **environment**: `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout`, `flaky_verification`, `verification_hang`, `repository_hook`
-- **infrastructure**: `verification_killed`, `network`, `execution_lost`
+- **infrastructure**: `verification_killed`, `network`, `execution_lost`, `prompt_record`
 - **human**: `intervention`, `configuration`
 
 The subcategory of a reviewer that judged a stated item of `Add password reset` unmet is `work_defect`.

@@ -33,18 +33,37 @@ A mechanism here never overrides a rule there.
 ## The prompt answer
 
 - `prompt` holds `parts` and `final`.
-- `parts` holds the parts of the system prompt in reading order. Each part holds `{ part, name, origin, path, digest, text }`.
-- `part` is one of `standard`, `role`, `workbench` and `binding`. `origin` is one of `binary`, `file` and `database`. Both are code enums.
-- `standard` is `base.md` and `role` is `<agent_name>.md`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. `binding` is one part for each repository binding with a nonblank text of `prompts[<agent_name>]`, in binding order.
-- `name` is the file name of a file part and the repository name of a `binding` part.
-- `origin` is `binary` for a shipped text, `file` for an override file and `database` for a `binding` part.
-- `path` is the override location that the server looked up, also for `binary`. It is `null` for a `binding` part, and when `agent.prompt.agent_directory` is empty.
-- `digest` is the SHA-256 hex digest of `text`.
-- `final` holds the system prompt: every part, then the framing. A `binding` part renders as `Instructions of repository <name>:`, a blank line and the text.
+- `parts` holds the parts of the system prompt in reading order, the framing last. Each part holds `{ layer, part, name, origin, path, binding_id, commit, digest, heading, state, text }`.
+- The first seven fields form the [prompt reference](agent.vocabulary.md#prompt-reference) of the part. `promptReferenceSchema` of `engine/src/agent/contract.ts` defines it, and `promptPartSchema` adds `layer`, `heading`, `state` and `text`.
+- `part` is one of `standard`, `role`, `workbench`, `instruction_file`, `repository`, `binding` and `framing`. `origin` is one of `binary`, `file`, `database` and `repository`. `state` is one of `resolved`, `changed`, `invalid` and `unreachable`. The three are the code enums `PromptPart`, `PromptOrigin` and `PromptPartState`.
+- `layer` is 1 for `standard`, `role` and `workbench`, 2 for `instruction_file` and `repository`, 3 for `binding`, and null for `framing`.
+- `standard` is `base.md` and `role` is `<agent_name>.md`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. For each repository binding in binding order, `instruction_file` is the file of `prompts.instruction_file`, `repository` is the nonblank text of `prompts.repository`, and `binding` is the nonblank text of `prompts.agents[<agent_name>]`.
+- `name` is the file name of a layer 1 part. It is the template name of `framing`, for example `framing-worker`. It is the binding name of a layer 2 or layer 3 part.
+- `origin` is `binary` for a shipped text, `file` for an override file, `database` for `repository` and `binding`, and `repository` for `instruction_file`.
+- `path` is the override location that the server looked up for `binary` and `file`. It is the repository path for origin `repository`, and `null` for origin `database` and when `agent.prompt.agent_directory` is empty.
+- `binding_id` is the binding revision of a layer 2 or layer 3 part, and `null` otherwise. `commit` is the 40-hex commit of origin `repository`, and `null` otherwise.
+- `digest` is the SHA-256 hex digest of the exact UTF-8 text of the part, with no heading.
+- `heading` is the plain-text line that the server writes before the text. The dashboard renders no heading itself.
+
+| Part                                       | `heading`                                                  |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| `standard`, `role`, `workbench`, `framing` | null                                                       |
+| `instruction_file`                         | `Repository prompt of repository <name>, file <path>:`     |
+| `repository`                               | `Repository prompt of repository <name>, set in KanthorD:` |
+| `binding`                                  | `Binding prompt of repository <name>:`                     |
+
+- Only a `resolved` part holds `text`. A failed layer 2 read is a part state, and the read itself answers 200. An unreachable remote answers `unreachable`. An instruction file that is too large, is not UTF-8, cannot be read or holds a control character answers `invalid`. A text whose digest differs from its reference answers `changed`.
+- `final` holds the system prompt: each part in reading order. A part with a heading renders as the heading, a blank line and the text. `final` is null when a part is not `resolved`.
 - The query `view=final` answers `prompt` with `final` only.
-- The optional queries `project_id` and `binding_id` select the repository binding whose Binding prompt of the agent joins `final`, and `final` is then the Worker final. Without them, a Workbench agent answers the Workbench final, and `env@1` answers the Worker final.
-- A `binding_id` that names no repository binding of `project_id` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`.
-- Tests cover every part, every origin, `view=final`, the Workbench final, a Worker final with a binding and each refusal.
+- The optional queries `project_id` and `binding_id` select the repository binding whose layers 2 and 3 join `final`, and `final` is then the Worker final. The read takes the instruction file at the current base head, as the next attempt takes it. Without them, a Workbench agent answers the Workbench final, and `env@1` answers the Worker final.
+- The optional queries `node_id` and `attempt` select the stack that the agent of one node reads. `attempt` is a positive integer. Without `attempt`, the read takes the open attempt, else the latest attempt. The read takes the instruction file at the commit that the attempt pins, and at the current base head for an attempt with no pin.
+- A `binding_id` that names no repository binding of `project_id` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`. `attempt` without `node_id`, and `node_id` with `project_id` or `binding_id`, answer 400 `gateway.request.validation_failed`.
+- `agent.prompt.resolve` is `GET /api/agent/prompt/resolve?execution_id=&agent_name=` under the `human` access policy. The static segment `prompt` matches before `:agent_name`.
+- The resolve reads the `agent.prompt` span of the execution and the agent, resolves each reference of `kanthord.prompt.sources` by its origin and checks each digest. It answers `{ parts, final, engine_version }`. `engine_version` is the value of `kanthord.engine.version` of the span.
+- The resolve reads only the references that the server wrote in a span, so it reads no file that a caller chooses.
+- An absent execution answers 404 `scheduler.execution.not_found`. A trace with no `agent.prompt` span for the agent answers 404 `agent.prompt.record_absent`.
+- A `changed` part of origin `binary` holds no text. The page `docs/cli/agent.md` of the engine gives the git command that reads the shipped text at `engine_version`.
+- Tests cover every part, every origin, every state, `view=final`, the Workbench final, a Worker final with a binding, a node with and without a pin, a resolve with a `changed` part, each refusal and a non-human caller of the resolve.
 
 ## Agent configuration validation
 
@@ -253,7 +272,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt files
 
-- The Agent prompt holds no table and no setting row. The files `base.md`, `<agent_name>.md` and `workbench.md` are its only source.
+- The KanthorD prompt holds no table and no setting row. The files `base.md`, `<agent_name>.md` and `workbench.md` are its only source.
 - The server composes every consumer from the same reader of the agent directory. The worker application reads no prompt file.
 - `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to `agents`. The file of `swe@1` is then `~/.local/share/kanthord/agents/swe@1.md`.
 - An empty value means that every file is the shipped text.
@@ -262,10 +281,15 @@ The Agent component owns these keys of the section `agent`.
 - The reader takes a file as UTF-8 Markdown of at most 32768 bytes, with no control character other than a tab and a newline. The reader resolves no `@` import. A deadline of 10 seconds bounds each read.
 - A file that the reader rejects answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason` in `details`. `file` names the file, for example `swe@1.md`. An absent file selects the shipped text.
 - Every reader refuses in the same way: `agent.get`, the execution setup, the Workbench session open and the `env@1` run. No reader replaces an invalid file with the shipped text.
-- The Binding prompt is the key `prompts` of the `config` JSON of a repository binding. The [Project Service](project-service.impl.md#validation) owns its validation.
-- The keys of `prompts` are the agent names of the catalog. The catalog is the only list, so no new enum exists.
+- The Repository prompt and the Binding prompt are the key `prompts` of the `config` JSON of a repository binding: `prompts.instruction_file`, `prompts.repository` and `prompts.agents`. The [Project Service](project-service.impl.md#validation) owns their validation.
+- The keys of `prompts.agents` are the agent names of the catalog. The catalog is the only list, so no new enum exists.
+- The composer reads the instruction file through the Project read `instructionFileOf`, with the Repository component reader. The reader follows a symbolic link inside the tree at the commit, so `AGENTS.md -> docs/agents.md` reads `docs/agents.md`.
+- The reader state `present` gives a part. `absent`, `not_regular_file` and `outside_root` give no part. `too_large`, `not_utf8` and `unreadable` answer 409 `agent.prompt.source_invalid`.
+- A present text passes the text validation of a prompt file. A text with a control character answers 409 `agent.prompt.source_invalid` with `reason: control_character`. A carriage return is a control character, so a file with CRLF line ends is invalid. The reader converts no newline.
+- `agent.prompt.source_invalid` holds `details: { part, name, binding_id, path, commit, reason }`. `binding_id` and `commit` are null for a layer 1 part. The execution setup and the `env@1` run answer it.
+- A retried execution setup that finds a stored part that no longer resolves answers 409 `agent.prompt.source_invalid` with `reason: changed`.
 - The configuration holds no `agent.prompt.system_file` or `agent.prompt.host_file`. A config step deletes both.
-- Tests cover an empty and a nonempty `agent_directory`, a relative path, an absent file, each rejection and each reader that refuses.
+- Tests cover an empty and a nonempty `agent_directory`, a relative path, an absent file, each rejection and each reader that refuses. Tests cover each reader state of an instruction file, a link inside the tree and a file with CRLF line ends.
 
 ## Prompt templates
 

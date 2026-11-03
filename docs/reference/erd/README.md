@@ -44,7 +44,7 @@ flowchart TB
         subgraph v2["ERD 2: Execution"]
             w2["Worker: registration"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt, evidence, evidence asset, assessment, outcome, proposal"]
+            m2["Mission: attempt with prompt commits, evidence, evidence asset, assessment, outcome, proposal"]
         end
         subgraph v3["ERD 3: External integration"]
             i3["Intake: inbound, inbound event, outbound request"]
