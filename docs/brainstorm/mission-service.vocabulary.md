@@ -223,7 +223,7 @@ Round 1 has no review base.
 
 Take round 2 of "Add password reset".
 Its review base is the tested commit of round 1, so round 2 reviews only the patch since that commit.
-Round 2 ends at the setup, so it is no base round, and round 3 keeps the review base of round 1.
+When round 2 ends at the setup instead, round 2 is no base round, and round 3 keeps the review base of round 1.
 
 ## attempt closure
 
