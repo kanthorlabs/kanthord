@@ -223,7 +223,7 @@ Round 1 has no review base.
 
 Take round 2 of "Add password reset".
 Its review base is the tested commit of round 1, so round 2 reviews only the patch since that commit.
-A round that stops at the setup between rounds 1 and 2 is no base round, so the next round keeps the review base of round 1.
+Round 2 ends at the setup, so it is no base round, and round 3 keeps the review base of round 1.
 
 ## attempt closure
 
@@ -386,7 +386,7 @@ Only the first case permits an empty judgement, and no case permits an absent ra
 
 The record of one blocker or one suggestion that a review round reports.
 A finding holds a label, a kind, an action, a name, a description, a fix and a why, and a blocker also holds a ground.
-Its status is `open` or `fixed`: `fixed` when a later assessment of the attempt lists it in `fixed_finding_ids`.
+Its status is `open` or `fixed`: `fixed` when a later current assessment of the attempt lists it in `fixed_finding_ids`.
 [Review finding](mission-service.md#review-finding) owns the rule.
 
 Round 1 of "Add password reset" reports the blocker `B1` "Reset link never expires" with `action: yes`.

@@ -646,6 +646,7 @@ A reviewer execution that claims from `Waiting` performs the evaluation.
 A reviewer execution that claims from `External.Requested` performs no evaluation.
 When the node requires no external action, the passing assessment ends the claim, and the reviewer execution performs nothing more.
 Otherwise, on both paths, the reviewer execution invokes the action performer after a current passing assessment stands.
+When the submit of a `success` assessment causes a rework, the node leaves `Evaluating`, and the reviewer execution ends as `revoked` with no request.
 The action performer reads the required external actions of the attempt.
 It reads the request evidence of the node across every attempt.
 A required action is eligible when it is unrequested in the attempt and it follows no other action.

@@ -565,7 +565,8 @@ A final round causes no rework.
 A current execution assessment of a round that is not final causes a rework in two cases.
 
 - Its result is `criterion-not-met`.
-- On an `implement` node, its result is `success`, and it holds a finding with `action: yes`, or the attempt holds an open finding that KanthorD fixes and that the assessment does not list as fixed.
+- On an `implement` node, its result is `success`, and it holds a finding with `action: yes`.
+- On an `implement` node, its result is `success`, and an open finding of the attempt with the route `fix` is not in its `fixed_finding_ids`.
 
 An `examine` node keeps only the rework of `criterion-not-met`.
 An assessment whose cause has the category `plan` causes no rework. The plan belongs to the human, and the execution belongs to KanthorD.
@@ -641,7 +642,7 @@ A finding with `action: yes` of an `examine` round that causes a rework gets the
 A finding is `fixed` when its `fixed_assessment_id` names an assessment, and `open` otherwise.
 `fixed_finding_ids` of a current assessment is the only link between rounds.
 Each listed id names an open finding of the attempt with the route `fix`.
-The Mission Service writes the identity of the listing assessment into `fixed_assessment_id` of each listed finding.
+The Mission Service writes the identity of the assessment that lists them into `fixed_assessment_id` of each listed finding.
 A finding that `fixed_finding_ids` does not list stays open with its first text, and the next fix and the next round read it.
 An open blocker that the assessment does not list stays a blocker of that assessment, so a `success` lists each open blocker of the attempt.
 The reviewer reports each defect once, and it never reports a prior finding again.
@@ -938,7 +939,7 @@ Outcome and completion owns the routing of the opened attempt to `Available` or 
 
 The next execution reads the node revision that its attempt pins.
 It reads the outcome of the cleared attempt and the cause that the outcome names.
-After a rework, it reads the assessment that caused the latest rework of its attempt.
+After a rework, it reads the assessment that caused the latest rework of its attempt, and the open findings of the attempt.
 It reads the opener of its attempt.
 A read of a record of a closed attempt migrates nothing.
 

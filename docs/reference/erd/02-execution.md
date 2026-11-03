@@ -154,8 +154,8 @@ erDiagram
     mission_finding {
         text id PK "finding_ + ULID"
         text node_id FK "node"
-        text assessment_id FK "reporting assessment, or the assessment that a human finding names"
-        text label "B1 or S1 of a reviewer, H1 of a human, unique in the assessment"
+        text assessment_id FK "assessment that reports the finding, or the assessment that a human finding names"
+        text label "B1 or S1 of a reviewer, unique in the assessment; H1 of a human, unique in the node"
         text kind "blocker | suggestion, FindingKind enum in code"
         text action "yes | no, FindingAction enum in code"
         text task_id "task of the revision, null for the node"
