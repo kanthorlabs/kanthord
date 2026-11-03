@@ -98,19 +98,47 @@ One run of the agent loop of one agent for one consumer.
 The term names no closed set.
 Execution 1 opens one agent session of `swe@1` under worker binding `coder-main`.
 
-## Agent prompt
+## prompt layer
 
-The files that a human controls for every repository: `base.md` (the Standard of every agent), `<agent_name>.md` (the Role of one agent) and `workbench.md` (the Workbench behavior).
+One of the three layers of the system prompt of an agent session, read from the most general to the most specific.
+The closed set is:
+
+- 1: the KanthorD prompt
+- 2: the Repository prompt
+- 3: the Binding prompt
+
+The framing closes the system prompt, and it is no prompt layer.
+The message type `kanthord.prompt-layer` and the hook `pinnedLayersHook` pin the work prompt, and they are no prompt layer.
+Execution 1 of `swe@1` reads the KanthorD prompt, then the Repository prompt and the Binding prompt of the binding `app`, then the framing.
+
+## KanthorD prompt
+
+Layer 1: the files that a human controls for every repository: `base.md` (the Standard of every agent), `<agent_name>.md` (the Role of one agent) and `workbench.md` (the Workbench behavior).
 A file of the same name in the agent directory replaces the shipped text of that file whole.
 The term names no closed set.
 Ulrich puts `swe@1.md` into the agent directory, so `swe@1` reads that file in place of the shipped `swe@1.md`, and still reads the shipped `base.md`.
 
+## Repository prompt
+
+Layer 2 for one repository binding: the instruction file, then the stored text of `prompts.repository`.
+Every agent that works on that repository reads it.
+The instruction file joins as `Repository prompt of repository <name>, file <path>:` and the text. The stored text joins as `Repository prompt of repository <name>, set in KanthorD:` and the text.
+The term names no closed set.
+The binding `app` names `prompts.instruction_file: AGENTS.md` and holds `prompts.repository` "A test file sits beside its source file.", so `swe@1` and `re@1` read both texts.
+
+## instruction file
+
+The repository file that `prompts.instruction_file` of a repository binding names, read at the base commit that the attempt pins.
+The path is relative to the repository root, and the binding names at most one file.
+The term names no closed set.
+The binding `app` names `AGENTS.md`. Attempt 2 of node `n1` pins commit `c1`, so the coder and the reviewer of attempt 2 read `AGENTS.md` at `c1`.
+
 ## Binding prompt
 
-The text of `prompts[<agent_name>]` in the configuration of a repository binding.
-It joins the system prompt of that agent as `Instructions of repository <name>:` and the text.
+Layer 3: the text of `prompts.agents[<agent_name>]` in the configuration of a repository binding.
+It joins the system prompt of that agent as `Binding prompt of repository <name>:` and the text.
 The term names no closed set. The keys are the agent names of the catalog.
-The binding `app` holds `prompts` with `swe@1` set to "Write comments in English.", so Execution 1 reads that text under the Agent prompt of `swe@1`.
+The binding `app` holds `prompts.agents` with `swe@1` set to "Write comments in English.", so Execution 1 reads that text after the Repository prompt of `app`.
 
 ## prompt part
 
@@ -120,9 +148,13 @@ The closed set is:
 - `standard`
 - `role`
 - `workbench`
+- `instruction_file`
+- `repository`
 - `binding`
+- `framing`
 
-`base.md` is the `standard` part of Execution 1, `swe@1.md` is its `role` part, and the text of `app` is its `binding` part.
+`standard`, `role` and `workbench` are layer 1. `instruction_file` and `repository` are layer 2. `binding` is layer 3. `framing` is in no layer.
+`base.md` is the `standard` part of Execution 1, `swe@1.md` is its `role` part, `AGENTS.md` of `app` is its `instruction_file` part, and the text of `app` is its `binding` part.
 
 ## prompt origin
 
@@ -132,8 +164,30 @@ The closed set is:
 - `binary`
 - `file`
 - `database`
+- `repository`
 
 The shipped `base.md` has origin `binary`, an override `swe@1.md` in the agent directory has origin `file`, and the Binding prompt of `app` has origin `database`.
+`AGENTS.md` of `app` has origin `repository`.
+
+## prompt reference
+
+The record that names one prompt part and the exact text that it served: `part`, `name`, `origin`, `path`, `binding_id`, `commit` and `digest`.
+`binding_id` names the binding revision of a layer 2 or layer 3 part. `commit` names the commit of origin `repository`. `digest` is the SHA-256 hex digest of the text with no heading.
+The term names no closed set.
+The `agent.prompt` span of Execution 2 holds the reference `{ part: "instruction_file", name: "app", origin: "repository", path: "AGENTS.md", binding_id: "binding_B7", commit: "c1", digest }`.
+
+## prompt part state
+
+The result of the resolution of one prompt reference.
+The closed set is:
+
+- `resolved`
+- `changed`
+- `invalid`
+- `unreachable`
+
+Only a `resolved` part holds a text.
+An operator edits `swe@1.md` in the agent directory after Execution 1, so the `role` part of Execution 1 resolves as `changed`.
 
 ## resume
 

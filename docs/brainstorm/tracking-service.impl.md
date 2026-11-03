@@ -189,10 +189,10 @@ A session entry is a record of the kind `session_entry` in `tracking.telemetry.w
 - Before the cut, the producer replaces each secret of the LLM credential of the agent with `[redacted]` in every string value of the entry. It matches the exact secret strings only, so an identity, a commit or a tool call identity stays whole.
 - `entry_id` and `tool_call_id` come from the entry before the redaction.
 - A `pi` entry holds its tool call identity in `toolCallId` of a tool result message. A `claude_code` entry holds `tool_call_id: null`, and a reader finds its tool result through the `tool_use_id` of the content blocks.
-- When the session opens, the native producer appends one entry of type `custom` with `customType` `kanthord.pinned_context` for the final system prompt. The entry takes its own entry bound.
-  The entry holds `{ part: "system_prompt", text }`, the final system prompt of the agent.
+- When the session opens, the native producer appends one entry of type `custom` with `customType` `kanthord.pinned_context` as the marker of the system prompt. The entry takes its own entry bound.
+  The entry holds `{ part: "system_prompt" }` and no text, so the entry cut never removes a part of the system prompt. The [prompt composer](agent.md#prompt-composer) owns this shape.
   pi writes a `model_change` and a `thinking_level_change` entry at the session open, so this entry follows them.
-  The worker injects this text into each model call and pi persists no entry of it, so this entry is the only record of it.
+  The worker injects the system prompt into each model call and pi persists no entry of it. The `agent.prompt` span of the execution is the record of it, and `agent.prompt.resolve` rebuilds the text.
 - pi persists each change of the prompt sections as a message with `role` `system`. Such an entry is a session entry as every other.
 
 ## Trace summary

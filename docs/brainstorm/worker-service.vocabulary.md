@@ -112,12 +112,12 @@ Each model inference call uses the model [connector](architecture.vocabulary.md#
 ## prompt part
 
 A prompt part is one text of the system prompt of a native agent. The [Agent component](agent.vocabulary.md#prompt-part) defines the closed set.
-The Agent prompt of the agent and the Binding prompt of each repository binding of the node supply the parts. The framing closes the system prompt, and it is no prompt part.
+The KanthorD prompt of the agent, and the Repository prompt and the Binding prompt of each repository binding of the node supply the parts. The framing closes the system prompt as the `framing` part, and it is in no prompt layer.
 
 The shipped `base.md` is the `standard` part, and it states the rules that every agent shares.
 `coder@1` declares the Role of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the Role of `re@1`, `assets/prompt/re@1.md`.
 The Role of `re@1` states that the agent judges evidence against the criterion and changes no file of the repository.
-The repository binding of `kanthorlabs/kanthord` holds the Binding prompt of `swe@1` "The work product is TypeScript. A test file sits beside its source file."
+The repository binding of `kanthorlabs/kanthord` names the instruction file `AGENTS.md` and holds the Binding prompt of `swe@1` "The work product is TypeScript. A test file sits beside its source file."
 The catalog holds one prompt declaration for `swe@1`, and `coder@1` references that declaration.
 
 ## work prompt
@@ -133,9 +133,9 @@ The prompt composer is the Worker Service component that produces the prompt of 
 The term names no closed set.
 The composer of Execution 1 on "Add password reset" resolves the system prompt of `swe@1` on the server and pins the work prompt.
 It takes the `standard` part from the shipped `base.md` and the `role` part from the shipped `swe@1.md`.
-It takes the `binding` part from the Binding prompt of `swe@1` in the repository binding of `kanthorlabs/kanthord`.
+It takes the `instruction_file` part from `AGENTS.md` at the base commit that the attempt pins, and the `binding` part from the Binding prompt of `swe@1` in the repository binding of `kanthorlabs/kanthord`.
 It pins the work prompt of task "Add reset token expiry".
-The reviewer execution of the same node composes the Binding prompt of `re@1` from that repository binding, and it reads no file of the workspace.
+The reviewer execution of the same attempt reads the same `AGENTS.md` at the same commit, and it composes the Binding prompt of `re@1` from that repository binding. It reads no file of the workspace.
 
 ## entry
 

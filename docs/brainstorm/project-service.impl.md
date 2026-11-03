@@ -204,16 +204,24 @@ The write refuses a submission that changes the worker of an existing worker bin
 - Every worker binding holds `tags`, the binding of an external harness included.
 - An effective instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
-- The `config` of a repository binding holds `prompts`, an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS`: `swe@1`, `re@1` and `env@1`. The catalog is the only list, and no new enum exists.
-- A key outside the catalog refuses the write with 400 `gateway.request.validation_failed`.
-- The write validates each text with the text validation of a prompt file: at most 32768 UTF-8 bytes and no control character other than a tab and a newline.
-- A violation refuses the write with 400 `project.bindings.repository.prompt_invalid` and `details: { agent_name, reason }`. `reason` is `too_large` or `control_character`.
+- The `config` of a repository binding holds `prompts`, an optional `z.strictObject` with three optional keys: `instruction_file`, `repository` and `agents`. `bindingPromptsSchema` of `engine/src/project/contract.ts` defines it.
+- `agents` is an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS`: `swe@1`, `re@1` and `env@1`. The catalog is the only list, and no new enum exists.
+- A key outside the three keys, or an agent key outside the catalog, refuses the write with 400 `gateway.request.validation_failed`.
+- The write validates `repository` and each text of `agents` with the text validation of a prompt file: at most 32768 UTF-8 bytes and no control character other than a tab and a newline.
+- `instruction_file` is a relative repository path that uses `/`. It holds no `..` segment, no empty segment and no control character, and it holds at most 255 bytes. It takes no `@<commit>` form, because the attempt pin records the commit.
+- A violation refuses the write with 400 `project.bindings.repository.prompt_invalid` and `details: { prompt, reason }`. `prompt` is `instruction_file`, `repository` or an agent name. `reason` is `too_large` or `control_character` for a text, and `path_invalid` for the path.
+- The write reads the instruction file at the base head with `instructionFileOf`. A file whose state at the head answers `agent.prompt.source_invalid` refuses the write with 400 `project.bindings.repository.prompt_invalid` and `details: { prompt: "instruction_file", reason }`. An absent file passes.
 - A blank text counts as absent at the composition.
-- The `prompts` of a binding revision joins the system prompt of the agent as `Instructions of repository <name>:` and the text. [agent.md](agent.md#prompt-composer) rules the order and the precedence.
-- A change of `prompts` stores the next binding revision with a new binding ID. A node keeps its pinned binding revision, and `mission node rebind` moves the node to the current revision.
+- The instruction file of a binding revision joins the system prompt as `Repository prompt of repository <name>, file <path>:` and the text. `repository` joins as `Repository prompt of repository <name>, set in KanthorD:` and the text. `agents[<agent_name>]` joins the system prompt of that agent as `Binding prompt of repository <name>:` and the text. [agent.md](agent.md#prompt-composer) rules the order and the precedence.
+- A change of any `prompts` key stores the next binding revision with a new binding ID. A node keeps its pinned binding revision, and `mission node rebind` moves the node to the current revision.
 - The onboarding group of the binding takes the new binding ID as a changed row, and it clears `environment_from_agent`.
-- The execution setup, `agent.get` with a binding and an `env@1` run read the text of the binding revision that each names.
-- Tests cover each `prompts` key, an unknown key, each violation, a blank text and the revision that a change stores.
+- The execution setup, `agent.get` with a binding and an `env@1` run read the texts of the binding revision that each names.
+- The Project Service offers two reads through its `contract.ts`. `baseCommitOf(binding_id, deadline)` answers the 40-hex head commit of the base branch. `instructionFileOf(binding_id, commit, deadline)` answers the reader state and the text of `prompts.instruction_file` at that commit.
+- Both reads reuse `readBase` and `readFiles` of `engine/src/project/environment.ts` and the SSH access of the binding. Each read takes the deadline of its caller, and every caller reads all bindings in parallel.
+- The execution setup and `agent.get` use one deadline of 20000 ms. The handover uses at most 20000 ms of the one deadline of its handler.
+- A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`. A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable` with `failure_reason`. A commit that the remote no longer holds is a failed read.
+- The server caches each answer of `instructionFileOf` in process, keyed by `(resource_identity, commit, path)`, with 256 entries. A commit never changes, so an entry never goes stale.
+- Tests cover each `prompts` key, an unknown key, each text violation with `details.prompt`, each path violation, a blank text, the revision that a change stores, an invalid and an absent instruction file at the write, parallel reads under one deadline, a slow remote and a cache hit with no git call.
 - Every repository binding names exactly one `ssh_credential` of platform `ssh`. An absent SSH credential refuses the write.
 - The host of the address must be a member of the SSH host set of the binding platform. Another host refuses the write with 400 `project.bindings.repository.address_invalid`.
 - The host of the address must hold a [pin](repository.impl.md#host-keys). An unpinned host refuses the write with 409 `repository.host_key.unpinned`.
@@ -353,6 +361,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `project.binding.check` checks an unsaved repository configuration at `POST /api/project/:project_id/binding/check`. It is a read under `human` access. It takes the body `{ kind: "repository", config }` and no mutation key.
 - It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, and the custody suitability of `ssh_credential` and `credential`.
 - Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, ssh_credential, credential }`.
+- The answer also holds `instruction_file: { path, commit, state, reason }`, the state of the instruction file at the base head. It is null when the configuration names no instruction file. `reason` is null for a state that is no failure.
 - It stores nothing. An absent project answers 404 `project.project.not_found`.
 
 ## The environment of a repository binding
@@ -762,13 +771,19 @@ At every placement, the server derives the client identity of an instance for a 
 - The form states "A removed instance finishes its execution, then takes no new work of this binding." when the draft removes an instance.
 - The row of a worker binding of a worker that kanthord hosts shows `· <instance names>`, for example `· box-coder, coder-1`. A registration row shows `· instance <name>` and the badge `Draining` while the binding no longer lists its instance.
 - The "no taker" view of the dashboard applies the match of [The match](scheduler-service.impl.md#the-match): the intent, the tags and the declared node states.
-- The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Binding prompts` holds the Binding prompt of each agent.
-- `Binding prompts` holds one row for each agent of the catalog: `swe@1`, `re@1` and `env@1`. The section makes no network call.
+- The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Prompts` holds the instruction file, the Repository prompt and the Binding prompt of each agent.
+- `Prompts` holds the field `Instruction file`, a repository path that is empty by default. The field shows the state of `project.binding.check`: `AGENTS.md found at <commit>`, `absent` or `invalid: <reason>`.
+- When the field is empty and the check finds `AGENTS.md` at the base head, the section shows the hint `AGENTS.md exists at the base head.`
+- The help of the field states "Name one file, for example AGENTS.md. Its text joins the default standard of every agent. KanthorD reads no nested file. Leave the field empty when the file holds advice or instructions for an interactive tool."
+- `Prompts` holds the row `Repository prompt` for every agent, then one row `Binding prompt` for each agent of the catalog: `swe@1`, `re@1` and `env@1`.
 - A row with a text expands to its Markdown and holds a copy button. A row with no text is inactive.
-- The `Edit` dialog of a row writes the draft only, and the Save of the binding stores it. The dialog shows the byte counter against the 32768-byte limit and refuses a text above the limit or with a control character. An empty text removes the Binding prompt of that agent.
+- The `Edit` dialog of a row writes the draft only, and the Save of the binding stores it. The dialog shows the byte counter against the 32768-byte limit and refuses a text above the limit or with a control character. An empty text removes the text of that row.
+- The `Edit` dialog holds a `Preview` tab. The tab selects an agent and reads `agent.get` with `project_id` and `binding_id`. It replaces the text of the draft part and lists the parts in reading order, with the layer and the heading that the server answers. Each layer 2 and layer 3 part carries the label `Default standard`.
 - The help of the section states that a change stores a new binding revision, and that a node keeps the old text until `mission node rebind`.
 - The help states that the new binding revision makes the Onboarding component clear the mark that the stored environment came from `env@1`.
-- The help states that the Binding prompts of the agents are separate texts, and that a rule that relaxes the default standard goes into the prompts of both `swe@1` and `re@1`.
+- The help of the Repository prompt and of each Binding prompt states "Each work-product sentence is a rule. The reviewer judges a violation as a blocker. A rule about the method, the tools, the repository operations or the release is guidance: the reviewer reports a violation as a suggestion."
+- The help of the `re@1` Binding prompt row states "Put each rule that the reviewer judges into the Repository prompt, so the coder reads it too. Use this text only to relax the judgement of a rule."
+- The help states "A prompt holds no secret."
 - The binding draft carries `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
 - The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows each record as `<name> (v<revision>)` with its fingerprint.

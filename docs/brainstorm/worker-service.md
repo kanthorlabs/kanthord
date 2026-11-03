@@ -70,18 +70,19 @@ An agent holds no repository credential.
 
 ## Prompt composition
 
-The system prompt of a native agent composes the Agent prompt, the Binding prompt and the framing. The [Agent component](agent.md#prompt-composer) rules both prompts.
-The composition places `base.md` first, then the Role of the agent, then one Binding prompt for each repository binding that holds a text, then the framing.
+The system prompt of a native agent composes the KanthorD prompt, the Repository prompt, the Binding prompt and the framing. The [Agent component](agent.md#prompt-composer) rules the three prompt layers.
+The composition places `base.md` first, then the Role of the agent. Then, for each repository binding in binding order, it places the instruction file, the stored Repository prompt and the Binding prompt. The framing comes last.
 The work prompt is the first user message.
 
 `base.md` states the rules that every native agent of the server shares. It holds no rule that only code, a test or a review needs, so a non-coding agent can read it.
-`base.md` and the Role state the default standard of the work product.
+`base.md`, the Role, and the Repository prompt and the Binding prompt of each repository of the work state the default standard of the work product.
 The Roles of `swe@1` and `re@1` hold the same code, test and finding rules in the same words, because `re@1` judges the work of `swe@1`.
 A worker declares, for each of its agents, the Role of that agent.
 A Role states the role of the agent, its responsibility and its contribution to the WHAT.
 The shipped Role is the default of the worker name. A file of the same name in the agent directory replaces it on one server.
-The Binding prompt states the programming language, the development style and the coding conventions of the work product of one repository.
-It states no rule about the method, the tools, the repository operations, the assessment or the release.
+The Repository prompt and the Binding prompt state the programming language, the development style, the conventions and the structure of the work product of one repository.
+A rule about the method, the tools, the repository operations or the release binds no work product, so it is no ground for a blocker. The reviewer gives a finding on such a rule as a suggestion with `action: no`, and the coder reads the rule as guidance.
+The Binding prompt of `re@1` can also relax how the reviewer weighs a work-product rule, for example "A missing changelog entry gives a suggestion, not a blocker." This is the only assessment statement that a Binding prompt holds.
 The work prompt renders from the node revision that the attempt pins.
 It states the requirement, the criterion and the verifications of the work that the execution takes.
 The work prompt of a task also states the name, the requirement and the criterion of its node first, as context for the task.
@@ -89,23 +90,24 @@ When the node names two or more repository bindings, the work prompt lists each 
 The Role is required, and every other part is optional.
 The work prompt is required for every unit of work.
 
-The Binding prompt of an execution holds one part for each repository binding of the pinned binding revisions, in binding order.
-Each part is the text of `prompts[<agent_name>]` of that [repository binding](project-service.md#repository-configuration-and-policy).
-A blank text adds no part.
-The steps method of `swe@1` and the evaluation method of `re@1` take every part.
+The Repository prompt and the Binding prompt of an execution hold the parts of each repository binding of the pinned binding revisions, in binding order.
+The parts of one binding are the instruction file at `prompts.instruction_file`, the text of `prompts.repository` and the text of `prompts.agents[<agent_name>]` of that [repository binding](project-service.md#repository-configuration-and-policy).
+An absent path and a blank text add no part.
+The steps method of `swe@1` and the evaluation method of `re@1` take every part. The coder and the reviewer read the same Repository prompt of each binding, and only the Role and the Binding prompt differ.
 An `examine` node takes every part for the bindings that it names.
 The worker reads no file of the workspace for the prompt, because an instruction file of the workspace is the work product of the candidate.
-KanthorD supports no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file in any form.
+The server reads the instruction file at the base commit that the attempt pins, never from the node branch, so the candidate cannot change the rules of its own attempt.
+The framing states that an instruction file in the workspace, for example `AGENTS.md` or `CLAUDE.md`, is work product and no instruction. An unrequested change of an instruction file by the candidate is a blocker.
 
-The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Binding prompts and the framing, in that order. The work prompt is the first user message.
-The precedence from the highest is the framing, the Binding prompt, the Role and the Standard. A later message governs an earlier message.
+The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Repository prompts, the Binding prompts and the framing, in that order. The work prompt is the first user message.
+The precedence from the highest is the framing, the Binding prompt, the stored Repository prompt, the instruction file, the Role and the Standard. A later message governs an earlier message.
 The framing states the obligations of the worker.
 No Binding prompt and no work prompt revokes one.
 An execution performs no conduct that its framing forbids, whatever another text states.
 The framing also states that an instruction for one repository governs only the work on the files of that repository, never the reply format that a message demands.
 The framing states the protocol conditions that hold for every native agent: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch file only under `.kanthord-scratch/` at the workspace root.
-A Binding prompt and a work prompt define no criterion.
-An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that `base.md` and the Role state.
+A Repository prompt, a Binding prompt and a work prompt define no criterion.
+An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) of the reviewer: `base.md`, the Role of `re@1`, the Repository prompt and the Binding prompt of `re@1`. The Binding prompt of `swe@1` is no part of it.
 
 A prompt carries instructions, and it authorizes no operation.
 It names no value of the effective configuration, it adds no tool and it changes no resource budget.
@@ -114,17 +116,17 @@ The tool table of the agent and the effective configuration bound every operatio
 The prompt composer is the Worker Service component that produces the prompt of a native agent.
 It resolves every part from the agent directory and from the binding configuration, it validates every text that it reads, and it composes the parts.
 It runs on the server. The worker application reads no prompt file.
-It reads the Binding prompt through the [Project Service](project-service.md#configuration-lifecycle-and-consistency), and it authorizes no operation.
+It reads the Repository prompt and the Binding prompt through the [Project Service](project-service.md#configuration-lifecycle-and-consistency), and it authorizes no operation.
 A file that the composer cannot read, cannot decode or finds above the bound is invalid, and the composition answers 409 `agent.prompt.template_invalid`. The composer uses no shipped text in its place.
 The composer decodes the text of a file, and it changes no instruction of that text.
-The composer records no prompt text. The `kanthord.pinned_context` entry of the agent session is the only record of the system prompt.
+The composer records no prompt text. The `agent.prompt` span of the execution holds the prompt reference of each part, and it is the only record of the system prompt. The execution setup fails when the span write fails.
 
 The execution resolves the system prompt once, when its setup is read.
 It holds that text until the execution ends.
 The work prompt renders for each unit of work that the method takes.
-A change of an agent file or of a Binding prompt changes no prompt of a running execution.
-A Binding prompt change stores a binding revision, and a node keeps the text of its pinned revision until `mission node rebind`.
-A later execution of the same attempt resolves the files that stand when that execution starts.
+A change of an agent file or of a `prompts` key changes no prompt of a running execution.
+A change of a `prompts` key stores a binding revision, and a node keeps the texts of its pinned revision until `mission node rebind`. A rebind and a new attempt move every layer 2 and layer 3 source at one boundary.
+A later execution of the same attempt resolves the agent files that stand when that execution starts. It reads the instruction file at the base commit that the first `worker.handover` of the attempt pins.
 No model inference call of the execution drops a part of its prompt.
 
 ## Instances and hosting

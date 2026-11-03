@@ -139,24 +139,34 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ## Prompt composer
 
-- A human controls the prompt of an agent session through two prompts: the Agent prompt and the Binding prompt. The framing and the prompt templates are KanthorD protocol, not a prompt of a human.
-- The Agent prompt is a set of three files. `base.md` is the Standard that every agent reads. It holds only the rules that every agent shares, a non-coding agent included. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
+- A human controls the prompt of an agent session through three [prompt layers](agent.vocabulary.md#prompt-layer). Layer 1 is the KanthorD prompt, layer 2 is the Repository prompt and layer 3 is the Binding prompt. The framing and the prompt templates are KanthorD protocol, not a prompt layer.
+- The KanthorD prompt is a set of three files. `base.md` is the Standard that every agent reads. It holds only the rules that every agent shares, a non-coding agent included. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
 - The component ships the text of each file. The binary embeds it, and no command downloads it.
 - A file of the same name in the agent directory replaces the shipped text of that file whole. The agent directory is a path of the server host.
 - An empty agent directory selects the shipped texts only.
-- The Binding prompt is the text of `prompts[<agent_name>]` in the configuration of a [repository binding](project-service.md#repository-configuration-and-policy). Each agent name of the catalog holds its own text. A blank text is an absent text.
-- The server composes the system prompt for every consumer. The order is `base.md`, `<agent_name>.md`, `workbench.md` for a Workbench session, one Binding prompt for each repository binding that holds a text, then the framing.
-- `swe@1` and `re@1` read the Binding prompt of every repository binding of the node at its pinned revision. `env@1` reads the Binding prompt of the binding of its environment run.
-- The precedence from the highest is the framing, the Binding prompt, `workbench.md`, the Role and the Standard. The messages follow the system prompt, and a later message governs an earlier one.
+- The Repository prompt of a [repository binding](project-service.md#repository-configuration-and-policy) has two parts, in this order. The first part is the [instruction file](agent.vocabulary.md#instruction-file), the repository file at the path `prompts.instruction_file`. The second part is the stored Repository prompt, the text of `prompts.repository`. Every agent that works on that repository reads both parts.
+- `prompts.instruction_file` is absent by default, and an absent path reads no file. The binding names exactly one file.
+- The Binding prompt is the text of `prompts.agents[<agent_name>]` in the configuration of a repository binding. Each agent name of the catalog holds its own text. A blank text is an absent text.
+- The server composes the system prompt for every consumer. The order is `base.md`, `<agent_name>.md` and `workbench.md` for a Workbench session. Then, for each repository binding in binding order, the instruction file, the stored Repository prompt and the Binding prompt follow. The framing closes the system prompt.
+- `swe@1` and `re@1` read layers 2 and 3 of every repository binding of the node at its pinned revision. `env@1` reads layers 2 and 3 of the binding of its environment run, with the instruction file at the commit of that run.
+- The precedence from the highest is the framing, the Binding prompt, the stored Repository prompt, the instruction file, `workbench.md`, the Role and the Standard. A later text governs an earlier text. The messages follow the system prompt, and a later message governs an earlier one.
 - An instruction of one repository governs only the work on the files of that repository. It never governs the reply format that a message demands.
-- The Binding prompt of each agent is a separate text. A rule that relaxes the default standard goes into the Binding prompts of both `swe@1` and `re@1`.
-- KanthorD reads no `CLAUDE.md`, `AGENTS.md` or `*.local.md` file of a repository or of a home directory. A native agent reads no instruction file in any form.
-- `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, and KanthorD does not support that load.
+- The Binding prompt of each agent is a separate text. A rule that the reviewer judges goes into the Repository prompt, so the coder reads it too. The Binding prompt of `re@1` holds only a relaxation of the judgement of a rule.
+- KanthorD reads the one instruction file that a repository binding names, at the base commit that the attempt pins. It reads no nested instruction file, no `*.local.md` file and no file of a home directory.
+- KanthorD expands no `@` import of an instruction file. A `CLAUDE.md` that holds only `@AGENTS.md` therefore needs the path `AGENTS.md`.
+- A present instruction file adds a part. An absent file, a file that is no regular file and a file outside the repository root add no part. A file that is too large, is not UTF-8, cannot be read or holds a control character answers 409 `agent.prompt.source_invalid`.
+- `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, and KanthorD does not support that load. Its working directory is the candidate. A `claude-code@1` coder reads the instruction file only through the `CLAUDE.md` of the candidate. It reads no pin. The evaluation claims of such a coder carry no layer 2 integrity.
 - A file of the agent directory or of its `prompts` subdirectory that the loader rejects answers 409 `agent.prompt.template_invalid` at every reader. No reader replaces it with the shipped text.
-- The work prompt is the task message of the consumer. It belongs to neither prompt, and the composer pins it.
-- A change of an agent file takes effect at the next composition. A change of a Binding prompt is a change of the binding configuration, so it stores the next binding revision. A node keeps the text of its pinned binding revision until `mission node rebind`.
-- A change of the Binding prompt gives the binding a new binding ID. Environment onboarding treats it as a changed binding and clears the mark that the stored environment came from `env@1`.
-- The agent page shows each part of the system prompt as one read-only row, with its origin, its path and its digest. The binding sheet of a repository edits the Binding prompt of each agent. The dashboard has no screen that edits an Agent prompt file.
+- The work prompt is the task message of the consumer. It belongs to no prompt layer, and the composer pins it.
+- A change of an agent file takes effect at the next composition. A change of a `prompts` key is a change of the binding configuration, so it stores the next binding revision. A node keeps the texts of its pinned binding revision until `mission node rebind`.
+- The first `worker.handover` of an attempt pins the base commit of the instruction file of each repository binding. Every later execution of that attempt reads the instruction file at that commit. A new attempt reads the base head again.
+- A change of a `prompts` key gives the binding a new binding ID. Environment onboarding treats it as a changed binding and clears the mark that the stored environment came from `env@1`.
+- Each execution records one [prompt reference](agent.vocabulary.md#prompt-reference) for each part of the system prompt of each agent, the framing included. The `agent.prompt` span of the execution holds the list. KanthorD stores no copy of a prompt text.
+- A reference resolves by its origin. A `database` reference reads the text of its binding revision, which never changes. A `repository` reference reads the file at its commit through the Project Service. A `binary` or `file` reference reads the current text.
+- Each resolved text passes a digest check. A text whose digest differs from the reference answers the state `changed` and no text.
+- A reference names no URL and no branch, because a branch moves and the node branch is the candidate.
+- The agent page shows each part of the KanthorD prompt as one read-only row, with its origin, its path and its digest. The binding sheet of a repository edits the instruction file path, the stored Repository prompt and the Binding prompt of each agent. The dashboard has no screen that edits a KanthorD prompt file.
+- `agent get` with a node shows the parts that the agent of that node reads, at the commit that the attempt pins. `agent prompt resolve` rebuilds the system prompt that one execution served, from the references of its span. The trace prompt block lists the parts of each agent of the execution.
 - The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 
 ## Agent session

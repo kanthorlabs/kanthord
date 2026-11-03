@@ -124,6 +124,9 @@ A rebind is a node API update that changes only the bindings of a node.
 It moves the pinned binding revision of one node, or of every node of a mission, to a later revision of the same binding.
 It admits every node that is not terminal and not retired.
 An open attempt keeps its pinned node revision, so the new binding revision applies at the next attempt.
+An attempt holds the prompt pin: the base commit at which every execution of the attempt reads the instruction file of each repository binding.
+The first `worker.handover` of the attempt writes the prompt pin, and no later act changes it.
+A rebind and a new attempt therefore move every Repository prompt and Binding prompt source at one boundary.
 A rebind of every node of a mission skips each terminal or retired node and reports it.
 A rebind refuses a revision of another binding, a tombstone and a disabled revision.
 Execution authority never grants planning authority.

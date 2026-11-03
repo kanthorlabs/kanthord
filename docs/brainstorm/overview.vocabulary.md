@@ -221,10 +221,13 @@ Each sub-agent has its own agent prompt that defines its responsibilities and co
 
 ## default standard
 
-The default standard is the standard that `base.md` and the Role of the agent state as the default of the human.
+The default standard is the standard of the human for the work product.
+`base.md`, the Role of the agent, and the Repository prompt and the Binding prompt of each repository of the work state it.
 An assessment weighs the evidence against it beside the criterion.
-The `base.md` and the Role that the reviewer runs with state the default standard that an assessment applies.
-The `kanthord.pinned_context` entry of the execution holds the system prompt that carries it.
+The `base.md`, the Role, the Repository prompt and the Binding prompt that the reviewer runs with state the default standard that an assessment applies.
+A Repository prompt and a Binding prompt bind the work product only: its language, its style, its conventions and its structure.
+A finding on a rule about the method, the tools, the repository operations or the release is a suggestion, not a blocker.
+The `agent.prompt` span of the execution holds the reference of each part of the system prompt that carries it.
 The term names no closed set.
 The shipped Role of `re@1` forbids an abstraction for single-use code.
 The change of task "Add reset token expiry" meets the criterion of "Add password reset".
