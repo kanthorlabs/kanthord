@@ -26,6 +26,8 @@ class PublicBuildTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((artifact / "brainstorm").exists())
             self.assertFalse((artifact / "serve.json").exists())
+            self.assertFalse((artifact / "DESIGN.md").exists())
+            self.assertFalse((artifact / ".claude").exists())
             self.assertTrue((artifact / "reference/gateway/verify.html").is_file())
             self.assertTrue((artifact / "reference/worker/register.html").is_file())
             self.assertFalse((artifact / "reference/api").exists())

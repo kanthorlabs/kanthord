@@ -4,7 +4,7 @@
 import re
 import sys
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 REPO = Path(__file__).resolve().parents[2]
 PUBLIC = REPO / "docs"
@@ -28,6 +28,20 @@ def is_public(path):
     }
 
 
+def viewer_target(query):
+    paths = parse_qs(query).get("p", [])
+    if len(paths) != 1:
+        return None
+    path = paths[0]
+    if not re.fullmatch(r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.md", path):
+        return None
+    if path != "README.md" and path.split("/")[0] not in SECTIONS:
+        return None
+    if path == "README.md" or path.endswith("/README.md"):
+        return path.removesuffix("README.md") + "index.html"
+    return path.removesuffix(".md") + ".html"
+
+
 def check_link(source, href, boundary, public):
     assert source.is_file(), "Link source must exist"
     assert source.is_relative_to(boundary), "Source must be inside its boundary"
@@ -45,8 +59,19 @@ def check_link(source, href, boundary, public):
         raise ValueError(f"{source}: public link to Markdown: {href}")
     if public and not is_public(target.relative_to(boundary)):
         raise ValueError(f"{source}: public link to internal material: {href}")
+    if target.name == "viewer.html" and url.query and not public:
+        page = viewer_target(url.query)
+        if page is None:
+            raise ValueError(f"{source}: invalid viewer link: {href}")
+        check_link(
+            target,
+            page + ("#" + url.fragment if url.fragment else ""),
+            boundary,
+            public,
+        )
+        return
     if url.fragment and target.suffix == ".html":
-        anchors = set(re.findall(r'\bid="([^"]+)"', target.read_text()))
+        anchors = set(re.findall(r'(?<![\w-])id="([^"]+)"', target.read_text()))
         if unquote(url.fragment) not in anchors:
             raise ValueError(f"{source}: missing anchor: {href}")
     if url.fragment and target.suffix == ".md":
@@ -122,6 +147,7 @@ def main():
             "assets/diagrams.mjs",
             "assets/diagram-page.mjs",
             "assets/base.css",
+            "assets/redirect.mjs",
         }
         if any(not (site / name).is_file() for name in required):
             raise ValueError(

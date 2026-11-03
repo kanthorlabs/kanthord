@@ -5,21 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>Moved · KanthorD</title>
-    <script>
-      (function () {
-        var path = new URLSearchParams(location.search).get("p") || "";
-        var page = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.md$/.test(path)
-          ? path
-              .replace(/(^|\/)README\.md$/, "$1index.html")
-              .replace(/\.md$/, ".html")
-          : "index.html";
-        location.replace(page + location.hash);
-      })();
+    <script type="module">
+      import { viewerTarget } from "./assets/redirect.mjs";
+
+      location.replace(viewerTarget(location.search, location.hash));
     </script>
   </head>
   <body>
     <p>
-      This page moved. Open the <a href="index.html">KanthorD documentation</a>.
+      This page moved. Open the
+      <a href="index.html">KanthorD documentation</a>.
     </p>
   </body>
 </html>

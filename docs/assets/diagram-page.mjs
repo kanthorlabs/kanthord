@@ -42,6 +42,8 @@ for (const diagram of diagrams) {
     const failure = document.createElement("pre");
     failure.className = "mermaid-error";
     failure.textContent = `[Diagram error: ${error.message}]\n\n${source}`;
-    diagram.parentElement.replaceWith(failure);
+    const panel = diagram.parentElement;
+    panel.previousElementSibling?.remove();
+    panel.replaceWith(failure);
   }
 }

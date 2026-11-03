@@ -96,7 +96,7 @@
   align-items: center;
   padding: 12px 24px;
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--text-primary);
   border: var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);

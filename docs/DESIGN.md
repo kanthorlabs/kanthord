@@ -46,7 +46,7 @@
 - **No soft or blurred shadows anywhere**
 
 ## Buttons
-- **Primary**: Coral `#E8635A` bg, white text, `font-weight: 700`, `border-radius: 10px`, `2px solid #111`, `4px 4px 0 #111` shadow
+- **Primary**: Coral `#E8635A` bg, `#111111` text (white text on coral is 3.3:1 and fails WCAG AA), `font-weight: 700`, `border-radius: 10px`, `2px solid #111`, `4px 4px 0 #111` shadow
 - **Ghost**: Transparent bg, black border and shadow — fills with `#FAFADF` on hover
 - **Pill CTA**: `border-radius: 999px`, coral or pink bg, black border and shadow — used for solo prominent CTAs
 - **Hover**: `transform: translate(2px, 2px)` + shadow shrinks to `2px 2px 0 #111`
