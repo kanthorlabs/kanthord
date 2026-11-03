@@ -41,7 +41,7 @@ A mechanism here never overrides a rule there.
 - `name` is the file name of a layer 1 part. It is the template name of `framing`, for example `framing-worker`. It is the binding name of a layer 2 or layer 3 part.
 - `origin` is `binary` for a shipped text, `file` for an override file, `database` for `repository` and `binding`, and `repository` for `instruction_file`.
 - `path` is the override location that the server looked up for `binary` and `file`. It is the repository path for origin `repository`, and `null` for origin `database` and when `agent.prompt.agent_directory` is empty.
-- `binding_id` is the binding revision of a layer 2 or layer 3 part, and `null` otherwise. `commit` is the 40-hex commit of origin `repository`, and `null` otherwise.
+- `binding_id` is the binding revision of a layer 2 or layer 3 part, and `null` otherwise. `commit` is the commit of origin `repository`, 40 or 64 lower-case hex, and `null` otherwise.
 - `digest` is the SHA-256 hex digest of the exact UTF-8 text of the part, with no heading.
 - `heading` is the plain-text line that the server writes before the text. The dashboard renders no heading itself.
 

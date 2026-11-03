@@ -216,7 +216,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - A change of any `prompts` key stores the next binding revision with a new binding ID. A node keeps its pinned binding revision, and `mission node rebind` moves the node to the current revision.
 - The onboarding group of the binding takes the new binding ID as a changed row, and it clears `environment_from_agent`.
 - The execution setup, `agent.get` with a binding and an `env@1` run read the texts of the binding revision that each names.
-- The Project Service offers two reads through its `contract.ts`. `baseCommitOf(binding_id, deadline)` answers the 40-hex head commit of the base branch. `instructionFileOf(binding_id, commit, deadline)` answers the reader state and the text of `prompts.instruction_file` at that commit.
+- The Project Service offers two reads through its `contract.ts`. `baseCommitOf(binding_id, deadline)` answers the head commit of the base branch, 40 or 64 lower-case hex. `instructionFileOf(binding_id, commit, deadline)` answers the reader state and the text of `prompts.instruction_file` at that commit.
 - Both reads reuse `readBase` and `readFiles` of `engine/src/project/environment.ts` and the SSH access of the binding. Each read takes the deadline of its caller, and every caller reads all bindings in parallel.
 - The execution setup and `agent.get` use one deadline of 20000 ms. The handover uses at most 20000 ms of the one deadline of its handler.
 - A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`. A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable` with `failure_reason`. A commit that the remote no longer holds is a failed read.
