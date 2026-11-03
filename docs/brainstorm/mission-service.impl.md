@@ -486,7 +486,7 @@ The route at the insert:
 
 ### The human finding
 
-- A human creates a finding on a node in any state. `assessment_id` names an execution assessment or a human assessment of the node in the attempt that delivered the code. With a human assessment, the round reads null.
+- A human creates a finding on a node in any state. `assessment_id` names an execution assessment or a human assessment of the node in the attempt that delivered the code. The create refuses an assessment of an attempt that delivered no code with 400 and an issue at `assessment_id`. With a human assessment, the round reads null.
 - A node with no assessment takes no human finding. A closing submit writes an assessment, and a human override writes a human assessment, also on a node with no attempt.
 - A human finding never makes its assessment a base round. It changes no review base and no status.
 - No round reads a human finding, and no `fixed_finding_ids` lists it, because its route is `report`.
@@ -1131,7 +1131,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests decide a finding with `accepted` and `dismissed`, and assert `mission.finding.decided`, `mission.finding.not_reported`, `mission.record.not_found` and a decision on a `Completed` node.
 - Tests read the findings: the `attempt` filter through the assessment, the order, the pages, and the computed `attempt`, `round`, `status` and `source`. They assert `created_at === identityTime(id)`, the undecided order by `id` with the last `id` as the cursor, `mission.node.not_found` and `mission.mission.not_found`. The round of an assessment equals the count of `submitAssessment`.
 - Tests create a human finding on a `Completed`, a `Blocked` and an `Available` node, with the labels `H1` and `H2` in each node. They refuse an `assessment_id` of another node and a node with no assessment. They admit a human assessment as `assessment_id`, with `round: null`.
-- Tests assert that a human finding on an unjudged round changes neither the review base of the next round nor any status. They assert `mission.version.conflict`, an unchanged mission version after a create, the update of the cause owner and the texts, `mission.finding.not_human`, `mission.finding.decided` after a decision and the act traces.
+- Tests assert that a human finding on an unjudged round of a delivered attempt changes neither the review base of the next round nor any status. Tests assert the refusal of an assessment of an attempt that delivered no code. They assert `mission.version.conflict`, an unchanged mission version after a create, the update of the cause owner and the texts, `mission.finding.not_human`, `mission.finding.decided` after a decision and the act traces.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a dependency terminal transition, a dependency edit and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `include_retired`.
 - Tests admit node creation at any time.

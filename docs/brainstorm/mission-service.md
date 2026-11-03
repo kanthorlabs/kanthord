@@ -593,7 +593,7 @@ Round 1 reviews the change of the node against the base branch of each binding.
 A later round reviews only the change since its review base.
 The review base of a round is the tested commit of each binding in the latest earlier base round of the attempt.
 A base round has the result `success`, or it holds a reviewer finding or a proposal of its own.
-A round that ends before the judgement is no base round, so the next round reviews the change since the latest judged round.
+A round that ends before the judgement is no base round, so the next round reviews the change since the latest base round.
 A round with no review base, or a binding with no review-base commit, reviews the change of the node against the base branch.
 
 An external request is a commitment to people outside KanthorD.
@@ -665,6 +665,8 @@ No decision changes a node.
 A human creates a human finding for a defect that the human finds after delivery.
 A human finding names the node, the assessment that missed the defect, the kind, the four texts and the owner of the cause.
 That assessment is an assessment of the node in the attempt that delivered the code.
+An attempt delivered the code when the basis of the successful outcome of the node names it, or when it holds a landed commit.
+A node can hold more than one such attempt.
 A human finding has the label `H<n>`, the action `yes` and the route `report`, and it has no round.
 A human finding changes no review base and no status, and no round reads it.
 The human edits the cause owner and the texts of a human finding until it holds a decision.
