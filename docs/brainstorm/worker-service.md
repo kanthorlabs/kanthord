@@ -76,7 +76,7 @@ The work prompt is the first user message.
 
 `base.md` states the rules that every native agent of the server shares. It holds no rule that only code, a test or a review needs, so a non-coding agent can read it.
 `base.md`, the Role, and the Repository prompt and the Binding prompt of each repository of the work state the default standard of the work product.
-The Roles of `swe@1` and `re@1` hold the same code, test and finding rules in the same words, because `re@1` judges the work of `swe@1`.
+The Roles of `swe@1` and `re@1` hold the same code and test rules in the same words, because `re@1` judges the work of `swe@1`. Their finding rules differ, because `re@1` writes its findings only in the judgement line.
 A worker declares, for each of its agents, the Role of that agent.
 A Role states the role of the agent, its responsibility and its contribution to the WHAT.
 The shipped Role is the default of the worker name. A file of the same name in the agent directory replaces it on one server.

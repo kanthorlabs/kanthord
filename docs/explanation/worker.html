@@ -463,20 +463,20 @@
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
 flowchart LR
     accTitle: The life of an implement node
-    accDescr: Pending becomes Available when its dependencies complete. coder@1 claims Available and the node is Executing. A release with further work returns it to Available. A release with no further work moves it to Waiting. reviewer@1 claims Waiting and the node is Evaluating. criterion-not-met below the rework limit returns it to Available. A success with no external action completes the node. A success with an external action opens a pull request and moves the node to External.Requested, then External.Success and Completed. A pull request that conflicts with the base, or that fails a required check, returns the node to Available. reviewer@1 claims External.Requested again when a chained action becomes eligible. A criterion-not-met at the limit, an undetermined assessment or a failed external action moves the node to Blocked. A human unblock opens the next attempt.
+    accDescr: Pending becomes Available when its dependencies complete. coder@1 claims Available and the node is Executing. A release with further work returns it to Available. A release with no further work moves it to Waiting. reviewer@1 claims Waiting and the node is Evaluating. Below the rework limit, criterion-not-met, or a success with an open finding, returns it to Available. A success with no external action completes the node. A success with an external action opens a pull request and moves the node to External.Requested, then External.Success and Completed. A pull request that conflicts with the base, or that fails a required check, returns the node to Available. reviewer@1 claims External.Requested again when a chained action becomes eligible. A criterion-not-met of the final round, an undetermined assessment or a failed external action moves the node to Blocked. A human unblock opens the next attempt.
     pending(["Pending"]) -- "dependencies Completed" --&gt; available(["Available"])
     available -- "coder@1 claims" --&gt; executing["Executing&lt;br/&gt;coder@1 works"]
     executing -- "release&lt;br/&gt;further_work: true" --&gt; available
     executing -- "release&lt;br/&gt;further_work: false" --&gt; waiting(["Waiting"])
     waiting -- "reviewer@1 claims" --&gt; evaluating["Evaluating&lt;br/&gt;reviewer@1 judges"]
-    evaluating -- "criterion-not-met&lt;br/&gt;rework" --&gt; available
+    evaluating -- "criterion-not-met, or success&lt;br/&gt;with an open finding: rework" --&gt; available
     evaluating -- "success,&lt;br/&gt;no external action" --&gt; completed(["Completed"])
     evaluating -- "success,&lt;br/&gt;pull request opened" --&gt; requested(["External.Requested"])
     requested -- "merged" --&gt; success(["External.Success"]) --&gt; completed
     requested -- "conflict with the base,&lt;br/&gt;or a required check failed" --&gt; available
     requested -- "next chained action&lt;br/&gt;eligible: reviewer@1 claims" --&gt; evaluating
     requested -- "closed or&lt;br/&gt;changes requested" --&gt; failed(["External.Failed"]) --&gt; blocked
-    evaluating -- "criterion-not-met at the limit,&lt;br/&gt;or undetermined" --&gt; blocked(["Blocked"])
+    evaluating -- "criterion-not-met of the final round,&lt;br/&gt;or undetermined" --&gt; blocked(["Blocked"])
     blocked -- "human unblock:&lt;br/&gt;next attempt" --&gt; available
     classDef work fill:#fbeae1,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
     classDef done fill:#ececec,stroke:#7a8399,color:#2d3142;
@@ -804,18 +804,38 @@ sequenceDiagram
             </li>
           </ol>
           <p>
-            A <code>criterion-not-met</code> assessment returns the node to
+            Each assessment of <code>reviewer@1</code> is one
+            <strong>review round</strong> of the attempt. The reviewer writes
+            each blocker and each suggestion as a
+            <a href="../reference/mission/finding.html">review finding</a>, and
+            the Mission Service records each finding. A
+            <code>criterion-not-met</code> assessment returns the node to
             <code>coder@1</code> as a <strong>rework</strong>, in the same
-            attempt, while the attempt holds fewer reworks than the limit and no
-            requested action. The next <code>coder@1</code> execution reads the
-            rationale of that assessment as its <strong>verdict</strong>. It
-            sends the whole rationale to <code>swe@1</code> in one revision turn
-            of the node, and it sends the node to review again only when the
-            head holds new work after the judged commit, when the checkout still
-            holds that commit.
+            attempt. On an <code>implement</code> node, a
+            <code>success</code> assessment also causes a rework when it holds a
+            finding with <code>action: yes</code>, or when it leaves an open
+            finding of the attempt unfixed. A rework happens only while the
+            attempt holds fewer reworks than the limit and no requested action.
+          </p>
+          <p>
+            The next <code>coder@1</code> execution reads the rationale of that
+            assessment and the open findings of the attempt as its
+            <strong>verdict</strong>. It sends both to <code>swe@1</code> in one
+            revision turn of the node, and it sends the node to review again
+            only when the head holds new work after the judged commit, when the
+            checkout still holds that commit.
             <a href="coder-worker.html#the-verdict-unit">The verdict unit</a>
-            explains the rule. An <code>undetermined</code> assessment, or a
-            <code>criterion-not-met</code> at the limit, moves the node to
+            explains the rule. A later round reviews only the patch since the
+            latest round with a judgement, and the reviewer lists each finding
+            that the patch fixes.
+          </p>
+          <p>
+            The round after the last permitted rework is the
+            <strong>final round</strong>. Each round after a requested action is
+            also final. A final round causes no rework. Its findings with
+            <code>action: yes</code> and the open findings of the attempt wait
+            for a human decision. An <code>undetermined</code> assessment, or a
+            <code>criterion-not-met</code> of the final round, moves the node to
             <code>Blocked</code>.
           </p>
           <p>
@@ -923,15 +943,17 @@ sequenceDiagram
                   <td><code>mission.rework_limit</code></td>
                   <td>2</td>
                   <td>
-                    <code>criterion-not-met</code> assessments that returned the
-                    node to <code>Available</code>
+                    Earlier execution assessments of the attempt: the review
+                    round minus 1
                   </td>
                   <td>
-                    With the default, the first two
-                    <code>criterion-not-met</code> assessments of an attempt
-                    cause a rework, and the third moves the node to
-                    <code>Blocked</code>. A <code>plan</code> cause moves the
-                    node to <code>Blocked</code> at each count.
+                    With the default, rounds 1 and 2 can cause a rework, and
+                    round 3 is final. A <code>criterion-not-met</code> of round
+                    3 moves the node to <code>Blocked</code>. A
+                    <code>success</code> of round 3 causes no rework, and its
+                    open findings wait for a human. A <code>plan</code> cause
+                    moves the node to <code>Blocked</code> at each count. The
+                    value 0 turns rework off.
                   </td>
                 </tr>
                 <tr>

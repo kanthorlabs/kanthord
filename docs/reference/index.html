@@ -645,6 +645,33 @@
                 </tr>
                 <tr>
                   <td>Mission</td>
+                  <td>
+                    <a href="mission/finding.html"
+                      >Read, decide and report review findings</a
+                    >
+                  </td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/finding</code>,
+                    <code>GET /api/mission/finding/:finding_id</code>,
+                    <code
+                      >GET
+                      /api/mission/project/:project_id/undecided-finding</code
+                    >,
+                    <code>POST /api/mission/finding/:finding_id/decide</code>,
+                    <code>POST /api/mission/node/:node_id/finding</code>,
+                    <code>PATCH /api/mission/finding/:finding_id</code>
+                  </td>
+                  <td>
+                    <code>mission finding list</code>,
+                    <code>mission finding get</code>,
+                    <code>mission finding undecided list</code>,
+                    <code>mission finding decide</code>,
+                    <code>mission finding create</code>,
+                    <code>mission finding update</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mission</td>
                   <td><a href="mission/outcome.html">Read outcomes</a></td>
                   <td>
                     <code>GET /api/mission/node/:node_id/outcome</code>,
@@ -721,6 +748,18 @@
                     <code
                       >GET
                       /api/mission/execution/:execution_id/cleared-outcome</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/cleared-assessment</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/rework-assessment</code
+                    >,
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/review-round</code
                     >
                   </td>
                   <td>
@@ -732,7 +771,10 @@
                     <code>mission execution dependency list</code>,
                     <code>mission execution dependency outcome list</code>,
                     <code>mission execution dependency evidence list</code>,
-                    <code>mission execution cleared-outcome get</code>
+                    <code>mission execution cleared-outcome get</code>,
+                    <code>mission execution cleared-assessment get</code>,
+                    <code>mission execution rework-assessment get</code>,
+                    <code>mission execution review-round get</code>
                   </td>
                 </tr>
                 <tr>

@@ -1,0 +1,1203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read, decide and report review findings · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="read-decide-and-report-review-findings">
+            Read, decide and report review findings
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A review finding records one blocker or one suggestion of a review
+            round, or one defect that a human finds after delivery. A
+            <strong>reviewer finding</strong> comes from the
+            <code>findings</code> of an
+            <a href="assessment.html#assessment-submit-1">assessment submit</a>.
+            A <strong>human finding</strong> comes from
+            <code>finding create</code>.
+          </p>
+          <ul>
+            <li>
+              <code>finding list</code> returns one page of the findings of a
+              node.
+            </li>
+            <li><code>finding get</code> returns one finding.</li>
+            <li>
+              <code>finding undecided list</code> returns one page of the
+              findings of a project that wait for a human.
+            </li>
+            <li>
+              <code>finding decide</code> records the decision of a human on a
+              finding that waits for a human.
+            </li>
+            <li>
+              <code>finding create</code> records a human finding on a node.
+            </li>
+            <li>
+              <code>finding update</code> changes a human finding that holds no
+              decision.
+            </li>
+          </ul>
+          <p>Every operation requires a human JWT.</p>
+          <h3 id="review-rounds">Review rounds</h3>
+          <p>
+            Each execution assessment is one review round of its attempt. Round
+            1 reviews the change of the node against the base branch. A later
+            round reviews only the patch since the tested commit of the latest
+            base round of the attempt. When that commit is not on the
+            first-parent history of the head, the round reviews the full change
+            again. A base round has the result <code>success</code>, holds a
+            reviewer finding or holds a fix-node proposal.
+            <a href="execution.html#execution-review-round-get"
+              ><code>execution review-round get</code></a
+            >
+            gives the reviewer the round, the review base and the open findings.
+            <a href="assessment.html#function-description">Assessments</a>
+            state the rework rule of a round.
+          </p>
+          <p>
+            A reviewer finding has the label <code>B&lt;n&gt;</code> for a
+            blocker or <code>S&lt;n&gt;</code> for a suggestion. A blocker holds
+            <code>action: yes</code> and a <code>ground</code>. A suggestion
+            holds <code>ground: null</code>. The reviewer reports each defect
+            once. It names each open finding that the change fixes in
+            <code>fixed_finding_ids</code> of the next assessment. A finding
+            that the reviewer does not name stays open.
+          </p>
+          <h3 id="route-and-status">Route and status</h3>
+          <p>The <code>route</code> of a finding states who acts on it:</p>
+          <ul>
+            <li>
+              <code>fix</code>: KanthorD fixes it in a rework of the same
+              attempt. The next <code>coder@1</code> execution reads it with its
+              identity.
+            </li>
+            <li><code>report</code>: a human reviews it.</li>
+            <li><code>record</code>: the finding is information only.</li>
+          </ul>
+          <p>The submit gives each new reviewer finding its route:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Finding</th>
+                  <th><code>route</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>action: no</code></td>
+                  <td><code>record</code></td>
+                </tr>
+                <tr>
+                  <td>A finding of an assessment that is not current</td>
+                  <td><code>record</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>action: yes</code> on an <code>implement</code> node,
+                    and the assessment causes a rework
+                  </td>
+                  <td><code>fix</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>action: yes</code> on an <code>examine</code> node,
+                    and the assessment causes a rework
+                  </td>
+                  <td><code>record</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>action: yes</code>, and the current assessment causes
+                    no rework
+                  </td>
+                  <td><code>report</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A route changes later only from <code>fix</code>, and only for an
+            open finding of the attempt:
+          </p>
+          <ul>
+            <li>
+              A current assessment that causes no rework gives each open
+              <code>fix</code> finding of its attempt the route
+              <code>report</code>.
+            </li>
+            <li>
+              A
+              <a href="node-control.html#block-discard-and-override"
+                >node override or node block</a
+              >
+              that closes the attempt gives each open <code>fix</code> finding
+              of the attempt the route <code>report</code>.
+            </li>
+            <li>
+              A node discard that closes the attempt gives each open
+              <code>fix</code> finding of the attempt the route
+              <code>record</code>.
+            </li>
+          </ul>
+          <p>
+            The <code>status</code> of a finding is <code>fixed</code> when
+            <code>fixed_assessment_id</code> names an assessment, and
+            <code>open</code> otherwise. A current assessment writes its own
+            identity into <code>fixed_assessment_id</code> of each finding of
+            its <code>fixed_finding_ids</code>. Only a <code>fix</code> finding
+            can become <code>fixed</code>.
+          </p>
+          <p>
+            A finding <strong>waits for a human</strong> when its route is
+            <code>report</code> and it holds no decision.
+            <code>finding decide</code> takes one of two decisions:
+          </p>
+          <ul>
+            <li>
+              <code>accepted</code>: the human agrees that the finding is a
+              defect and owns its fix outside KanthorD.
+            </li>
+            <li>
+              <code>dismissed</code>: the human judges that the finding is no
+              defect.
+            </li>
+          </ul>
+          <p>
+            A decision changes no node, so it accepts a finding of a node in any
+            state, <code>Completed</code> included. A second decision fails with
+            <code>409 mission.finding.decided</code>.
+          </p>
+          <h3 id="human-findings">Human findings</h3>
+          <p>
+            A human records a defect that a human finds after delivery with
+            <code>finding create</code>. The node can be in any state.
+          </p>
+          <ul>
+            <li>
+              <code>assessment_id</code> names an assessment of the node, the
+              assessment that missed the defect. The finding takes the attempt
+              of that assessment. A node with no assessment takes no human
+              finding.
+            </li>
+            <li>
+              <code>task_id</code> names a task of the node revision of that
+              assessment, or it is <code>null</code>.
+            </li>
+            <li>
+              The service gives the label <code>H&lt;n&gt;</code>, where n is 1
+              plus the count of the human findings of the node. It also gives
+              <code>action: yes</code>, <code>ground: null</code>, the route
+              <code>report</code> and <code>created_by</code>.
+            </li>
+            <li>
+              A human finding has no round, and no assessment can fix it. It
+              makes no assessment a base round.
+            </li>
+            <li>
+              <code>finding update</code> changes the kind, the task, the four
+              texts or the owner of the cause until a decision exists. A
+              reviewer finding takes no update.
+            </li>
+          </ul>
+          <p>
+            <code>finding create</code> and <code>finding update</code> check
+            <code>expected_mission_version</code> and keep the mission version,
+            because a finding changes no node. <code>finding create</code>,
+            <code>finding update</code> and <code>finding decide</code> each
+            write one
+            <a href="../../explanation/worker-contract.html#the-span-catalog"
+              >act trace</a
+            >
+            with equal node states before and after the act.
+          </p>
+          <p>
+            Each of the four texts <code>name</code>, <code>description</code>,
+            <code>fix</code> and <code>why</code> is nonblank and holds at most
+            8192 UTF-8 bytes. This fixed limit does not follow
+            <code>mission.text_max_bytes</code>.
+            <code>decision_reason</code> holds at most
+            <code>mission.text_max_bytes</code> UTF-8 bytes, 32768 by default.
+          </p>
+          <p>
+            The read operations change nothing. Each list call reads one page.
+            The CLI does not follow <code>next_cursor</code>.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="finding-list"><code>finding list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "finding_01M4C5G6BQ2X8D4N6R0T3V5W7Y",
+      "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
+      "attempt": 1,
+      "round": 1,
+      "assessment_id": "assessment_01M4C5G6BPZCGBK0EFKVT5AXH2",
+      "source": "reviewer",
+      "label": "B1",
+      "kind": "blocker",
+      "action": "yes",
+      "task_id": null,
+      "ground": "stated",
+      "name": "Reset link never expires",
+      "description": "The password reset token has no expiry check.",
+      "fix": "Refuse a token older than 30 minutes.",
+      "why": "The requirement states a 30-minute expiry.",
+      "route": "fix",
+      "status": "open",
+      "fixed_assessment_id": null,
+      "cause_owner": null,
+      "created_by": null,
+      "created_at": 1791409789303,
+      "decision": null,
+      "decision_reason": null,
+      "decided_by": null,
+      "decided_at": null
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <p>
+            The list orders the findings by the attempt, then by the round with
+            the human findings last, then by the kind with
+            <code>blocker</code> first, then by the number of the label, then by
+            the identity. The cursor follows the same order. Without
+            <code>attempt</code>, the list covers every attempt of the node.
+            With <code>round</code>, the list holds only reviewer findings of
+            that round.
+          </p>
+          <h3 id="finding-get"><code>finding get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with one <code>Finding</code>.
+            The CLI writes it as one JSON line to stdout and exits
+            <code>0</code>.
+          </p>
+          <h3 id="finding"><code>Finding</code></h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>finding_&lt;ulid&gt;</code></td>
+                  <td>Identity of the finding.</td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td><code>node_&lt;ulid&gt;</code></td>
+                  <td>Node of the finding.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>nonnegative safe integer</td>
+                  <td>
+                    Attempt of the assessment of the finding, computed at read
+                    time.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>round</code></td>
+                  <td>positive safe integer or <code>null</code></td>
+                  <td>
+                    Review round of the assessment, computed at read time;
+                    <code>null</code> for a human finding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>assessment_id</code></td>
+                  <td><code>assessment_&lt;ulid&gt;</code></td>
+                  <td>
+                    For a reviewer finding, the assessment that reported it. For
+                    a human finding, the assessment that missed the defect.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>source</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>reviewer</code> or <code>human</code>, computed at
+                    read time.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>label</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>B&lt;n&gt;</code> or <code>S&lt;n&gt;</code> for a
+                    reviewer finding, unique inside its assessment;
+                    <code>H&lt;n&gt;</code> for a human finding, unique inside
+                    the node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td>string</td>
+                  <td><code>blocker</code> or <code>suggestion</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>action</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>yes</code> when the change applies,
+                    <code>no</code> for a no-op or a won't-do. Always
+                    <code>yes</code> for a human finding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>task_id</code></td>
+                  <td><code>task_&lt;ulid&gt;</code> or <code>null</code></td>
+                  <td>
+                    Task of the finding; <code>null</code> for the node
+                    criterion or the default standard.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>ground</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Ground of a reviewer blocker: <code>stated</code>,
+                    <code>standard</code>, <code>unstated</code> or
+                    <code>conflict</code>. <code>null</code> for a suggestion
+                    and for a human finding.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>name</code>, <code>description</code>,
+                    <code>fix</code>, <code>why</code>
+                  </td>
+                  <td>string</td>
+                  <td>
+                    Short name, the concrete defect, the recommended change and
+                    the reason for the action.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>route</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>fix</code>, <code>report</code> or
+                    <code>record</code>. See
+                    <a href="#route-and-status">route and status</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>status</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>open</code> or <code>fixed</code>, computed from
+                    <code>fixed_assessment_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fixed_assessment_id</code></td>
+                  <td>
+                    <code>assessment_&lt;ulid&gt;</code> or <code>null</code>
+                  </td>
+                  <td>
+                    Assessment that named the finding in
+                    <code>fixed_finding_ids</code>; <code>null</code> while the
+                    finding is open.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cause_owner</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Owner of the cause of a human finding: <code>plan</code>,
+                    <code>agent</code>, <code>reviewer</code>,
+                    <code>gate</code>, <code>engine</code>, <code>apps</code>,
+                    <code>load</code> or <code>human</code>.
+                    <code>null</code> for a reviewer finding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_by</code></td>
+                  <td><code>Actor</code> or <code>null</code></td>
+                  <td>
+                    <code>human</code> actor of a human finding;
+                    <code>null</code> for a reviewer finding.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>Unix milliseconds</td>
+                  <td>Time that the identity of the finding holds.</td>
+                </tr>
+                <tr>
+                  <td><code>decision</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    <code>accepted</code> or <code>dismissed</code>;
+                    <code>null</code> until the decision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>decision_reason</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>Reason of the decision.</td>
+                </tr>
+                <tr>
+                  <td><code>decided_by</code></td>
+                  <td><code>Actor</code> or <code>null</code></td>
+                  <td><code>human</code> actor of the decision.</td>
+                </tr>
+                <tr>
+                  <td><code>decided_at</code></td>
+                  <td>Unix milliseconds or <code>null</code></td>
+                  <td>Time of the decision.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="finding-undecided-list">
+            <code>finding undecided list</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code> with the page shape of
+            <code>finding list</code>. The page holds the findings of the
+            mission of the project that wait for a human, in descending identity
+            order.
+          </p>
+          <h3 id="finding-decide-create-and-update">
+            <code>finding decide</code>, <code>finding create</code> and
+            <code>finding update</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>200</code> with the
+            <code>Finding</code> after the act. The CLI adds
+            <code>idempotency_key</code>, the key of the request, and writes one
+            JSON line to stdout, then exits <code>0</code>.
+          </p>
+          <p>
+            Identity formats follow the
+            <a href="../identities.html">identity reference</a>. Timestamps are
+            integer Unix milliseconds in UTC.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>All</td>
+                  <td>Absent, invalid or expired token, or a machine token.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>All</td>
+                  <td>
+                    Invalid path, query or body. On <code>create</code>, details
+                    name <code>assessment_id</code> when it names no assessment
+                    of the node, and <code>task_id</code> when it names no task
+                    of the revision of that assessment. A blank or oversized
+                    text names its field. An <code>update</code> with no field
+                    to change fails here.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.unexpected_body</code></td>
+                  <td>
+                    <code>list</code>, <code>get</code>,
+                    <code>undecided list</code>
+                  </td>
+                  <td>The request carries a body.</td>
+                </tr>
+                <tr>
+                  <td><code>400 system.pagination.cursor_invalid</code></td>
+                  <td><code>list</code>, <code>undecided list</code></td>
+                  <td>
+                    The <code>cursor</code> value is not a cursor that this
+                    operation issued.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>415 gateway.request.unsupported_media_type</code>
+                  </td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>The body is not <code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.invalid_json</code></td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>
+                    The body is not valid JSON with unique object members.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>413 gateway.request.body_too_large</code></td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>The body exceeds 10 MiB.</td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.idempotency.invalid_key</code></td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>Absent or malformed <code>Idempotency-Key</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>409 gateway.idempotency.conflict</code></td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>
+                    The key belongs to another request, or its first request is
+                    still in progress.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td><code>list</code>, <code>create</code></td>
+                  <td>The node does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.mission.not_found</code></td>
+                  <td><code>undecided list</code></td>
+                  <td>The project holds no mission.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td>
+                    <code>get</code>, <code>decide</code>, <code>update</code>
+                  </td>
+                  <td>The finding does not exist.</td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.finding.decided</code></td>
+                  <td><code>decide</code>, <code>update</code></td>
+                  <td>
+                    The finding already holds a decision. Details hold
+                    <code>finding_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.finding.not_reported</code></td>
+                  <td><code>decide</code></td>
+                  <td>
+                    The route of the finding is not <code>report</code>. Details
+                    hold <code>finding_id</code> and <code>route</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.finding.not_human</code></td>
+                  <td><code>update</code></td>
+                  <td>
+                    The finding is a reviewer finding. Details hold
+                    <code>finding_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 mission.version.conflict</code></td>
+                  <td><code>create</code>, <code>update</code></td>
+                  <td>
+                    <code>expected_mission_version</code> differs from the
+                    mission version.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>504 gateway.invocation.timeout</code></td>
+                  <td>All</td>
+                  <td>The operation did not complete in 30 seconds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI checks some input before it sends a request. Each local
+            failure exits <code>1</code> and sends no request.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>cli.mission.finding.list.invalid_node_id</code>,
+                    <code>cli.mission.finding.create.invalid_node_id</code>
+                  </td>
+                  <td><code>list</code>, <code>create</code></td>
+                  <td>
+                    <code>&lt;node-id&gt;</code> is not a canonical
+                    <code>node_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.finding.list.invalid_attempt</code>
+                  </td>
+                  <td><code>list</code></td>
+                  <td>
+                    <code>--attempt</code> is not a nonnegative safe integer in
+                    canonical form.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.mission.finding.list.invalid_round</code></td>
+                  <td><code>list</code></td>
+                  <td><code>--round</code> is not a positive safe integer.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cli.mission.finding.get.invalid_finding_id</code>,
+                    <code>cli.mission.finding.decide.invalid_finding_id</code>,
+                    <code>cli.mission.finding.update.invalid_finding_id</code>
+                  </td>
+                  <td>
+                    <code>get</code>, <code>decide</code>, <code>update</code>
+                  </td>
+                  <td>
+                    <code>&lt;finding-id&gt;</code> is not a canonical
+                    <code>finding_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.finding.undecided.list.invalid_project_id</code
+                    >
+                  </td>
+                  <td><code>undecided list</code></td>
+                  <td>
+                    <code>&lt;project-id&gt;</code> is not a canonical
+                    <code>project_&lt;ulid&gt;</code> identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >cli.mission.finding.&lt;command&gt;.token_required</code
+                    >
+                  </td>
+                  <td>All</td>
+                  <td>No nonblank token resolves.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.idempotency_key.invalid</code></td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>
+                    <code>--idempotency-key</code> is not an
+                    <code>idempotency_key_&lt;ulid&gt;</code> value.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.file.*</code></td>
+                  <td>
+                    <code>decide</code>, <code>create</code>,
+                    <code>update</code>
+                  </td>
+                  <td>
+                    <code>--file</code> is absent, not a regular file,
+                    <code>-</code>, not UTF-8, not JSON, has a repeated key, is
+                    not an object, or fails the schema
+                    (<code>cli.file.schema_invalid</code>).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_invalid</code></td>
+                  <td><code>list</code>, <code>undecided list</code></td>
+                  <td>
+                    <code>--limit</code> is not a positive decimal integer.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.pagination.limit_out_of_range</code></td>
+                  <td><code>list</code>, <code>undecided list</code></td>
+                  <td><code>--limit</code> is greater than 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>cli.option.duplicate</code></td>
+                  <td>All with options</td>
+                  <td>An option occurs more than once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>&lt;command&gt;</code> is <code>list</code>, <code>get</code>,
+            <code>undecided.list</code>, <code>decide</code>,
+            <code>create</code> or <code>update</code>.
+          </p>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status: &lt;status&gt;</code> to stderr. For a mutation, the
+            CLI also prints the row <code>idempotency_key: &lt;key&gt;</code>. A
+            transport failure, timeout or malformed response exits
+            <code>1</code> with
+            <code>cli.mission.finding.&lt;command&gt;.indeterminate</code>. For
+            a mutation, retry with the printed key.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Mutation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>finding list</code></td>
+                  <td>
+                    <code>GET /api/mission/node/:node_id/finding</code>
+                  </td>
+                  <td><code>mission.finding.list</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>finding get</code></td>
+                  <td>
+                    <code>GET /api/mission/finding/:finding_id</code>
+                  </td>
+                  <td><code>mission.finding.get</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>finding undecided list</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/project/:project_id/undecided-finding</code
+                    >
+                  </td>
+                  <td><code>mission.finding.undecided.list</code></td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>finding decide</code></td>
+                  <td>
+                    <code>POST /api/mission/finding/:finding_id/decide</code>
+                  </td>
+                  <td><code>mission.finding.decide</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>finding create</code></td>
+                  <td>
+                    <code>POST /api/mission/node/:node_id/finding</code>
+                  </td>
+                  <td><code>mission.finding.create</code></td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <td><code>finding update</code></td>
+                  <td>
+                    <code>PATCH /api/mission/finding/:finding_id</code>
+                  </td>
+                  <td><code>mission.finding.update</code></td>
+                  <td>Yes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every operation has the access <code>human</code> (human bearer JWT)
+            and a timeout of 30 seconds. <code>node_id</code>,
+            <code>finding_id</code> and <code>project_id</code> are required
+            path parameters.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Query field</th>
+                  <th>Commands</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td><code>list</code></td>
+                  <td>Optional nonnegative safe integer.</td>
+                </tr>
+                <tr>
+                  <td><code>round</code></td>
+                  <td><code>list</code></td>
+                  <td>Optional positive safe integer.</td>
+                </tr>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td><code>list</code>, <code>undecided list</code></td>
+                  <td>1 to 1000, default <code>100</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td><code>list</code>, <code>undecided list</code></td>
+                  <td>
+                    Optional <code>next_cursor</code> of the previous page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>A read takes no body. A mutation takes these headers:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Authorization</code></td>
+                  <td>Yes</td>
+                  <td><code>Bearer &lt;human-jwt&gt;</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td>Yes</td>
+                  <td><code>application/json</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>Idempotency-Key</code></td>
+                  <td>Yes</td>
+                  <td>
+                    <code>idempotency_key_&lt;ulid&gt;</code>; retain it to
+                    retry the same act.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Each body accepts no unknown field.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Body</th>
+                  <th>Fields</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>FindingDecide</code></td>
+                  <td>
+                    Required <code>decision</code> (<code>accepted</code> or
+                    <code>dismissed</code>) and <code>decision_reason</code>
+                    (nonblank string).
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>FindingCreate</code></td>
+                  <td>
+                    Required <code>expected_mission_version</code> (positive
+                    integer), <code>assessment_id</code>,
+                    <code>kind</code> (<code>blocker</code> or
+                    <code>suggestion</code>), <code>task_id</code> (<code
+                      >task_&lt;ulid&gt;</code
+                    >
+                    or <code>null</code>), <code>name</code>,
+                    <code>description</code>, <code>fix</code>,
+                    <code>why</code> and <code>cause_owner</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>FindingUpdate</code></td>
+                  <td>
+                    Required <code>expected_mission_version</code>, plus at
+                    least one of <code>kind</code>, <code>task_id</code>,
+                    <code>name</code>, <code>description</code>,
+                    <code>fix</code>, <code>why</code> and
+                    <code>cause_owner</code>, with the types of
+                    <code>FindingCreate</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="findingsubmit"><code>FindingSubmit</code></h3>
+          <p>
+            Each item of <code>findings</code> of
+            <a href="assessment.html#assessment-submit-1">assessment submit</a>
+            is one <code>FindingSubmit</code>. It accepts no unknown field.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>label</code></td>
+                  <td>string</td>
+                  <td>
+                    Required. Matches <code>^[BS][1-9][0-9]{0,2}$</code> and is
+                    unique in the submit. <code>B</code> is a blocker and
+                    <code>S</code> is a suggestion.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>action</code></td>
+                  <td><code>yes</code> or <code>no</code></td>
+                  <td>Required. A blocker holds <code>yes</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>task_id</code></td>
+                  <td><code>task_&lt;ulid&gt;</code> or <code>null</code></td>
+                  <td>Required. A task of the pinned revision, or null.</td>
+                </tr>
+                <tr>
+                  <td><code>ground</code></td>
+                  <td>string or <code>null</code></td>
+                  <td>
+                    Required. A blocker holds <code>stated</code>,
+                    <code>standard</code>, <code>unstated</code> or
+                    <code>conflict</code>. A suggestion holds <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>name</code>, <code>description</code>,
+                    <code>fix</code>, <code>why</code>
+                  </td>
+                  <td>nonblank string</td>
+                  <td>Required. At most 8192 UTF-8 bytes each.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A submit fails with
+            <code>400 gateway.request.validation_failed</code> and an issue at
+            <code>findings</code> for a bad or repeated label, a blocker with
+            <code>action: no</code> or with no ground, a suggestion with a
+            ground, an unknown <code>task_id</code>, a blank or oversized text,
+            more than 100 items, or a <code>success</code> with a blocker. It
+            fails with an issue at <code>fixed_finding_ids</code> for a repeated
+            identity, an identity that names no open <code>fix</code> finding of
+            the attempt, or a <code>success</code> that leaves out an open
+            blocker of the attempt. The check runs for every submit, also for a
+            submit that is not current.
+          </p>
+          <pre><code class="language-sh">curl -i 'http://127.0.0.1:31415/api/mission/node/node_01M4C5G6BNQQPFNM7M8W0GW1W4/finding?attempt=1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i -X POST http://127.0.0.1:31415/api/mission/finding/finding_01M4C5G6BQ2X8D4N6R0T3V5W7Y/decide \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH' \
+  -d '{"decision":"accepted","decision_reason":"The token expiry is a defect. The team fixes it in the next release."}'</code></pre>
+          <p>
+            The Gateway keeps the answer of a mutation for its idempotency key
+            in process memory for <code>gateway.idempotency_ttl</code> seconds,
+            86400 by default. A retry with the same key, human account and
+            request replays that answer, failures included.
+          </p>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord mission finding list &lt;node-id&gt; [--attempt &lt;attempt&gt;] [--round &lt;round&gt;] [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;]
+kanthord mission finding get &lt;finding-id&gt;
+kanthord mission finding undecided list &lt;project-id&gt; [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;]
+kanthord mission finding decide &lt;finding-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission finding create &lt;node-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]
+kanthord mission finding update &lt;finding-id&gt; --file &lt;path&gt; [--idempotency-key &lt;key&gt;]</code></pre>
+          <p>
+            Every command also accepts <code>--token &lt;jwt&gt;</code> and
+            <code>--endpoint &lt;url&gt;</code>.
+          </p>
+          <pre><code class="language-sh">kanthord mission finding list node_01M4C5G6BNQQPFNM7M8W0GW1W4 --attempt 1 --round 2
+kanthord mission finding decide finding_01M4C5G6BQ2X8D4N6R0T3V5W7Y --file decide.json
+kanthord mission finding create node_01M4C5G6BNQQPFNM7M8W0GW1W4 --file finding.json \
+  --idempotency-key idempotency_key_01M4C5G6DGWEVZYSPETSQR65JH</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--attempt &lt;attempt&gt;</code></td>
+                  <td><code>list</code> only; none, every attempt</td>
+                  <td>Nonnegative attempt number that selects one attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>--round &lt;round&gt;</code></td>
+                  <td><code>list</code> only; none, every round</td>
+                  <td>Positive round number that selects one round.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>100</code></td>
+                  <td>Maximum findings on the page, 1 to 1000.</td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;cursor&gt;</code></td>
+                  <td>None; the first page</td>
+                  <td><code>next_cursor</code> value of the previous page.</td>
+                </tr>
+                <tr>
+                  <td><code>--file &lt;path&gt;</code></td>
+                  <td>Mutations only; required</td>
+                  <td>
+                    Regular UTF-8 file that holds the complete request body.
+                    Stdin (<code>-</code>) is not accepted.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>A generated <code>idempotency_key_&lt;ulid&gt;</code></td>
+                  <td>
+                    Sets <code>Idempotency-Key</code>; supply the same key to
+                    retry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The help of each mutation prints an example file. An example
+            <code>finding.json</code> for <code>finding create</code>:
+          </p>
+          <pre><code class="language-json">{
+  "expected_mission_version": 8,
+  "assessment_id": "assessment_01M4C5G6BPZCGBK0EFKVT5AXH2",
+  "kind": "blocker",
+  "task_id": null,
+  "name": "Reset link works twice",
+  "description": "A used password reset token signs the user in again.",
+  "fix": "Mark the token used at the first sign-in.",
+  "why": "A reset token is for one use only.",
+  "cause_owner": "agent"
+}</code></pre>
+          <p>
+            An example <code>update.json</code> for <code>finding update</code>:
+          </p>
+          <pre><code class="language-json">{
+  "expected_mission_version": 8,
+  "cause_owner": "plan"
+}</code></pre>
+          <p>
+            The CLI validates the identity, the token, the key and the file
+            before it sends a request. Each option is accepted once. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >. The HTTP client has a 31-second deadline for these 30-second
+            operations.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

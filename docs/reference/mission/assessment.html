@@ -96,18 +96,31 @@
             </li>
           </ol>
           <p>
+            Each execution assessment is one <strong>review round</strong> of
+            its attempt. The round is 1 plus the count of the earlier execution
+            assessments of the attempt, so the rework count of the attempt is
+            the round minus 1. A round is <strong>final</strong> when its rework
+            count reaches <code>mission.rework_limit</code>, or when the attempt
+            holds a request evidence. A final round causes no rework.
+          </p>
+          <p>
             A submit can cause a rework or close the attempt. When the new
             assessment is current, these cases apply:
           </p>
           <ul>
             <li>
-              The result is <code>criterion-not-met</code>, and the
-              <code>cause</code> has a category other than <code>plan</code>.
-              The attempt holds fewer reworks than
-              <code>mission.rework_limit</code> and no request evidence. This is
-              a rework. The submit ends the live claim, writes no outcome and
-              keeps the attempt open. The node moves to
-              <code>Available</code> with a job.
+              The round is not final, and the <code>cause</code> is absent or
+              has a category other than <code>plan</code>. The result is
+              <code>criterion-not-met</code>, or the node has
+              <code>intent: implement</code>, the result is
+              <code>success</code> and the submit holds an
+              <strong>action item</strong>. An action item is a new finding with
+              <code>action: yes</code>, or an open finding of the attempt with
+              the route <code>fix</code> that <code>fixed_finding_ids</code>
+              does not name. This is a rework. The submit ends the live claim,
+              writes no outcome and keeps the attempt open. The node moves to
+              <code>Available</code> with a job. A rework of a
+              <code>success</code> assessment carries no failure cause.
             </li>
             <li>
               The result is <code>criterion-not-met</code>, and the
@@ -118,20 +131,31 @@
             </li>
             <li>
               The result is not <code>success</code>, and no case above applies.
-              The node moves to <code>Blocked</code>.
+              The node moves to <code>Blocked</code>. A
+              <code>criterion-not-met</code> without a request evidence carries
+              the transition rule <code>rework_limit</code>.
             </li>
             <li>
-              The result is <code>success</code>, and the pinned revision has no
-              required external action. The node moves to
+              The result is <code>success</code>, no rework applies, and the
+              pinned revision has no required external action. The node moves to
               <code>Completed</code>.
             </li>
           </ul>
           <p>
-            The reworks of an attempt are its earlier execution assessments with
-            the result <code>criterion-not-met</code>. A <code>plan</code> cause
-            marks a defect of the plan. A human corrects the plan with a
+            A <code>plan</code> cause marks a defect of the plan. A human
+            corrects the plan with a
             <a href="node-control.html#unblock">node unblock</a> that holds a
             <code>change</code>.
+          </p>
+          <p>
+            The submit records each item of <code>findings</code> as a
+            <a href="finding.html">review finding</a> in the same transaction. A
+            current submit marks each finding of
+            <code>fixed_finding_ids</code> as fixed. A current submit that
+            causes no rework gives the route <code>report</code> to its findings
+            with <code>action: yes</code> and to each open finding of the
+            attempt with the route <code>fix</code>. These findings then wait
+            for a human decision.
           </p>
           <p>
             A closure ends the live claim, closes the attempt and writes an
@@ -242,6 +266,7 @@
       "node_id": "node_01M4C5G6BNQQPFNM7M8W0GW1W4",
       "execution_id": "execution_01M4C5G6BP0355Z52M6JCYZCSK",
       "attempt": 1,
+      "round": 1,
       "node_revision": 3,
       "evidence_ids": ["evidence_01M4C5G6BN71J38HW3MFCKMAT6"],
       "dependency_outcome_ids": [],
@@ -346,6 +371,14 @@
                   <td><code>attempt</code></td>
                   <td>nonnegative safe integer</td>
                   <td>Attempt of the assessment.</td>
+                </tr>
+                <tr>
+                  <td><code>round</code></td>
+                  <td>positive safe integer or <code>null</code></td>
+                  <td>
+                    Review round of an execution assessment, computed at read
+                    time; <code>null</code> for a human assessment.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>node_revision</code></td>
@@ -641,7 +674,8 @@
                     name <code>rationale</code>, <code>evidence_ids</code>,
                     <code>dependency_outcome_ids</code>,
                     <code>tested_input</code>, <code>gate_files</code>,
-                    <code>proposals</code>, <code>cause</code> or
+                    <code>proposals</code>, <code>cause</code>,
+                    <code>findings</code>, <code>fixed_finding_ids</code> or
                     <code>result</code> when a submit rule fails.
                   </td>
                 </tr>
@@ -1240,6 +1274,27 @@ curl -i http://127.0.0.1:31415/api/mission/assessment/assessment_01M4C5G6BPZCGBK
                       ><code>stop.cause</code></a
                     >. The Scheduler writes it on the root span end of the
                     execution. The assessment stores no cause.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>findings</code></td>
+                  <td>array of <code>FindingSubmit</code></td>
+                  <td>
+                    Optional, <code>[]</code> by default, at most 100 items.
+                    Each item is one blocker or one suggestion of the round. See
+                    <a href="finding.html#findingsubmit"
+                      ><code>FindingSubmit</code></a
+                    >. A <code>success</code> holds no blocker.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fixed_finding_ids</code></td>
+                  <td>array of unique <code>finding_&lt;ulid&gt;</code></td>
+                  <td>
+                    Optional, <code>[]</code> by default. Each identity names an
+                    open finding of the attempt with the route
+                    <code>fix</code> that the change fixes. A
+                    <code>success</code> names each open blocker of the attempt.
                   </td>
                 </tr>
               </tbody>

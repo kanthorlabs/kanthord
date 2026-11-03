@@ -129,6 +129,13 @@
                     attempt.
                   </td>
                 </tr>
+                <tr>
+                  <td><code>execution review-round get</code></td>
+                  <td>
+                    The review round of the next assessment of the claimed
+                    attempt, its review base and the open findings.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -162,11 +169,32 @@
             that this outcome names, with the same failure.
           </p>
           <p>
-            <code>execution rework-assessment get</code> returns the
-            <code>criterion-not-met</code> execution assessment with the
-            greatest <code>sequence</code> of the claimed attempt. When the
-            attempt holds none, it fails with
+            <code>execution rework-assessment get</code> returns the execution
+            assessment with the greatest <code>sequence</code> of the claimed
+            attempt among the <code>criterion-not-met</code> assessments. When
+            the attempt holds an open <a href="finding.html">finding</a> with
+            the route <code>fix</code>, the selection also takes the
+            <code>success</code> assessments, because a
+            <code>success</code> with an open finding causes a rework. When the
+            attempt holds no such assessment, it fails with
             <code>404 mission.record.not_found</code>.
+          </p>
+          <p>
+            <code>execution review-round get</code> returns the
+            <code>ReviewRound</code> of the next assessment of the claimed
+            attempt. <code>round</code> is 1 plus the count of the execution
+            assessments of the attempt. <code>final</code> is
+            <code>true</code> when <code>round</code> minus 1 reaches
+            <code>mission.rework_limit</code>, or when the attempt holds a
+            request evidence. For an <code>implement</code> node,
+            <code>review_base</code> is the <code>tested_input</code> of the
+            latest execution assessment of the attempt that is a base round, and
+            <code>findings</code> lists each open finding of the attempt with
+            the route <code>fix</code>. A base round has the result
+            <code>success</code>, holds a reviewer finding or holds a fix-node
+            proposal. For an <code>examine</code> node,
+            <code>review_base</code> is <code>null</code> and
+            <code>findings</code> is empty.
           </p>
           <p>
             These operations change nothing. Each list call reads one page. The
@@ -380,6 +408,81 @@
             <a href="assessment.html#assessment"><code>Assessment</code></a
             >.
           </p>
+          <h3 id="execution-review-round-get">
+            <code>execution review-round get</code>
+          </h3>
+          <p>
+            The answer is one <code>ReviewRound</code>. The example abbreviates
+            the finding; see
+            <a href="finding.html#finding"><code>Finding</code></a
+            >.
+          </p>
+          <pre><code class="language-json">{
+  "round": 2,
+  "final": false,
+  "review_base": {
+    "kind": "repository",
+    "binding_id": "binding_01M4C5G6BP5EWTVTTXFH1R25MC",
+    "commit": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+  },
+  "findings": [
+    {
+      "id": "finding_01M4C5G6BQ2X8D4N6R0T3V5W7Y",
+      "label": "B1",
+      "kind": "blocker",
+      "route": "fix",
+      "status": "open"
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>round</code></td>
+                  <td>positive safe integer</td>
+                  <td>Round of the next assessment of the claimed attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>final</code></td>
+                  <td>boolean</td>
+                  <td><code>true</code> when this round causes no rework.</td>
+                </tr>
+                <tr>
+                  <td><code>review_base</code></td>
+                  <td>
+                    <a href="assessment.html#assessment"
+                      ><code>TestedInput</code></a
+                    >
+                    or <code>null</code>
+                  </td>
+                  <td>
+                    Tested input of the latest base round; <code>null</code> in
+                    round 1, with no base round, and for an
+                    <code>examine</code> node.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>findings</code></td>
+                  <td>array of <code>Finding</code></td>
+                  <td>
+                    Open findings of the attempt with the route
+                    <code>fix</code>, in the order of
+                    <a href="finding.html#finding-list"
+                      ><code>finding list</code></a
+                    >.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <h3 id="execution-evidence-asset-content-get">
             <code>execution evidence asset content get</code>
           </h3>
@@ -487,9 +590,8 @@
                   </td>
                   <td>
                     The claimed attempt is attempt 1; the claimed attempt holds
-                    no <code>criterion-not-met</code> execution assessment; or
-                    the asset does not exist or lies outside the execution
-                    bound.
+                    no rework assessment; or the asset does not exist or lies
+                    outside the execution bound.
                   </td>
                 </tr>
                 <tr>
@@ -673,6 +775,15 @@
                 <tr>
                   <td>
                     <code
+                      >cli.mission.execution.review_round.get.invalid_execution_id</code
+                    >
+                  </td>
+                  <td><code>review-round get</code></td>
+                  <td>Same check.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
                       >cli.mission.execution.cleared_outcome.get.invalid_execution_id</code
                     >
                   </td>
@@ -697,8 +808,9 @@
                     <code>dependency.outcome.list</code>,
                     <code>dependency.evidence.list</code>,
                     <code>cleared_outcome.get</code>,
-                    <code>cleared_assessment.get</code> or
-                    <code>rework_assessment.get</code>.
+                    <code>cleared_assessment.get</code>,
+                    <code>rework_assessment.get</code> or
+                    <code>review_round.get</code>.
                   </td>
                 </tr>
                 <tr>
@@ -925,6 +1037,17 @@
                   <td><code>mission.execution.rework_assessment.get</code></td>
                   <td>None</td>
                 </tr>
+                <tr>
+                  <td><code>execution review-round get</code></td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/execution/:execution_id/review-round</code
+                    >
+                  </td>
+                  <td><code>mission.execution.review_round.get</code></td>
+                  <td>None</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1126,6 +1249,11 @@ curl -i http://127.0.0.1:31415/api/mission/execution/execution_01M4C5G6BP0355Z52
           </h3>
           <pre><code class="language-text">kanthord mission execution rework-assessment get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
           <pre><code class="language-sh">kanthord mission execution rework-assessment get execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
+          <h3 id="execution-review-round-get-1">
+            <code>execution review-round get</code>
+          </h3>
+          <pre><code class="language-text">kanthord mission execution review-round get &lt;execution-id&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-sh">kanthord mission execution review-round get execution_01M4C5G6BP0355Z52M6JCYZCSK</code></pre>
         </article>
       </main>
     </div>
