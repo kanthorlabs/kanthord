@@ -487,7 +487,7 @@ The route at the insert:
 ### The human finding
 
 - A human creates a finding on a node in any state. `assessment_id` names an execution assessment or a human assessment of the node in the attempt that delivered the code. The create refuses an assessment of an attempt that delivered no code with 400 and an issue at `assessment_id`. With a human assessment, the round reads null.
-- A node with no assessment takes no human finding. A closing submit writes an assessment, and a human override writes a human assessment, also on a node with no attempt.
+- A node with no delivered attempt takes no human finding. A closing submit writes an assessment, and a human override writes a human assessment, also on a node with no attempt.
 - A human finding never makes its assessment a base round. It changes no review base and no status.
 - No round reads a human finding, and no `fixed_finding_ids` lists it, because its route is `report`.
 - The human updates the cause owner, the kind, the task and the texts until a decision exists.
