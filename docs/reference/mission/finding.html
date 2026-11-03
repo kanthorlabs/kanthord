@@ -220,13 +220,16 @@
           <ul>
             <li>
               <code>assessment_id</code> names the assessment that missed the
-              defect: an assessment of the attempt that delivered the code.
-              Today the service accepts any assessment of the node. Read the
+              defect: an assessment of the node in an attempt that delivered the
+              code. An attempt delivered the code when it is the attempt of the
+              successful outcome of the node, or when it holds a landed commit.
+              Another assessment answers
+              <code>400 gateway.request.validation_failed</code>. Read the
               assessment identities with
               <a href="assessment.html#assessment-list"
                 ><code>assessment list</code></a
               >. The finding takes the attempt of that assessment. A node with
-              no assessment takes no human finding.
+              no delivered attempt takes no human finding.
             </li>
             <li>
               <code>expected_mission_version</code> is the
@@ -574,7 +577,8 @@
                     <code>update</code>, that assessment is the stored
                     assessment of the finding. On <code>create</code>, details
                     name <code>assessment_id</code> when it names no assessment
-                    of the node. A blank or oversized text names its field. An
+                    of the node in an attempt that delivered the code. A blank
+                    or oversized text names its field. An
                     <code>update</code> with no field to change fails here.
                   </td>
                 </tr>
