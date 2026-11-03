@@ -91,7 +91,7 @@ The Worker Service writes these facts for [the affected test run](worker-service
 - The texts of the span stay `command` and `output`.
 - `worker.release_gate` ends with `kanthord.release_gate.affected`, the verdict of the node, `absent` included.
 - `worker.release_gate` also ends with `kanthord.release_gate.result`: `passed`, `routed` or `budget_end`. Every `worker.verification` span holds `kanthord.verification.context`: `task`, `node`, `release` or `evaluation`.
-- `worker.evaluation` ends with `kanthord.evaluation.affected`. `kanthord.evaluation.stage` takes the [stage values](worker-service.impl.md#the-cause-of-a-stop) of the Worker Service.
+- `worker.evaluation` ends with `kanthord.evaluation.affected`, `kanthord.evaluation.round`, `kanthord.evaluation.final_round`, `kanthord.evaluation.action_labels` and `kanthord.evaluation.fixed_count`. `kanthord.evaluation.stage` takes the [stage values](worker-service.impl.md#the-cause-of-a-stop) of the Worker Service.
 - A stop of the class `affected_invalid` or `affected_timeout` writes the stop attributes of every other stop.
 
 ## Primary store

@@ -309,7 +309,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - The transition span holds `kanthord.transition.rule`, with one of five values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;
   - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
-  - `rework_limit` when a `criterion-not-met` assessment at `mission.rework_limit` moves the node to `Blocked`;
+  - `rework_limit` when a `criterion-not-met` assessment of the final round (round limit + 1) moves the node to `Blocked`;
   - `plan_defect` when a current `criterion-not-met` assessment with a cause of the category `plan` moves the node to `Blocked`;
   - `none` otherwise.
 - With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none` and `plan_defect` hold neither.
