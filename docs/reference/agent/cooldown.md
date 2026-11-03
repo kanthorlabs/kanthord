@@ -17,7 +17,7 @@ The key of a cooldown is the credential name and its holder. The holder is `serv
 
 When the claimant copy of the credential of every entry of the chain of an agent has a live cooldown, a work pull answers `no-work`. That answer creates no block, no pause and no failed execution. The agent views report `cooling` with the code `agent.configuration.chain_cooling`; see [the agent view](agent.md#expected-response) and [the worker binding agent view](../project/agent.md#expected-response). That code is a view code and has no HTTP status. At the `worker` placement, each instance holds its own copy. The worker binding agent view shows the cooldown with the latest `available_at` over the instances of the binding.
 
-The **Cooldown** section of the LLM credential page reads `cooldown list`. It shows the strike and the end time of a live cooldown, and the strikes of an expired cooldown. The **Details** tab of an `Available` node and the **Overview** status line read `cooling` of the [worker binding agent view](../project/agent.md#expected-response).
+The **Cooldown** section of the LLM credential page reads `cooldown list`. It shows the strike and the end time of a live cooldown, and the strikes of an expired cooldown. The **Details** tab of an `Available` node and the muted cooling line under the **Overview** summary read `cooling` of the [worker binding agent view](../project/agent.md#expected-response).
 
 | Command | Effect                                                                                    |
 | ------- | ----------------------------------------------------------------------------------------- |
