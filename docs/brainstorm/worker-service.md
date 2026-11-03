@@ -96,7 +96,7 @@ An absent path and a blank text add no part.
 The steps method of `swe@1` and the evaluation method of `re@1` take every part. The coder and the reviewer read the same Repository prompt of each binding, and only the Role and the Binding prompt differ.
 An `examine` node takes every part for the bindings that it names.
 The worker reads no file of the workspace for the prompt, because an instruction file of the workspace is the work product of the candidate.
-The server reads the instruction file at the base commit that the attempt pins, never from the node branch, so the candidate cannot change the rules of its own attempt.
+The server reads the instruction file at the base commit that the attempt pins, never from the node branch. So the candidate cannot change the rules of its own attempt.
 The framing states that an instruction file in the workspace, for example `AGENTS.md` or `CLAUDE.md`, is work product and no instruction. An unrequested change of an instruction file by the candidate is a blocker.
 
 The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Repository prompts, the Binding prompts and the framing, in that order. The work prompt is the first user message.

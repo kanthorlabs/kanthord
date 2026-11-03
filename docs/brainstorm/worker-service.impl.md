@@ -1080,7 +1080,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credential_id` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resource_budget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, ssh_public_key, strategy: { base_branch } }`. The entry holds no prompt, because the server composes every Binding prompt.
+- Each entry of `repositories` holds `{ binding_id, name, address, ssh_host_key, ssh_public_key, strategy: { base_branch } }`. The entry holds no prompt, because the server composes every prompt layer.
 - `ssh_host_key` is `{ known_hosts }`: the line of the [pin](repository.impl.md#host-keys) of the address host. The line is `<host> <key>` for port 22 and `[<host>]:<port> <key>` for another port. The answer holds no key.
 - The read refuses a binding whose address host is outside the SSH host set with `project.bindings.repository.address_invalid`, and an unpinned host with `repository.host_key.unpinned`. The worker stops the execution with that code.
 - `ssh_public_key` is the OpenSSH public key of the SSH credential of the binding. The answer holds no private key.
@@ -1090,8 +1090,8 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The worker drops each `SshAccess` at the end of the execution and writes no key to a file.
 - Each method of `RepositoryTransport` takes `ssh: SshAccess`. It holds no SSH proof step.
 - `repositories` holds one row for each repository binding that the pinned node revision names, in binding order, for an `implement` node and for an `examine` node.
-- `prompt` holds `{ final, sources }`. `final` is the system prompt that the server composes: the KanthorD prompt, the Repository prompt and the Binding prompt of each repository binding of the pinned revisions, and the framing, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them. `sources` is the list of the [prompt references](agent.vocabulary.md#prompt-reference) of the parts in reading order, the framing included.
-- The read reads the instruction file of every binding in parallel with `instructionFileOf` at the pinned commit, under one deadline of 20000 ms. An invalid file answers 409 `agent.prompt.source_invalid`. A failed read answers 422 `project.bindings.repository.ssh_unreachable` or `project.bindings.repository.base_branch_absent`. The worker stops the execution with that code.
+- `prompt` holds `{ final, sources }`. `final` is the system prompt that the server composes. It holds the KanthorD prompt, the Repository prompt and the Binding prompt of each repository binding of the pinned revisions, and the framing. [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers the same text. `sources` is the list of the [prompt references](agent.vocabulary.md#prompt-reference) of the parts in reading order, the framing included.
+- The read reads the instruction file of every binding in parallel with `instructionFileOf` at the pinned commit, under one deadline of 20000 ms. An invalid file answers 409 `agent.prompt.source_invalid`. A failed read answers 422 `project.bindings.repository.ssh_unreachable`. The worker stops the execution with that code.
 - The read commits its Operational transaction, which only reads. After the commit, it writes the `agent.prompt` span of each agent. The span write is part of the setup, not best-effort telemetry.
 - A failed span write, or a writer that stores no record, fails the read with 503 `worker.execution.prompt_record_failed`. The worker stops the execution with that code. Only after the write does the read answer `prompt`.
 - The span id is deterministic from the execution and the agent, so the first span of an execution wins. A retried read first reads the stored span. It resolves the stored references and answers that text.
@@ -1931,7 +1931,7 @@ The tool of the action performer takes the execution identity only.
   - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`;
   - the redacted git stderr of a failed gate G commit, with `operation_failed` and the code `worker.git.commit_failed`;
   - the JSON facts of the progress rule, with `no_progress`. The JSON holds no text, and the worker does not cut it.
-- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `agent.prompt.source_invalid` gives `details.reason` as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.
@@ -1987,12 +1987,12 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | failed `worker.git` step                  | `merge_base`                                                             | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | `worker.verification.infrastructure_failed`                              | `infrastructure.verification_killed`                               |
-| `operation_failed`                        | `agent.prompt.source_invalid` with a file reason                         | `prompt.source_invalid`                                            |
-| `operation_failed`                        | `agent.prompt.source_invalid` with `reason: changed`                     | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `agent.prompt.source_invalid`, the stop detail `changed`                 | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `agent.prompt.source_invalid`, another stop detail                       | `prompt.source_invalid`                                            |
 | `operation_failed`                        | `worker.execution.prompt_not_pinned`                                     | `infrastructure.prompt_record`                                     |
 | `operation_failed`                        | `worker.execution.prompt_record_failed`                                  | `infrastructure.prompt_record`                                     |
 | `operation_failed`                        | `project.bindings.repository.ssh_unreachable`                            | `infrastructure.network`                                           |
-| `operation_failed`                        | `project.bindings.repository.base_branch_absent`                         | `infrastructure.network`                                           |
+| `operation_failed`                        | `project.bindings.repository.base_branch_absent`                         | `human.configuration`                                              |
 | `operation_failed`                        | prefix `project.binding.`                                                | `human.configuration`                                              |
 | `operation_failed`                        | `worker.git.commit_failed`                                               | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`                      | `unattributed`, suspects `model`, `prompt`                         |

@@ -38,7 +38,7 @@ A mechanism here never overrides a rule there.
 - `part` is one of `standard`, `role`, `workbench`, `instruction_file`, `repository`, `binding` and `framing`. `origin` is one of `binary`, `file`, `database` and `repository`. `state` is one of `resolved`, `changed`, `invalid` and `unreachable`. The three are the code enums `PromptPart`, `PromptOrigin` and `PromptPartState`.
 - `layer` is 1 for `standard`, `role` and `workbench`, 2 for `instruction_file` and `repository`, 3 for `binding`, and null for `framing`.
 - `standard` is `base.md` and `role` is `<agent_name>.md`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. For each repository binding in binding order, `instruction_file` is the file of `prompts.instruction_file`, `repository` is the nonblank text of `prompts.repository`, and `binding` is the nonblank text of `prompts.agents[<agent_name>]`.
-- `name` is the file name of a layer 1 part, the template name of `framing`, for example `framing-worker`, and the binding name of a layer 2 or layer 3 part.
+- `name` is the file name of a layer 1 part. It is the template name of `framing`, for example `framing-worker`. It is the binding name of a layer 2 or layer 3 part.
 - `origin` is `binary` for a shipped text, `file` for an override file, `database` for `repository` and `binding`, and `repository` for `instruction_file`.
 - `path` is the override location that the server looked up for `binary` and `file`. It is the repository path for origin `repository`, and `null` for origin `database` and when `agent.prompt.agent_directory` is empty.
 - `binding_id` is the binding revision of a layer 2 or layer 3 part, and `null` otherwise. `commit` is the 40-hex commit of origin `repository`, and `null` otherwise.
@@ -286,7 +286,7 @@ The Agent component owns these keys of the section `agent`.
 - The composer reads the instruction file through the Project read `instructionFileOf`, with the Repository component reader. The reader follows a symbolic link inside the tree at the commit, so `AGENTS.md -> docs/agents.md` reads `docs/agents.md`.
 - The reader state `present` gives a part. `absent`, `not_regular_file` and `outside_root` give no part. `too_large`, `not_utf8` and `unreadable` answer 409 `agent.prompt.source_invalid`.
 - A present text passes the text validation of a prompt file. A text with a control character answers 409 `agent.prompt.source_invalid` with `reason: control_character`. A carriage return is a control character, so a file with CRLF line ends is invalid. The reader converts no newline.
-- `agent.prompt.source_invalid` holds `details: { part, name, binding, path, commit, reason }`. `binding` and `commit` are null for a layer 1 part. The execution setup and the `env@1` run answer it.
+- `agent.prompt.source_invalid` holds `details: { part, name, binding_id, path, commit, reason }`. `binding_id` and `commit` are null for a layer 1 part. The execution setup and the `env@1` run answer it.
 - A retried execution setup that finds a stored part that no longer resolves answers 409 `agent.prompt.source_invalid` with `reason: changed`.
 - The configuration holds no `agent.prompt.system_file` or `agent.prompt.host_file`. A config step deletes both.
 - Tests cover an empty and a nonempty `agent_directory`, a relative path, an absent file, each rejection and each reader that refuses. Tests cover each reader state of an instruction file, a link inside the tree and a file with CRLF line ends.

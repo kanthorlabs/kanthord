@@ -69,12 +69,12 @@ Every repository binding holds one SSH credential reference. That record holds t
 A platform action requires an API key of the platform.
 A repository binding holds at most one credential reference. That reference serves every platform action of the binding, including the check of an external object for the Mission Service.
 A binding without a credential reference permits no platform action.
-At the write of a repository binding, the Project Service performs one network git read through the [Repository component](repository.md#repository-connector).
+At the write of a repository binding, the Project Service performs the network git reads of the connection and of the instruction file through the [Repository component](repository.md#repository-connector).
 A failed read refuses the write.
 A repository binding holds the field `prompts` with three optional keys of the [prompt composer](agent.md#prompt-composer).
 `prompts.instruction_file` is the repository path of the instruction file. `prompts.repository` is the stored Repository prompt. `prompts.agents` holds one Binding prompt for each agent of the catalog.
 The Project Service validates each text against the bound of a prompt file, and it validates the path of the instruction file.
-The Project Service reads the instruction file of the repository at the base commit that the attempt pins, and at the base head for a binding check and a binding write.
+The Project Service reads the instruction file of the repository at the base commit that the attempt pins. A binding check and a binding write read it at the base head.
 A binding write refuses an instruction file that is invalid at the base head. An absent file passes.
 A change of a `prompts` key creates a binding revision. A node keeps the texts of its pinned binding revision until `mission node rebind`.
 The new binding ID of that revision counts as a changed binding for the Onboarding component, and it clears the mark that the stored environment came from `env@1`.

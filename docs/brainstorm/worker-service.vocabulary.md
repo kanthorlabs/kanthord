@@ -133,7 +133,8 @@ The prompt composer is the Worker Service component that produces the prompt of 
 The term names no closed set.
 The composer of Execution 1 on "Add password reset" resolves the system prompt of `swe@1` on the server and pins the work prompt.
 It takes the `standard` part from the shipped `base.md` and the `role` part from the shipped `swe@1.md`.
-It takes the `instruction_file` part from `AGENTS.md` at the base commit that the attempt pins, and the `binding` part from the Binding prompt of `swe@1` in the repository binding of `kanthorlabs/kanthord`.
+It takes the `instruction_file` part from `AGENTS.md` at the base commit that the attempt pins.
+It takes the `binding` part from the Binding prompt of `swe@1` in the repository binding of `kanthorlabs/kanthord`.
 It pins the work prompt of task "Add reset token expiry".
 The reviewer execution of the same attempt reads the same `AGENTS.md` at the same commit, and it composes the Binding prompt of `re@1` from that repository binding. It reads no file of the workspace.
 
