@@ -102,7 +102,7 @@ The framing states that an instruction file in the workspace, for example `AGENT
 The framing states the precedence to the agent. The system prompt holds the Standard, the Role, the Repository prompts, the Binding prompts and the framing, in that order. The work prompt is the first user message.
 The precedence from the highest is the framing, the Binding prompt, the stored Repository prompt, the instruction file, the Role and the Standard. A later message governs an earlier message.
 The framing states the obligations of the worker.
-No Binding prompt and no work prompt revokes one.
+No prompt layer and no work prompt revokes one.
 An execution performs no conduct that its framing forbids, whatever another text states.
 The framing also states that an instruction for one repository governs only the work on the files of that repository, never the reply format that a message demands.
 The framing states the protocol conditions that hold for every native agent: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch file only under `.kanthord-scratch/` at the workspace root.

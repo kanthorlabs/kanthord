@@ -1401,8 +1401,8 @@ The attempts block:
 - An execution row shows its kind from `kanthord.execution.kind` (`steps` or `evaluation`), its state, its cause line and its duration.
 - An execution whose cause equals the cause of the previous failed execution of the attempt shows `Repeat`. The current trace shows `This trace`.
 - A repeated `plan` or `prompt` cause shows "A retry does not fix this. Change the plan or the prompt."
-- A setup stop with `agent.prompt.source_invalid` and a file reason (`too_large`, `not_utf8`, `unreadable` or `control_character`) has the cause category `prompt`. A stop with `reason: changed` has the category `infrastructure`, because the next execution composes again from the current text.
-- A stop with `project.bindings.repository.ssh_unreachable`, `project.bindings.repository.base_branch_absent` or `worker.execution.prompt_record_failed` has the category `infrastructure`.
+- A setup stop with `agent.prompt.source_invalid` and a file reason (`too_large`, `not_utf8`, `unreadable` or `control_character`) has the cause `prompt.source_invalid`. A stop with `reason: changed` has the cause `infrastructure.prompt_record`, because the next execution composes again from the current text.
+- A stop with `project.bindings.repository.ssh_unreachable` or `project.bindings.repository.base_branch_absent` has the cause `infrastructure.network`. A stop with `worker.execution.prompt_not_pinned` or `worker.execution.prompt_record_failed` has the cause `infrastructure.prompt_record`.
 - The current execution shows `Prompt changed` when the digest of a `part` and `name` pair of `kanthord.prompt.sources`, or `kanthord.prompt.templates_digest`, differs from the previous execution.
 - The comparison reads the spans of the previous execution once. No other execution carries the mark.
 - An execution row opens its trace on the `Summary` tab. A failed read shows its error and `Retry`.

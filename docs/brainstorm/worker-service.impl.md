@@ -1138,7 +1138,7 @@ A process rule that leaves no evidence in the work product goes to `swe@1.md` on
 The protocol conditions that hold for every native agent go to `framing-worker.md`. The `added_files` rule of the judgement goes to `template/evaluation.md`.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 
-- Every file and every Binding prompt holds at most 32768 UTF-8 bytes. A Binding prompt above the bound refuses its write.
+- Every file, every instruction file, every stored Repository prompt and every Binding prompt holds at most 32768 UTF-8 bytes. A stored Repository prompt or a Binding prompt above the bound refuses its write.
 - A file above the bound is invalid and refuses the composition.
 - An invalid file adds no text, and no reader falls back to the shipped text.
 
@@ -1987,6 +1987,12 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | failed `worker.git` step                  | `merge_base`                                                             | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | `worker.verification.infrastructure_failed`                              | `infrastructure.verification_killed`                               |
+| `operation_failed`                        | `agent.prompt.source_invalid` with a file reason                         | `prompt.source_invalid`                                            |
+| `operation_failed`                        | `agent.prompt.source_invalid` with `reason: changed`                     | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `worker.execution.prompt_not_pinned`                                     | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `worker.execution.prompt_record_failed`                                  | `infrastructure.prompt_record`                                     |
+| `operation_failed`                        | `project.bindings.repository.ssh_unreachable`                            | `infrastructure.network`                                           |
+| `operation_failed`                        | `project.bindings.repository.base_branch_absent`                         | `infrastructure.network`                                           |
 | `operation_failed`                        | prefix `project.binding.`                                                | `human.configuration`                                              |
 | `operation_failed`                        | `worker.git.commit_failed`                                               | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | a `worker.turn.*` code, `worker.merge.markers_left`                      | `unattributed`, suspects `model`, `prompt`                         |
@@ -2056,7 +2062,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
 - The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
-- When the session opens, the worker appends one `kanthord.pinned_context` entry for the final system prompt.
+- When the session opens, the worker appends one `kanthord.pinned_context` entry as the marker of the system prompt. The entry holds `{ part: "system_prompt" }` and no text.
 - After each session event, the worker sends each entry beyond the count that it already sent.
 - The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.
