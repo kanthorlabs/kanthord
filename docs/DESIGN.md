@@ -20,7 +20,7 @@
 
 ## Typography
 - **Primary Font**: DM Sans (preferred) — friendly geometric sans-serif. Alternatives: Space Grotesk, Nunito
-- **Headings**: Weight 700–800, `clamp(2.5rem, 6vw, 5rem)` for h1, `line-height: 1.1`, `letter-spacing: -0.01em`. **Default to lowercase** — "services i provide" not "SERVICES I PROVIDE"
+- **Headings**: Weight 700–800, `clamp(2.5rem, 6vw, 5rem)` for h1, `line-height: 1.1`, `letter-spacing: -0.01em`. **Lowercase on the home page only** — "documentation types" not "DOCUMENTATION TYPES". Documentation pages keep the written case of each heading, because a heading can hold an identifier such as `GET /api/liveness` or `coder@1`. Never apply `text-transform` to a heading
 - **Body**: Regular 400, `0.95rem`, `line-height: 1.65`, color `#555555`
 - **Labels / Nav**: Medium 500–600, `0.9rem`, normal case (not uppercase)
 - **Annotations**: Handwritten-style (Caveat or similar) used sparingly for callouts
@@ -80,7 +80,7 @@ Key things an AI coding tool must know to nail this style:
 - **The shadow rule**: `box-shadow: 4px 4px 0px 0px #111111` — zero blur, always. Single most important rule
 - **Press-down on every interactive element**: `translate(2px,2px)` + shadow shrink on hover; `translate(4px,4px)` + shadow none on click
 - **Background is warm cream `#FAFADF`** — not pure white, not bright yellow
-- **Headings are lowercase by default** — casual and handcrafted, not aggressive
+- **Headings are lowercase on the home page only** — documentation pages keep the written case, so that identifiers in headings stay exact
 - **All accent colors coexist** — coral, purple, mint, yellow, pink can all appear in one design; define all 5 as CSS tokens even if not all prominent
 - **Scatter decorative elements** — 3–6 absolute-positioned stars/blobs per section; this is what makes it feel alive and handcrafted, not just "cards with borders"
 - **Shadows are selective** — not every card gets one; flat cards (border only) are intentional and mix with shadowed cards
