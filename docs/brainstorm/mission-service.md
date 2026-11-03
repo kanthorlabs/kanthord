@@ -664,7 +664,7 @@ No decision changes a node.
 
 A human creates a human finding for a defect that the human finds after delivery.
 A human finding names the node, the assessment that missed the defect, the kind, the four texts and the owner of the cause.
-That assessment is an assessment of the node in the attempt that delivered the code.
+That assessment is an assessment of the node in an attempt that delivered the code.
 An attempt delivered the code when the basis of the successful outcome of the node names it, or when it holds a landed commit.
 A node can hold more than one such attempt.
 A human finding has the label `H<n>`, the action `yes` and the route `report`, and it has no round.
