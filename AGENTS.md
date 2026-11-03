@@ -119,6 +119,7 @@ The pages record only the decision. Read the owning page section before you prop
 - Never declare a SQL `CHECK` constraint, for example `CHECK (kind IN ('repository','worker','storage'))`.
 - Define every closed value set as an enum in code. The owning service validates the value before the write.
 - Never declare an index that is not a unique index.
+- Add a new table or a new column only when the value cannot be computed from related data, or when the computation costs more than the stored value. Justify each new column in the plan, and review the column list in its own round.
 - The schema lives in `docs/reference/erd/` and records only ruled design. Keep HANDOFF items out of it.
 - `project_id` is the second key column only in project-scoped tables.
 - Write every table name, every column name and every property name inside a JSON column in snake_case. The name of an external library or protocol is no exception. Only a ruling of Ulrich that names the external requirement permits another case. The `environment` key of a repository binding configuration is such a ruled case. See [Naming outside the code](#naming-outside-the-code).
