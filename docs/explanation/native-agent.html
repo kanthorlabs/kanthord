@@ -111,9 +111,10 @@
               a fallback chain.
             </li>
             <li>
-              A human controls two prompts: the Agent prompt, which is a set of
-              files, and the Binding prompt of each repository binding. KanthorD
-              composes both into the system prompt, and the task comes last.
+              A human controls three prompt layers: the KanthorD prompt, the
+              Repository prompt of each repository and the Binding prompt of
+              each agent on a repository. KanthorD composes them into the system
+              prompt, and the task comes last.
             </li>
             <li>
               The tool set, not the prompt, limits what an agent can do. A tool
@@ -172,7 +173,7 @@
             enforces that rule; the prompt only states it.
           </p>
           <p>
-            Each declaration holds a shipped agent prompt and its tool set. A
+            Each declaration holds a shipped Role text and its tool set. A
             declaration holds no provider, no model and no reasoning effort. A
             human selects those values.
           </p>
@@ -454,27 +455,44 @@ sequenceDiagram
           <h3 id="what-the-model-reads">What the model reads</h3>
           <p>
             Start with the result. A worker execution of <code>swe@1</code> on a
-            node with one repository binding sends the model this sequence of
-            messages:
+            node with one repository binding <code>app</code> sends the model
+            this sequence of messages. The binding names the instruction file
+            <code>AGENTS.md</code>, a Repository prompt and a Binding prompt of
+            <code>swe@1</code>:
           </p>
           <pre><code class="language-text">[system]
 …the text of base.md…
 
 …the text of swe@1.md…
 
-Instructions of repository app:
+Repository prompt of repository app, file AGENTS.md:
 
-…the binding prompt of swe@1 for the binding app…
+…the text of AGENTS.md at the base commit that the attempt pins…
+
+Repository prompt of repository app, set in KanthorD:
+
+…the text of prompts.repository of the binding…
+
+Binding prompt of repository app:
+
+…the text of prompts.agents["swe@1"] of the binding…
 
 …the framing…
 
 [user]
 …the task…</code></pre>
           <p>
-            The system prompt holds the Standard, the role of the agent, the
-            binding prompts and a fixed paragraph, the <strong>framing</strong>.
+            The system prompt holds three <strong>prompt layers</strong>, read
+            from the most general text to the most specific text. A fixed
+            paragraph, the <strong>framing</strong>, closes the system prompt.
             The framing states the precedence and the protocol of the worker.
             The task comes last, as a message.
+          </p>
+          <p>
+            The server writes a heading line before each layer 2 and layer 3
+            text, so the model sees which repository and which source each rule
+            comes from. A layer 1 text and the framing have no heading. A blank
+            line separates two parts.
           </p>
           <p>The same order, as a table:</p>
           <div class="table-wrap">
@@ -483,6 +501,7 @@ Instructions of repository app:
                 <tr>
                   <th>#</th>
                   <th>Part</th>
+                  <th>Layer</th>
                   <th>Worker execution</th>
                   <th>Workbench session</th>
                 </tr>
@@ -490,52 +509,85 @@ Instructions of repository app:
               <tbody>
                 <tr>
                   <td>1</td>
-                  <td>System prompt</td>
+                  <td><code>standard</code></td>
+                  <td>1</td>
                   <td><code>base.md</code></td>
                   <td><code>base.md</code></td>
                 </tr>
                 <tr>
                   <td>2</td>
-                  <td>System prompt</td>
+                  <td><code>role</code></td>
+                  <td>1</td>
                   <td><code>&lt;agent&gt;.md</code></td>
                   <td><code>&lt;agent&gt;.md</code></td>
                 </tr>
                 <tr>
                   <td>3</td>
-                  <td>System prompt</td>
+                  <td><code>workbench</code></td>
+                  <td>1</td>
                   <td>None</td>
                   <td><code>workbench.md</code></td>
                 </tr>
                 <tr>
                   <td>4</td>
-                  <td>System prompt</td>
+                  <td><code>instruction_file</code></td>
+                  <td>2</td>
                   <td>
-                    One part for each repository binding with a nonblank binding
-                    prompt
+                    The file that <code>prompts.instruction_file</code> of the
+                    binding names, when the file exists
                   </td>
                   <td>None</td>
                 </tr>
                 <tr>
                   <td>5</td>
-                  <td>System prompt</td>
-                  <td><code>framing-worker.md</code></td>
-                  <td><code>framing-workbench.md</code></td>
+                  <td><code>repository</code></td>
+                  <td>2</td>
+                  <td>
+                    The nonblank text of <code>prompts.repository</code> of the
+                    binding
+                  </td>
+                  <td>None</td>
                 </tr>
                 <tr>
                   <td>6</td>
-                  <td>Pinned message</td>
-                  <td>Work prompt</td>
+                  <td><code>binding</code></td>
+                  <td>3</td>
+                  <td>
+                    The nonblank text of
+                    <code>prompts.agents[&lt;agent&gt;]</code> of the binding
+                  </td>
                   <td>None</td>
                 </tr>
                 <tr>
                   <td>7</td>
+                  <td><code>framing</code></td>
+                  <td>None</td>
+                  <td><code>framing-worker.md</code></td>
+                  <td><code>framing-workbench.md</code></td>
+                </tr>
+                <tr>
+                  <td>8</td>
+                  <td>Pinned message</td>
+                  <td>None</td>
+                  <td>Work prompt</td>
+                  <td>None</td>
+                </tr>
+                <tr>
+                  <td>9</td>
                   <td>Conversation</td>
+                  <td>None</td>
                   <td>Later instructions and replies</td>
                   <td>Human messages and replies</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <p>
+            Rows 1 to 7 form the system prompt. Rows 4, 5 and 6 repeat for each
+            repository binding of the node, in binding order. So the rules of
+            one repository stay together in one block. A row with no text adds
+            no part.
+          </p>
           <p>
             The <strong>work prompt</strong> is the task message of a Worker
             execution: the name, the requirement, the criterion and the
@@ -546,69 +598,76 @@ Instructions of repository app:
               >affected test command</a
             >
             of each repository with a valid declaration. The model receives it
-            once, at row 6. Row 7 holds what comes after it: the revision
+            once, at row 8. Row 9 holds what comes after it: the revision
             instructions, the judgement instructions of
             <code>reviewer@1</code> and the replies of the agent.
           </p>
           <p>
             The agent <code>env@1</code> repairs a failed environment of a
             repository binding on the server. Its system prompt holds
-            <code>base.md</code>, <code>env@1.md</code>, the binding prompt of
-            its own binding and the worker framing. Its first message holds the
+            <code>base.md</code>, <code>env@1.md</code>, layers 2 and 3 of its
+            own binding and the worker framing. It reads the instruction file at
+            the commit of its environment run. Its first message holds the
             failure. It has no Workbench session.
           </p>
-          <h3 id="the-two-prompts-that-a-human-controls">
-            The two prompts that a human controls
-          </h3>
+          <h3 id="the-three-prompt-layers">The three prompt layers</h3>
           <p>
-            A human controls the prompt of a native agent through two prompts.
-            The framing and the templates of the framing belong to the KanthorD
-            protocol, not to a prompt of a human.
+            A human controls the prompt of a native agent through three layers.
+            The framing and the prompt templates belong to the KanthorD
+            protocol. They are no layer.
           </p>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Prompt</th>
-                  <th>Purpose</th>
+                  <th>Layer</th>
+                  <th>Name</th>
+                  <th>Who reads it</th>
+                  <th>Sources, in reading order</th>
                   <th>Owner</th>
-                  <th>Source</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>Agent prompt</td>
-                  <td>
-                    The Standard, the role of the agent and the Workbench
-                    behavior
-                  </td>
-                  <td>The server host</td>
+                  <td>1</td>
+                  <td>KanthorD prompt</td>
+                  <td>Every agent</td>
                   <td>
                     The files <code>base.md</code>,
                     <code>&lt;agent_name&gt;.md</code> and
                     <code>workbench.md</code>
                   </td>
+                  <td>The server host</td>
                 </tr>
                 <tr>
-                  <td>Binding prompt</td>
+                  <td>2</td>
+                  <td>Repository prompt</td>
+                  <td>Every native agent that works on the repository</td>
                   <td>
-                    The language and the conventions of one repository for one
-                    agent
+                    The instruction file that
+                    <code>prompts.instruction_file</code> names, then the stored
+                    text <code>prompts.repository</code>
                   </td>
                   <td>The repository binding of the project</td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>Binding prompt</td>
+                  <td>One agent on the repository</td>
                   <td>
-                    The field <code>prompts</code> of the repository binding,
-                    with one text for each of <code>swe@1</code>,
-                    <code>re@1</code> and <code>env@1</code>
+                    <code>prompts.agents[&lt;agent_name&gt;]</code>, one text
+                    for each of <code>swe@1</code>, <code>re@1</code> and
+                    <code>env@1</code>
                   </td>
+                  <td>The repository binding of the project</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p>
-            <strong>Agent prompt.</strong> Each file has a shipped text that is
-            embedded in the binary. An upgrade replaces it together with the
-            code that depends on it.
+            <strong>KanthorD prompt (layer 1).</strong> Each file has a shipped
+            text that is embedded in the binary. An upgrade replaces it together
+            with the code that depends on it.
           </p>
           <ul>
             <li>
@@ -644,42 +703,191 @@ Instructions of repository app:
             the composed text.
           </p>
           <p>
-            <strong>Binding prompt.</strong> A human sets
-            <code>prompts</code> in the configuration of a repository binding,
-            for example
-            <code
-              >{ &quot;swe@1&quot;: &quot;Write comments in English.&quot;
-              }</code
-            >. Each key is the name of an agent of the catalog, and each text is
-            optional. A text renders as
-            <code>Instructions of repository &lt;name&gt;:</code> and the text.
-            A missing key, an empty text and a blank text add nothing.
+            <strong>Repository prompt (layer 2).</strong> The Repository prompt
+            has two sources, and the server reads both, in this order:
+          </p>
+          <ol>
+            <li>
+              The <strong>instruction file</strong>: one file of the repository
+              that <code>prompts.instruction_file</code> names, for example
+              <code>AGENTS.md</code>, <code>CLAUDE.md</code> or
+              <code>docs/agent-rules.md</code>. The key is absent by default, so
+              KanthorD reads no repository file until a human names one.
+            </li>
+            <li>
+              The stored text <code>prompts.repository</code> of the binding. It
+              comes later, so it governs the instruction file.
+            </li>
+          </ol>
+          <p>
+            The server reads the instruction file from the base branch, at the
+            commit that the attempt pins. It never reads the file from the node
+            branch, because the node branch holds the work of the candidate.
+            <a href="#the-attempt-prompt-pin">The attempt prompt pin</a>
+            explains the commit.
           </p>
           <ul>
             <li>
-              <code>swe@1</code> and <code>re@1</code> read the binding prompts
-              of every repository binding of the node, at the binding revision
-              that the node pins.
+              An absent file adds no part. A path that names a directory, or a
+              symbolic link that points outside the tree, also counts as an
+              absent file.
             </li>
             <li>
-              <code>env@1</code> reads the binding prompt of the binding of its
-              environment run.
+              The server follows a symbolic link inside the tree. So
+              <code>AGENTS.md -&gt; docs/agents.md</code> reads
+              <code>docs/agents.md</code>.
+            </li>
+            <li>
+              A file that is larger than 32768 bytes, is not UTF-8, cannot be
+              read or holds a control character other than a tab and a newline
+              is invalid. A carriage return is a control character, so a file
+              with CRLF line ends is invalid. An invalid file stops the
+              execution with <code>409 agent.prompt.source_invalid</code>. A
+              human fixes the file on the base branch.
+            </li>
+            <li>
+              KanthorD reads no nested per-directory file, no
+              <code>*.local.md</code> file and no file of a home directory, and
+              it expands no <code>@</code> import. The reason: KanthorD composes
+              the system prompt once per execution, before the agent opens a
+              directory, and no commit holds a personal file. So no reference
+              can pin such a file.
             </li>
           </ul>
           <p>
-            The binding prompt of one agent is an independent text.
-            <code>re@1</code> does not read the prompt of <code>swe@1</code>. A
-            rule that relaxes the default standard must go into the prompts of
-            both <code>swe@1</code> and <code>re@1</code>, or the reviewer
-            judges the work against the default standard that the rule relaxes.
+            <strong>Binding prompt (layer 3).</strong> A human sets
+            <code>prompts.agents</code> in the configuration of a repository
+            binding, for example
+            <code
+              >{ &quot;re@1&quot;: &quot;A missing changelog entry gives a
+              suggestion, not a blocker.&quot; }</code
+            >. Each key is the name of an agent of the catalog, and each text is
+            optional. Only that agent reads the text.
           </p>
           <p>
-            KanthorD reads no <code>CLAUDE.md</code>, <code>AGENTS.md</code> or
-            <code>*.local.md</code> file, neither in a repository nor in a home
-            directory. A native agent takes its conventions from the two prompts
-            only. <code>claude-code@1</code> receives no KanthorD text. Claude
-            Code loads its own <code>CLAUDE.md</code> files as behavior of its
-            harness, not as KanthorD support.
+            A missing key, an empty text and a blank text add no part, for
+            <code>prompts.repository</code> and for each text of
+            <code>prompts.agents</code>. Every native agent of a node reads
+            layers 2 and 3 of every repository binding of the node, at the
+            binding revision that the node pins.
+          </p>
+          <p>
+            For native agents, the coder <code>swe@1</code> and the reviewer
+            <code>re@1</code> read the same layer 2. Only the Role and layer 3
+            differ. So a rule that the reviewer judges goes into the Repository
+            prompt, and the coder reads it too. A Binding prompt of
+            <code>re@1</code> holds only a relaxation of the judgement, for
+            example the changelog text above.
+          </p>
+          <p>
+            <code>claude-code@1</code> receives no KanthorD text: no layer, no
+            framing. Claude Code loads its own <code>CLAUDE.md</code> files from
+            its working directory, which is the candidate. A
+            <code>claude-code@1</code> coder thus reads the instruction file
+            only through the <code>CLAUDE.md</code> of the candidate, and it
+            reads no pinned commit.
+          </p>
+          <h3 id="the-default-standard">The default standard</h3>
+          <p>
+            The first paragraph of <code>base.md</code> states: "This text, the
+            rules of your role, and the repository prompt and the binding prompt
+            of each repository of the work form the default standard. The
+            default standard binds every work product." So layers 2 and 3 are
+            rules, not advice.
+          </p>
+          <ul>
+            <li>
+              The reviewer judges against its own stack: <code>base.md</code>,
+              the <code>re@1</code> Role, the Repository prompt and the
+              <code>re@1</code> Binding prompt. The <code>swe@1</code> Binding
+              prompt is not part of it.
+            </li>
+            <li>
+              A finding that violates a rule about the work product, for example
+              its language, its style, its conventions or its structure, is a
+              blocker. The blocker names the default standard.
+            </li>
+            <li>
+              A rule about the method, the tools, the repository operations or
+              the release is no ground for a blocker. The reviewer gives a
+              finding on such a rule <code>action: no</code>, so it causes no
+              rework. The coder still reads the rule as guidance. The framing
+              owns the commit, the branch, the push, the verification and the
+              release.
+            </li>
+            <li>
+              Each instruction file is a gate input. Rule 8 of
+              <code>re@1.md</code> makes an unrequested change to it a blocker.
+              So a candidate cannot change the rules that the next attempt
+              reads.
+            </li>
+          </ul>
+          <p>
+            <a href="../how-to-guides/write-repository-rules.html"
+              >Write the rules of a repository</a
+            >
+            shows how to write rules that fit this standard.
+          </p>
+          <h3 id="the-attempt-prompt-pin">The attempt prompt pin</h3>
+          <p>
+            The coder and the reviewer of one attempt read the same instruction
+            file text, also when a human merges a new <code>AGENTS.md</code>
+            into the base branch between the two executions. The
+            <strong>attempt prompt pin</strong> makes this true:
+          </p>
+          <ol>
+            <li>
+              The first <code>worker.handover</code> of an attempt reads the
+              head commit of the base branch of each repository binding that
+              names an instruction file. It reads all bindings in parallel, in
+              at most 20 seconds.
+            </li>
+            <li>
+              It writes the list of <code>{ binding_id, commit }</code> into
+              <code>mission_attempt.prompt_commits</code>, only when the stored
+              value is null. It then reads the stored value back, so two
+              concurrent handovers use one value.
+            </li>
+            <li>
+              Each execution setup of the attempt reads the file at the pinned
+              commit: the coder, the reviewer, each rework and each review
+              round. A later handover of the attempt reads no head.
+            </li>
+            <li>A new attempt pins the base head again.</li>
+          </ol>
+          <ul>
+            <li>
+              A rebind applies at the next attempt, so every layer 2 and layer 3
+              source moves at one boundary.
+            </li>
+            <li>
+              A base refresh can merge a newer <code>AGENTS.md</code> into the
+              node branch. The framing states that an instruction file in the
+              workspace is work product and no instruction.
+            </li>
+            <li>
+              An external harness calls no handover. When
+              <code>claude-code@1</code> is the coder, the first native
+              handover, usually the reviewer, writes the pin at that later base
+              head.
+            </li>
+            <li>
+              A setup that finds no pin entry for a binding that names an
+              instruction file answers
+              <code>409 worker.execution.prompt_not_pinned</code>.
+            </li>
+            <li>
+              A failed head read answers
+              <code>422 project.bindings.repository.ssh_unreachable</code>, or
+              <code>422 project.bindings.repository.base_branch_absent</code>
+              when the remote does not hold the base branch. A force-push that
+              removes a pinned commit stops each later execution of the attempt
+              with <code>ssh_unreachable</code>.
+            </li>
+          </ul>
+          <p>
+            Layer 1 has no pin. A change of a file in the agent directory takes
+            effect at the next composition.
           </p>
           <h3 id="precedence">Precedence</h3>
           <p>Two rules decide which text wins a conflict:</p>
@@ -692,14 +900,25 @@ Instructions of repository app:
           </ol>
           <p>
             The precedence inside the system prompt, from highest to lowest, is:
-            the framing, the binding prompts, <code>workbench.md</code>, the
-            role and the Standard. Then come the messages: a later message
-            governs an earlier one.
+            the framing, the Binding prompt, the stored Repository prompt, the
+            instruction file, <code>workbench.md</code>, the Role and the
+            Standard. Then come the messages: a later message governs an earlier
+            one.
           </p>
+          <ul>
+            <li>
+              A Binding prompt can relax a rule of the Repository prompt, for
+              its own agent only.
+            </li>
+            <li>
+              A Repository prompt can relax a rule of <code>base.md</code> or of
+              the Role. It cannot revoke an obligation of the framing.
+            </li>
+          </ul>
           <p>
             An instruction of one repository governs only the work on the files
             of that repository. It never governs the reply format that a message
-            demands. The reason is that a binding prompt belongs to a
+            demands. The reason is that a layer 2 or layer 3 text belongs to a
             repository, and a message belongs to the consumer that drives the
             agent.
           </p>
@@ -713,15 +932,23 @@ Instructions of repository app:
           <p>The server composes the whole system prompt for every consumer:</p>
           <ul>
             <li>
-              A Worker execution receives it as <code>prompt.final</code> in its
-              execution setup. The worker application reads no prompt file. It
-              pins only the work prompt.
+              A Worker execution receives it in its execution setup as
+              <code>prompt: { final, sources }</code>. <code>final</code> is the
+              text, and <code>sources</code> lists the prompt reference of each
+              part. The worker application reads no prompt file. It pins only
+              the work prompt.
             </li>
             <li>
               A Workbench session and an <code>env@1</code> run take it from the
               server process.
             </li>
           </ul>
+          <p>
+            The setup reads the instruction file of each binding in parallel,
+            under one deadline of 20 seconds. The server caches each file by the
+            repository, the commit and the path. A cache hit reads no git, and a
+            commit never changes, so an entry never goes stale.
+          </p>
           <p>
             An invalid file is a refusal, not a fallback. A file in the agent
             directory that is not a regular UTF-8 file, that is larger than 32
@@ -732,9 +959,108 @@ Instructions of repository app:
             session open and the <code>env@1</code> run. A reader never replaces
             the invalid file with the shipped text, because that would run an
             agent with other rules than the rules that the operator wrote. The
-            same limits apply to a binding prompt, and a violation answers
+            same limits apply to <code>prompts.repository</code> and to each
+            text of <code>prompts.agents</code>, and a violation answers
             <code>400 project.bindings.repository.prompt_invalid</code> at the
             binding write.
+          </p>
+          <h3 id="the-prompt-record">The prompt record</h3>
+          <p>
+            KanthorD stores no copy of a prompt text. It stores a
+            <strong>prompt reference</strong> for each part, and it resolves the
+            reference to the text when a human asks for it. A prompt reference
+            holds <code>part</code>, <code>name</code>, <code>origin</code>,
+            <code>path</code>, <code>binding_id</code>, <code>commit</code> and
+            <code>digest</code>, the SHA-256 hex digest of the exact text.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>origin</code></th>
+                  <th>Parts</th>
+                  <th>The reference resolves from</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>binary</code></td>
+                  <td>Layer 1 and the framing, shipped text</td>
+                  <td>The current binary</td>
+                </tr>
+                <tr>
+                  <td><code>file</code></td>
+                  <td>Layer 1 and the framing, override file</td>
+                  <td>The current file of the agent directory</td>
+                </tr>
+                <tr>
+                  <td><code>database</code></td>
+                  <td><code>repository</code>, <code>binding</code></td>
+                  <td>
+                    The binding revision <code>binding_id</code>. A binding
+                    revision never changes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td><code>instruction_file</code></td>
+                  <td>
+                    The file <code>path</code> at <code>commit</code>, read from
+                    git with the SSH access of the binding
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li>
+              The execution setup writes one <code>agent.prompt</code> span for
+              each agent. The span holds <code>kanthord.prompt.sources</code>,
+              the reference list in reading order, and
+              <code>kanthord.engine.version</code>. It holds no text.
+            </li>
+            <li>
+              The span write is part of the setup. A failed write stops the
+              setup with <code>503 worker.execution.prompt_record_failed</code>.
+            </li>
+            <li>
+              The first span of an execution and an agent wins. A retried setup
+              answers the text of the stored references. When a stored part no
+              longer resolves, for example after an edit in the agent directory,
+              the retried setup answers
+              <code>409 agent.prompt.source_invalid</code> with
+              <code>reason: changed</code>. A retry never answers a text that
+              differs from the record.
+            </li>
+            <li>
+              The session entry <code>kanthord.pinned_context</code> holds only
+              <code>{ part: &quot;system_prompt&quot; }</code>. It holds no
+              text, so the entry cut of the Tracking Service never removes a
+              part of the system prompt.
+            </li>
+          </ul>
+          <p>
+            <code
+              >kanthord agent prompt resolve --execution &lt;id&gt; --agent
+              &lt;name&gt;</code
+            >
+            reads the span, resolves each reference and checks each digest. A
+            part whose text has another digest now answers the state
+            <code>changed</code> and no text. A deploy that edits a shipped text
+            thus turns every older trace into <code>changed</code> for that
+            part, with <code>final: null</code>. The answer holds
+            <code>engine_version</code>, so a human reads the old shipped text
+            from the release tag <code>v&lt;engine_version&gt;</code>.
+            <a href="../reference/agent/prompt.html"
+              >Resolve the prompt of an execution</a
+            >
+            gives the command.
+          </p>
+          <p>
+            Today the worker releases no <code>stop</code> after a setup
+            refusal, the same as for
+            <code>worker.execution.credential_not_pinned</code>. The worker
+            reports the code as a diagnostic.
           </p>
           <h3 id="why-the-work-prompt-is-pinned">
             Why the work prompt is pinned
@@ -759,26 +1085,26 @@ Instructions of repository app:
           <ul>
             <li>
               <strong>A change of an agent file</strong> takes effect at the
-              next read of the server. A running execution keeps the system
-              prompt of its setup.
+              next composition. A running execution keeps the system prompt of
+              its setup.
             </li>
             <li>
-              <strong>A change of a binding prompt</strong> is a change of the
-              binding configuration. It stores the next binding revision. A node
-              keeps the text of the binding revision that it pins. Run
-              <code>mission node rebind</code> to move the node to the current
-              revision.
+              <strong>A change of a <code>prompts</code> key</strong> is a
+              change of the binding configuration. It stores the next binding
+              revision. A node keeps the texts of the binding revision that it
+              pins. Run <code>mission node rebind</code> to move the node to the
+              current revision. The move applies at the next attempt.
+            </li>
+            <li>
+              <strong>A change of the instruction file</strong> on the base
+              branch reaches a node at its next attempt, because the attempt
+              pins the commit.
             </li>
             <li>
               <strong>Environment onboarding</strong> treats the new binding ID
               of the revision as a changed binding. It clears
               <code>environment_from_agent</code>, the mark that a stored
               environment came from a session of <code>env@1</code>.
-            </li>
-            <li>
-              <strong>Both agents</strong> can need the same change. The binding
-              prompts of <code>swe@1</code> and <code>re@1</code> diverge by
-              design, so a human edits both.
             </li>
             <li>
               <strong>A deploy</strong> upgrades the server and every worker
@@ -788,42 +1114,41 @@ Instructions of repository app:
           <h3 id="reading-the-composed-prompt">Reading the composed prompt</h3>
           <p>
             <code>agent.get</code> answers every part of the system prompt, plus
-            the final prompt:
+            the final prompt. Each part holds its prompt reference and
+            <code>layer</code>, <code>heading</code>, <code>state</code> and
+            <code>text</code>. <code>state</code> is <code>resolved</code>, or
+            <code>invalid</code> or <code>unreachable</code> for an instruction
+            file that the server cannot read. A failed read is a part state, and
+            the read answers <code>200</code>. <code>final</code> is
+            <code>null</code> when a part is not <code>resolved</code>.
           </p>
           <ul>
             <li>
-              Each part holds <code>part</code> (<code>standard</code>,
-              <code>role</code>, <code>workbench</code> or
-              <code>binding</code>), <code>name</code>,
-              <code>origin</code> (<code>binary</code>, <code>file</code> or
-              <code>database</code>), <code>path</code>, <code>digest</code> and
-              <code>text</code>.
+              <code>kanthord agent get swe@1</code> answers the stack with no
+              binding. <code>--view final</code> answers the final prompt only.
             </li>
             <li>
-              For <code>binary</code>, <code>path</code> is the override
-              location that the server looked up. For a
-              <code>binding</code> part, <code>path</code> is <code>null</code>.
-            </li>
-            <li>
-              The query <code>view=final</code> answers the final prompt only.
-            </li>
-            <li>
-              The queries <code>project_id</code> and
-              <code>binding_id</code> add the binding prompt of one repository
-              binding. Without them, a Workbench agent answers the Workbench
-              system prompt, and <code>env@1</code> answers the worker system
-              prompt.
-            </li>
-            <li>
-              The CLI reads it with <code>kanthord agent get swe@1</code>, adds
-              <code>--view final</code> for the final prompt only, or
               <code
                 >--project &lt;project-id&gt; --binding-id
                 &lt;binding-id&gt;</code
               >
-              for a binding.
+              adds layers 2 and 3 of one binding, with the instruction file at
+              the current base head, as the next attempt reads it.
+            </li>
+            <li>
+              <code>--node &lt;node-id&gt; [--attempt &lt;k&gt;]</code> answers
+              exactly what the agent of one node reads, at the commit that the
+              attempt pins. Without <code>--attempt</code>, the read takes the
+              open attempt, else the latest attempt.
             </li>
           </ul>
+          <p>
+            The dashboard shows layer 1 on the agent page as the card
+            <code>KanthorD prompt (layer 1)</code>. The binding sheet shows
+            layers 2 and 3 in the section <code>Prompts</code>. Its
+            <code>Preview</code> tab lists the parts in reading order and labels
+            each layer 2 and layer 3 part <code>Default standard</code>.
+          </p>
           <h2 id="tools">Tools</h2>
           <p>
             The agent receives only the tools of its declaration. A tool outside
@@ -1068,8 +1393,8 @@ Instructions of repository app:
             <li>
               <strong>Static catalog.</strong> A new agent or a change of a tool
               set requires a new KanthorD release. A prompt change does not: a
-              file in the agent directory and a binding prompt override the
-              shipped text.
+              file in the agent directory replaces the shipped text, and layers
+              2 and 3 add rules for each repository.
             </li>
           </ul>
         </article>
