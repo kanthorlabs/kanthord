@@ -151,13 +151,13 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `credential_version` is an in-memory counter of the component for each instance. A server start sets every counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
 - Each committed write of a copy of that instance raises the counter by one. These writes are a create, a rotation, a metadata edit, a revoke, an archive, the completion of a login, and a refresh report.
 - Custody calls `instanceCopyRefreshed(holder)` after it writes the refresh report of an instance copy.
-- The heartbeat answer of the instance carries the counter, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
+- `credential_version` stays in the heartbeat answer of the instance, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
 - A worker instance checks each of its own copies after its first heartbeat answer and when the `credential_version` of a heartbeat answer changes. The process sends its first heartbeat at its start. A change during a check run starts one more run after it.
 - The instance lists its copies with `llm.credential.list`. It reads each live copy whose `sealed_current` is true through `llm.credential.sealed`.
 - `llm.credential.sealed` is `GET /api/llm/credential/:credential_name/sealed`, policy `worker`, read, secret. The answer is `{ name, platform, revision, metadata, sealed }` of the newest live revision of the copy of the instance of the token. A copy that is absent or sealed to an ended key answers 404 `credential.credential.not_found`. Custody reads the sealed object with `storedSealed` and never opens it.
 - The instance opens the copy with its own key and runs the `check` of [the LLM provider](#the-llm-provider) of the platform with a deadline of 10 s. The check has no refresh store, so it never refreshes the copy. An OAuth access token that expires within 5 minutes reports `unhealthy` with `failure_reason: unauthorized` without a remote call. It maps the result as [the resource healthcheck](#the-resource-healthcheck) does. A platform without a check or an open failure reports `unknown` with `failure_reason: unclassified`. A check that exceeds the deadline reports `unknown` with `failure_reason: deadline_exceeded`.
 - A run that ends on an indeterminate answer or a server failure runs again at the next heartbeat. A refusal waits for the next change of the counter.
-- It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204. The body limit is 1 MiB.
+- It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204.
 - `revision` must be the newest live revision of a copy of the instance of the token that is sealed to the current key. An absent or ended-key copy answers 404 `credential.credential.not_found`. Another revision answers 409 `credential.revision.conflict` with `details.revision`. These bodies answer 400 `credential.input.invalid`:
   - a `failure_reason` that is null for a status other than `healthy`, or not null for `healthy`;
   - the `failure_reason` `held_by_instance`, because only the server answers it;
@@ -211,14 +211,15 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A login of an instance holder refuses with 409 `credential.name.conflict` only when the `(name, holder)` group holds a live revision sealed to the current fingerprint. `details.id` holds the identity of that revision.
 - A login of an archived copy answers 409 `credential.credential.archived`. The archive stays final.
 - A copy whose newest live revision is sealed to an ended key takes a new login. A key rotation or a Reset key of the instance makes a copy stale in this way.
-- `llm.credential.login` waits for the first report of the instance with an address, inside the operation timeout of 30 s. The instance receives the session in its next heartbeat answer.
+- `llm.credential.login` waits for the first report of the instance with an address, inside the operation timeout of 30 s. The instance receives the session in its next work read.
 - An instance session never uses browser mode. `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use device mode. A request for browser mode answers 400 `credential.login.browser_unavailable`.
-- The heartbeat answer of the instance lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 2 s while a session of it is pending.
+- The work read of the instance lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 15 s.
+- The LLM Service raises the work version of the instance when a login starts, when a human submits its code and when it ends. It calls its dependency `workChanged(holder)`. A login ends by completion, failure or expiry.
 - `login_sessions` is `[{ session_id, name, platform, mode, code }]`. `name` is the credential name, because the instance seals with it in the AAD. `mode` is `copy_code` or `device`. `code` is the copy code that the human submitted, or null.
 - The instance runs the pi-ai login with the interaction adapter of the component and registers the OAuth flows of pi-ai as the component does. It reports `{ state, address, code, message, failure_reason }` through `llm.credential.login_report`: `POST /api/llm/credential/login/:session_id/report`, policy `worker`, mutation, answer 204.
 - `state` is `pending`, `completed` or `failed`. A `pending` report sets the address, the code and the last message. A `failed` report fails the session with `failure_reason`.
 - In device mode, the instance reports only the user code and the verification address. The PKCE verifier and the polling secret stay in the instance process.
-- The value that the human submits through `llm.credential.login_code` reaches the instance in the next heartbeat answer.
+- The value that the human submits through `llm.credential.login_code` reaches the instance in the next work read, within 15 s.
 - An instance session accepts one value, in `copy_code` mode only, after the instance reported the address. Another value answers 409 `credential.login.value_not_awaited`.
 - The instance runs each listed session once. A session that leaves `login_sessions` ends on the instance.
 - The instance expires its own run 15 minutes after it receives the session. The expiry of the server decides.
@@ -228,7 +229,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A report to an unknown, ended or expired session, or to a session of another instance, answers 404 `credential.login.not_found`.
 - `address` is an `https:` URL of at most 2048 characters. `code`, `message` and `failure_reason` hold at most 1024 characters. The first address of a session stays; a report with another address answers 400 `credential.input.invalid`.
 - The component applies a `pending` or `failed` report to the session after the commit of the operation.
-- The instance sends a lost `pending` report again with the next heartbeat answer. It sends a lost `completed` report again every 2 s with one idempotency key, until the session ends or expires. A stopped instance starts no session.
+- The instance sends a lost `pending` report again at each heartbeat while its session runs. It sends a lost `completed` report again every 2 s with one idempotency key, until the session ends or expires. A stopped instance starts no session.
 - `InstanceLogin` of `src/llm/instance-login.ts` holds the session of an instance holder on the server. `InstanceLogins` of `src/apps/worker/instance-login.ts` runs the sessions on the instance.
 - The instance refreshes its OAuth copy and reports the refreshed copy sealed, under [the credential handover](custody.impl.md#the-credential-handover). One instance runs one execution at a time, so one copy has one refresh holder.
 

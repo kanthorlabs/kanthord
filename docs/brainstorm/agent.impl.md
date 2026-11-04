@@ -342,6 +342,7 @@ The Agent component owns these keys of the section `agent`.
 - A resume opens that file through the `SessionManager` of pi.
 - The adapter passes the session identity of the consumer as `id` to `SessionManager.create`.
 - A resume takes the file whose session id equals that identity, and it never calls `continueRecent`.
+- The Worker Service reads one entry by its `id` and `type` from the file whose name ends with `_<session id>.jsonl`.
 
 ## Sensitive text redaction
 

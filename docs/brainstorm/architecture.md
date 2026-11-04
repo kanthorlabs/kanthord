@@ -224,3 +224,4 @@ Every service that versions a resource follows these rules.
 - Every service writes telemetry to the Tracking Service.
 - An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the Gateway Service.
 - A human reads a trace from the Tracking Service through the Gateway Service.
+- The Tracking Service reads a full session entry from the host of the execution through the Worker Service.

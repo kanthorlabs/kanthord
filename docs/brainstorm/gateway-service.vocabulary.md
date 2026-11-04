@@ -59,7 +59,7 @@ It derives the handover key from that client secret. No other worker instance op
 The JWT of kind `worker` that names one worker instance revision. The instance receives it sealed to its public key, so only the holder of the private key opens it.
 
 The worker instance `box-coder` calls `worker.instance.token` with its `instance_id` and opens the sealed answer.
-It presents the worker token on `worker.instance.connect` and `worker.instance.heartbeat`.
+It presents the worker token on `worker.instance.connect`, `worker.instance.heartbeat`, `worker.instance.work` and `worker.session_read.report`.
 The token lives `WORKER_TOKEN_LIFETIME`, 3600 s, and it opens no work pull and no registration.
 
 A non-secret decoded worker payload:

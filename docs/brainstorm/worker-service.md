@@ -149,7 +149,7 @@ It starts and ends the instance through the [slot driver](worker-service.vocabul
 At the `server` placement, the instance is a thread of the server process.
 At the `container` placement, the instance runs in one container on the server host.
 A slot driver keeps the instance on the server host, and it gives the instance no machine credential and no endpoint.
-A container instance mounts no path of the server host.
+A container instance mounts one path of the server host: its own session directory.
 The `container` placement is unavailable in three cases. The server runs in a container. No container runtime of the server host answers. The runtime cannot run the instance as a user without privilege.
 A create of a `container` instance refuses while the placement is unavailable.
 A server-wide limit caps the count of live server instances. A create at the limit refuses.
@@ -253,6 +253,10 @@ Its log, its workspace, its state, its pi tools, its telemetry and its lifecycle
 At the `server` and the `container` placements, a code failure of one worker unit stops no other instance and no service of the server.
 An uncaught error, a thread exit and a container exit are such failures.
 At the `server` placement, this containment covers no command that the agent runs.
+
+At every placement, the host of an instance serves a [session read](worker-service.vocabulary.md#session-read) of the Tracking Service from the agent sessions of the instance.
+At the `server` and the `container` placements, the server reads them directly.
+At the `worker` placement, the instance serves the read only while it runs and holds a current connection.
 
 The tool of an agent and the verifications of a node run code that the repository supplies.
 The Worker Service runs them inside a trust boundary that the operator provides.

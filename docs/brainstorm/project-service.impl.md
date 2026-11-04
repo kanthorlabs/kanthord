@@ -677,8 +677,12 @@ The component computes the status of a group in this order. The first rule that 
 
 ### The cache volume
 
-- Each group at the `image` target holds one volume `kanthord_cache_<id>`, with `<id>` derived from the owner, the project and the resource identity. It carries the owner label, `io.kanthord.cache_project=<project_id>` and `io.kanthord.cache_resource=<resource_identity>`.
+- Each group at the `image` target holds one volume `kanthord_cache_<id>`, with `<id>` derived from the owner, the project and the resource identity. It carries the owner label, `io.kanthord.cache_project=<project_id>`, `io.kanthord.cache_resource=<resource_identity>` and `io.kanthord.id_map=auto`.
 - Each `container` instance of a worker binding that names the group and each proof container mount it at `/var/lib/kanthord/.cache`.
+- On rootless Podman, each container that mounts the cache volume runs with `--userns=auto:uidmapping=10001:0:1,gidmapping=10001:0:1`, under [the uid map](worker-service.impl.md#the-uid-map).
+- A cache volume of an earlier engine, without the label `io.kanthord.id_map=auto`, takes the full-map carrier once. Every other cache volume takes the auto container.
+- One shared function, `prepareCacheVolume`, runs the owner step before a launch or a proof mounts the volume. It runs after the wait for the image, with the resolved image and `--pull=never`.
+- The step runs once for each cache volume without the file `.kanthord_owner`. The auto container runs `chown -R 10001:10001` on the volume. Each carrier writes `.kanthord_owner` after the owner change.
 - The KanthorD layer writes `npm_config_cache`, `npm_config_store_dir`, `PIP_CACHE_DIR`, `GOMODCACHE` and `CARGO_HOME` below that path into `ENV`, unless the document sets the variable.
 - The volume key is the group and not the digest, so a new digest keeps the cache warm. Garbage collection removes the volume of a group that no current binding holds.
 - Garbage collection lists the names with `<runtime> volume ls --filter label=io.kanthord.owner=<owner> --filter label=io.kanthord.cache_project --format '{{.Name}}'`.

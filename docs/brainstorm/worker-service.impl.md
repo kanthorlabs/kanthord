@@ -65,6 +65,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 - A runtime identity is `worker_registration_<ulid>`. It names one registration.
 - An instance record revision is `worker_instance_<ulid>`, and a connection is `connection_<ulid>`. [Worker instances](#worker-instances) states both.
+- A session read is `session_read_<ulid>`. It names one pending read of [The session read](#the-session-read).
 - The output schema of `POST /api/worker/register` returns it under `runtime_identity`, beside `resource_identity` from the verified machine identity and `worker_name` from the worker binding row that the registration transaction reads.
 - The machine identity of [gateway-service.impl.md](gateway-service.impl.md#the-forwarding-contract) names it for a live registration.
 - It is no JWT claim.
@@ -114,7 +115,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 ## Deregistration
 
-- `worker.registration.deregister` is a `client` mutation of `unary` lifetime at `DELETE /api/worker/registration/:runtime_identity`, with no body, the default 30 s timeout and the default 10 MiB body limit.
+- `worker.registration.deregister` is a `client` mutation of `unary` lifetime at `DELETE /api/worker/registration/:runtime_identity`, with no body, the default 30 s timeout and the 32 MiB body limit.
 - It is no execution operation and requires no live registration under [the Gateway machine identity rules](gateway-service.impl.md#the-jwt). Authentication still checks the credential and binding.
 - The handler ends the live registration whose runtime identity equals the path parameter and whose client identity, project and resource identity equal those of the caller. The path parameter names the target because the machine identity names no runtime identity after the end.
 - The handler ends the registration and frees its place under the instance count through the Project instance-count collaboration in the same transaction, as registration takes it.
@@ -128,7 +129,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 ## Resume of a registration
 
-- `worker.registration.resume` is a `human` mutation of `unary` lifetime at `POST /api/worker/registration/:runtime_identity/resume`, with no body, the default 30 s timeout and the default 10 MiB body limit.
+- `worker.registration.resume` is a `human` mutation of `unary` lifetime at `POST /api/worker/registration/:runtime_identity/resume`, with no body, the default 30 s timeout and the 32 MiB body limit.
 - It reopens an ended registration while that registration is the claimant of a `running` execution.
   The Worker Service reads the `running` execution of the runtime identity through the Scheduler Service in the same transaction.
   The Scheduler first settles any expired unsettled execution under [Scheduler liveness](scheduler-service.md#liveness).
@@ -167,7 +168,7 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The worker unit checks `ssh-agent` and `ssh-add` for presence at its start. A spawn that answers `ENOENT` refuses the start with `repository.connector.tool_missing`.
 - The application logs one info record for each task start, task commit, task verification, done record, planning of the units and of the verdict, verdict rule check, release verification, routed release failure, turn violation, node judgement and base merge. A record holds identities and results, and no agent content.
 - When an execution ends, the application logs one record `execution ended` with `execution_id` and `kind`. The `kind` is `released`, `closed` or `ended`. For `ended`, the record adds `reason` and `code`. For `released` with a `stop`, the record adds the `reason` and the `code` of that `stop`. When the stop has a cause text, the record also adds `detail`.
-- The worker unit keeps the agent sessions of each execution in `pi/sessions/execution/<execution identity>/` of its data directory, under [Traces](#traces). It keeps the newest 50 execution directories.
+- The worker unit keeps the agent sessions of each execution in `pi/sessions/execution/<execution identity>/` of its data directory, under [Traces](#traces). It keeps every execution directory.
 - After each registration, the worker unit logs one record `Worker application ready` with `runtime_identity`, `resource_identity` and `worker_name`.
 - The application writes operational log records to stderr as JSON lines. It prints no token, no private key and no instance configuration, and it requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -435,7 +436,7 @@ The Docker form of `Container on this host`:
 - The route label of an unmatched call equals the HTTP label `/*`.
 - A malformed message with a readable `call_id` answers 400 `gateway.request.validation_failed`. `servePort` drops any other malformed message.
 - The check order equals the HTTP order: 413, then authentication, then `gateway.request.unexpected_body` or `gateway.request.invalid_json`.
-- It measures the body limit on the JSON text with `bodyLimitOf(operation)`, the same function that `src/gateway/service.ts` uses. A body above the limit answers 413 `gateway.request.body_too_large`.
+- It measures the body limit on the JSON text with `REQUEST_BODY_MAX_BYTES`, the same value that `src/gateway/service.ts` uses. A body above the limit answers 413 `gateway.request.body_too_large`.
 - It parses the JSON text with `parseJSON`, as the HTTP route does. A body on an operation with no body answers 400 `gateway.request.unexpected_body`.
 - It then calls `Invocation.invoke(operation_id, { params, query, body }, options)` with the options of the HTTP route.
 - The options hold `authorization` set to `Bearer <JWT>` from `credential`, the idempotency key, the trace context, a request identity and a cancellation context. They hold no `identity` option.
@@ -490,7 +491,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - A create at the `server` or the `container` placement counts the live server instances in its transaction. At `worker.server_instance_limit`, it refuses with 409 `worker.instance.server_limit` and `details: { limit }`.
 - After the commit of a create or an archive of a server instance, the Worker Service calls `instancesChanged()`, and the pool host starts or stops that instance.
 - An archived name stays taken. A create of a taken name answers 409 `worker.instance.name_conflict`.
-- The names `server`, `token`, `connect` and `heartbeat` are reserved and answer 400 `worker.instance.name_invalid`. `server` is the holder value of a server-held credential. The other three are static route segments.
+- The names `server`, `token`, `connect`, `heartbeat` and `work` are reserved and answer 400 `worker.instance.name_invalid`. `server` is the holder value of a server-held credential. The other four are static route segments.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived.
 - Only a Reset key creates a revision. A Reset key applies only at the `worker` placement. On a server instance, it refuses with 409 `worker.instance.placement_unsupported` and `details: { placement }`.
 - `worker.instance.rotate` names `expected_revision`. In one transaction it inserts the next revision with the new public key and ends the old revision.
@@ -521,17 +522,19 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 
 ### The operations of an instance
 
-| Operation                   | Route                                               | Policy                                    | Input                                                 | Answer                                                                                                                                                       |
-| --------------------------- | --------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `worker.instance.create`    | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, placement, public_key?, endpoint? }` | 200 instance record                                                                                                                                          |
-| `worker.instance.list`      | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived`      | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                                     |
-| `worker.instance.get`       | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                                  | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current, health }]` |
-| `worker.instance.rotate`    | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`       | 200 instance record                                                                                                                                          |
-| `worker.instance.archive`   | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision, force? }`                       | 200 instance record                                                                                                                                          |
-| `worker.instance.token`     | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                     | 200 `{ server_version, sealed }`                                                                                                                             |
-| `worker.instance.connect`   | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`                 | 200 `{ connection_id, binding_version, sealed }`                                                                                                             |
-| `worker.instance.heartbeat` | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`                  | 200 `{ server_version, binding_version, credential_version, login_sessions }`                                                                                |
-| `worker.ssh.sign`           | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                 | 200 `{ nonce, ciphertext }`                                                                                                                                  |
+| Operation                    | Route                                               | Policy                                    | Input                                                 | Answer                                                                                                                                                       |
+| ---------------------------- | --------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `worker.instance.create`     | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, placement, public_key?, endpoint? }` | 200 instance record                                                                                                                                          |
+| `worker.instance.list`       | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived`      | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                                     |
+| `worker.instance.get`        | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                                  | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current, health }]` |
+| `worker.instance.rotate`     | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`       | 200 instance record                                                                                                                                          |
+| `worker.instance.archive`    | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision, force? }`                       | 200 instance record                                                                                                                                          |
+| `worker.instance.token`      | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                     | 200 `{ server_version, sealed }`                                                                                                                             |
+| `worker.instance.connect`    | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`                 | 200 `{ connection_id, binding_version, sealed }`                                                                                                             |
+| `worker.instance.heartbeat`  | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`                  | 200 `{ server_version, binding_version, credential_version, work_version }`                                                                                  |
+| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                   | 200 `{ work_version, login_sessions, session_reads }`                                                                                                        |
+| `worker.session_read.report` | `POST /api/worker/session-read/:read_id/report`     | `worker`, mutation                        | `SessionReadResult`                                   | 204                                                                                                                                                          |
+| `worker.ssh.sign`            | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                 | 200 `{ nonce, ciphertext }`                                                                                                                                  |
 
 - An instance record is `{ id, name, worker, placement, revision, public_key, fingerprint, created_at, ended_at }`. `public_key` and `fingerprint` are null for a server instance.
 - An absent `placement` or a value outside the set answers 400 `worker.instance.placement_invalid`.
@@ -566,7 +569,8 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                                                                                                                                        |
 | 409  | `worker.instance.archived`              | A write names an archived instance.                                                                                                                                                                  |
 | 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists, or an archive without `force` names an instance whose registration holds a live execution. `details.bindings` or `details.executions` lists them. |
-| 409  | `worker.instance.connection_superseded` | A `connect` or a heartbeat names a connection that is not current.                                                                                                                                   |
+| 409  | `worker.instance.connection_superseded` | A `connect`, a heartbeat or a work read names a connection that is not current.                                                                                                                      |
+| 404  | `worker.session_read.not_found`         | A report names an unknown or expired session read, or a read of another instance.                                                                                                                    |
 | 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                                                                                                    |
 | 400  | `worker.ssh.sign_invalid`               | The sealed sign request does not open, or its plaintext does not match the schema.                                                                                                                   |
 | 403  | `worker.ssh.placement_refused`          | The instance of the execution is not at the `worker` placement. `details.placement` names its placement.                                                                                             |
@@ -608,7 +612,7 @@ The current connection:
 
 - The server keeps in memory only the current `connection_id` of each instance and its last heartbeat. It remembers no ended connection.
 - A server start keeps no connection. A `connect`, a heartbeat or a `client` request whose `connection_id` arrives while the instance has no current connection makes that id current. A heartbeat also sets its `connection_name` on a current connection that holds none.
-- When another id is current, `connect` and the heartbeat answer 409 `worker.instance.connection_superseded`. A `client` request answers 401 `gateway.jwt.connection_superseded`, under [gateway-service.impl.md](gateway-service.impl.md#the-jwt).
+- When another id is current, `connect`, the heartbeat and the work read answer 409 `worker.instance.connection_superseded`. A `client` request answers 401 `gateway.jwt.connection_superseded`, under [gateway-service.impl.md](gateway-service.impl.md#the-jwt).
 - On 401 `gateway.jwt.connection_superseded`, the wrapper sends one heartbeat. A 409 answer ends the process as superseded. A success makes the connection current again, and the process continues.
 - A superseded process calls `unit.abandon`. The unit keeps its registrations, cancels the context of the running execution and waits for the end of the execution.
 - The cancellation aborts a running bash tool. The bash tool ends its child tree through `killChildTree`, under [Enforcement of the worker boundary](#enforcement-of-the-worker-boundary).
@@ -618,8 +622,17 @@ The current connection:
 
 The heartbeat and the renewal:
 
-- The process calls `worker.instance.heartbeat` once at its start, then every `INSTANCE_HEARTBEAT_INTERVAL`, 15 s, and every 2 s while the instance holds an open login session.
-- The answer is `{ server_version, binding_version, credential_version, login_sessions }`. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) defines `credential_version`. [The login of an instance](llm.impl.md#the-login-of-an-instance) defines `login_sessions`.
+- The process calls `worker.instance.heartbeat` once at its start, then every `INSTANCE_HEARTBEAT_INTERVAL`, 15 s. One interval serves every case.
+- The heartbeat is a liveness signal. The answer is `{ server_version, binding_version, credential_version, work_version }`. Each value comes from memory, and the handler reads no store. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) defines `credential_version`.
+- `work_version` is an in-memory counter of the Worker Service for each instance. A server start sets each counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
+- The counter rises by one when the Worker Service queues a [session read](#the-session-read) of the instance. It also rises by one at each call of `workChanged(holder)` of the LLM Service, under [The login of an instance](llm.impl.md#the-login-of-an-instance). The composition root connects `workChanged` to `raiseWorkVersion(holder)` of the Worker Service.
+- The process keeps the `work_version` of its last successful work read. It holds none at its start.
+- When a heartbeat answer holds another `work_version`, the process calls the work read `worker.instance.work`: `POST /api/worker/instance/work`, policy `worker`, read, body `{ connection_id }`.
+- The answer of the work read is `{ work_version, login_sessions, session_reads }`. [The login of an instance](llm.impl.md#the-login-of-an-instance) defines `login_sessions`, and [The session read](#the-session-read) defines `session_reads`.
+- A `connection_id` that is not current answers 409 `worker.instance.connection_superseded`. The work read renews no liveness.
+- After the work read, the process syncs its logins with `login_sessions` and its session reads with `session_reads`, then keeps the new version.
+- A failed work read keeps the old version, so the next heartbeat calls the work read again.
+- The heartbeat and the work read run in series.
 - A `server_version` that differs from the package version stops the worker unit and exits 1 with `worker.version.mismatch`.
 - A changed `binding_version` makes the process call `connect` with its `connection_id`.
 - `bindingsChanged(projectId)` bumps the `binding_version` of each instance that a binding of the project lists in its previous or its latest revision.
@@ -637,6 +650,61 @@ Tests:
 - Two pulls of one instance on two bindings commit one claim.
 - An execution passes one renewal of its client token.
 - A heartbeat with another `server_version` stops the unit.
+
+## The session read
+
+[worker-service.md](worker-service.md#instances-and-hosting) requires that the host of an instance serves a session read of the Tracking Service from the agent sessions of the instance. The [rebuild read](tracking-service.impl.md#the-rebuild-read) of the Tracking Service is its only caller.
+
+- A session read is `{ execution_id, session_id, entry_id, entry_type }`. It asks the host of the execution for one pi entry.
+- The composition root maps the call of the Tracking Service: `executionOf(execution_id)` of the Scheduler Service answers the runtime identity, then `readSessionEntry(runtime_identity, read, signal)` of the Worker Service reads the entry.
+- An unknown execution, or a registration with a null `instance_id`, answers `session_absent` with reason `instance_unknown`. An external harness holds a null `instance_id`.
+- The Worker Service reads the live revision of the instance by name. No live revision answers `session_absent` with reason `archived`.
+- The Worker Service checks `id` and `type` of a `resolved` entry. Another `id` or `type` answers `unreadable`, and the log record names the identities only.
+
+### The host read
+
+One function, `readSessionFileEntry(sessionRoot, read, signal)` of `src/worker/unit/session-store.ts`, serves every placement. It answers `SessionReadResult`, a union on `outcome`: `resolved` with `entry`, `too_large` with `bytes`, `session_absent`, `entry_absent` or `unreadable`.
+
+| Placement   | Session root                                                                                        | Reader               |
+| ----------- | --------------------------------------------------------------------------------------------------- | -------------------- |
+| `server`    | `<state>/workers/<name>/state/kanthord/pi/sessions/`                                                | the server process   |
+| `container` | `<state>/workers/<name>/sessions/`, the [session directory](#the-session-directory) of the instance | the server process   |
+| `worker`    | `pi/sessions/` of the data directory of `kanthord serve worker`                                     | the instance process |
+
+- The caller creates or knows the session root, so the read trusts the root. The container writes everything below its root, so the read treats each path below the root as untrusted.
+- The read checks `execution/<execution_id>/` below the root with `lstat`. Each of the two directories must be a directory and no symlink. An absent path answers `session_absent`, and a symlink or another file type answers `unreadable`. The read keeps the `dev` and the `ino` of both.
+- It opens each file whose name ends with `_<session_id>.jsonl` with `O_RDONLY | O_NOFOLLOW | O_NONBLOCK`. No such file answers `session_absent`. It skips a descriptor that `fstat` finds no regular file.
+- After the open, it checks both directories with `lstat` again. Another `dev` or `ino`, or a symlink, answers `unreadable`.
+- It reads at most the `fstat` size of the file as a stream of lines. It holds at most `SESSION_ENTRY_FULL_MAX_BYTES` + 1 bytes of one line.
+- It parses each line within the bound and skips a line that `JSON.parse` refuses, as pi does. It answers `resolved` with the first object whose `id` equals `entry_id` and whose `type` equals `entry_type`.
+- For a line above the bound, it buffers nothing. It searches the raw bytes of the line for `"id":"<entry_id>"` and keeps the byte length of the line. A match answers `too_large` with that length.
+- No match answers `entry_absent`. An I/O error other than `ENOENT` answers `unreadable`.
+- An abort of `signal` closes each open descriptor. The Gateway aborts it at `TRACKING_TIMEOUT_MS`.
+- No log record holds entry content. A log record holds the identities and the outcome only.
+- Every other server walk or delete below a `container` session root follows the same rule: it checks each path with `lstat` and follows no symlink.
+
+### The session read at a server placement
+
+- At the `server` and the `container` placements, the Worker Service calls `PoolHost.readSessionEntry(instance, read, signal)`.
+- The pool host selects the session root of the placement and calls `readSessionFileEntry` in the server process.
+- The read takes no part of the instance. It works while the instance runs, waits in its backoff, waits as a pending instance or stops.
+
+### The session read at the `worker` placement
+
+- A last heartbeat older than `INSTANCE_CONNECTED_WINDOW` (60 s) answers `unreachable` with reason `offline` at once.
+- The Worker Service adds `{ read_id, execution_id, session_id, entry_id, entry_type }` to the in-memory list of the instance and raises its `work_version` by one.
+- The next heartbeat answers the new `work_version`, within 15 s. The instance then receives the read in `session_reads` of the work read.
+- The instance runs each new listed read once with `readSessionFileEntry`. It runs each listed read at once, and the cap on the server bounds its parallel reads.
+- The instance reports the result through `worker.session_read.report`: `POST /api/worker/session-read/:read_id/report`, policy `worker`, mutation, answer 204. The idempotency rule of `llm.credential.login_report` applies.
+- The body is `SessionReadResult`, a union on `outcome`. `entry` exists only for `resolved`, and `bytes` only for `too_large`. Another body answers 400 `gateway.request.validation_failed`.
+- The Worker Service resolves the read with the report and removes it from the list.
+- A report of an unknown or expired read, or of a read of another instance, answers 404 `worker.session_read.not_found`.
+- No report within `SESSION_READ_WAIT_MS` (25 s) answers `unreachable` with reason `timeout`. The composition root passes the wait as the option `sessionReadWaitMs`.
+- The Worker Service keeps at most `SESSION_READS_PENDING_MAX` (8) pending reads for each instance. Two reads of the same entry share one host read. A ninth distinct read answers `unreachable` with reason `busy`.
+- No read survives a server restart. The reader repeats the call.
+- The instance opens every connection. The Gateway keeps one listener on one port. The answer carries no credential, and no model call passes through the server.
+- The route `/api/worker/session-read/` lies outside `/api/worker/instance/`, so it reserves no instance name.
+- Pre-condition: the instance process runs and holds a current connection, and its data directory holds the execution directory. A stateless host loses the directory.
 
 ## The server instances
 
@@ -704,6 +772,7 @@ Tests:
 - `PoolInstance` holds `instance_id`, `name` and `placement`. The key is the instance name, because the name and the placement of an instance never change.
 - `PlacementStatus` holds `placement`, `available`, `reason`, `detail` and `container_runtime`. `detail` holds the first line of the runtime answer, at most 200 bytes.
 - `PoolHost` offers `placementStatus(placement)`.
+- `PoolHost` offers `readSessionEntry(instance, read, signal)`. It reads one entry from the session root of the placement in the server process, under [The session read](#the-session-read).
 - The Worker Service reads `placementStatus(placement)` before the transaction of a create at the `container` placement, and `worker.placement.list` answers it. It answers the `check()` result of the pool host.
 - A driver adds no pool state. The states stay pending, running, stopping, exited, then ended, backoff or relaunch.
 - An async launch failure resolves `exited` with code 1. The pool host then follows the failure path of [The server instances](#the-server-instances), so the backoff covers a stopped runtime, a failed pull and an absent image.
@@ -726,11 +795,11 @@ The pool host and the code of the worker unit keep these guarantees at every slo
 The OS-containment guarantees below bind the `container` driver.
 The `thread` driver keeps none of them for the agent tools and the verification commands, under [Trust boundary](#trust-boundary).
 
-- **C1.** The root file system is read-only. The writable state of the instance is its slot volume and the tmpfs mounts of the runtime.
-- **C2.** No path of the server host is mounted: no configuration, data or state directory of the server, no `HOME` and no runtime socket.
+- **C1.** The root file system is read-only. The writable state of the instance is its slot volume, its session directory and the tmpfs mounts of the runtime.
+- **C2.** No path of the server host is mounted, except the session directory of the instance: no configuration, data or state directory of the server, no `HOME` and no runtime socket.
 - **C3.** The instance holds its own PID namespace, so it cannot see or signal the server process.
 - **C4.** The instance holds no capability, `no-new-privileges` applies, and the core size is 0.
-- **C5.** The uid 10001 of the container maps to no privileged host uid, through a rootless runtime or the VM of a macOS runtime.
+- **C5.** On rootless Podman, the container uid 10001 maps to the server user. On a rootful runtime, it maps to the host uid 10001. No map gives a privileged host uid. A container escape as uid 10001 on rootless Podman acts as the server user, and kanthord accepts that trade-off. The other container uids use a private auto range.
 - **C6.** The instance holds its own network namespace and no published port.
 
 C1 to C6 leave two reaches open.
@@ -754,12 +823,12 @@ Tests of the slot driver:
 ## Isolation of a thread slot
 
 - The slot root of a server instance is `workers/<instance name>/` of the state directory of the server, with mode `0700`. Every server instance holds a slot root.
-- The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it.
+- The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it, except regular files below `sessions/` for a session read. It follows no symlink.
 - After an archived server instance ends, the pool host removes its slot root and its slot volume.
 - At each start, the pool host removes slot roots under `workers/` and slot volumes of the owner. It removes only those whose name belongs to no live server instance.
 - A removal of the instance from a binding keeps the slot root and the slot volume, because the instance keeps its workspaces until its archive.
 - A failed removal or sweep writes `worker.pool.cleanup_failed` with the slot root or the volume name and `err` to the server log. It blocks no start and no launch.
-- The slot root of a `server` instance holds `state/kanthord/kanthord.log` and `stderr.log`. The slot root of a `container` instance holds `stderr.log` only, and the [slot volume](#the-slot-volume) holds the state.
+- The slot root of a `server` instance holds `state/kanthord/kanthord.log` and `stderr.log`. The slot root of a `container` instance holds `stderr.log`, the host marker `sessions.volume` and `sessions/`, the [session directory](#the-session-directory) of the instance. The [slot volume](#the-slot-volume) holds the rest of the state.
 - The rules below bind the `thread` driver.
 - The thread starts with its own `env` and never with `SHARE_ENV`.
 - The thread refuses a start with `worker.thread.directory_invalid` when any of `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` is absent or not absolute.
@@ -793,15 +862,23 @@ Tests of the slot driver:
   1. `server_in_container` when `/run/.containerenv` or `/.dockerenv` exists, or when `KUBERNETES_SERVICE_HOST` is set.
   2. `runtime_absent` when neither `podman` nor `docker` resolves on the `PATH` of the server.
   3. For `podman`, then `docker`, the driver runs `<runtime> info --format json` with a 10 s limit. The first runtime that answers wins.
-  4. A Docker answer counts as failed when `ServerErrors` is not empty or `ServerVersion` is empty. A Docker client below version 23 counts as failed, and `detail` states the version.
+  4. A Docker answer counts as failed when `ServerErrors` is not empty or `ServerVersion` is empty. A Docker client below version 23 counts as failed, and `detail` is "docker client `<version>` is below 23. Upgrade the Docker client to 23 or later." An empty `ServerVersion` gives the `detail` "docker answers no server version. Remove the `podman-docker` shim, or point `docker` at a Docker Engine."
   5. `runtime_failed` when no runtime answers. `detail` holds the first stderr line of the first runtime that resolves.
-  6. `runtime_failed` when rootless Podman holds no `host.idMappings.uidmap` entry that covers the container uid 10001. `detail` names the server user.
-  7. `runtime_rootful` when the host is Linux, the runtime is rootful and the server uid is not 0. Podman is rootful when `host.security.rootless` is false. Docker is rootful when `SecurityOptions` holds no `name=rootless`. Docker Desktop, whose `OperatingSystem` is `Docker Desktop`, is exempt.
+  6. `runtime_failed` when rootless Podman holds no `host.idMappings.uidmap` entry that covers the container uid 10001. `detail` is "the subordinate uid range of `<user>` does not cover the container uid 10001. Add a subordinate uid range of at least 10001 ids for `<user>`."
+  7. `runtime_failed` when `docker` answers, the server platform is Linux, `OperatingSystem` is not `Docker Desktop`, and `SecurityOptions` holds `name=rootless`. `detail` is "rootless Docker cannot map the container uid 10001 to the server user. Use rootless Podman or a rootful runtime."
+  8. `runtime_failed` when rootless Podman answers a `version.Version` below `PODMAN_AUTO_UIDMAPPING_MIN_VERSION`, the first version that accepts `auto:uidmapping=` for a rootless user. `detail` is "podman `<version>` refuses --userns=auto:uidmapping=. Upgrade Podman to `<minimum>` or later."
+  9. `runtime_rootful` when the host is Linux, the runtime is rootful and the server uid is not 0. Podman is rootful when `host.security.rootless` is false. Docker is rootful when `SecurityOptions` holds no `name=rootless`. Docker Desktop, whose `OperatingSystem` is `Docker Desktop`, is exempt.
 - The driver keeps the newest answer for 10 s and reuses it. A launch with no answer yet waits for one.
 - The driver uses the runtime of the newest available answer.
 - The runtime CLI runs with the full server `env`, because Podman reads `HOME`, `XDG_RUNTIME_DIR`, `XDG_DATA_HOME` and `CONTAINER_HOST`, and Docker reads `DOCKER_HOST` and `DOCKER_CONTEXT`. Only the named `--env` variables reach the container.
 - A server with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME` loses the Podman machine connection, because Podman keeps the connection list under those directories. The check then answers `runtime_failed`.
 - `check()` runs outside every transaction.
+- A runtime that does not answer is transient: a stopped Podman machine, Docker `ServerErrors`, a nonzero `info` exit, or a Podman answer with no `host`. A failed check stays until a human changes the host: the uid 10001 cover check, a Docker client below 23, a Docker answer with no server version (the `podman-docker` shim), rootless Docker on Linux and a Podman below `PODMAN_AUTO_UIDMAPPING_MIN_VERSION`. The pool host retries with a backoff in both cases.
+- Each failed-check detail names a host action. Each transient detail names the runtime state: the first stderr line, the Docker server error, "podman answers no host" or "`<runtime>` info exits `<code>`".
+- The version check applies to rootless Podman only, because a rootful Podman never takes the auto option.
+- Docker Desktop keeps its exemption on every platform. Rootful Docker and rootful Podman keep the `runtime_rootful` rule.
+- Each `detail` holds at most 200 bytes.
+- `check()` answers the status. `facts()` of `ContainerDriver` answers the facts of the same answer: `rootless`, `selinux`, `platform`, `dockerDesktop` and `remote`. `facts` is null when the status is not available. `remote` comes from `host.serviceIsRemote` of `podman info`.
 
 ### The placement list
 
@@ -820,7 +897,7 @@ Tests of the slot driver:
 - The sheet turns `Container` off when `reason` is `server_in_container`, `runtime_absent` or `runtime_rootful`. The card then shows "Off." and the text of the reason in place of its description:
   - `server_in_container`: "This server runs in a container, so it cannot start a container for the instance. Choose Server."
   - `runtime_absent`: "Install Podman or Docker on the server host, then open this sheet again."
-  - `runtime_rootful`: "`<runtime>` runs as root on this host. Use rootless Podman or rootless Docker." `<runtime>` is `Podman` or `Docker` from `container_runtime`, or "The container runtime" when `container_runtime` is null.
+  - `runtime_rootful`: "`<runtime>` runs as root on this host. Use rootless Podman." `<runtime>` is `Podman` or `Docker` from `container_runtime`, or "The container runtime" when `container_runtime` is null.
 - On `runtime_failed`, `Container` stays on, because the create accepts that instance. The card adds "`<detail>`. Fix the container runtime of the server user, then open this sheet again." to its description.
 - Only `Worker` shows the host kind, the address and the [copy blocks](#the-copy-blocks). `Server` and `Container` send no key and no endpoint.
 - A refusal 409 `worker.instance.server_limit` shows "This server runs <limit> server instances, the limit. Archive one, or raise worker.server_instance_limit." under **Placement**.
@@ -851,6 +928,7 @@ Tests of the slot driver:
 
 - The owner value is the Crockford base32 form of the first 128 bits of `deriveKey(master_key, "worker/container-owner")`. Nothing stores it.
 - The container and its volume take the name `kanthord_slot_<instance name>`. Both carry the labels `io.kanthord.owner=<owner>` and `io.kanthord.instance=<instance name>`.
+- Each volume create also adds `--label io.kanthord.id_map=auto` (`ID_MAP_LABEL`). The label marks a volume of this engine, under [The uid map](#the-uid-map).
 - `prepare()` runs `<runtime> ps --all --filter label=io.kanthord.owner=<owner> --format '{{.Names}}'`, then `<runtime> rm --force <name>` for each name.
 - `prepare()` never removes a volume, because the volume holds the workspace of a registration that resumes. The archive and the start sweep of [Isolation of a thread slot](#isolation-of-a-thread-slot) remove the volume of an archived instance.
 - Each launch first runs `<runtime> rm --force kanthord_slot_<instance name>`.
@@ -861,9 +939,85 @@ Tests of the slot driver:
 ### The slot volume
 
 - The named volume `kanthord_slot_<instance name>` mounts at `/var/lib/kanthord`. At its first mount, it copies the ownership of `/var/lib/kanthord` from the image, so uid 10001 owns it on every runtime.
-- It holds `state/kanthord/kanthord.log`, the workspaces, the `pi/` directory and `tmp/`.
-- An agent session of a `container` instance is a file in `state/kanthord/pi/sessions/execution/<execution_id>/` of the slot volume.
-- No host file changes its owner, and no `--userns` option applies.
+- It holds `state/kanthord/kanthord.log`, the workspaces, the rest of the `pi/` directory and `tmp/`.
+- An agent session of a `container` instance is a file in `execution/<execution_id>/` of its [session directory](#the-session-directory).
+
+### The session directory
+
+- The session directory of a `container` instance is `<state>/workers/<instance name>/sessions/` on the server host. The instance mounts it at `/var/lib/kanthord/state/kanthord/pi/sessions` (`SESSION_MOUNT`).
+- No volume or directory is shared between two instances. Each instance mounts its own session directory.
+- On an SELinux host, the session mount and `/migrate` take the volume option `:Z`, a private label. No two instances share a label. The runtime check reads SELinux from `host.security.selinuxEnabled` of `podman info`, or from the security option `name=selinux` of `docker info`.
+- `:Z` relabels the whole session tree at each container start, so the start delay grows with the tree.
+- The archive removes the slot root, and with it the session directory.
+- When `sessions/` is absent, the pool host creates `sessions.partial/` with mode `0700`. It sets no owner on it. It then runs the migration. After the migration exits 0, it writes the host marker and renames `sessions.partial/` to `sessions/`.
+- The host marker is the file `sessions.volume` of the slot root (`SESSION_VOLUME_MARKER`), mode `0600`. It holds the `CreatedAt` value of `<runtime> volume inspect --format '{{.CreatedAt}}' kanthord_slot_<instance name>`.
+- A launch runs the migration when `sessions/` is absent, when the marker is absent, or when the marker differs from the current `CreatedAt`. When `sessions/` is present, the migration mounts `sessions/`.
+- A failure path loses no trigger. An abort, an image failure, a server stop or a failed migration leaves the marker unchanged, so the next launch runs the migration.
+- The migration runs after the wait for the image and before the spawn, because it uses the image. It runs with no time limit and stops on the stop of the instance. The driver command timeout does not apply to it.
+- The migration container takes the name `kanthord_migrate_<instance name>` (`MIGRATE_NAME_PREFIX`) and the owner label. `prepare()` and the launch remove a stale one first, so one migration runs at a time. An abort kills it by its name, and a terminate spawns no slot container.
+- A failed migration counts as a launch exit with code 1. `sessions.partial/` stays, and the next launch copies the same files again.
+- The migration moves the sessions of an earlier engine out of `state/kanthord/pi/sessions/` of the slot volume. It removes the source only after the copy succeeds, so every session stays at one path.
+- For a new volume, the source is absent, so the migration copies nothing. It creates the mount point and its parents with the owner `10001:10001`.
+- `<mount>` is `sessions.partial` or, when `sessions/` is present, `sessions`. `<z>` is `:Z` on an SELinux host and empty on other hosts. [The uid map](#the-uid-map) gives `<userns>`.
+- The container script differs by the kind of `/migrate`. The file share variant runs when the server runs on macOS or when the runtime is Docker Desktop. The host directory variant runs in every other case.
+- Host directory variant:
+
+```text
+<runtime> run --rm --pull=never --network=none
+  --name kanthord_migrate_<instance name> --label <owner label>
+  --user 0:0 <userns>
+  --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER
+  --security-opt=no-new-privileges
+  --volume kanthord_slot_<instance name>:/var/lib/kanthord
+  --volume <state>/workers/<instance name>/<mount>:/migrate<z>
+  --entrypoint /bin/sh <image>
+  -c 'src=/var/lib/kanthord/state/kanthord/pi/sessions; if [ -d "$src" ]; then cp -a "$src/." /migrate/ && rm -rf "$src"; fi; mkdir -p "$src" && chown -R 10001:10001 /var/lib/kanthord /migrate'
+```
+
+- File share variant: the same command with the script below. The copy keeps the mode and the times, not the owner. No `chown` runs on `/migrate`.
+
+```text
+src=/var/lib/kanthord/state/kanthord/pi/sessions; if [ -d "$src" ]; then cp -R --preserve=mode,timestamps "$src/." /migrate/ && rm -rf "$src"; fi; mkdir -p "$src" && chown -R 10001:10001 /var/lib/kanthord
+```
+
+- `chown -R` of the slot volume runs in both variants. It gives uid 10001 the parents that `mkdir -p` creates.
+
+### The uid map
+
+| Runtime                                          | Rule                                                                                                                                                                                                        | Owner of the session files on the host           |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Rootless Podman on Linux                         | `--userns=auto:uidmapping=10001:0:1,gidmapping=10001:0:1` on every container that mounts a kanthord volume: the slot container, the migration container, the cache volume container and the proof container | the server user                                  |
+| Rootless Podman machine on macOS                 | the same rule inside the VM                                                                                                                                                                                 | the macOS user, through the file share of the VM |
+| Rootful Podman machine on macOS                  | no `--userns`. The rootful runtime maps uid 10001 to uid 10001 of the VM. No owner is set on the file share.                                                                                                | the macOS user, through the file share of the VM |
+| Rootful Podman or Docker on Linux (server uid 0) | no `--userns`. The migration sets the owner `10001:10001` of `/migrate`.                                                                                                                                    | host uid 10001. The server reads as root.        |
+| Docker Desktop on macOS and on Linux             | no `--userns`                                                                                                                                                                                               | the user of the file share of Docker Desktop     |
+| Rootless Docker on Linux                         | refused: the runtime check answers `runtime_failed`                                                                                                                                                         | none                                             |
+
+- `uidmapping=10001:0:1` maps the container uid 10001 to intermediate id 0, the server user. `gidmapping=10001:0:1` maps the container gid 10001 to the primary gid of the server user.
+- The driver reads the rootless state from the current runtime check.
+- The slot container runs as `--user 10001:10001`, as the proof container does.
+- The server read needs only the uid. The session files hold mode `0600`, and their directories hold `0700`.
+- The other container uids take a private auto range of the subordinate ids. Podman sizes the range from the image and skips the ranges of other containers, so other `--userns=auto` containers of the server user keep working.
+- Capacity: the kanthord image holds uid 10001, so its range holds 10002 ids. An environment image holds at least that range. A default host of 65536 subordinate ids runs at most 6 such containers at the same time. The count covers the slot and the proof containers together.
+- A launch above the capacity fails with the runtime text in `stderr.log`. It is no runtime check refusal, so it reaches only the server log.
+- The uid 10001 cover check stays. It refuses a subordinate range that does not reach the container uid 10001.
+- A rootless Podman volume of an earlier engine holds files of intermediate id 10001, which no auto range maps. Such a volume takes a full-map carrier once.
+- A volume without the label `io.kanthord.id_map=auto` is a volume of an earlier engine. The pool host reads the label and `CreatedAt` with one `volume inspect`.
+- A slot volume without the label takes the full-map carrier at its first migration. After the carrier exits 0, the host marker holds its `CreatedAt`, so no migration of that volume runs again. A slot volume with the label takes the auto migration container.
+- Full-map carriers on Linux with a local Podman: the server runs `podman unshare /bin/sh -c '<script>' sh <volume mount point> <state>/workers/<instance name>/<mount>`. Both paths are arguments, not script text. No container starts, and an abort kills the `podman unshare` process. The mount point comes from `podman volume inspect --format '{{.Mountpoint}}'`. The script:
+
+```text
+src="$1/state/kanthord/pi/sessions"; if [ -d "$src" ]; then cp -a "$src/." "$2/" && rm -rf "$src"; fi; mkdir -p "$src" && chown -R 0:0 "$1" "$2"
+```
+
+- In `podman unshare`, id 0 is the server user, the container uid 10001 of the auto option.
+- Full-map carriers on macOS, and on Linux with a remote Podman client: `podman unshare` is not available, so the migration container runs with `<userns>` = `--userns=keep-id:uid=10001,gid=10001`.
+- `<userns>` is the auto option for a labeled volume and `--userns=keep-id:uid=10001,gid=10001` for a full-map carrier on rootless Podman. It is empty on every other runtime.
+- While a `keep-id` container runs, auto containers cannot start. `ContainerDriver` offers `exclusive(run)` and `shared(run)`. A full-map `keep-id` container runs in `exclusive`, and it waits for every `shared` run.
+- The start of a slot container, a proof container, an auto migration container and an auto cache volume container runs in `shared`. For a slot container, `shared` holds until its first frame or its exit. For a detached container, `shared` holds until `<runtime> run` exits.
+- After the full-map migration, every volume file belongs to the container uid 10001, so each later auto range reads it.
+- The cache volume of a group takes the same rules, under [project-service.impl.md](project-service.impl.md#the-cache-volume). A cache volume without the label takes the full-map carrier once. After the carrier exits 0, the pool host writes the host record `<state>/volumes/<cache volume name>.owner`, mode `0600`, with the `CreatedAt` of the volume.
+- The host marker and the host record are files in the server state, not store columns.
 
 ### The run command
 
@@ -873,10 +1027,11 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 <runtime> run --rm -i --pull=missing
   --name kanthord_slot_<instance name>
   --label io.kanthord.owner=<owner> --label io.kanthord.instance=<instance name>
-  --user 10001 --sig-proxy=false --log-driver none --no-healthcheck
+  --user 10001:10001 <userns> --sig-proxy=false --log-driver none --no-healthcheck
   --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0
   --read-only --tmpfs /tmp:rw,nosuid,nodev,size=64m
   --volume kanthord_slot_<instance name>:/var/lib/kanthord --workdir /var/lib/kanthord
+  --volume <state>/workers/<instance name>/sessions:/var/lib/kanthord/state/kanthord/pi/sessions<z>
   --env HOME=/var/lib/kanthord --env TMPDIR=/var/lib/kanthord/tmp --env LANG=C.UTF-8
   --env XDG_CONFIG_HOME=/var/lib/kanthord/config --env XDG_DATA_HOME=/var/lib/kanthord/data
   --env XDG_STATE_HOME=/var/lib/kanthord/state --env XDG_CACHE_HOME=/var/lib/kanthord/cache
@@ -886,6 +1041,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 ```
 
 - `--env <NAME>` repeats for each of `TZ`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` that the server `env` sets. The argv holds the name only, so the value comes from the client `env`.
+- `<userns>` is `--userns=auto:uidmapping=10001:0:1,gidmapping=10001:0:1` on rootless Podman and empty on every other runtime. `<z>` is `:Z` on an SELinux host. [The session directory](#the-session-directory) states both.
 - The driver passes no `PATH`, `USER`, `LOGNAME`, `SHELL`, `LC_ALL` or `LC_CTYPE` of the host.
 - The command holds no `-t`, because a TTY mixes the streams and changes the line ends.
 - `tini` of the image is PID 1. It reaps the children and forwards the signals.
@@ -959,12 +1115,16 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 
 ### macOS and Linux hosts
 
-- On macOS, the Podman machine or Docker Desktop holds the slot volume inside its VM, so no host path is shared. The workspace runs on the native file system of the VM.
+- On macOS, the Podman machine or Docker Desktop holds the slot volume inside its VM. The workspace runs on the native file system of the VM.
+- On macOS, the session directory is the only host path that the VM shares with the instance. The server state directory must lie in a shared folder of the VM. The Podman machine shares `$HOME` by default, and the server state directory `~/.local/share/kanthord` lies below it.
+- A server state directory outside a shared folder fails the mount. The runtime exits 125, and the pool host writes `worker.pool.instance_failed` with the runtime text in `stderr.log`.
+- The unit audits each execution directory for mode `0700` and its own uid, so the file share must present both.
 - On macOS, the frames cross the API link of the runtime: SSH to the Podman machine, or the socket of Docker Desktop.
 - The VM memory bounds every container. The default Podman machine holds 2 GiB. Two or more `container` instances that run `npm` need `podman machine set --memory 8192`.
 - A stopped Podman machine answers `runtime_failed`. After `podman machine start`, the `container` instances recover through the backoff.
 - A Linux binary install under a system user needs a subordinate uid range and a runtime directory:
   - `apt install podman uidmap`, then `usermod --add-subuids 200000-265535 --add-subgids 200000-265535 kanthord`.
+  - That range of 65536 ids runs at most 6 kanthord containers at the same time, under [The uid map](#the-uid-map). For more instances, raise the range with `usermod --add-subuids <range> --add-subgids <range> <user>`, then run `podman system migrate`.
   - The unit sets `RuntimeDirectory=kanthord`, `RuntimeDirectoryMode=0700`, `Environment=XDG_RUNTIME_DIR=/run/kanthord` and `KillMode=mixed`.
   - `~/.config/containers/containers.conf` of the server user sets `cgroup_manager = "cgroupfs"` and `events_logger = "file"`, because a system user holds no systemd user session.
 - A Linux desktop user runs rootless Podman with no setup.
@@ -974,8 +1134,8 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 
 - Argv golden tests for Podman and Docker assert every option of the run command, and no `client_secret` and no `env` value in the argv.
 - Detection fixtures cover these hosts:
-  - rootless Podman, a stopped Podman machine, a subordinate range of exactly 10001 uids and a range of 10000 uids;
-  - Docker Desktop, rootless Docker, rootful Docker, the `podman-docker` shim and a stopped Docker daemon;
+  - rootless Podman, a stopped Podman machine, a subordinate range of exactly 10001 uids that answers available, and a range of 10000 uids that answers `runtime_failed`;
+  - Docker Desktop, rootless Docker on Linux as a `runtime_failed` fixture, rootful Docker, the `podman-docker` shim and a stopped Docker daemon;
   - `/.dockerenv`.
 - Frame tests cover these cases:
   - a round trip, a chunk split inside a UTF-8 sequence and two frames in one chunk;
@@ -1877,7 +2037,7 @@ This revision projects no tool to a REST route, and it gives the CLI no command 
 A tool is reached through the MCP server.
 
 - The endpoint path is `/api/worker/mcp`.
-- `src/worker/contract.ts` declares three operations at that path. Each declares the `client` access policy, a live registration, the operational store, the 10 MiB body limit and the [900 s timeout](gateway-service.impl.md#cancellation).
+- `src/worker/contract.ts` declares three operations at that path. Each declares the `client` access policy, a live registration, the operational store, the 32 MiB body limit and the [900 s timeout](gateway-service.impl.md#cancellation).
 - `worker.mcp.message` is `POST /api/worker/mcp` with the `stream` lifetime. Its body is one JSON-RPC message of the MCP specification. The answer is one `application/json` body or one `text/event-stream` response that stays open until the server answers that message.
 - `worker.mcp.listen` is `GET /api/worker/mcp` with the `stream` lifetime and no body. It opens the server-to-client event stream. The route timeout ends the response, and the client resumes with `Last-Event-ID`.
 - `worker.mcp.close` is `DELETE /api/worker/mcp` with the `unary` lifetime and no body. It ends the session that `Mcp-Session-Id` names and answers 204.
@@ -2067,7 +2227,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 
 - `openNativeAgent` starts one `agent.session` span before it opens the pi session. The span identity is the pi session id.
 - It opens the pi session with `SessionManager.create(<workspace>, <session directory>, { id })`, so pi persists every entry to a JSONL file.
-- The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`.
+- The session directory is `pi/sessions/execution/<execution identity>/` of the data directory, with mode `0700`. The worker unit keeps every execution directory.
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
 - When the session opens, the worker appends one `kanthord.pinned_context` entry as the marker of the system prompt. The entry holds `{ part: "system_prompt" }` and no text.
 - After each session event, the worker sends each entry beyond the count that it already sent.
@@ -2076,7 +2236,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - An `agent.turn` span stays a child of its enclosing worker span: `worker.task` for a turn on a unit, `worker.phase` for a conflict turn, and `worker.evaluation` for the reviewer. Its `gen_ai.conversation.id` names its session.
 - The start of an `agent.turn` span holds `kanthord.prompt.template`: the `PromptTemplate` value of the instruction that drove the turn. It also holds `kanthord.prompt.template.digest`, the sha-256 hex digest of the source template, and `kanthord.prompt.work.digest`, the `WorkPrompt.digest` that `renderWorkPrompt` computes. The digest names the rendered work prompt before the redaction.
 - Before the worker sends an entry, it applies the sensitive text rule set to its copy. The secrets of every credential of the execution are the known secrets. Each finding becomes `<redacted:RULE>`.
-- The session file stays on the host as a convenience. A stateless container loses it, and the Tracking Service still holds every entry that reached it.
+- The host of an execution keeps its own copy of each agent session. A reader [rebuilds](tracking-service.impl.md#the-rebuild-read) a cut entry from that copy while the host can serve it. The rebuild answers an error when the host cannot serve the entry, and never the cut entry. A stateless host loses the copy, and the Tracking Service still holds every entry that reached it.
 - The span identity of a worker span hashes the execution identity, a run key and the local key. The run key is 8 random hexadecimal characters, new in each process run of the execution. A resumed execution therefore writes new spans and keeps the spans of the earlier run.
 
 pi keeps its own compaction logic, and kanthord designs nothing for it.

@@ -244,7 +244,7 @@ The `/hooks/*` handler reads `arrayBuffer()`.
 It passes the exact bytes and headers to the Intake Service.
 A re-serialized body breaks the signature of the platform.
 It parses no JSON and validates no schema.
-The `hono/body-limit` middleware permits 40 KiB on the worker registration operation and on `/api/auth/*`, 50 MiB on a delivery operation, and 10 MiB on other operations.
+The `hono/body-limit` middleware permits 32 MiB on every operation.
 
 ## The forwarding contract
 
@@ -558,7 +558,7 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), the [LL
 
 `testClient` of `hono/testing` covers the logic of each handler.
 A real ephemeral loopback listener covers the `Host` and `Origin` checks with the preflight.
-It covers the body limits and a streaming body.
+It covers the body limit and a streaming body.
 It covers a timeout against a mutation that completes and a client disconnect.
 It covers the shutdown drain and the exact bytes of a delivery.
 It checks the liveness response for both `server` and `gateway`, including SQLite and log health, through HTTP and direct clients.
@@ -610,7 +610,7 @@ A loopback callback listener that pi-ai opens for an OAuth login session belongs
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
 It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential` and `DELETE /api/worker/registration/:runtime_identity` for a worker instance.
-It forwards `POST /api/worker/instance/token`, `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat` and `POST /api/worker/ssh/sign` for a worker instance at the `worker` placement.
+It forwards `POST /api/worker/instance/token`, `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat`, `POST /api/worker/instance/work`, `POST /api/worker/session-read/:read_id/report` and `POST /api/worker/ssh/sign` for a worker instance at the `worker` placement.
 It forwards the LLM credential routes that a worker token calls, under [llm.impl.md](llm.impl.md#instance-copies).
 These routes are `POST /api/llm/credential` of `create`, `POST /api/llm/credential/:credential_name/revision` of `rotate`, `GET /api/llm/credential` of `list` and `GET /api/llm/credential/:credential_name` of `get`.
 They also include `POST /api/llm/credential/:credential_name/report` of `report` and `POST /api/llm/credential/login/:session_id/report` of `login_report`.
@@ -641,7 +641,7 @@ Each operation declares its own access policy; a path prefix grants no policy.
 `GET /api/healthcheck` declares the `human` policy.
 `GET /api/auth/verify`, the registration inspection operations and the instance record operations of the Worker Service declare the human policy.
 `POST /api/worker/register` and the registration lifecycle, credential, SSH signature and MCP operations declare the client policy, and delivery operations declare the delivery policy.
-`POST /api/worker/instance/token` declares the public policy. `POST /api/worker/instance/connect` and `POST /api/worker/instance/heartbeat` declare the worker policy.
+`POST /api/worker/instance/token` declares the public policy. `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat`, `POST /api/worker/instance/work` and `POST /api/worker/session-read/:read_id/report` declare the worker policy.
 
 ## The client configuration file
 

@@ -21,7 +21,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 ## Operation contracts
 
-- Every Scheduler route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging), the [default 30 s timeout](gateway-service.impl.md#cancellation) and the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits) unless a row below says otherwise.
+- Every Scheduler route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging), the [default 30 s timeout](gateway-service.impl.md#cancellation) and the [32 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits) unless a row below says otherwise.
 - `scheduler.work.pull` at `POST /api/scheduler/work/pull` is a `client` mutation of `wait` lifetime. Its route timeout is 120 s and its wait window is 90 s. Cancellation ends the wait and no accepted claim.
   - The handler runs the full claim in a [probe transaction](architecture.impl.md#the-operation-and-its-two-entry-adapters) at the start and after each wait. The probe and the commit that follows it use one `now` value.
   - A probe or a commit that reaches admission takes its own instance healthcheck.

@@ -260,6 +260,18 @@ When the laptop of Ulrich sleeps, no heartbeat arrives inside the window, and th
 A restart of `claude-code` therefore registers again.
 The instance heartbeat of a [connection](#connection) is another signal. It keeps the connection current and renews no registration.
 
+## work read
+
+The work read is the read that answers the pending work of an instance after a change of its `work_version`.
+The answer holds the pending logins and the pending [session reads](#session-read) of the instance.
+The instance heartbeat of `box-coder` answers a new `work_version`, so `box-coder` calls `worker.instance.work` and receives one login.
+
+## session read
+
+A session read is one request of the Tracking Service for one entry of an agent session on the host of the execution.
+A reader rebuilds a cut entry of the `swe@1` session of `Add password reset`, which `box-coder` ran.
+The Worker Service queues a session read for `box-coder`, and `box-coder` reports the full entry.
+
 ## pool
 
 The pool is the instances that one worker binding lists in `worker_instances`.
@@ -309,7 +321,7 @@ A binding write that moves `box-1` from `coder-box` to `coder-review` sends `box
 ## slot volume
 
 The slot volume is the named volume `kanthord_slot_<instance name>` that holds the state of a server instance at the `container` placement.
-It holds the workspaces, the `pi/` directory with the agent sessions and the log of the instance.
+It holds the workspaces, the `pi/` directory and the log of the instance. The agent sessions of the instance live in its session directory on the server host.
 `box-1` writes its workspace into the volume `kanthord_slot_box-1`.
 A relaunch of `box-1` mounts the same volume and resumes its `running` execution.
 The archive of `box-1` removes the volume.
