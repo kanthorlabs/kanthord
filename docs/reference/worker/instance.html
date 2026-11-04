@@ -196,7 +196,7 @@
           </p>
           <h3 id="the-instance-exchange">The instance exchange</h3>
           <p>
-            <code>kanthord serve worker</code> calls three operations. A human
+            <code>kanthord serve worker</code> calls these operations. A human
             does not call them:
           </p>
           <ol>
@@ -1090,7 +1090,8 @@
                   <td><code>bytes</code>, an integer of at least 1</td>
                   <td>
                     The UTF-8 byte length of the entry line is above the full
-                    entry bound. The instance sends no entry.
+                    entry bound of 33488896 bytes, 32 MiB minus 64 KiB. The
+                    instance sends no entry.
                   </td>
                 </tr>
                 <tr>
@@ -1796,7 +1797,7 @@ kanthord worker instance archive coder-1 --expected-revision 1 --force</code></p
           <p>
             <code>kanthord worker instance</code> without a subcommand displays
             help. No CLI command calls <code>token</code>, <code>connect</code>,
-            <code>heartbeat</code> or <code>work</code>;
+            <code>heartbeat</code>, <code>work</code> or <code>report</code>;
             <code>kanthord serve worker</code> calls them.
           </p>
           <div class="table-wrap">

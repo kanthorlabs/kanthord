@@ -464,8 +464,8 @@ sudo systemctl restart kanthord</code></pre>
                     <code>server_in_container</code>,
                     <code>runtime_absent</code> or <code>runtime_rootful</code>.
                     The reason <code>runtime_failed</code> never refuses a
-                    create, because a stopped runtime recovers. See the rows
-                    below.
+                    create, because the runtime can recover or a human can fix
+                    the host. See the rows below.
                   </td>
                 </tr>
                 <tr>
@@ -601,23 +601,23 @@ sudo systemctl restart kanthord</code></pre>
                     An instance never shows on the <strong>Workers</strong> page
                   </td>
                   <td>
-                    Read <code>workers/&lt;client_id&gt;/stderr.log</code>. A
-                    failed pull shows there. Pull the image as the user of the
-                    server, then wait for the next start of the instance. The
-                    server tries again after a pause of up to 30 s.
+                    Read <code>workers/&lt;name&gt;/stderr.log</code>. A failed
+                    pull shows there. Pull the image as the user of the server,
+                    then wait for the next start of the instance. The server
+                    tries again after a pause of up to 30 s.
                   </td>
                 </tr>
                 <tr>
                   <td>
-                    On rootless Podman, a container instance never starts while
-                    6 KanthorD containers run, and its
+                    On rootless Podman, a container instance does not start
+                    while other <code>container</code> instances run, and its
                     <code>stderr.log</code> shows a user namespace error
                   </td>
                   <td>
-                    A default subordinate range of 65536 ids runs 6 KanthorD
-                    containers next to the other <code>--userns=auto</code>
-                    containers of the user. For more instances, raise the range
-                    with
+                    A default subordinate range of 65536 ids runs at most 6
+                    KanthorD containers at the same time. The other
+                    <code>--userns=auto</code> containers of the user lower that
+                    count. For more instances, raise the range with
                     <code
                       >sudo usermod --add-subuids &lt;range&gt; --add-subgids
                       &lt;range&gt; &lt;user&gt;</code

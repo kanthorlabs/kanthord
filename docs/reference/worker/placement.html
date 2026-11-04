@@ -125,7 +125,7 @@
       "available": false,
       "reason": "runtime_failed",
       "detail": "Cannot connect to Podman. Please verify your connection to the Linux system.",
-      "container_runtime": "podman"
+      "container_runtime": null
     },
     {
       "placement": "worker",
@@ -187,8 +187,9 @@
                   <td><code>items[].container_runtime</code></td>
                   <td>string or null</td>
                   <td>
-                    <code>podman</code> or <code>docker</code> when the server
-                    found a container runtime; otherwise <code>null</code>.
+                    <code>podman</code> or <code>docker</code> when a runtime
+                    answers the check; <code>null</code> when no runtime
+                    answers.
                   </td>
                 </tr>
               </tbody>
