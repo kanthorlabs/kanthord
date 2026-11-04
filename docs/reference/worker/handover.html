@@ -64,6 +64,14 @@
             response.
           </p>
           <p>
+            The first handover of an attempt also writes the
+            <a href="../../explanation/native-agent.html#the-attempt-prompt-pin"
+              >attempt prompt pin</a
+            >. It reads the base head of each repository binding that names an
+            instruction file, with a 20-second deadline, and pins that commit
+            for every execution of the attempt.
+          </p>
+          <p>
             When the instance of the caller is at the <code>server</code> or the
             <code>container</code> placement, the server releases the
             <code>server</code> copy of the credential; see
@@ -287,6 +295,29 @@
                 <tr>
                   <td><code>409 credential.revision.revoked</code></td>
                   <td>The pinned credential revision is revoked.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>422 project.bindings.repository.ssh_unreachable</code>
+                  </td>
+                  <td>
+                    The first handover of an attempt cannot read the base head
+                    of a binding that names an instruction file, or the read
+                    exceeds its 20-second deadline.
+                    <code>details.failure_reason</code> names the cause.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >422 project.bindings.repository.base_branch_absent</code
+                    >
+                  </td>
+                  <td>
+                    The first handover of an attempt finds that the remote does
+                    not hold the base branch of a binding that names an
+                    instruction file.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>403 custody.handover.holder_refused</code></td>

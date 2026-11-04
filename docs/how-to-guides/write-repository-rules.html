@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Write the rules of a repository · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li>
+            <a href="#1-decide-where-each-rule-goes"
+              >1. Decide where each rule goes</a
+            >
+          </li>
+          <li>
+            <a href="#2-write-each-sentence-as-a-rule"
+              >2. Write each sentence as a rule</a
+            >
+          </li>
+          <li>
+            <a href="#3-choose-the-instruction-file"
+              >3. Choose the instruction file</a
+            >
+          </li>
+          <li>
+            <a href="#4-set-the-prompts-of-the-binding"
+              >4. Set the prompts of the binding</a
+            >
+          </li>
+          <li>
+            <a href="#5-check-what-each-agent-reads"
+              >5. Check what each agent reads</a
+            >
+          </li>
+          <li><a href="#result">Result</a></li>
+          <li>
+            <a href="#relax-a-rule-for-the-reviewer"
+              >Relax a rule for the reviewer</a
+            >
+          </li>
+          <li>
+            <a href="#a-claude-code-1-coder"
+              >A <code>claude-code@1</code> coder</a
+            >
+          </li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="write-the-rules-of-a-repository">
+            Write the rules of a repository
+          </h1>
+          <p>
+            Write the conventions of one repository once, so that every native
+            agent that works on it reads them. The coder
+            <code>swe@1</code> follows the rules, and the reviewer
+            <code>re@1</code> judges the work against the same rules. A
+            violation of a work-product rule is a blocker, so the node goes back
+            to the coder.
+          </p>
+          <p>
+            The rules live in the repository binding of the project, in the key
+            <code>prompts</code>. KanthorD reads them into the system prompt of
+            each execution.
+            <a href="../explanation/native-agent.html#the-prompt">The prompt</a>
+            explains the whole system prompt.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>
+              A project with a repository binding and its base branch. See
+              <a href="../reference/project/binding.html">project bindings</a>.
+            </li>
+            <li>
+              The <code>kanthord</code> CLI with a human token, or the
+              dashboard.
+            </li>
+            <li>
+              The rules of your repository, for example from a code review
+              checklist or an existing <code>AGENTS.md</code>.
+            </li>
+          </ul>
+          <h2 id="1-decide-where-each-rule-goes">
+            1. Decide where each rule goes
+          </h2>
+          <p>
+            The system prompt of an agent holds three prompt layers. An agent
+            reads them from the most general to the most specific, and a later
+            text governs an earlier text.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Name</th>
+                  <th>Where you write it</th>
+                  <th>Who reads it</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>KanthorD prompt</td>
+                  <td>
+                    Shipped with KanthorD. An operator can replace a file in
+                    <code>agent.prompt.agent_directory</code> on the server
+                    host.
+                  </td>
+                  <td>Every native agent of every project</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>Repository prompt</td>
+                  <td>
+                    The instruction file that
+                    <code>prompts.instruction_file</code> names, then the text
+                    <code>prompts.repository</code>
+                  </td>
+                  <td>Every native agent on the repository</td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>Binding prompt</td>
+                  <td><code>prompts.agents[&lt;agent&gt;]</code></td>
+                  <td>One agent on the repository</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The full order, from the lowest precedence to the highest, is the
+            reading order:
+            <code>base.md</code>, the Role, <code>workbench.md</code>, the
+            instruction file, the stored Repository prompt, the Binding prompt,
+            and the framing of KanthorD. So the stored Repository prompt can
+            override a rule of the instruction file, and a Binding prompt can
+            override a rule of the Repository prompt for its own agent. No text
+            overrides the framing. The framing states that the worker owns the
+            commit, the branch, the push, the verification and the release.
+          </p>
+          <p>Put each rule into one place:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>The rule</th>
+                  <th>Put it into</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    A rule of the work product that the team already keeps in a
+                    file of the repository
+                  </td>
+                  <td>The instruction file</td>
+                  <td>
+                    The team edits one file, and the base branch versions it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A rule of the work product that applies only when KanthorD
+                    does the work, or a correction of the instruction file
+                  </td>
+                  <td><code>prompts.repository</code></td>
+                  <td>
+                    It comes after the instruction file, so it governs that
+                    file.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A rule that the reviewer judges</td>
+                  <td>
+                    The instruction file or <code>prompts.repository</code>,
+                    never only a Binding prompt
+                  </td>
+                  <td>
+                    The coder and the reviewer read the same layer 2. A rule in
+                    the <code>re@1</code> Binding prompt only reaches the
+                    reviewer, so the coder never sees the rule that blocks it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A relaxation of how the reviewer weighs a rule</td>
+                  <td><code>prompts.agents[&quot;re@1&quot;]</code></td>
+                  <td>
+                    This is the one judgement statement that layer 3 permits.
+                    See
+                    <a href="#relax-a-rule-for-the-reviewer"
+                      >Relax a rule for the reviewer</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    An extra hint for one agent, for example a note for
+                    <code>env@1</code> about the toolchain of the repository
+                  </td>
+                  <td><code>prompts.agents[&lt;agent&gt;]</code></td>
+                  <td>Only that agent reads it.</td>
+                </tr>
+                <tr>
+                  <td>A secret, a token or a password</td>
+                  <td>Nowhere</td>
+                  <td>
+                    A prompt holds no secret. Every human of the project and
+                    each model provider reads a prompt, and KanthorD scans no
+                    prompt for a secret.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="2-write-each-sentence-as-a-rule">
+            2. Write each sentence as a rule
+          </h2>
+          <p>
+            A layer 2 or layer 3 text joins the
+            <strong>default standard</strong> of the agent. The first paragraph
+            of <code>base.md</code> holds these sentences: "This text, the rules
+            of your role, and the repository prompt and the binding prompt of
+            each repository of the work form the default standard. The default
+            standard binds every work product." So the reviewer reads each
+            work-product sentence as a rule. A violation is a blocker, and the
+            node goes back to the coder.
+          </p>
+          <p>
+            Write each sentence so that a reviewer can decide yes or no. Replace
+            advice with a rule:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Advice (avoid)</th>
+                  <th>Rule (write)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Try to keep functions short.</td>
+                  <td>A function holds at most 40 lines.</td>
+                </tr>
+                <tr>
+                  <td>Prefer descriptive names.</td>
+                  <td>Write every name outside the code in snake_case.</td>
+                </tr>
+                <tr>
+                  <td>Tests are nice to have.</td>
+                  <td>A test file sits beside its source file.</td>
+                </tr>
+                <tr>
+                  <td>Consider error handling.</td>
+                  <td>
+                    Every HTTP handler answers an error with the shared error
+                    envelope.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A rule binds the <strong>work product</strong>: its language, its
+            style, its conventions and its structure. A rule about the method,
+            the tools, the repository operations or the release is no ground for
+            a blocker. The reviewer reports a violation of such a rule with
+            <code>action: no</code>, so it causes no rework. The coder still
+            reads it as guidance.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sentence</th>
+                  <th>Kind</th>
+                  <th>What the reviewer does with a violation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Every exported function has a type annotation.</td>
+                  <td>Work product</td>
+                  <td>A blocker</td>
+                </tr>
+                <tr>
+                  <td>Run <code>pnpm lint</code> before you commit.</td>
+                  <td>Method</td>
+                  <td>A suggestion with <code>action: no</code></td>
+                </tr>
+                <tr>
+                  <td>Use the GitHub CLI to open a pull request.</td>
+                  <td>Repository operation</td>
+                  <td>
+                    A suggestion with <code>action: no</code>. The worker opens
+                    the pull request, not the agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Bump the version in <code>package.json</code> at a release.
+                  </td>
+                  <td>Release</td>
+                  <td>A suggestion with <code>action: no</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A verification command of a node is the place for a check that a
+            command can run. A rule in a prompt is the place for a convention
+            that a reviewer reads.
+          </p>
+          <h2 id="3-choose-the-instruction-file">
+            3. Choose the instruction file
+          </h2>
+          <p>
+            Name an instruction file when the repository already keeps its rules
+            in a file, for example <code>AGENTS.md</code>. Leave the key absent
+            when the file holds advice or instructions for an interactive tool,
+            because every sentence of the file then binds the work.
+          </p>
+          <ul>
+            <li>
+              Name exactly one file. KanthorD has no fallback list, so a
+              repository with only <code>CLAUDE.md</code> names
+              <code>CLAUDE.md</code>.
+            </li>
+            <li>
+              Write a relative path with <code>/</code>, for example
+              <code>docs/agent-rules.md</code>. The path holds no
+              <code>.</code> or <code>..</code> segment, no empty segment, no
+              backslash and no control character, and at most 255 bytes.
+            </li>
+            <li>
+              Keep the file at most 32768 bytes of UTF-8 text, with LF line
+              ends. A carriage return is a control character, so a file with
+              CRLF line ends is invalid.
+            </li>
+            <li>
+              Put every rule into the named file. To scope a rule to one
+              directory, name the directory in the rule, for example "Every
+              handler in <code>src/api</code> validates its input." KanthorD
+              reads no nested file, for example <code>src/api/AGENTS.md</code>,
+              because it composes the system prompt before the agent opens a
+              directory.
+            </li>
+            <li>
+              Do not rely on an <code>@</code> import. KanthorD expands no
+              <code>@</code> import, so a <code>CLAUDE.md</code> that holds only
+              <code>@AGENTS.md</code> gives the text <code>@AGENTS.md</code>.
+              Name <code>AGENTS.md</code> instead.
+            </li>
+            <li>
+              A symbolic link inside the repository works. KanthorD reads the
+              target, so <code>AGENTS.md -&gt; docs/agents.md</code> reads
+              <code>docs/agents.md</code>.
+            </li>
+            <li>
+              KanthorD reads no <code>*.local.md</code> file and no file of a
+              home directory, because no commit holds a personal file.
+            </li>
+          </ul>
+          <p>
+            Commit the file to the base branch. KanthorD reads the file from the
+            base branch, never from the node branch.
+          </p>
+          <h2 id="4-set-the-prompts-of-the-binding">
+            4. Set the prompts of the binding
+          </h2>
+          <p>
+            Every key of <code>prompts</code> is optional and absent by default:
+          </p>
+          <pre><code class="language-json">{
+  "prompts": {
+    "instruction_file": "AGENTS.md",
+    "repository": "Write every name outside the code in snake_case. A test file sits beside its source file. Each change adds an entry to CHANGELOG.md.",
+    "agents": {
+      "re@1": "A missing changelog entry gives a suggestion, not a blocker."
+    }
+  }
+}</code></pre>
+          <p>
+            <code>repository</code> and each text of <code>agents</code> hold at
+            most 32768 UTF-8 bytes, with no control character other than a tab
+            and a newline. The keys of <code>agents</code> are
+            <code>swe@1</code>, <code>re@1</code> and <code>env@1</code>.
+          </p>
+          <h3 id="with-the-cli">With the CLI</h3>
+          <ol>
+            <li>
+              Export the binding set of the project:
+              <pre><code class="language-sh">kanthord project binding export &lt;project-id&gt; &gt; bindings.json</code></pre>
+            </li>
+            <li>
+              Add the <code>prompts</code> object to the <code>config</code> of
+              the repository binding in <code>bindings.json</code>.
+            </li>
+            <li>
+              Check the instruction file before the apply. Write the
+              <code>config</code> of the repository binding into
+              <code>check.json</code> as
+              <code
+                >{ &quot;kind&quot;: &quot;repository&quot;, &quot;config&quot;:
+                { ... } }</code
+              >, then run:
+              <pre><code class="language-sh">kanthord project binding check &lt;project-id&gt; --file check.json</code></pre>
+              The answer holds
+              <code>instruction_file: { path, commit, state, reason }</code>.
+              Continue when <code>state</code> is <code>present</code>. The
+              state <code>absent</code> also passes the apply, but the agents
+              then read no instruction file until the file exists on the base
+              branch. When the configuration names no instruction file and the
+              base head holds a valid <code>AGENTS.md</code>, the answer holds
+              <code
+                >instruction_file_hint: &quot;AGENTS.md exists at the base
+                head.&quot;</code
+              >.
+            </li>
+            <li>
+              Apply the binding set:
+              <pre><code class="language-sh">kanthord project binding apply &lt;project-id&gt; --file bindings.json</code></pre>
+            </li>
+          </ol>
+          <p>
+            The apply reads the instruction file at the base head. It refuses an
+            invalid file with
+            <code>400 project.bindings.repository.prompt_invalid</code> and
+            stores nothing. An absent file passes, and the agents read no
+            instruction file until the file exists.
+          </p>
+          <h3 id="with-the-dashboard">With the dashboard</h3>
+          <ol>
+            <li>
+              Open the project, then open the repository binding. The sheet
+              holds the section <strong>Prompts</strong>.
+            </li>
+            <li>
+              Write the path into the field <strong>Instruction file</strong>.
+              Select <strong>Verify</strong>. The field shows
+              <code>AGENTS.md found at &lt;commit&gt;.</code>, an absent state
+              or an invalid state with its reason.
+            </li>
+            <li>
+              Select the edit button of the row
+              <strong>Repository prompt</strong> or of a row
+              <strong>Binding prompt</strong>. Write the text, then select
+              <strong>Apply</strong>. The dialog button
+              <strong>Apply</strong> changes the draft of the sheet only and
+              stores nothing. The dialog shows the byte count against the
+              32768-byte limit.
+            </li>
+            <li>Select <strong>Save binding</strong> to store the texts.</li>
+            <li>
+              Open the edit dialog again and select the tab
+              <strong>Preview</strong>. It lists the parts that an agent reads,
+              in reading order. Each layer 2 and layer 3 part has the label
+              <strong>Default standard</strong>. The preview reads the stored
+              binding, so it works only after the first save.
+            </li>
+          </ol>
+          <p>
+            Each save that changes a <code>prompts</code> key stores a new
+            binding revision. A node keeps the texts of the revision that it
+            pins until <code>mission node rebind</code> moves it to the current
+            revision, at its next attempt.
+          </p>
+          <h2 id="5-check-what-each-agent-reads">
+            5. Check what each agent reads
+          </h2>
+          <p>
+            Read the system prompt that the next attempt of a node on this
+            binding gets:
+          </p>
+          <pre><code class="language-sh">kanthord agent get re@1 --project &lt;project-id&gt; --binding-id &lt;binding-id&gt; --view final</code></pre>
+          <p>
+            The read takes the instruction file at the current base head. Read
+            the stack that the agent of a node reads now, at the commit that its
+            attempt pins:
+          </p>
+          <pre><code class="language-sh">kanthord agent get re@1 --node &lt;node-id&gt;</code></pre>
+          <p>
+            Without <code>--view final</code>, the answer lists each part with
+            its <code>layer</code>, <code>heading</code>, <code>state</code> and
+            <code>text</code>. A part with the state <code>invalid</code> or
+            <code>unreachable</code> shows a file that the server cannot read.
+            <code>final</code> is then <code>null</code>.
+          </p>
+          <p>
+            After an execution, rebuild the exact system prompt that it served:
+          </p>
+          <pre><code class="language-sh">kanthord agent prompt resolve --execution &lt;execution-id&gt; --agent re@1</code></pre>
+          <h2 id="result">Result</h2>
+          <ul>
+            <li>
+              The system prompt of each native agent on the repository holds the
+              heading
+              <code
+                >Repository prompt of repository &lt;name&gt;, file
+                &lt;path&gt;:</code
+              >
+              and the text of the file, then
+              <code
+                >Repository prompt of repository &lt;name&gt;, set in
+                KanthorD:</code
+              >
+              and the stored text. The agent of a Binding prompt also reads
+              <code>Binding prompt of repository &lt;name&gt;:</code> and its
+              text.
+            </li>
+            <li>
+              For native agents, the coder and the reviewer of one attempt read
+              the instruction file at the same base commit. The worker calls
+              <code>worker.handover</code> once after each claim, before the
+              execution setup, and the first handover of the attempt pins that
+              commit. A rework and a review round stay inside the attempt, so
+              they read the same commit. A change that a human merges into the
+              base branch later reaches the node at its next attempt.
+            </li>
+            <li>
+              The reviewer judges a violation of a work-product rule as a
+              blocker. An unrequested change of the instruction file by the
+              coder is also a blocker, because the instruction file is a gate
+              input.
+            </li>
+          </ul>
+          <h2 id="relax-a-rule-for-the-reviewer">
+            Relax a rule for the reviewer
+          </h2>
+          <p>
+            A Binding prompt comes after the Repository prompt, so it governs it
+            for its own agent. Use the <code>re@1</code> Binding prompt to
+            change how the reviewer weighs a rule, not to add a rule:
+          </p>
+          <pre><code class="language-json">{
+  "prompts": {
+    "repository": "Each change adds an entry to CHANGELOG.md.",
+    "agents": {
+      "re@1": "A missing changelog entry gives a suggestion, not a blocker."
+    }
+  }
+}</code></pre>
+          <p>
+            The coder reads the changelog rule and follows it. The reviewer
+            reads the rule and the relaxation, so a missing entry gives a
+            suggestion and no rework.
+          </p>
+          <h2 id="a-claude-code-1-coder">A <code>claude-code@1</code> coder</h2>
+          <p>
+            KanthorD sends no prompt text to the external harness
+            <code>claude-code@1</code>. Claude Code loads its own
+            <code>CLAUDE.md</code> files from its working directory, which is
+            the candidate on the node branch. When a project runs
+            <code>claude-code@1</code> as the coder, add the line
+            <code>@&lt;path&gt;</code>, for example <code>@AGENTS.md</code>,
+            where <code>&lt;path&gt;</code> is the instruction file of the
+            binding, to the <code>CLAUDE.md</code> of the base branch, so the
+            coder reads the instruction file of the binding. When the binding
+            names <code>CLAUDE.md</code> itself, Claude Code loads that file
+            with no import.
+          </p>
+          <ul>
+            <li>
+              The <code>claude-code@1</code> coder reads the file from the node
+              branch, not from a pinned commit. It reads no
+              <code>prompts.repository</code> and no Binding prompt. Put every
+              rule that the reviewer judges into the instruction file.
+            </li>
+            <li>
+              The harness calls no handover, so the first native execution of
+              the attempt, usually the reviewer, pins the base head. The
+              reviewer can thus read a later base commit than the coder.
+            </li>
+          </ul>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause</th>
+                  <th>Fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    The apply answers
+                    <code>400 project.bindings.repository.prompt_invalid</code>
+                    with <code>reason: path_invalid</code>
+                  </td>
+                  <td>
+                    The path is absolute, holds a <code>.</code> or
+                    <code>..</code> segment, an empty segment, a backslash or a
+                    control character, or is longer than 255 bytes.
+                  </td>
+                  <td>Write a relative path such as <code>AGENTS.md</code>.</td>
+                </tr>
+                <tr>
+                  <td>
+                    The apply answers <code>prompt_invalid</code> with
+                    <code>prompt: &quot;instruction_file&quot;</code> and
+                    <code>reason: control_character</code>
+                  </td>
+                  <td>
+                    The file at the base head holds a carriage return or another
+                    control character. CRLF line ends cause this.
+                  </td>
+                  <td>
+                    Convert the file to LF line ends, commit it to the base
+                    branch and apply again.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The apply answers <code>prompt_invalid</code> with
+                    <code>reason: too_large</code>
+                  </td>
+                  <td>The file or the text is larger than 32768 bytes.</td>
+                  <td>
+                    Shorten the text. Move the extra rules into another source,
+                    for example <code>prompts.repository</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The worker logs <code>agent.prompt.source_invalid</code> and
+                    takes no more work
+                  </td>
+                  <td>
+                    The execution setup answered
+                    <code>409 agent.prompt.source_invalid</code>: the
+                    instruction file is invalid at the commit that the attempt
+                    pins. <code>details.reason</code> names the defect:
+                    <code>too_large</code>, <code>not_utf8</code>,
+                    <code>unreadable</code> or <code>control_character</code>. A
+                    retried setup also answers <code>reason: changed</code> when
+                    a stored part, for example a file of the agent directory,
+                    changed since the first setup of the execution. A retry of
+                    the same attempt reads the same commit.
+                  </td>
+                  <td>
+                    Fix the file on the base branch. A new attempt pins the new
+                    base head, for example the attempt that a human unblock
+                    opens. Today a refused setup releases no stop, and the
+                    worker instance takes no more work. After the fix, restart
+                    <code>kanthord serve worker</code> for an instance at the
+                    <code>worker</code> placement. For the
+                    <code>server</code> or the <code>container</code> placement,
+                    restart the server with <code>kanthord serve</code>. See
+                    <a href="../explanation/native-agent.html#the-prompt-record"
+                      >the prompt record</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A running node does not follow a new rule</td>
+                  <td>
+                    The node pins its binding revision, and the attempt pins the
+                    commit of the instruction file.
+                  </td>
+                  <td>
+                    For a <code>prompts</code> change, move the node to the new
+                    binding revision with
+                    <code
+                      >kanthord mission node rebind &lt;mission-id&gt;
+                      &lt;binding-id&gt; --node &lt;node-id&gt; --file
+                      &lt;path&gt;</code
+                    >. See
+                    <a href="../reference/mission/node.html#node-rebind"
+                      >node rebind</a
+                    >. A save alone does not move a node. For an instruction
+                    file change, no command is necessary. Both changes reach the
+                    node at its next attempt. A rework inside the current
+                    attempt keeps the old texts.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The reviewer blocks a candidate that edits the instruction
+                    file
+                  </td>
+                  <td>
+                    Rule 8 of <code>re@1.md</code>: an unrequested change to a
+                    gate input is a blocker.
+                  </td>
+                  <td>
+                    Name the change in the requirement of the node, or change
+                    the file outside KanthorD.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The reviewer reports a rule violation with
+                    <code>action: no</code>
+                  </td>
+                  <td>
+                    The rule is about the method, the tools, the repository
+                    operations or the release.
+                  </td>
+                  <td>
+                    Rewrite the rule as a rule of the work product, or keep it
+                    as guidance.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The coder does not follow a rule that the reviewer blocks on
+                  </td>
+                  <td>
+                    The rule stands only in the <code>re@1</code> Binding
+                    prompt.
+                  </td>
+                  <td>
+                    Move the rule into <code>prompts.repository</code> or the
+                    instruction file.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The dashboard shows no hint for an existing
+                    <code>AGENTS.md</code>
+                  </td>
+                  <td>
+                    The hint shows only when the field is empty and a valid
+                    <code>AGENTS.md</code> is present at the base head. An
+                    invalid file or a failed read gives no hint.
+                  </td>
+                  <td>
+                    Write <code>AGENTS.md</code> into the field and select
+                    <strong>Verify</strong> to see its state.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            For each field and code, see
+            <a href="../reference/project/binding.html#prompts">Prompts</a> of
+            the binding reference and
+            <a href="../reference/agent/agent.html">Get an agent declaration</a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

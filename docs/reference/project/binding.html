@@ -300,6 +300,16 @@
             <code>failure_reason</code>. Use <code>check</code> to test a
             repository binding before an apply.
           </p>
+          <p>
+            <code>check</code> also reads the instruction file at the base head
+            and answers its state in <code>instruction_file</code>. When the
+            configuration names no instruction file, it reads
+            <code>AGENTS.md</code> and answers a hint when that file is present
+            and valid. See
+            <a href="#project-binding-verify-and-project-binding-check"
+              >the answer</a
+            >.
+          </p>
           <h3 id="binding-configuration">Binding configuration</h3>
           <p>
             The <code>config</code> object of each kind accepts only the fields
@@ -382,49 +392,152 @@
                   <td><code>prompts</code></td>
                   <td>object</td>
                   <td>
-                    Optional. One optional text for each agent name
-                    <code>swe@1</code>, <code>re@1</code> and
-                    <code>env@1</code>. A text holds at most 32768 UTF-8 bytes
-                    and no control character other than a tab and a newline. See
-                    <a href="#binding-prompts">Binding prompts</a>.
+                    Optional. The keys <code>instruction_file</code>,
+                    <code>repository</code> and <code>agents</code>, each
+                    optional. See <a href="#prompts">Prompts</a>.
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <h3 id="binding-prompts">Binding prompts</h3>
+          <h3 id="prompts">Prompts</h3>
           <p>
-            The field <code>prompts</code> of a repository binding holds the
-            Binding prompt. The key is the name of an agent of the catalog. A
-            key outside <code>swe@1</code>, <code>re@1</code> and
-            <code>env@1</code> fails with
-            <code>400 gateway.request.validation_failed</code>. A text that
-            exceeds 32768 UTF-8 bytes or holds a control character fails with
+            The field <code>prompts</code> of a repository binding holds layers
+            2 and 3 of the
+            <a
+              href="../../explanation/native-agent.html#the-three-prompt-layers"
+              >prompt layers</a
+            >. It is an object with three optional keys, and each key is absent
+            by default:
+          </p>
+          <pre><code class="language-json">{
+  "prompts": {
+    "instruction_file": "AGENTS.md",
+    "repository": "Write every name outside the code in snake_case. A test file sits beside its source file. Each change adds an entry to CHANGELOG.md.",
+    "agents": {
+      "re@1": "A missing changelog entry gives a suggestion, not a blocker."
+    }
+  }
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Layer</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>instruction_file</code></td>
+                  <td>2</td>
+                  <td>
+                    One repository path, for example <code>AGENTS.md</code>,
+                    <code>CLAUDE.md</code> or <code>docs/agent-rules.md</code>.
+                    The path is relative, uses <code>/</code>, holds no
+                    <code>.</code> segment, no <code>..</code> segment, no empty
+                    segment, no backslash and no control character, and holds at
+                    most 255 bytes. It takes no <code>@&lt;commit&gt;</code>
+                    form, because the attempt pins the commit.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>2</td>
+                  <td>
+                    The stored Repository prompt: one text for every native
+                    agent on the repository.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agents</code></td>
+                  <td>3</td>
+                  <td>
+                    An object that maps an agent name to its Binding prompt. The
+                    keys are <code>swe@1</code>, <code>re@1</code> and
+                    <code>env@1</code>, and each key is optional.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A key outside the three keys, or an agent key outside the catalog,
+            fails with <code>400 gateway.request.validation_failed</code>.
+            <code>repository</code> and each text of <code>agents</code> hold at
+            most 32768 UTF-8 bytes and no control character other than a tab and
+            a newline. Another text, or an invalid path, fails with
             <code>400 project.bindings.repository.prompt_invalid</code> and
-            <code>details.agent_name</code> and <code>details.reason</code>.
-            <code>reason</code> is <code>too_large</code> or
-            <code>control_character</code>.
+            <code>details: { prompt, reason }</code>. <code>prompt</code> is
+            <code>instruction_file</code>, <code>repository</code> or an agent
+            name. <code>reason</code> is <code>too_large</code> or
+            <code>control_character</code> for a text, and
+            <code>path_invalid</code> for the path.
           </p>
           <p>
-            The server joins the text of
-            <code>prompts[&lt;agent&gt;]</code> into the system prompt of that
-            agent as <code>Instructions of repository &lt;name&gt;:</code> and
-            the text. A missing key, an empty text and a blank text add nothing.
-            <code>swe@1</code> and <code>re@1</code> read the prompts of every
-            repository binding of the node at its pinned revision.
-            <code>env@1</code> reads the prompt of the binding of its
-            environment run. The text ranks above the Agent prompt and below the
-            framing. See
+            The server composes the parts of each repository binding into the
+            system prompt of every native agent on that repository, in this
+            order:
+          </p>
+          <ol>
+            <li>
+              The instruction file, under the heading
+              <code
+                >Repository prompt of repository &lt;name&gt;, file
+                &lt;path&gt;:</code
+              >.
+            </li>
+            <li>
+              The text of <code>repository</code>, under the heading
+              <code
+                >Repository prompt of repository &lt;name&gt;, set in
+                KanthorD:</code
+              >.
+            </li>
+            <li>
+              The text of <code>agents[&lt;agent&gt;]</code>, under the heading
+              <code>Binding prompt of repository &lt;name&gt;:</code>, for that
+              agent only.
+            </li>
+          </ol>
+          <p>
+            An absent key, an empty text, a blank text and an absent instruction
+            file add no part. A later text governs an earlier text. See
             <a href="../../explanation/native-agent.html#the-prompt"
               >how the native agent reads its prompt</a
             >.
           </p>
           <ul>
             <li>
-              A change of <code>prompts</code> stores the next binding revision.
-              A node keeps the text of the revision that it pins until
-              <code>mission node rebind</code> moves the node to the current
-              revision.
+              An execution reads the instruction file at the base commit that
+              the first handover of its attempt pins, never from the node
+              branch. Every later execution of the attempt reads the same
+              commit, and a new attempt pins the base head again. The
+              <code>env@1</code> run reads the file at the commit of the run.
+            </li>
+            <li>
+              An apply of a new or changed binding that names
+              <code>instruction_file</code> reads the file at the head of the
+              base branch, with a 20-second deadline. An absent file passes. A
+              file that is larger than 32768 bytes, is not UTF-8, cannot be read
+              or holds a control character fails with
+              <code>400 project.bindings.repository.prompt_invalid</code> and
+              <code
+                >details: { prompt: &quot;instruction_file&quot;, reason }</code
+              >. A carriage return is a control character, so a file with CRLF
+              line ends fails.
+            </li>
+            <li>
+              KanthorD reads no nested per-directory file, no
+              <code>*.local.md</code> file and no file of a home directory, and
+              it expands no <code>@</code> import.
+            </li>
+            <li>
+              A change of any <code>prompts</code> key stores the next binding
+              revision. A node keeps the texts of the revision that it pins
+              until <code>mission node rebind</code> moves the node to the
+              current revision, at the next attempt.
             </li>
             <li>
               Environment onboarding treats the new binding ID as a changed
@@ -433,10 +546,20 @@
               <code>env@1</code>.
             </li>
             <li>
-              The prompts of the agents are separate texts.
-              <code>re@1</code> does not read the prompt of <code>swe@1</code>.
-              Write a rule that relaxes the default standard into the prompts of
-              both <code>swe@1</code> and <code>re@1</code>.
+              The coder and the reviewer read the same layer 2. Write each rule
+              that the reviewer judges into <code>repository</code> or the
+              instruction file, so the coder reads it too. Use
+              <code>agents[&quot;re@1&quot;]</code> only to relax the judgement
+              of a rule.
+            </li>
+            <li>
+              Each work-product sentence of a layer 2 or layer 3 text is a rule,
+              and the reviewer judges a violation as a blocker. A rule about the
+              method, the tools, the repository operations or the release is
+              guidance. A prompt holds no secret. See
+              <a href="../../how-to-guides/write-repository-rules.html"
+                >Write the rules of a repository</a
+              >.
             </li>
             <li>
               The server and every worker host run the same execution setup
@@ -1332,6 +1455,91 @@
             </table>
           </div>
           <p>
+            <code>check</code> also answers two fields about the instruction
+            file. <code>verify</code> answers neither.
+          </p>
+          <pre><code class="language-json">{
+  "instruction_file": {
+    "path": "AGENTS.md",
+    "commit": "9fceb02d0ae598e95dc970b74767f19372d61af8",
+    "state": "present",
+    "reason": null
+  },
+  "instruction_file_hint": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>instruction_file</code></td>
+                  <td>object or null</td>
+                  <td>
+                    <code>{ path, commit, state, reason }</code>, the state of
+                    the file that <code>prompts.instruction_file</code> names,
+                    at the base head. <code>null</code> when the configuration
+                    names no instruction file.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>instruction_file.state</code></td>
+                  <td>string</td>
+                  <td>
+                    <code>present</code>, <code>absent</code>,
+                    <code>invalid</code> or <code>unreachable</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>instruction_file.reason</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code>null</code> for <code>present</code> and
+                    <code>absent</code>. For <code>invalid</code>:
+                    <code>too_large</code>, <code>not_utf8</code>,
+                    <code>unreadable</code> or <code>control_character</code>.
+                    For <code>unreachable</code>:
+                    <code>base_branch_absent</code>, else a value of the
+                    <a href="#failure-reasons-of-the-address-entry"
+                      >failure reason list</a
+                    >, for example <code>deadline_exceeded</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>instruction_file.commit</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The base head, 40 or 64 lower-case hex.
+                    <code>null</code> for <code>unreachable</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>instruction_file_hint</code></td>
+                  <td>string or null</td>
+                  <td>
+                    <code>AGENTS.md exists at the base head.</code> when the
+                    configuration names no instruction file and a valid
+                    <code>AGENTS.md</code> is <code>present</code> at the base
+                    head. <code>null</code> otherwise, also for an invalid
+                    <code>AGENTS.md</code> and for a failed read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The check reads the file with the same head read as
+            <code>apply</code>, under a 20-second deadline. A failed read of a
+            named file gives the state <code>unreachable</code>, and a failed
+            read of <code>AGENTS.md</code> gives no hint. Neither refuses the
+            request.
+          </p>
+          <p>
             The <code>ssh_credential</code> and <code>credential</code> entries
             are the answers of the credential verify. Their values are in the
             <a href="../repository/credential.html#verify-and-check"
@@ -1765,11 +1973,24 @@
                   <td>
                     <code>400 project.bindings.repository.prompt_invalid</code>
                   </td>
-                  <td><code>apply</code></td>
+                  <td><code>apply</code>, <code>check</code></td>
                   <td>
-                    A text of <code>prompts</code> exceeds 32768 UTF-8 bytes or
-                    holds a control character. <code>details</code> holds
-                    <code>agent_name</code> and <code>reason</code>.
+                    A text of <code>prompts.repository</code> or
+                    <code>prompts.agents</code> exceeds 32768 UTF-8 bytes or
+                    holds a control character, or the
+                    <code>prompts.instruction_file</code> path is invalid. For
+                    <code>apply</code>, the instruction file at the base head is
+                    also invalid: larger than 32768 bytes, not UTF-8, unreadable
+                    or with a control character. <code>details</code> holds
+                    <code>prompt</code> and <code>reason</code>.
+                    <code>reason</code> is <code>too_large</code> or
+                    <code>control_character</code> for a text,
+                    <code>path_invalid</code> for the path, and
+                    <code>too_large</code>, <code>not_utf8</code>,
+                    <code>unreadable</code> or
+                    <code>control_character</code> for the file.
+                    <code>check</code> answers an invalid head file as
+                    <code>instruction_file.state: invalid</code>.
                   </td>
                 </tr>
                 <tr>
@@ -1779,9 +2000,23 @@
                   <td><code>apply</code></td>
                   <td>
                     <code>git ls-remote</code> of a new or changed binding
-                    fails. <code>details.failure_reason</code> names the cause,
-                    for example <code>key_refused</code> or
+                    fails, or the read of its instruction file at the base head
+                    fails or exceeds its 20-second deadline.
+                    <code>details.failure_reason</code> names the cause, for
+                    example <code>key_refused</code> or
                     <code>identity_unavailable</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >422 project.bindings.repository.base_branch_absent</code
+                    >
+                  </td>
+                  <td><code>apply</code></td>
+                  <td>
+                    A new or changed binding names an instruction file, and the
+                    remote does not hold its base branch.
                   </td>
                 </tr>
                 <tr>

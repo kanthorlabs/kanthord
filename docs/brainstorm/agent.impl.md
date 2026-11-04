@@ -42,7 +42,7 @@ A mechanism here never overrides a rule there.
 - `origin` is `binary` for a shipped text, `file` for an override file, `database` for `repository` and `binding`, and `repository` for `instruction_file`.
 - `path` is the override location that the server looked up for `binary` and `file`. It is the repository path for origin `repository`, and `null` for origin `database` and when `agent.prompt.agent_directory` is empty.
 - `binding_id` is the binding revision of a layer 2 or layer 3 part, and `null` otherwise. `commit` is the commit of origin `repository`, 40 or 64 lower-case hex, and `null` otherwise.
-- `digest` is the SHA-256 hex digest of the exact UTF-8 text of the part, with no heading.
+- `digest` is the SHA-256 hex digest of the exact UTF-8 text of the part, with no heading. It is null for a part that the server cannot read: an `invalid` or `unreachable` instruction file of `agent.get`.
 - `heading` is the plain-text line that the server writes before the text. The dashboard renders no heading itself.
 
 | Part                                       | `heading`                                                  |
@@ -57,12 +57,13 @@ A mechanism here never overrides a rule there.
 - The query `view=final` answers `prompt` with `final` only.
 - The optional queries `project_id` and `binding_id` select the repository binding whose layers 2 and 3 join `final`, and `final` is then the Worker final. The read takes the instruction file at the current base head, as the next attempt takes it. Without them, a Workbench agent answers the Workbench final, and `env@1` answers the Worker final.
 - The optional queries `node_id` and `attempt` select the stack that the agent of one node reads. `attempt` is a positive integer. Without `attempt`, the read takes the open attempt, else the latest attempt. The read takes the instruction file at the commit that the attempt pins, and at the current base head for an attempt with no pin.
+- A `node_id` that names no mission node answers 404 `mission.node.not_found`. A node with no attempt, or with no attempt `attempt`, answers 404 `mission.record.not_found`.
 - A `binding_id` that names no repository binding of `project_id` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`. `attempt` without `node_id`, and `node_id` with `project_id` or `binding_id`, answer 400 `gateway.request.validation_failed`.
 - `agent.prompt.resolve` is `GET /api/agent/prompt/resolve?execution_id=&agent_name=` under the `human` access policy. The static segment `prompt` matches before `:agent_name`.
-- The resolve reads the `agent.prompt` span of the execution and the agent, resolves each reference of `kanthord.prompt.sources` by its origin and checks each digest. It answers `{ parts, final, engine_version }`. `engine_version` is the value of `kanthord.engine.version` of the span.
+- The resolve reads the `agent.prompt` span of the execution and the agent, resolves each reference of `kanthord.prompt.sources` by its origin and checks each digest. It answers `{ parts, final, engine_version }`. `engine_version` is the value of `kanthord.engine.version` of the span. Each part holds the `digest` and the `commit` of its span reference, also when the part is not `resolved`.
 - The resolve reads only the references that the server wrote in a span, so it reads no file that a caller chooses.
 - An absent execution answers 404 `scheduler.execution.not_found`. A trace with no `agent.prompt` span for the agent answers 404 `agent.prompt.record_absent`.
-- A `changed` part of origin `binary` holds no text. The page `docs/cli/agent.md` of the engine gives the git command that reads the shipped text at `engine_version`.
+- A `changed` part of origin `binary` holds no text. The page `docs/cli/agent.md` of the engine gives the git command that reads the shipped text from the root release tag `v<engine_version>`: `git -C engine show "$(git rev-parse "v<engine_version>:engine"):static/prompt/<name>"`. A development build has no release tag, so its version names no unique engine commit.
 - Tests cover every part, every origin, every state, `view=final`, the Workbench final, a Worker final with a binding, a node with and without a pin, a resolve with a `changed` part, each refusal and a non-human caller of the resolve.
 
 ## Agent configuration validation

@@ -199,6 +199,16 @@
             channel needs.
           </p>
           <p>
+            The first <code>worker.handover</code> of an attempt also writes the
+            <a href="native-agent.html#the-attempt-prompt-pin"
+              >attempt prompt pin</a
+            >: the base commit of each repository binding that names an
+            instruction file. Every later execution of the attempt reads the
+            instruction file at that commit. The execution setup answers
+            <code>prompt: { final, sources }</code>: the system prompt and the
+            prompt reference of each part.
+          </p>
+          <p>
             The release body holds <code>further_work</code> and an optional
             <code>stop</code>. A <code>stop</code> requires
             <code>further_work: true</code>. A native worker adds
@@ -637,15 +647,22 @@ flowchart TB
                 </tr>
                 <tr>
                   <td><code>agent.prompt</code></td>
-                  <td>Worker</td>
+                  <td>Worker Service, on the server</td>
                   <td>Root</td>
                   <td>
                     <code>kanthord.agent.name</code>,
-                    <code>kanthord.prompt.parts</code>:
-                    <code>&lt;part&gt;:&lt;name&gt;:&lt;digest&gt;</code> items
-                    in reading order,
-                    <code>kanthord.prompt.templates_digest</code>. One span for
-                    each agent, written at the execution setup read
+                    <code>kanthord.prompt.sources</code>: the canonical JSON of
+                    each
+                    <a href="native-agent.html#the-prompt-record"
+                      >prompt reference</a
+                    >
+                    in reading order, the framing included,
+                    <code>kanthord.prompt.templates_digest</code> and
+                    <code>kanthord.engine.version</code>. One span for each
+                    agent, written by the execution setup before it answers. The
+                    span id derives from the execution and the agent, so the
+                    first span wins. A failed write fails the setup with
+                    <code>503 worker.execution.prompt_record_failed</code>
                   </td>
                   <td>None</td>
                 </tr>
@@ -836,9 +853,12 @@ flowchart TB
               When the session opens, the native producer sends one entry of
               type <code>custom</code> with <code>customType</code>
               <code>kanthord.pinned_context</code> for the system prompt. Its
-              <code>data</code> holds <code>part</code>:
-              <code>system_prompt</code>, and <code>text</code>. This entry is
-              the only record of the system prompt.
+              <code>data</code> holds only <code>part</code>:
+              <code>system_prompt</code>, and no text. The
+              <code>agent.prompt</code> span of the same execution and agent
+              holds the prompt references, and
+              <code>kanthord agent prompt resolve</code> rebuilds the text from
+              them.
             </li>
             <li>
               The producer cuts an entry above 61440 bytes of JSON and sets
@@ -1076,7 +1096,9 @@ flowchart TB
             flushes its queue for at most 5 seconds before the release and
             before the assessment. A record that is still queued at the end of
             the execution is dropped, and the worker logs the count. A failed
-            telemetry write never fails the execution.
+            telemetry write never fails the execution. The one exception is the
+            <code>agent.prompt</code> span, which the server writes in the
+            execution setup, because it is the only record of the prompt.
           </p>
           <h2 id="the-external-harness-path">The external harness path</h2>
           <p>
@@ -1085,12 +1107,16 @@ flowchart TB
             hooks that capture what Claude Code exposes.
           </p>
           <p>
-            <code>claude-code@1</code> receives no KanthorD text: no Agent
-            prompt, no Binding prompt and no framing. Claude Code loads its own
-            <code>CLAUDE.md</code> files from its working directory and its home
-            directory. That load is behavior of the Claude Code harness. It is
-            no KanthorD support. KanthorD reads no <code>CLAUDE.md</code>,
-            <code>AGENTS.md</code> or <code>*.local.md</code> file.
+            <code>claude-code@1</code> receives no KanthorD text: no KanthorD
+            prompt, no Repository prompt, no Binding prompt and no framing.
+            Claude Code loads its own <code>CLAUDE.md</code> files from its
+            working directory and its home directory. That load is behavior of
+            the Claude Code harness. It is no KanthorD support. The working
+            directory is the candidate, so a <code>claude-code@1</code> coder
+            reads the instruction file of the binding only through the
+            <code>CLAUDE.md</code> files that Claude Code loads from the
+            candidate, and it reads no pinned commit. The harness calls no
+            <code>worker.handover</code>, so it writes no attempt prompt pin.
           </p>
           <h3 id="launch">Launch</h3>
           <ol>
