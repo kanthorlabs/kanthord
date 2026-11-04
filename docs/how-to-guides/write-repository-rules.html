@@ -411,7 +411,7 @@
           <pre><code class="language-json">{
   "prompts": {
     "instruction_file": "AGENTS.md",
-    "repository": "Write every name outside the code in snake_case. A test file sits beside its source file.",
+    "repository": "Write every name outside the code in snake_case. A test file sits beside its source file. Each change adds an entry to CHANGELOG.md.",
     "agents": {
       "re@1": "A missing changelog entry gives a suggestion, not a blocker."
     }
@@ -589,10 +589,12 @@
             <code>CLAUDE.md</code> files from its working directory, which is
             the candidate on the node branch. When a project runs
             <code>claude-code@1</code> as the coder, add the line
-            <code>@AGENTS.md</code> to the <code>CLAUDE.md</code> of the base
-            branch, so the coder reads the instruction file of the binding. When
-            the binding names <code>CLAUDE.md</code> itself, Claude Code loads
-            that file with no import.
+            <code>@&lt;path&gt;</code>, for example <code>@AGENTS.md</code>,
+            where <code>&lt;path&gt;</code> is the instruction file of the
+            binding, to the <code>CLAUDE.md</code> of the base branch, so the
+            coder reads the instruction file of the binding. When the binding
+            names <code>CLAUDE.md</code> itself, Claude Code loads that file
+            with no import.
           </p>
           <ul>
             <li>
@@ -659,12 +661,14 @@
                 </tr>
                 <tr>
                   <td>
-                    The execution setup answers
-                    <code>409 agent.prompt.source_invalid</code>
+                    The worker logs <code>agent.prompt.source_invalid</code> and
+                    takes no more work
                   </td>
                   <td>
-                    The instruction file is invalid at the commit that the
-                    attempt pins. <code>details.reason</code> names the defect:
+                    The execution setup answered
+                    <code>409 agent.prompt.source_invalid</code>: the
+                    instruction file is invalid at the commit that the attempt
+                    pins. <code>details.reason</code> names the defect:
                     <code>too_large</code>, <code>not_utf8</code>,
                     <code>unreadable</code> or <code>control_character</code>. A
                     retried setup also answers <code>reason: changed</code> when
@@ -676,7 +680,11 @@
                     Fix the file on the base branch. A new attempt pins the new
                     base head, for example the attempt that a human unblock
                     opens. Today a refused setup releases no stop, and the
-                    worker instance takes no more work; see
+                    worker instance takes no more work. After the fix, restart
+                    <code>kanthord serve worker</code> for an instance at the
+                    <code>worker</code> placement. For the
+                    <code>server</code> or the <code>container</code> placement,
+                    restart the server with <code>kanthord serve</code>. See
                     <a href="../explanation/native-agent.html#the-prompt-record"
                       >the prompt record</a
                     >.
