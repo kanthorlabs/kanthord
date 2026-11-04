@@ -547,9 +547,12 @@
             </li>
             <li>
               For native agents, the coder and the reviewer of one attempt read
-              the instruction file at the same base commit. The first handover
-              of the attempt pins that commit. A change that a human merges into
-              the base branch later reaches the node at its next attempt.
+              the instruction file at the same base commit. The worker calls
+              <code>worker.handover</code> once after each claim, before the
+              execution setup, and the first handover of the attempt pins that
+              commit. A rework and a review round stay inside the attempt, so
+              they read the same commit. A change that a human merges into the
+              base branch later reaches the node at its next attempt.
             </li>
             <li>
               The reviewer judges a violation of a work-product rule as a
@@ -697,7 +700,8 @@
                       >node rebind</a
                     >. A save alone does not move a node. For an instruction
                     file change, no command is necessary. Both changes reach the
-                    node at its next attempt.
+                    node at its next attempt. A rework inside the current
+                    attempt keeps the old texts.
                   </td>
                 </tr>
                 <tr>
