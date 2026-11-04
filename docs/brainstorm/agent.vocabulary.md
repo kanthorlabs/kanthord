@@ -116,7 +116,7 @@ The text that replaces one sensitive text.
 In an agent session it is `<redacted:RULE:N:TAG>`, and in a tracer copy it is `<redacted:RULE>`.
 The term names no closed set.
 The term differs from the marker line of a judgement.
-Execution 1 shows `<redacted:url_userinfo:3:9f2c41ab07d1e5c3>` in place of the user and the password of a database address.
+Execution 1 shows `<redacted:url_userinfo:d:jpcmebklahnbofmd>` in place of the user and the password of a database address.
 
 ## prompt layer
 
