@@ -115,8 +115,10 @@ An entry holds its identity, its parent entry, its position in the session, its 
 A span references an entry by the session identity and the entry identity, and it never embeds the entry.
 The content of a tool call and of a model reply reaches telemetry through the session entries alone.
 An entry above the entry bound keeps its identity and its structure, and it states that its content is cut.
-The host of an execution keeps its own copy of each agent session as a convenience.
-That copy is no kanthord record, and a reader never depends on it.
+The host of an execution keeps its own copy of each agent session.
+A reader [rebuilds](tracking-service.vocabulary.md#rebuild) a cut entry from that copy while the host can serve it.
+The rebuild answers an error when the host cannot serve the entry, and never the cut entry.
+A rebuild serves the content that the cut removed, as pi wrote it.
 The producer removes the secrets of the LLM credential of the agent from every entry before it sends the entry.
 
 ## The trace summary

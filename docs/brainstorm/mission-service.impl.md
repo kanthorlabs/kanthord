@@ -450,7 +450,7 @@ The read computes these values, and no column stores them.
 - A reviewer blocker holds `action: yes` and a `ground`. A reviewer suggestion holds `ground: null`.
 - A human finding holds `action: yes`, `ground: null`, the `kind` that the human gives and a `cause_owner`.
 - `task_id` names a task of the revision that the assessment names, or it is null for the node criterion or the default standard.
-- `name`, `description`, `fix` and `why` each hold nonblank text of at most `FINDING_TEXT_MAX_BYTES` UTF-8 bytes. The worker schema checks that limit without the server configuration. 100 findings with 4 fields of 8 KiB give 3.2 MiB, under the 10 MiB body limit.
+- `name`, `description`, `fix` and `why` each hold nonblank text of at most `FINDING_TEXT_MAX_BYTES` UTF-8 bytes. The worker schema checks that limit without the server configuration. 100 findings with 4 fields of 8 KiB give 3.2 MiB, under the 32 MiB body limit.
 - One assessment holds at most `FINDING_MAX` reviewer findings.
 - `fixed_assessment_id` is null at the insert. A later current assessment of the same node and attempt writes it once, when its `fixed_finding_ids` lists the finding.
 - `decision`, `decision_reason`, `decided_by` and `decided_at` are null until the human decision. `decided_by` holds the JSON human `Actor`.
@@ -951,7 +951,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 
 - Every Mission route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging) of the Gateway Service.
 - Every Mission route uses the [default 30 s timeout](gateway-service.impl.md#cancellation).
-- Every Mission route uses the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits).
+- Every Mission route uses the [32 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits).
 - `Text` is a nonblank JSON string of at most `mission.text_max_bytes` UTF-8 bytes. A larger value answers HTTP 400 with an issue list. The rule applies to every text field of a node and to every item of `verifications`.
 - A stale expected revision answers 409 `mission.revision.conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version.conflict` with the current value in `details`.
 - An absent mission answers 404 `mission.mission.not_found`. An absent node answers 404 `mission.node.not_found`. An absent record answers 404 `mission.record.not_found`.
@@ -1168,7 +1168,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - A test asserts no mission version increment for each non-graph write and for a write with no structure or content change.
 - A test asserts that each content change creates the next node revision.
 - A test checks the `NodeChange` answer of each operation whose answer holds it.
-- A test checks the shared error envelope, the 30 s timeout and the 10 MiB body limit on every Mission route.
+- A test checks the shared error envelope, the 30 s timeout and the 32 MiB body limit on every Mission route.
 - A test asserts 409 `mission.revision.conflict` with the current value for a stale expected revision, and 409 `mission.version.conflict` with the current value for a stale expected mission version.
 - A test asserts 409 `mission.version.conflict` for a stale expected mission version on every `human` write that changes a node, its edges or its state, and asserts that a human control other than an unblock with a change leaves the mission version unchanged.
 - A test asserts that an execution submission commits after a human graph write increments the mission version.

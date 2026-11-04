@@ -111,6 +111,11 @@ A session entry is one entry of an agent session. It is a record of its own kind
 A model reply, a tool result and a compaction summary of `swe@1` are session entries.
 The entry identity, the session identity and the position of the entry identify it inside its trace.
 
+## rebuild
+
+A rebuild is a read of the full entry of a cut session entry from the host of the execution.
+A reader rebuilds the cut model reply of the `swe@1` session of `Add password reset`, and the rebuild answers the reply as pi wrote it.
+
 ## session format
 
 A session format names the shape of the entries of an agent session.

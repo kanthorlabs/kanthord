@@ -186,6 +186,7 @@ A session entry is a record of the kind `session_entry` in `tracking.telemetry.w
 - A cut keeps the first half and the last half of the limit around the marker `[cut <n> characters]`. `<n>` counts the removed characters.
 - When the entry stays above the bound, the producer cuts again with the limits 1024 and then 256.
 - When the entry stays above the bound after the limit 256, the producer sends only `type`, `id`, `parentId` and `timestamp`. It also keeps `role`, `toolCallId`, `toolName`, `isError`, `usage` and `stopReason` of `message`.
+- An entry with `truncated: true` is rebuildable through [the rebuild read](#the-rebuild-read). The record holds no size and no digest.
 - Before the cut, the producer applies the [sensitive text rule set](agent.impl.md#sensitive-text-redaction) to every string value of the entry. The secrets of every credential of the execution are the known secrets. Each finding becomes `<redacted:RULE>`. An identity, a commit or a tool call identity stays whole.
 - `entry_id` and `tool_call_id` come from the entry before the redaction.
 - A `pi` entry holds its tool call identity in `toolCallId` of a tool result message. A `claude_code` entry holds `tool_call_id: null`, and a reader finds its tool result through the `tool_use_id` of the content blocks.
@@ -261,8 +262,51 @@ The cause names the layer that caused a failure event. The Worker Service owns t
 - `tracking.session.entry.list` answers the entries of one session in the order of `sequence`. `tool_call_id` filters it to the result of one tool call.
 - `limit` takes 1 to 1000. It defaults to 100 for `tracking.trace.list` and `tracking.session.entry.list`, and to 500 for `tracking.span.list`.
 - `tracking.session.entry.get` answers one entry. An entry that the trace does not hold answers 404 `tracking.entry.not_found`.
+- `tracking.session.entry.rebuild` answers the full entry of a cut entry from the host of the execution, as [the rebuild read](#the-rebuild-read) states.
 - A reader of an open trace reads the span list again and reads the entry list after its last cursor. The dashboard reads every 5 seconds while the trace is `open`.
 - A reader renders a span with a parent that the store does not hold at the top level, marked "parent not stored".
+
+## The rebuild read
+
+`tracking.session.entry.rebuild` answers the full entry of one session entry. It uses `GET /api/tracking/trace/:trace_id/session/:session_id/entry/:entry_id/full` with `human` access. It is a read with the timeout `TRACKING_TIMEOUT_MS`.
+
+- The read loads the trace and the entry in one read transaction. An unknown trace answers 404 `tracking.trace.not_found`. An entry that the trace does not hold answers 404 `tracking.entry.not_found`.
+- An entry with `truncated: false` is the full entry. The read answers the stored entry at once.
+- For an entry with `truncated: true`, the read takes `execution_id` from the trace row. It calls its dependency `SessionHosts.read` outside every transaction. A null `execution_id` answers 404 `tracking.entry.session_absent` with reason `instance_unknown`.
+- The [Worker Service](worker-service.impl.md#the-session-read) finds the host of the execution and reads the pi entry there.
+- The current identity locates the pi entry. `execution_id` names the execution directory. The file name ends with `_<session_id>.jsonl`. The line holds `id` equal to `entry_id` and the `type` of the stored entry.
+- The answer is `sessionEntrySchema`. `entry` is the full pi entry, and `truncated` is `false`. The read stores nothing.
+- A failure answers an error code, never the cut entry.
+- The host measures the UTF-8 byte length of the line as pi wrote it. Above the full entry bound, the host sends no entry and answers the size.
+- The full entry bound `SESSION_ENTRY_FULL_MAX_BYTES` is `REQUEST_BODY_MAX_BYTES` minus `SESSION_READ_ENVELOPE_BYTES` (65536), so 33488896 bytes. The report body holds the line plus its envelope, so it fits the request body limit.
+- At the `worker` placement, the Worker Service waits `SESSION_READ_WAIT_MS` for the report of the host. The wait is `TRACKING_TIMEOUT_MS` minus `SESSION_READ_ANSWER_MARGIN_MS` (5000), so 25 s. The read answers `timeout` before the Gateway timeout ends the call.
+- The host applies no redaction at the read, and the read checks no digest. The pi session file holds the entry as pi wrote it.
+- No log record holds entry content. A log record holds the identities and the outcome only.
+- The record holds no size, so a reader sees no size before the read.
+
+The read answers these errors:
+
+| HTTP | Code                            | Condition                                                                                                                                                                                                  |
+| ---- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 409  | `tracking.entry.too_large`      | The full entry is above the full entry bound. `details: { instance, placement, bytes, limit }`.                                                                                                            |
+| 503  | `tracking.entry.unreachable`    | The `worker` instance cannot serve the read now. `details: { instance, placement, reason }`. `reason` is `offline` (no current connection), `timeout` (no answer within 25 s) or `busy` (8 reads pending). |
+| 404  | `tracking.entry.session_absent` | The host holds no file of the session. `details: { instance, placement, reason }`. `reason` is `not_kept`, `archived` or `instance_unknown`. For `instance_unknown`, `instance` and `placement` are null.  |
+| 404  | `tracking.entry.entry_absent`   | The session file holds no entry with the entry identity and type. `details: { instance, placement }`.                                                                                                      |
+| 503  | `tracking.entry.unreadable`     | The host failed to read the session file, met a symlink or a changed directory below the session root, or sent another entry. `details: { instance, placement }`.                                          |
+
+- `not_kept` means that pi never wrote the session, a stateless host lost it, or the instance moved to a new host.
+- `archived` means that the instance is archived, and KanthorD no longer reads its sessions.
+- `instance_unknown` means that no instance of KanthorD ran the execution.
+- `UnreachableReason` (`offline`, `timeout`, `busy`) applies only at the `worker` placement. The server reads the sessions of the `server` and the `container` placements directly.
+- The host outcome `session_absent` maps to reason `not_kept`. Each other host outcome except `resolved` maps to the error code of the same name.
+
+The CLI:
+
+- `kanthord tracking session entry get <trace-id> <session-id> <entry-id> --full` calls the rebuild read. The output keeps the eleven fields of `get`. An error exits 1 with its code. `tracking.entry.too_large` also exits 1, because the command asks for one full entry.
+- `kanthord tracking session entry list <trace-id> <session-id> --full` reads the page, then rebuilds each entry with `truncated: true`. It runs at most `SESSION_READS_PENDING_MAX / 2` rebuilds at the same time.
+- A failed rebuild of `list --full` exits 1 with the code of the failure of the lowest `sequence` and its `details.entry_id`.
+- An entry that answers `tracking.entry.too_large` in `list --full` stays cut with `truncated: true`, and it alone does not exit 1. The size is a fixed property of the entry, not a host fault.
+- A whole session is `list --full` over its pages. No export command exists.
 
 ## The timeline read
 
@@ -452,6 +496,7 @@ The service builds the answer in memory from these rows. The answer holds raw nu
 - RULED 2026-10-25 by Ulrich. The analytics reads answer at most 1000 items, and they take a range of 7 days by default and 31 days at most.
 - RULED 2026-10-25 by Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
 - RULED 2026-10-31 by Ulrich. `tracking_trace` adds 23 flow columns. `tracking.db` adds `tracking_flow_rollup`, `tracking_flow_histogram` and `tracking_usage_rollup` with primary keys only. This ruling supersedes the ruling of 2026-10-25 on the schema.
+- RULED 2026-11-03 by Ulrich. The full entry bound is the request body limit minus 65536 bytes. The rebuild adds no column, and `truncated: true` alone marks a rebuildable entry.
 - RULED 2026-10-25 by Ulrich. The cause lives only as `kanthord.cause.*` on the root span end. The Tracking Service derives no cause and adds no cause column. `tracking.trace.list` filters by `cause_category`, and `tracking.facet.get` answers `cause_categories`.
 - RULED 2026-10-25 by Ulrich. `tracking.cause.label` writes the span `tracking.cause_label` with the span identity `<root_span_id>.cause_label`. A new label replaces the old one, and every reader takes the label over the rule cause.
 - RULED 2026-10-25 by Ulrich. The producer records each fact, and an analytics read only adds up and divides. `instance_busy_ratio` sums the root `duration_ms` per `kanthord.worker.instance`.
