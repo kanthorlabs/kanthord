@@ -356,10 +356,11 @@
             </li>
           </ul>
           <p>
-            The stop detail of <code>agent.prompt.source_invalid</code> is its
-            <code>details.reason</code>. Today the worker releases no
-            <code>stop</code> after a refused execution setup, so these causes
-            apply only when a stop carries one of these codes.
+            After a refused execution setup, the worker releases a
+            <code>stop</code> with <code>operation_failed</code> and the setup
+            code, so these causes apply. For
+            <code>agent.prompt.source_invalid</code>, the detail is
+            <code>details.reason</code>.
           </p>
           <p>
             <code>suspects</code> is a list of categories, the best guess first.

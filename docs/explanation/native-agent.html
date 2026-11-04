@@ -889,9 +889,9 @@ Binding prompt of repository app:
           </ul>
           <p>
             Layer 1 has no pin. A change of a file in the agent directory takes
-            effect at the next composition. A refused setup releases no stop
-            today; <a href="#the-prompt-record">the prompt record</a> states the
-            gap.
+            effect at the next composition. A refused setup releases a
+            <code>stop</code> with the setup code, and the worker pulls the next
+            work. When the release fails, the pull loop ends.
           </p>
           <h3 id="precedence">Precedence</h3>
           <p>Two rules decide which text wins a conflict:</p>
@@ -1061,11 +1061,14 @@ Binding prompt of repository app:
             gives the command.
           </p>
           <p>
-            Today the worker releases no <code>stop</code> after a refused
-            execution setup, the same as for
-            <code>worker.execution.credential_not_pinned</code>. The worker unit
-            logs the code as a diagnostic and ends its pull loop, so it takes no
-            more work, and the execution gets no release.
+            After a refused execution setup, the worker releases the execution
+            with a <code>stop</code>, the same as for
+            <code>worker.execution.credential_not_pinned</code>. The
+            <code>stop</code> holds the reason <code>operation_failed</code> and
+            the setup code, and the worker pulls the next work. When the release
+            fails, the pull loop ends. A <code>gateway.</code> refusal other
+            than an execution end releases no <code>stop</code> and ends the
+            pull loop.
           </p>
           <h3 id="why-the-work-prompt-is-pinned">
             Why the work prompt is pinned

@@ -1102,6 +1102,9 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - An entry of `repositories` holds no `project_prompt` and no `working_layer`. The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
+- An execution end, 403 `gateway.invocation.execution_proof_failed` or 409 `scheduler.execution.not_running`, releases no stop, and the pull loop continues.
+- Every setup refusal other than an execution end and a `gateway.` refusal releases a stop with `further_work: true`, the reason `operation_failed` and that code. For example, a failed prompt record releases a stop with `worker.execution.prompt_record_failed`. The worker then pulls the next work. When the release fails, the pull loop ends.
+- Another `gateway.` refusal of the read, or an indeterminate answer until `expired_at`, releases no stop and ends the pull loop of the binding.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
 - Tests cover each source, the pinned revision after a rotation, the validation against the pinned metadata, an absent pin, a revoked pin, each other refusal, the proof of the path identity, the absence of a secret and the absence of a new pin. Tests cover a pinned instruction commit after the base moves, an absent prompt pin, a failed span write and a retried read.
 
