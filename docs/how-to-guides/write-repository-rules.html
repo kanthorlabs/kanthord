@@ -164,7 +164,8 @@
             </table>
           </div>
           <p>
-            The full order, from the lowest precedence to the highest, is:
+            The full order, from the lowest precedence to the highest, is the
+            reading order:
             <code>base.md</code>, the Role, <code>workbench.md</code>, the
             instruction file, the stored Repository prompt, the Binding prompt,
             and the framing of KanthorD. So the stored Repository prompt can
@@ -374,9 +375,12 @@
               CRLF line ends is invalid.
             </li>
             <li>
-              Put every rule into the named file. KanthorD reads no nested file,
-              for example <code>src/api/AGENTS.md</code>, because it composes
-              the system prompt before the agent opens a directory.
+              Put every rule into the named file. To scope a rule to one
+              directory, name the directory in the rule, for example "Every
+              handler in <code>src/api</code> validates its input." KanthorD
+              reads no nested file, for example <code>src/api/AGENTS.md</code>,
+              because it composes the system prompt before the agent opens a
+              directory.
             </li>
             <li>
               Do not rely on an <code>@</code> import. KanthorD expands no
@@ -440,9 +444,11 @@
               <pre><code class="language-sh">kanthord project binding check &lt;project-id&gt; --file check.json</code></pre>
               The answer holds
               <code>instruction_file: { path, commit, state, reason }</code>.
-              Continue when <code>state</code> is <code>present</code>. When the
-              configuration names no instruction file and the base head holds a
-              valid <code>AGENTS.md</code>, the answer holds
+              Continue when <code>state</code> is <code>present</code>. The
+              state <code>absent</code> also passes the apply, but the agents
+              then read no instruction file until the file exists on the base
+              branch. When the configuration names no instruction file and the
+              base head holds a valid <code>AGENTS.md</code>, the answer holds
               <code
                 >instruction_file_hint: &quot;AGENTS.md exists at the base
                 head.&quot;</code
@@ -476,8 +482,10 @@
               Select the edit button of the row
               <strong>Repository prompt</strong> or of a row
               <strong>Binding prompt</strong>. Write the text, then select
-              <strong>Apply</strong>. The dialog shows the byte count against
-              the 32768-byte limit.
+              <strong>Apply</strong>. The dialog button
+              <strong>Apply</strong> changes the draft of the sheet only and
+              stores nothing. The dialog shows the byte count against the
+              32768-byte limit.
             </li>
             <li>Select <strong>Save binding</strong> to store the texts.</li>
             <li>
@@ -538,10 +546,10 @@
               text.
             </li>
             <li>
-              The coder and the reviewer of one attempt read the instruction
-              file at the same base commit. The first handover of the attempt
-              pins that commit. A change that a human merges into the base
-              branch later reaches the node at its next attempt.
+              For native agents, the coder and the reviewer of one attempt read
+              the instruction file at the same base commit. The first handover
+              of the attempt pins that commit. A change that a human merges into
+              the base branch later reaches the node at its next attempt.
             </li>
             <li>
               The reviewer judges a violation of a work-product rule as a
@@ -653,8 +661,13 @@
                   </td>
                   <td>
                     The instruction file is invalid at the commit that the
-                    attempt pins. <code>details.reason</code> names the defect.
-                    A retry of the same attempt reads the same commit.
+                    attempt pins. <code>details.reason</code> names the defect:
+                    <code>too_large</code>, <code>not_utf8</code>,
+                    <code>unreadable</code> or <code>control_character</code>. A
+                    retried setup also answers <code>reason: changed</code> when
+                    a stored part, for example a file of the agent directory,
+                    changed since the first setup of the execution. A retry of
+                    the same attempt reads the same commit.
                   </td>
                   <td>
                     Fix the file on the base branch. A new attempt pins the new
@@ -673,9 +686,18 @@
                     commit of the instruction file.
                   </td>
                   <td>
-                    For a <code>prompts</code> change, run
-                    <code>mission node rebind</code>. Both changes apply at the
-                    next attempt of the node.
+                    For a <code>prompts</code> change, move the node to the new
+                    binding revision with
+                    <code
+                      >kanthord mission node rebind &lt;mission-id&gt;
+                      &lt;binding-id&gt; --node &lt;node-id&gt; --file
+                      &lt;path&gt;</code
+                    >. See
+                    <a href="../reference/mission/node.html#node-rebind"
+                      >node rebind</a
+                    >. A save alone does not move a node. For an instruction
+                    file change, no command is necessary. Both changes reach the
+                    node at its next attempt.
                   </td>
                 </tr>
                 <tr>

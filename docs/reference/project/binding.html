@@ -1980,8 +1980,15 @@
                     holds a control character, or the
                     <code>prompts.instruction_file</code> path is invalid. For
                     <code>apply</code>, the instruction file at the base head is
-                    also invalid. <code>details</code> holds
+                    also invalid: larger than 32768 bytes, not UTF-8, unreadable
+                    or with a control character. <code>details</code> holds
                     <code>prompt</code> and <code>reason</code>.
+                    <code>reason</code> is <code>too_large</code> or
+                    <code>control_character</code> for a text,
+                    <code>path_invalid</code> for the path, and
+                    <code>too_large</code>, <code>not_utf8</code>,
+                    <code>unreadable</code> or
+                    <code>control_character</code> for the file.
                     <code>check</code> answers an invalid head file as
                     <code>instruction_file.state: invalid</code>.
                   </td>
