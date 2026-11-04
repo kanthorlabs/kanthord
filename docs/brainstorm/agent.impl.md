@@ -645,16 +645,17 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 
 Marker grammar:
 
-- Session marker: `<redacted:RULE:N:TAG>`. `RULE` is a value of `SensitiveRule` or `scan_failed`. `N` is `\d{1,10}`. `TAG` is `[0-9a-f]{16}`.
+- Session marker: `<redacted:RULE:N:TAG>`. `RULE` is a value of `SensitiveRule` or `scan_failed`. `N` is the decimal index with each digit 0-9 written as `a`-`j`: `[a-j]{1,10}`. `TAG` is the hexadecimal tag with each nibble 0-f written as `a`-`p`: `[a-p]{16}`.
+- A session marker holds no digit, so that no status scanner reads a status code in it.
 - Tracer marker: `<redacted:RULE>`, with no index and no tag, because the tracer holds no table.
 - Any other text that starts with `<redacted:` is no marker.
 
 The tag:
 
-- `TAG` is the session part followed by the process part, 8 hexadecimal characters each.
+- `TAG` is the session part followed by the process part, 8 hexadecimal characters each, written as letters.
 - The session part is the first 8 characters of the sha-256 hex digest of the pi session id.
 - The process part is 8 random hexadecimal characters from `randomBytes`. It names one redaction object. A worker session and an `env@1` session have one object; a workbench session has one object for its life in the process.
-- Example: `<redacted:url_userinfo:3:9f2c41ab07d1e5c3>`.
+- Example: `<redacted:url_userinfo:d:jpcmebklahnbofmd>`.
 - `openSession` builds the redaction object from `sessionManager.getSessionId()` before it creates the pi session (`engine/src/agent/agent-session.ts`). So `text()` of the system prompt, `text()` of the work and every handler use one tag. With two tags, the pins find no equal text and insert a second copy.
 
 The table:
@@ -665,7 +666,7 @@ The table:
 - A final merged span longer than `SENSITIVE_VALUE_MAX_CHARACTERS` gets index 0. So no table value is longer than 16384 characters, and one key masks at most 16384 characters.
 - A merged span with a view part maps to its source range. When the view text of that range differs from the source text, the table keeps no value, and the marker takes index 0. A span of the wrapped view is such a case.
 - The same value always gets the same marker for one redaction object, also when another rule finds it later.
-- Index 0 marks a value that the session could not keep: `<redacted:scan_failed:0:TAG>` for a scan failure. `<redacted:RULE:0:TAG>` marks a value above `REDACTION_TABLE_MAX`, a span longer than `SENSITIVE_VALUE_MAX_CHARACTERS`, or a value whose view text differs from its source text.
+- Index 0 marks a value that the session could not keep: `<redacted:scan_failed:a:TAG>` for a scan failure. `<redacted:RULE:a:TAG>` marks a value above `REDACTION_TABLE_MAX`, a span longer than `SENSITIVE_VALUE_MAX_CHARACTERS`, or a value whose view text differs from its source text.
 - The hook module owns `REDACTION_TABLE_MAX`: 4096 values.
 - The workbench table holds at most `REDACTION_TABLE_MAX` values for the life of the session in the process. Above it, each new value takes index 0, and `unkept` counts each such marker.
 - A marker starts with `<`, as the current URL userinfo marker `<redacted>` does (`engine/src/repository/connector.ts`).
@@ -805,7 +806,7 @@ Hook order:
 - The whole scan of one string is pass 1 with the escaped view, plus pass 2 with the table, the known secrets, the part checks and the wrapped view.
 - A performance row is one input of the gate bench of the engine. The inputs are 1 MiB of random text, of code, of code as one JSON string, and of base64 in lines of 76 as one JSON string. They also are 50 KiB of code and the adversarial unit of each rule.
 - A test runs every performance row on the CI runner, with a limit of 600 ms per row. That limit only catches a quadratic case. A CI pass does not show that the target holds.
-- The scan of one string stops at `SENSITIVE_SCAN_MAX_CHARACTERS`. Above it, the string becomes `<redacted:scan_failed:0:TAG>`. A string of 8 MiB costs about 8 times a row.
+- The scan of one string stops at `SENSITIVE_SCAN_MAX_CHARACTERS`. Above it, the string becomes `<redacted:scan_failed:a:TAG>`. A string of 8 MiB costs about 8 times a row.
 
 ### Telemetry
 
@@ -827,9 +828,9 @@ The worker writes seven attributes at the end of the `agent.session` span (`engi
 
 ### Errors
 
-- A rule throws for a string, for example a `RangeError`. The string becomes `<redacted:scan_failed:0:TAG>`, and `scan_failed` grows. The reference also fails closed (`pi.ts`).
-- The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi-coding-agent/core/extensions/runner.js`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:0:TAG>`.
-- The `context` handler catches every error, and the summary becomes `<redacted:scan_failed:0:TAG>`.
+- A rule throws for a string, for example a `RangeError`. The string becomes `<redacted:scan_failed:a:TAG>`, and `scan_failed` grows. The reference also fails closed (`pi.ts`).
+- The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi-coding-agent/core/extensions/runner.js`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:a:TAG>`.
+- The `context` handler catches every error, and the summary becomes `<redacted:scan_failed:a:TAG>`.
 - The `tool_call` handler catches every error and returns `{ block: true, reason }`. On a throw, pi also fails the call (`pi-agent-core/agent-loop.js`).
 - `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply.
 
