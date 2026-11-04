@@ -264,7 +264,8 @@
                   <td><code>prompt</code></td>
                   <td>
                     <code>context_missing</code>,
-                    <code>instruction_conflict</code>, <code>rule_absent</code>
+                    <code>instruction_conflict</code>, <code>rule_absent</code>,
+                    <code>source_invalid</code>
                   </td>
                 </tr>
                 <tr>
@@ -316,7 +317,7 @@
                   <td><code>infrastructure</code></td>
                   <td>
                     <code>verification_killed</code>, <code>network</code>,
-                    <code>execution_lost</code>
+                    <code>execution_lost</code>, <code>prompt_record</code>
                   </td>
                 </tr>
                 <tr>
@@ -326,6 +327,36 @@
               </tbody>
             </table>
           </div>
+          <p>The prompt codes of the execution setup have these causes:</p>
+          <ul>
+            <li>
+              <code>agent.prompt.source_invalid</code> with a file reason,
+              <code>too_large</code>, <code>not_utf8</code>,
+              <code>unreadable</code> or <code>control_character</code>, gives
+              <code>prompt</code> / <code>source_invalid</code>. A retry does
+              not fix it, because the file stays invalid at the pinned commit.
+            </li>
+            <li>
+              <code>agent.prompt.source_invalid</code> with
+              <code>reason: changed</code>,
+              <code>worker.execution.prompt_not_pinned</code> and
+              <code>worker.execution.prompt_record_failed</code> give
+              <code>infrastructure</code> / <code>prompt_record</code>. The next
+              execution composes the prompt again.
+            </li>
+            <li>
+              <code>project.bindings.repository.ssh_unreachable</code> gives
+              <code>infrastructure</code> / <code>network</code>.
+              <code>project.bindings.repository.base_branch_absent</code> gives
+              <code>human</code> / <code>configuration</code>.
+            </li>
+          </ul>
+          <p>
+            The stop detail of <code>agent.prompt.source_invalid</code> is its
+            <code>details.reason</code>. Today the worker releases no
+            <code>stop</code> after a refused execution setup, so these causes
+            apply only when a stop carries one of these codes.
+          </p>
           <p>
             <code>suspects</code> is a list of categories, the best guess first.
             It stands only with the category <code>unattributed</code>, and
