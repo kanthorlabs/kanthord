@@ -127,8 +127,9 @@
               <code>1</code> of a new name, with its placement. The name follows
               the binding name form: 1 to 63 characters,
               <code>^[a-z][a-z0-9-]*$</code>. The names <code>server</code>,
-              <code>token</code>, <code>connect</code> and
-              <code>heartbeat</code> are reserved. An archived name stays taken.
+              <code>token</code>, <code>connect</code>,
+              <code>heartbeat</code> and <code>work</code> are reserved. An
+              archived name stays taken.
             </li>
             <li>
               <code>worker instance list</code> pages the newest revision of
@@ -213,11 +214,14 @@
             </li>
             <li>
               <code>worker.instance.heartbeat</code> renews the connection once
-              at the start, then every 15 seconds, and every 2 seconds while a
+              at the start, then every 15 seconds. When its answer holds another
+              <code>work_version</code>, the instance calls
+              <code>worker.instance.work</code>. The work read answers the
+              pending
               <a href="../llm/login.html#login-on-a-worker-instance"
-                >login on the instance</a
+                >logins on the instance</a
               >
-              is pending.
+              and the pending session reads of the instance.
             </li>
           </ol>
           <p>
@@ -230,12 +234,13 @@
             The server keeps only the current connection of each instance in
             memory, with its last heartbeat. A connect without
             <code>connection_id</code> creates a new connection, and the
-            previous connection ends at once. A connect or a heartbeat with
-            another <code>connection_id</code> fails with
+            previous connection ends at once. A connect, a heartbeat or a work
+            read with another <code>connection_id</code> fails with
             <code>409 worker.instance.connection_superseded</code>. After a
             server start, no connection is current. The first connect, heartbeat
             or <code>client</code> request with a valid
-            <code>connection_id</code> makes that connection current.
+            <code>connection_id</code> makes that connection current. A work
+            read makes no connection current.
           </p>
           <p>
             The dashboard shows an instance as connected while its last
@@ -896,15 +901,7 @@
   "server_version": "0.1.0",
   "binding_version": 3,
   "credential_version": 0,
-  "login_sessions": [
-    {
-      "session_id": "&lt;session-id&gt;",
-      "name": "claude",
-      "platform": "anthropic-subscription",
-      "mode": "copy_code",
-      "code": null
-    }
-  ]
+  "work_version": 1791468015002
 }</code></pre>
           <div class="table-wrap">
             <table>
@@ -945,6 +942,64 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><code>work_version</code></td>
+                  <td>integer</td>
+                  <td>
+                    Version of the pending work of the instance. A server start
+                    sets it to the start time in Unix milliseconds. It rises by
+                    <code>1</code> when the server queues a session read of the
+                    instance, and when a login of the instance starts, takes its
+                    code or ends. When the value differs from the value of the
+                    last work read, the instance calls the work read.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A heartbeat also sets the <code>connection_name</code> of a current
+            connection that holds none.
+          </p>
+          <h3 id="workerinstancework"><code>worker.instance.work</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. No CLI command calls this
+            operation. The instance calls it after a heartbeat answer with
+            another <code>work_version</code>. A failed work read keeps the old
+            version, so the next heartbeat starts a work read again. The work
+            read renews no liveness.
+          </p>
+          <pre><code class="language-json">{
+  "work_version": 1791468015002,
+  "login_sessions": [
+    {
+      "session_id": "&lt;session-id&gt;",
+      "name": "claude",
+      "platform": "anthropic-subscription",
+      "mode": "copy_code",
+      "code": null
+    }
+  ],
+  "session_reads": []
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>work_version</code></td>
+                  <td>integer</td>
+                  <td>
+                    The work version of this answer. The instance keeps it after
+                    a successful work read.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>login_sessions</code></td>
                   <td>array</td>
                   <td>
@@ -982,13 +1037,19 @@
                     <code>login-code</code>; <code>null</code> until then.
                   </td>
                 </tr>
+                <tr>
+                  <td><code>session_reads</code></td>
+                  <td>array</td>
+                  <td>
+                    Pending session reads of the instance, at most 8. Each item
+                    holds <code>read_id</code>, <code>execution_id</code>,
+                    <code>session_id</code>, <code>entry_id</code> and
+                    <code>entry_type</code>. An empty list when none is pending.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
-          <p>
-            A heartbeat also sets the <code>connection_name</code> of a current
-            connection that holds none.
-          </p>
           <h3 id="failures">Failures</h3>
           <p>
             API failures use the shared
@@ -1010,7 +1071,7 @@
                   <td>
                     Missing or invalid token, or a token of the wrong kind.
                     Create, list, get, rotate and archive require a human token.
-                    Connect and heartbeat require a worker token.
+                    Connect, heartbeat and work require a worker token.
                   </td>
                 </tr>
                 <tr>
@@ -1049,7 +1110,8 @@
                   <td>
                     The name breaks the binding name form, or it is
                     <code>server</code>, <code>token</code>,
-                    <code>connect</code> or <code>heartbeat</code>.
+                    <code>connect</code>, <code>heartbeat</code> or
+                    <code>work</code>.
                   </td>
                 </tr>
                 <tr>
@@ -1179,7 +1241,10 @@
                   <td>
                     <code>409 worker.instance.connection_superseded</code>
                   </td>
-                  <td><code>connect</code>, <code>heartbeat</code></td>
+                  <td>
+                    <code>connect</code>, <code>heartbeat</code>,
+                    <code>work</code>
+                  </td>
                   <td>
                     Another connection of the instance is current.
                     <code>details.connection_name</code> holds the name of the
@@ -1214,7 +1279,8 @@
                   <td>
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>token</code>,
-                    <code>connect</code>, <code>heartbeat</code>
+                    <code>connect</code>, <code>heartbeat</code>,
+                    <code>work</code>
                   </td>
                   <td>The body exceeds 32 MiB.</td>
                 </tr>
@@ -1225,7 +1291,8 @@
                   <td>
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>token</code>,
-                    <code>connect</code>, <code>heartbeat</code>
+                    <code>connect</code>, <code>heartbeat</code>,
+                    <code>work</code>
                   </td>
                   <td>
                     The request body is not <code>application/json</code>.
@@ -1400,14 +1467,21 @@
                   <td><code>worker</code> (worker JWT)</td>
                   <td>Yes</td>
                 </tr>
+                <tr>
+                  <td><code>work</code></td>
+                  <td><code>POST /api/worker/instance/work</code></td>
+                  <td><code>worker.instance.work</code></td>
+                  <td><code>worker</code> (worker JWT)</td>
+                  <td>No</td>
+                </tr>
               </tbody>
             </table>
           </div>
           <p>
             Every operation has a timeout of 30 seconds. The body limit is 32
             MiB. The Gateway skips the Host allowlist for the
-            <code>token</code>, <code>connect</code> and
-            <code>heartbeat</code> routes.
+            <code>token</code>, <code>connect</code>, <code>heartbeat</code> and
+            <code>work</code> routes.
           </p>
           <div class="table-wrap">
             <table>
@@ -1535,6 +1609,10 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><code>work</code></td>
+                  <td><code>{ &quot;connection_id&quot; }</code>.</td>
+                </tr>
+                <tr>
                   <td><code>list</code>, <code>get</code></td>
                   <td>None.</td>
                 </tr>
@@ -1617,8 +1695,8 @@ kanthord worker instance archive builder-1 --expected-revision 2
 kanthord worker instance archive coder-1 --expected-revision 1 --force</code></pre>
           <p>
             <code>kanthord worker instance</code> without a subcommand displays
-            help. No CLI command calls <code>token</code>,
-            <code>connect</code> or <code>heartbeat</code>;
+            help. No CLI command calls <code>token</code>, <code>connect</code>,
+            <code>heartbeat</code> or <code>work</code>;
             <code>kanthord serve worker</code> calls them.
           </p>
           <div class="table-wrap">
