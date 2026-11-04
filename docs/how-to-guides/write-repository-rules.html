@@ -677,9 +677,26 @@
                     the same attempt reads the same commit.
                   </td>
                   <td>
-                    Fix the file on the base branch. A new attempt pins the new
-                    base head, for example the attempt that a human unblock
-                    opens. The worker instance pulls the next work, so no
+                    Fix the file on the base branch. The node retries the same
+                    attempt after 30 s and then after 60 s, and it goes to
+                    <code>Paused</code> after 3 failures in a row. A retry and a
+                    <a href="../reference/mission/node-control.html#resume"
+                      ><code>kanthord mission node resume</code></a
+                    >
+                    keep the attempt and its pinned commit, so they fail again.
+                    To run on the new base head, pause the node with
+                    <a href="../reference/mission/node-control.html#cli-shape"
+                      ><code>kanthord mission node pause</code></a
+                    >
+                    if it is not paused yet. Then block it with
+                    <a
+                      href="../reference/mission/node-control.html#block-discard-and-override"
+                      ><code>kanthord mission node block</code></a
+                    >, and unblock it with
+                    <a href="../reference/mission/node-control.html#unblock"
+                      ><code>kanthord mission node unblock</code></a
+                    >. The unblock opens a new attempt that pins the new base
+                    head. The worker instance pulls the next work, so no
                     restart is necessary. See
                     <a href="../explanation/native-agent.html#the-prompt-record"
                       >the prompt record</a

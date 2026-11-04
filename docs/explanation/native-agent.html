@@ -891,7 +891,7 @@ Binding prompt of repository app:
             Layer 1 has no pin. A change of a file in the agent directory takes
             effect at the next composition. A refused setup releases a
             <code>stop</code> with the setup code, and the worker pulls the next
-            work.
+            work. When the release fails, the pull loop ends.
           </p>
           <h3 id="precedence">Precedence</h3>
           <p>Two rules decide which text wins a conflict:</p>
@@ -1065,8 +1065,9 @@ Binding prompt of repository app:
             with a <code>stop</code>, the same as for
             <code>worker.execution.credential_not_pinned</code>. The
             <code>stop</code> holds the reason <code>operation_failed</code>
-            and the setup code, and the worker pulls the next work. A
-            <code>gateway.</code> refusal releases no <code>stop</code> and ends
+            and the setup code, and the worker pulls the next work. When the
+            release fails, the pull loop ends. A <code>gateway.</code> refusal
+            other than an execution end releases no <code>stop</code> and ends
             the pull loop.
           </p>
           <h3 id="why-the-work-prompt-is-pinned">
