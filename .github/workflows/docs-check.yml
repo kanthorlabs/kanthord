@@ -1,0 +1,42 @@
+name: docs-check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Check out engine
+        env:
+          SUBMODULE_TOKEN: ${{ secrets.SUBMODULE_TOKEN }}
+        run: |
+          if [ -n "$SUBMODULE_TOKEN" ]; then
+            git config --global url."https://x-access-token:${SUBMODULE_TOKEN}@github.com/".insteadOf "git@kanthorlabs.github.com:"
+          else
+            git config --global url."https://github.com/".insteadOf "git@kanthorlabs.github.com:"
+          fi
+          git submodule update --init --depth 1 engine
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: engine/.nvmrc
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install engine dependencies
+        working-directory: engine
+        run: pnpm install --frozen-lockfile
+      - name: Check the documentation
+        run: scripts/docs/check.sh
