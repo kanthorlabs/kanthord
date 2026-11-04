@@ -875,9 +875,12 @@ erDiagram
             </li>
             <li>
               The <code>config</code> JSON of a repository binding holds
-              <code>prompts</code>, a map from an agent name to a text of at
-              most 32768 UTF-8 bytes. A change of a text inserts the next
-              binding revision.
+              <code>prompts</code>, an object with the optional keys
+              <code>instruction_file</code> (a repository path of at most 255
+              bytes), <code>repository</code> (a text) and
+              <code>agents</code> (a map from an agent name to a text). Each
+              text holds at most 32768 UTF-8 bytes. A change of a key inserts
+              the next binding revision.
             </li>
             <li>
               An enablement change validates every dependent worker binding
