@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { REDACTION_CANARY_PARTS, REDACTION_MARKER_PREFIX } from "./canary.mjs";
 import {
   githubAuthHeader,
   matchesScratch,
   matchesSecret,
   pendingCheckAction,
+  sessionFailure,
   shouldPause,
 } from "./check.mjs";
 
@@ -181,4 +183,56 @@ test("pendingCheckAction: completed nodes when idle returns start", () => {
 test("pendingCheckAction: completed nodes when busy returns queue", () => {
   assert.equal(pendingCheckAction(1, true), "queue");
   assert.equal(pendingCheckAction(5, true), "queue");
+});
+
+const markerOf = (index) =>
+  `${REDACTION_MARKER_PREFIX}${index}:0123456789abcdef>`;
+
+const entryLine = (role, text) =>
+  JSON.stringify({
+    type: "message",
+    message: { role, content: [{ type: "text", text }] },
+  });
+
+const coderSession = (text) => ({
+  file: "coder.jsonl",
+  agents: ["swe@1"],
+  text,
+});
+
+test("session: a file with the canary fails", () => {
+  const canary = REDACTION_CANARY_PARTS.join("");
+  const detail = sessionFailure([
+    coderSession(entryLine("toolResult", markerOf(1))),
+    coderSession(entryLine("toolResult", canary)),
+  ]);
+  assert.equal(detail, "canary stored in coder.jsonl");
+});
+
+test("session: a swe@1 tool result with the marker passes", () => {
+  assert.equal(
+    sessionFailure([coderSession(entryLine("toolResult", markerOf(1)))]),
+    null,
+  );
+});
+
+test("session: a marker only in the system message fails", () => {
+  assert.equal(
+    sessionFailure([coderSession(entryLine("system", markerOf(1)))]),
+    "tool output leg not exercised",
+  );
+});
+
+test("session: a re@1 file without the marker passes", () => {
+  assert.equal(
+    sessionFailure([
+      coderSession(entryLine("toolResult", markerOf(1))),
+      {
+        file: "reviewer.jsonl",
+        agents: ["re@1"],
+        text: entryLine("toolResult", "no finding"),
+      },
+    ]),
+    null,
+  );
 });

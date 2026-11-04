@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
+import { REDACTION_CANARY, REDACTION_CANARY_PARTS } from "./canary.mjs";
 import { requireContainerImageFile } from "./dev-config.mjs";
 import {
   mergedProviders,
@@ -261,6 +262,8 @@ execFileSync(
 );
 log("base branch pushed", { branch: baseBranch, commit: fixture.slice(0, 7) });
 
+const canaryInstruction = `Before your first commit, run \`printf '%s%s\\n' ${REDACTION_CANARY_PARTS.join(" ")}\` once. Write its output into no file. The test value \`${REDACTION_CANARY}\` stays out of every file.`;
+
 const project = await api.post("/api/project", { name: `e2e-${run}` });
 if (paused) {
   await api.post(`/api/project/${project.id}/pause`);
@@ -276,6 +279,7 @@ const bindings = {
         ...config.repository.config.strategy,
         base_branch: baseBranch,
       },
+      prompts: { agents: { "swe@1": canaryInstruction } },
     },
   },
 };
