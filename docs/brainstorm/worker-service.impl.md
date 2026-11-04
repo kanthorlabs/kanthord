@@ -1104,7 +1104,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The application calls the read after the handover and before the first inference call.
 - An execution end, 403 `gateway.invocation.execution_proof_failed` or 409 `scheduler.execution.not_running`, releases no stop, and the pull loop continues.
 - Every setup refusal other than an execution end and a `gateway.` refusal releases a stop with `further_work: true`, the reason `operation_failed` and that code. For example, a failed prompt record releases a stop with `worker.execution.prompt_record_failed`. The worker then pulls the next work. When the release fails, the pull loop ends.
-- A gateway answer of the setup read ends the execution with no release. A gateway answer is a `gateway.` refusal other than an execution end, or an indeterminate answer until `expired_at`. The worker logs `worker.execution.setup_unavailable` with the code and waits the pull backoff before its next pull. The pull loop resets the backoff only after a host that reaches the setup.
+- A gateway answer of the setup read ends the host of the execution with no release. A gateway answer is a `gateway.` refusal other than an execution end, or an indeterminate answer until `expired_at`. The worker logs `worker.execution.setup_unavailable` with the code and waits the pull backoff before its next pull. The pull loop resets the backoff only after a host that reaches the setup.
 - A re-pull of the same claim retries the setup. The loss settlement routes the node only when the gateway answer lasts until `expired_at`.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
 - Tests cover each source, the pinned revision after a rotation, the validation against the pinned metadata, an absent pin, a revoked pin, each other refusal, the proof of the path identity, the absence of a secret and the absence of a new pin. Tests cover a pinned instruction commit after the base moves, an absent prompt pin, a failed span write and a retried read.
@@ -1190,7 +1190,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - The `worker` application holds no `master_key`.
 - At the `server` and the `container` placements, the pool host derives the `client_secret` of each binding entry. The slot driver delivers the entries to the instance at the start and after each change. The `thread` driver puts them in `workerData` and in a `bindings` message. The `container` driver sends them in the `init` frame and in a `bindings` frame. The worker unit holds no `master_key`.
 - A `client_secret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
-- A handover envelope that the handover key does not open releases the execution with a stop `worker.handover.decryption_failed`. A gateway answer of the handover ends the execution with no release, and the worker waits the pull backoff, as for the setup read.
+- A handover envelope that the handover key does not open releases the execution with a stop `worker.handover.decryption_failed`. A gateway answer of the handover ends the host of the execution with no release, and the worker waits the pull backoff, as for the setup read.
 - A service refusal of the handover releases a stop with its code. Each handover stop is released with an empty credential set. The pull loop continues after each of these ends.
 - In server and container placements, custody refuses a handover of a revision with an OAuth refresh in flight, and the handover pins nothing. [The OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check) rules the refusal.
 - The handler then waits until the refresh ends and runs the handover again. The wait ends 5 s before the 30 s route timeout of `worker.handover`, so the handler answers before the route timer.
@@ -1969,7 +1969,7 @@ After a violation stop of gate G, the execution makes no checkpoint commit and p
 A failed checkpoint or push of a stop logs `checkpoint failed` with the redacted reason.
 A reviewer execution writes no commit and releases with the `stop` only.
 A failed push still releases with the `stop`, and the next execution starts from the pushed head.
-A failed release ends the execution with no release, and the loss settlement routes the node.
+A failed release ends the host of the execution with no release, and the loss settlement routes the node.
 A reply with no valid marker line gets one repair turn, for the evaluation judgement and the review reply of `reviewer@1`.
 The repair instruction is `The reply holds no valid <marker> line. Reply again with exactly one such line.` With a nonempty `issues` list, it adds ` Correct each issue of the last line: <issues as JSON>`.
 A second invalid judgement stops the execution with `judgement_invalid`, and a second invalid review reply ends the review of that task.
