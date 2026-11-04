@@ -62,13 +62,19 @@
             <a href="enablement.html">enablement</a>.
           </p>
           <p>
-            The server composes the prompt at read time from the Agent prompt
-            and the Binding prompt. The Agent prompt holds the files
+            The server composes the prompt at read time from three
+            <a
+              href="../../explanation/native-agent.html#the-three-prompt-layers"
+              >prompt layers</a
+            >. Layer 1, the KanthorD prompt, holds the files
             <code>base.md</code>, <code>&lt;agent_name&gt;.md</code> and, for a
-            Workbench agent, <code>workbench.md</code>. The Binding prompt holds
-            the text of <code>prompts[&lt;agent_name&gt;]</code> of each
-            repository binding. The framing is KanthorD protocol and no part of
-            either prompt.
+            Workbench agent, <code>workbench.md</code>. Layer 2, the Repository
+            prompt, holds the instruction file that
+            <code>prompts.instruction_file</code> of a repository binding names,
+            then the text of <code>prompts.repository</code>. Layer 3, the
+            Binding prompt, holds the text of
+            <code>prompts.agents[&lt;agent_name&gt;]</code>. The framing is
+            KanthorD protocol and no layer. It closes the system prompt.
           </p>
           <p>
             A file of the same name in the directory
@@ -89,13 +95,35 @@
             The execution setup, the Workbench session open and the
             <code>env@1</code> run refuse in the same way.
           </p>
+          <p>The read selects the repository bindings in one of three ways:</p>
+          <ul>
+            <li>
+              With no binding query, a Workbench agent answers the Workbench
+              system prompt, and <code>env@1</code> answers the worker system
+              prompt. No layer 2 or layer 3 part joins.
+            </li>
+            <li>
+              With <code>project_id</code> and <code>binding_id</code>,
+              <code>final</code> is the worker system prompt with layers 2 and 3
+              of that binding. The read takes the instruction file at the
+              current head of the base branch, as the next attempt takes it.
+            </li>
+            <li>
+              With <code>node_id</code>, <code>final</code> is the worker system
+              prompt with layers 2 and 3 of each repository binding of the node
+              revision that the attempt pins. The read takes the instruction
+              file at the commit that the attempt pins, and at the current base
+              head for an attempt with no pin. Without <code>attempt</code>, the
+              read takes the open attempt, else the latest attempt.
+            </li>
+          </ul>
           <p>
-            Without a binding, a Workbench agent answers the Workbench system
-            prompt, and <code>env@1</code> answers the worker system prompt.
-            With a project and a repository binding, <code>final</code> is the
-            worker system prompt with the binding prompt of that binding.
-            KanthorD reads no <code>AGENTS.md</code>, <code>CLAUDE.md</code> or
-            <code>*.local.md</code> file of a repository or of a home directory.
+            The read takes every instruction file in parallel under one deadline
+            of 20 seconds. A failed read of an instruction file is a part state,
+            and the read answers <code>200</code>. KanthorD reads only the one
+            file that <code>prompts.instruction_file</code> names. It reads no
+            nested file, no <code>*.local.md</code> file and no file of a home
+            directory.
           </p>
           <h2 id="expected-response">Expected response</h2>
           <p>
@@ -139,12 +167,30 @@
   "prompt": {
     "parts": [
       {
+        "layer": 1,
         "part": "standard",
         "name": "base.md",
         "origin": "binary",
         "path": "/home/kanthord/.local/share/kanthord/agents/base.md",
+        "binding_id": null,
+        "commit": null,
         "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
+        "heading": null,
+        "state": "resolved",
         "text": "This text is the shared standard of every agent. ..."
+      },
+      {
+        "layer": 2,
+        "part": "instruction_file",
+        "name": "app",
+        "origin": "repository",
+        "path": "AGENTS.md",
+        "binding_id": "binding_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        "commit": "9fceb02d0ae598e95dc970b74767f19372d61af8",
+        "digest": "f56a4bcf56b42c1603ce0c9687f0f94a1a975644097fe563ab7a5c34ac8ffe9d",
+        "heading": "Repository prompt of repository app, file AGENTS.md:",
+        "state": "resolved",
+        "text": "Write every name outside the code in snake_case. ..."
       }
     ],
     "final": "This text is the shared standard of every agent. ..."
@@ -200,12 +246,12 @@
                 </tr>
                 <tr>
                   <td><code>prompt.final</code></td>
-                  <td>string</td>
+                  <td>string or null</td>
                   <td>
-                    The composed system prompt: every part, then the framing. A
-                    <code>binding</code> part reads
-                    <code>Instructions of repository &lt;name&gt;:</code> and
-                    its text.
+                    The composed system prompt: every part in reading order, the
+                    framing last. A part with a heading renders as the heading,
+                    a blank line and the text. <code>null</code> when a part is
+                    not <code>resolved</code>.
                   </td>
                 </tr>
                 <tr>
@@ -331,15 +377,28 @@
             <code>strikes</code> and a past <code>available_at</code> until a
             success or a clear. Selection treats an expired hold as free.
           </p>
-          <p>
-            <code>prompt.parts</code> holds
-            <code>standard</code> (<code>base.md</code>),
-            <code>role</code> (<code>&lt;agent_name&gt;.md</code>),
-            <code>workbench</code> (<code>workbench.md</code>, only in the
-            Workbench system prompt) and one <code>binding</code> part for each
-            repository binding with a nonblank prompt of the agent. Each part
-            holds these fields:
-          </p>
+          <p><code>prompt.parts</code> holds the parts in reading order:</p>
+          <ol>
+            <li>
+              <code>standard</code>: <code>base.md</code>, for every agent.
+            </li>
+            <li><code>role</code>: <code>&lt;agent_name&gt;.md</code>.</li>
+            <li>
+              <code>workbench</code>: <code>workbench.md</code>, only in the
+              Workbench system prompt.
+            </li>
+            <li>
+              For each repository binding, in binding order:
+              <code>instruction_file</code>, then <code>repository</code>, then
+              <code>binding</code>. An absent instruction file, an absent text
+              and a blank text add no part.
+            </li>
+            <li>
+              <code>framing</code>: the rendered framing template. It closes the
+              system prompt.
+            </li>
+          </ol>
+          <p>Each part holds these fields:</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -351,19 +410,36 @@
               </thead>
               <tbody>
                 <tr>
+                  <td><code>layer</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    The prompt layer: <code>1</code> for <code>standard</code>,
+                    <code>role</code> and <code>workbench</code>,
+                    <code>2</code> for <code>instruction_file</code> and
+                    <code>repository</code>, <code>3</code> for
+                    <code>binding</code>. <code>null</code> for
+                    <code>framing</code>.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>part</code></td>
                   <td>string</td>
                   <td>
                     <code>standard</code>, <code>role</code>,
-                    <code>workbench</code> or <code>binding</code>.
+                    <code>workbench</code>, <code>instruction_file</code>,
+                    <code>repository</code>, <code>binding</code> or
+                    <code>framing</code>.
                   </td>
                 </tr>
                 <tr>
                   <td><code>name</code></td>
                   <td>string</td>
                   <td>
-                    The file name, for example <code>base.md</code>, or the
-                    repository name for a <code>binding</code> part.
+                    The file name of a layer 1 part, for example
+                    <code>base.md</code>. The template name of
+                    <code>framing</code>, for example
+                    <code>framing-worker</code>. The repository binding name of
+                    a layer 2 or layer 3 part.
                   </td>
                 </tr>
                 <tr>
@@ -372,7 +448,9 @@
                   <td>
                     <code>binary</code> for a shipped text,
                     <code>file</code> for an override file,
-                    <code>database</code> for a binding prompt.
+                    <code>database</code> for <code>repository</code> and
+                    <code>binding</code>, <code>repository</code> for
+                    <code>instruction_file</code>.
                   </td>
                 </tr>
                 <tr>
@@ -380,27 +458,95 @@
                   <td>string or null</td>
                   <td>
                     The override path that the server looked up, also for
-                    <code>binary</code>. <code>null</code> for
-                    <code>binding</code> and for an empty directory.
+                    <code>binary</code>. The repository path for
+                    <code>instruction_file</code>. <code>null</code> for
+                    <code>repository</code> and <code>binding</code>, and when
+                    the agent directory is empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>binding_id</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The binding revision of a layer 2 or layer 3 part.
+                    <code>null</code> otherwise.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>commit</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The commit of an <code>instruction_file</code> part, 40 or
+                    64 lower-case hex. <code>null</code> for every other part,
+                    and for an instruction file whose base head the server
+                    cannot read.
                   </td>
                 </tr>
                 <tr>
                   <td><code>digest</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The SHA-256 hex digest of the exact UTF-8 text, with no
+                    heading. <code>null</code> for a part that the server cannot
+                    read.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>heading</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The line before the text:
+                    <code
+                      >Repository prompt of repository &lt;name&gt;, file
+                      &lt;path&gt;:</code
+                    >
+                    for <code>instruction_file</code>,
+                    <code
+                      >Repository prompt of repository &lt;name&gt;, set in
+                      KanthorD:</code
+                    >
+                    for <code>repository</code>,
+                    <code>Binding prompt of repository &lt;name&gt;:</code> for
+                    <code>binding</code>. <code>null</code> for the other parts.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>state</code></td>
                   <td>string</td>
-                  <td>SHA-256 hex digest of <code>text</code>.</td>
+                  <td>
+                    <code>resolved</code>. An <code>instruction_file</code> part
+                    is <code>unreachable</code> when the read of the remote
+                    fails or exceeds its deadline, and <code>invalid</code> when
+                    the file is larger than 32768 bytes, is not UTF-8, cannot be
+                    read or holds a control character.
+                    <a href="prompt.html">The prompt resolve</a> also answers
+                    <code>changed</code>.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>text</code></td>
-                  <td>string</td>
-                  <td>Text of the part.</td>
+                  <td>string or null</td>
+                  <td>
+                    The text of a <code>resolved</code> part.
+                    <code>null</code> otherwise.
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p>
-            The precedence of the system prompt is the framing, then the binding
-            parts, then <code>workbench.md</code>, then the role, then the
-            standard. A later message governs an earlier one.
+            The first seven fields after <code>layer</code> form the
+            <a href="../../explanation/native-agent.html#the-prompt-record"
+              >prompt reference</a
+            >
+            of the part.
+          </p>
+          <p>
+            The precedence of the system prompt is the framing, then the Binding
+            prompt, then the stored Repository prompt, then the instruction
+            file, then <code>workbench.md</code>, then the role, then the
+            standard. A later text governs an earlier one, and a later message
+            governs an earlier one.
           </p>
           <h3 id="selection">Selection</h3>
           <ul>
@@ -449,9 +595,11 @@
                 <tr>
                   <td><code>400 gateway.request.validation_failed</code></td>
                   <td>
-                    <code>view</code> is not <code>final</code>, or only one of
+                    <code>view</code> is not <code>final</code>, only one of
                     <code>project_id</code> and <code>binding_id</code> is
-                    present.
+                    present, <code>attempt</code> comes without
+                    <code>node_id</code>, or <code>node_id</code> comes with
+                    <code>project_id</code> or <code>binding_id</code>.
                   </td>
                 </tr>
                 <tr>
@@ -463,6 +611,17 @@
                   <td>
                     <code>binding_id</code> names no repository binding of the
                     project <code>project_id</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.node.not_found</code></td>
+                  <td><code>node_id</code> names no mission node.</td>
+                </tr>
+                <tr>
+                  <td><code>404 mission.record.not_found</code></td>
+                  <td>
+                    The node holds no attempt, or no attempt
+                    <code>attempt</code>.
                   </td>
                 </tr>
                 <tr>
@@ -600,8 +759,27 @@
                   <td>query</td>
                   <td>Only together with <code>project_id</code></td>
                   <td>
-                    Repository binding whose binding prompt joins
+                    Repository binding whose layers 2 and 3 join
                     <code>final</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>node_id</code></td>
+                  <td>query</td>
+                  <td>
+                    No; excludes <code>project_id</code> and
+                    <code>binding_id</code>
+                  </td>
+                  <td>Mission node whose agent stack the read answers.</td>
+                </tr>
+                <tr>
+                  <td><code>attempt</code></td>
+                  <td>query</td>
+                  <td>Only together with <code>node_id</code></td>
+                  <td>
+                    Positive integer. The attempt whose prompt pin the read
+                    takes. Without it, the open attempt, else the latest
+                    attempt.
                   </td>
                 </tr>
               </tbody>
@@ -628,9 +806,10 @@
           <pre><code class="language-sh">curl -s 'http://127.0.0.1:31415/api/agent/swe@1?view=final' \
   -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
           <h2 id="cli-shape">CLI shape</h2>
-          <pre><code class="language-text">kanthord agent get &lt;agent-name&gt; [--view final] [--project &lt;project-id&gt; --binding-id &lt;binding-id&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <pre><code class="language-text">kanthord agent get &lt;agent-name&gt; [--view final] [--project &lt;project-id&gt; --binding-id &lt;binding-id&gt; | --node &lt;node-id&gt; [--attempt &lt;k&gt;]] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
           <pre><code class="language-sh">kanthord agent get swe@1 --view final
-kanthord agent get swe@1 --project &lt;project-id&gt; --binding-id &lt;binding-id&gt;</code></pre>
+kanthord agent get swe@1 --project &lt;project-id&gt; --binding-id &lt;binding-id&gt;
+kanthord agent get re@1 --node &lt;node-id&gt; --attempt 2 --view final</code></pre>
           <div class="table-wrap">
             <table>
               <thead>
@@ -676,6 +855,21 @@ kanthord agent get swe@1 --project &lt;project-id&gt; --binding-id &lt;binding-i
                   <td><code>--binding-id &lt;binding-id&gt;</code></td>
                   <td>None; requires <code>--project</code></td>
                   <td>Sets <code>binding_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--node &lt;node-id&gt;</code></td>
+                  <td>
+                    None; excludes <code>--project</code> and
+                    <code>--binding-id</code>
+                  </td>
+                  <td>Sets <code>node_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--attempt &lt;k&gt;</code></td>
+                  <td>None; requires <code>--node</code></td>
+                  <td>
+                    Sets <code>attempt</code>. The server checks the value.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>--token &lt;jwt&gt;</code></td>

@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Resolve the prompt of an execution · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li>
+            <a href="#read-an-old-shipped-text">Read an old shipped text</a>
+          </li>
+          <li><a href="#failures">Failures</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="resolve-the-prompt-of-an-execution">
+            Resolve the prompt of an execution
+          </h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            Rebuild the exact system prompt that one agent of an execution
+            served. The API and <code>kanthord agent prompt resolve</code>
+            perform the same read and change no state.
+          </p>
+          <p>
+            KanthorD stores no copy of a prompt text. The execution setup stores
+            one <code>agent.prompt</code> span for each agent of the execution.
+            The span holds a
+            <a href="../../explanation/native-agent.html#the-prompt-record"
+              >prompt reference</a
+            >
+            for each part and the engine version, and no text. The read finds
+            that span, resolves each reference by its <code>origin</code> and
+            checks each digest:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>origin</code></th>
+                  <th>The read takes the text from</th>
+                  <th>A failure answers</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>database</code></td>
+                  <td>
+                    <code>prompts.repository</code> or
+                    <code>prompts.agents[&lt;agent_name&gt;]</code> of the
+                    binding revision <code>binding_id</code>. A binding revision
+                    never changes.
+                  </td>
+                  <td><code>changed</code> when the text is absent</td>
+                </tr>
+                <tr>
+                  <td><code>repository</code></td>
+                  <td>
+                    The file <code>path</code> at <code>commit</code> of the
+                    binding <code>binding_id</code>, read from git with the SSH
+                    access of the binding.
+                  </td>
+                  <td>
+                    <code>unreachable</code> when the read of the remote fails
+                    or exceeds its deadline, <code>invalid</code> for an invalid
+                    file, <code>changed</code> for an absent file
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>binary</code></td>
+                  <td>The shipped text of the current binary.</td>
+                  <td>
+                    <code>changed</code> when the current text has another
+                    digest
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>file</code></td>
+                  <td>
+                    The current file of
+                    <code>agent.prompt.agent_directory</code>.
+                  </td>
+                  <td>
+                    <code>changed</code> for an absent file or another digest,
+                    <code>invalid</code> for an invalid file
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each resolved text passes a digest check against the
+            <code>digest</code> of its reference. A text with another digest
+            answers <code>changed</code> with a <code>null</code> text. A failed
+            part is a part state, and the read answers <code>200</code>. The
+            read takes every instruction file in parallel under one deadline of
+            20 seconds.
+          </p>
+          <p>
+            The read takes only the references that the server wrote in a span.
+            It reads no file that the caller names.
+          </p>
+          <h2 id="expected-response">Expected response</h2>
+          <p>
+            The API returns HTTP <code>200</code> with
+            <code>{ parts, final, engine_version }</code>. The CLI writes the
+            same object as one JSON line to stdout and exits <code>0</code>. The
+            example below is shortened. The edited <code>base.md</code> of a
+            later deploy makes its part <code>changed</code>.
+          </p>
+          <pre><code class="language-json">{
+  "parts": [
+    {
+      "layer": 1,
+      "part": "standard",
+      "name": "base.md",
+      "origin": "binary",
+      "path": "/home/kanthord/.local/share/kanthord/agents/base.md",
+      "binding_id": null,
+      "commit": null,
+      "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
+      "heading": null,
+      "state": "changed",
+      "text": null
+    }
+  ],
+  "final": null,
+  "engine_version": "28.0.1"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>parts</code></td>
+                  <td>array</td>
+                  <td>
+                    The parts of the span in reading order, the framing last.
+                    Each part holds the fields of the
+                    <a href="agent.html#expected-response">prompt part</a> of
+                    <code>agent get</code>. Each part holds the
+                    <code>digest</code> and the <code>commit</code> of its span
+                    reference, also when the part is not <code>resolved</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>final</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The system prompt that the execution served.
+                    <code>null</code> when a part is not <code>resolved</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>engine_version</code></td>
+                  <td>string</td>
+                  <td>
+                    The value of <code>kanthord.engine.version</code> of the
+                    span: the engine version that served the execution.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="read-an-old-shipped-text">Read an old shipped text</h2>
+          <p>
+            KanthorD keeps no copy of a layer 1 text. A deploy that edits a
+            shipped text therefore turns every older trace into
+            <code>changed</code> for that part, with <code>final: null</code>.
+            To read the old text of a <code>changed</code> part of origin
+            <code>binary</code>, run one of these commands in a root checkout of
+            the kanthord repository:
+          </p>
+          <pre><code class="language-sh">git -C engine show "$(git rev-parse "v&lt;engine_version&gt;:engine"):static/prompt/&lt;name&gt;"
+git -C engine show "$(git rev-parse "v&lt;engine_version&gt;:engine"):static/prompt/template/&lt;name&gt;.md"</code></pre>
+          <ul>
+            <li>
+              The first command reads a part with the file name
+              <code>&lt;name&gt;</code>, for example <code>base.md</code>.
+            </li>
+            <li>
+              The second command reads a <code>framing</code> part, for example
+              <code>framing-worker</code>.
+            </li>
+            <li>
+              The release tag <code>v&lt;engine_version&gt;</code> of the root
+              repository names the engine commit. A development build has no
+              release tag, so its version names no unique engine commit.
+            </li>
+            <li>
+              For a <code>changed</code> part of origin <code>file</code>, read
+              the old file from the version control of the agent directory.
+            </li>
+          </ul>
+          <p>
+            Compare the system prompts of two executions with <code>diff</code>:
+          </p>
+          <pre><code class="language-sh">diff &lt;(kanthord agent prompt resolve --execution E1 --agent re@1 | jq -r .final) &lt;(kanthord agent prompt resolve --execution E2 --agent re@1 | jq -r .final)</code></pre>
+          <h2 id="failures">Failures</h2>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>401 gateway.authentication.unauthorized</code></td>
+                  <td>
+                    Missing, invalid, expired or banned token, or a machine
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 gateway.request.validation_failed</code></td>
+                  <td>
+                    <code>execution_id</code> or <code>agent_name</code> is
+                    absent or empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 scheduler.execution.not_found</code></td>
+                  <td><code>execution_id</code> names no execution.</td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.prompt.record_absent</code></td>
+                  <td>
+                    The trace of the execution holds no
+                    <code>agent.prompt</code> span for the agent.
+                    <code>details</code> holds <code>execution_id</code> and
+                    <code>agent_name</code>. An execution of an external harness
+                    has no such span.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The CLI checks some input before it sends the request:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLI code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cli.agent.prompt.resolve.token_required</code></td>
+                  <td>
+                    No option, environment variable or client file supplies a
+                    token.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.agent.prompt.resolve.indeterminate</code></td>
+                  <td>
+                    A transport failure, timeout or malformed response. Retry
+                    the command.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/agent/prompt/resolve</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>agent.prompt.resolve</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>30 seconds</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    None; a nonempty body fails with
+                    <code>400 gateway.request.unexpected_body</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The static path <code>/api/agent/prompt/resolve</code> takes
+            precedence over <code>/api/agent/:agent_name</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Required</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>execution_id</code></td>
+                  <td>query</td>
+                  <td>Yes</td>
+                  <td>The execution.</td>
+                </tr>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>query</td>
+                  <td>Yes</td>
+                  <td>
+                    The agent of the execution, for example <code>re@1</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -s 'http://127.0.0.1:31415/api/agent/prompt/resolve?execution_id=&lt;execution-id&gt;&amp;agent_name=re@1' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord agent prompt resolve --execution &lt;execution-id&gt; --agent &lt;agent-name&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Default / resolution</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--execution &lt;execution-id&gt;</code></td>
+                  <td>Required</td>
+                  <td>Sets <code>execution_id</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--agent &lt;agent-name&gt;</code></td>
+                  <td>Required</td>
+                  <td>Sets <code>agent_name</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>--token &lt;jwt&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_TOKEN</code> → client-file token; a nonblank
+                    resolved token is required
+                  </td>
+                  <td>Human JWT sent as the bearer credential.</td>
+                </tr>
+                <tr>
+                  <td><code>--endpoint &lt;url&gt;</code></td>
+                  <td>
+                    <code>KANTHORD_ENDPOINT</code> → client-file endpoint →
+                    <code>http://127.0.0.1:31415</code>
+                  </td>
+                  <td>Server base URL.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>agent</code> group declares <code>--token</code> and
+            <code>--endpoint</code>. See
+            <a href="../index.html#client-configuration">client configuration</a
+            >.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>
