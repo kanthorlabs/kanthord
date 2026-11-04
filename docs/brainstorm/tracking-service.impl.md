@@ -106,8 +106,8 @@ The schema holds the trace with its summary, the span, the record, the telemetry
 The span row holds no copy of a column of its trace row and no column that an attribute derives.
 A read joins the trace row and reads the attributes of the span.
 A bulk import runs in bounded transactions, so a concurrent write of the server never waits for a whole import.
-The retention sweep deletes in bounded batches for the same reason.
-A separate database file separates the locking and the retention sweep of telemetry, and it separates no processor, no memory and no disk bandwidth.
+A cleanup deletes in bounded batches for the same reason.
+A separate database file separates the locking of telemetry, and it separates no processor, no memory and no disk bandwidth.
 
 ## Local store
 
@@ -254,7 +254,7 @@ The cause names the layer that caused a failure event. The Worker Service owns t
 - Equal sort values follow the creation order of the trace in descending order. Under `started_at`, a trace with no start sorts by its creation time.
 - An open trace sorts last under `duration_ms`.
 - A cursor of another sort answers 400 `system.pagination.cursor_invalid`.
-- The list scans `tracking_trace`. The retention bounds that table, and no index other than a unique index exists.
+- The list scans `tracking_trace`. No retention bounds that table, and no index other than a unique index exists. The scan grows with the table, so the `trace` threshold of the [Footprint Service](footprint-service.md#thresholds-and-alerts) alerts before the scan gets slow.
 - `tracking.facet.get` answers the distinct worker names, agent names, models, error types and `cause_categories`, at most 200 values each.
   `cause_categories` holds the categories of the effective causes.
   `project_id` limits it to the traces of one project.
@@ -294,7 +294,7 @@ The read answers these errors:
 | 404  | `tracking.entry.entry_absent`   | The session file holds no entry with the entry identity and type. `details: { instance, placement }`.                                                                                                      |
 | 503  | `tracking.entry.unreadable`     | The host failed to read the session file, met a symlink or a changed directory below the session root, or sent another entry. `details: { instance, placement }`.                                          |
 
-- `not_kept` means that pi never wrote the session, a stateless host lost it, or the instance moved to a new host.
+- `not_kept` means that pi never wrote the session, a stateless host lost it, the instance moved to a new host, or a human cleanup removed it.
 - `archived` means that the instance is archived, and KanthorD no longer reads its sessions.
 - `instance_unknown` means that no instance of KanthorD ran the execution.
 - `UnreachableReason` (`offline`, `timeout`, `busy`) applies only at the `worker` placement. The server reads the sessions of the `server` and the `container` placements directly.
@@ -428,12 +428,12 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `compare` takes `previous` or `none`, and it defaults to `previous`.
 - `previous_window` is the window of the same length directly before the window.
 - `previous_window` is null for `compare=none`, or when `tracking_flow_rollup` holds no row of the grain.
-- It is also null when its start lies before the retention cutoff of the grain or before the first rollup row of the grain.
+- It is also null when its start lies before the first rollup row of the grain. The first rollup row of each grain is the coverage start.
 - `project_id` and `worker_name` filter the rollup rows.
 - The cut of the same-hour sums is the end of the hour of `window.now`, less the length of the window.
 - The same-hour sums add the rows of the previous window before the cut.
 - At the `day` grain, a cut inside a day adds the hour rows of that day before the cut.
-- The cut is null when `previous_window` is null. At the `day` grain, a cut inside a day is also null when the start of that day lies before the retention cutoff of the hour rows.
+- The cut is null when `previous_window` is null. At the `day` grain, a cut inside a day is also null when the start of that day lies before the first hour row.
 
 One read runs at most six statements in one read transaction. Each statement reads a range of `grain` and `bucket_start` on the primary key.
 
@@ -461,25 +461,29 @@ The service builds the answer in memory from these rows. The answer holds raw nu
 - `--project <project-id>` and `--worker <worker-name>` set `project_id` and `worker_name`. `--from <unix-ms>` and `--to <unix-ms>` set `from` and `to`.
 - `--bucket` and `--compare` set the field of their name.
 
-## Retention
+## Writable period and deletes
 
-- `tracking.retention_days` holds the retention of a trace in days. It defaults to `30`.
-- The retention of a trace starts at `created_at` of its row.
-- The service runs a sweep at its start and then every hour.
-- A sweep deletes the rows of `tracking_trace` with `created_at` older than the retention, at most 20 rows in each transaction. One sweep runs at most 50 transactions. `ON DELETE CASCADE` deletes their spans, records, telemetry texts and session entries.
+- `tracking.trace_writable_days` holds the [writable period](tracking-service.vocabulary.md#writable-period) of a trace in days. It defaults to `DEFAULT_AGE_DAYS`, 30, of `src/tracking/contract.ts`.
+- The writable period bounds only the admission of a record. It deletes nothing.
+- No start and no timer deletes a trace or a rollup row.
+- A human deletes a trace through [`tracking.trace.delete`](tracking-service.vocabulary.md#trace-delete): `POST /api/tracking/trace/delete`, access `human_or_service` with the services `[footprint]`, body `{ trace_ids, requested_by? }` with 1 to 20 trace identities, answer `{ removed, absent, refused }`.
+- For each identity, the delete runs `DELETE FROM tracking_trace WHERE trace_id = ? AND state != 'open'`. A deleted row counts in `removed`. An open trace answers `refused` with the reason `live`. An unknown identity counts in `absent`.
+- `tracking.trace.delete` refuses only an open trace. A worker cannot write to an ended execution, and a resume reopens the trace first.
+- `ON DELETE CASCADE` deletes the spans, the records, the telemetry texts and the session entries of a deleted trace.
+- The Tracking Service trusts `requested_by` only from the Footprint service identity, under [the cleanup](footprint-service.impl.md#cleanup). A human caller that sends `requested_by` answers 400 `gateway.request.validation_failed`.
+- The `scheduler_execution` row of a deleted trace keeps its `trace_id`. A read of that identity answers `404 tracking.trace.not_found`.
 - The table `tracking_telemetry_text` holds no `expired_at`, and its `content` is `NOT NULL`.
-- The design answers a reference to a deleted trace as expired. The store keeps no tombstone of a deleted trace, so the read answers `404 tracking.trace.not_found`, the same answer as for an unknown trace.
+- The store keeps no tombstone of a deleted trace, so the read answers `404 tracking.trace.not_found`, the same answer as for an unknown trace.
 - `tracking.text.get` answers `{ trace_id, text_id, content, created_at }`.
 - `tracking.text.get` checks the trace first. A text of a deleted or unknown trace answers 404 `tracking.trace.not_found`. A text that a held trace does not hold answers 404 `tracking.text.not_found`.
-- A late record reuses the predicate of the sweep and needs no tombstone. The time of an execution identity is the time of its ULID. When that time is older than the retention, `tracking.telemetry.write` refuses every record with `trace_expired` and opens no trace row.
+- A late record needs no tombstone. The time of an execution identity is the time of its ULID. When that time is older than the writable period, `tracking.telemetry.write` refuses every record with `trace_expired` and opens no trace row.
 - `serverSpan` drops a span of such an execution and counts the drop.
-- `serverTraceSpan` drops a span when `created_at` of its trace is older than the retention, and counts the drop.
-- The flow rollups outlive their traces. Hour rows stay 8 days. Day rows stay 64 days.
-- The sweep deletes old rollup rows in batches of 500 rows, at most 50 transactions for each table and grain.
+- `serverTraceSpan` drops a span when `created_at` of its trace is older than the writable period, and counts the drop.
+- The flow rollups outlive their traces. An admitted record updates its rollup bucket at every age.
 
 ## Configuration
 
-- `tracking.retention_days` holds the retention of a trace in days, as a positive safe integer of at most 3650. It defaults to `30`.
+- `tracking.trace_writable_days` holds the writable period of a trace in days, as a positive safe integer of at most 3650. It defaults to `30`.
 
 ## Ruled values
 
@@ -488,7 +492,7 @@ The service builds the answer in memory from these rows. The answer holds raw nu
 - RULED 2026-10-22 under the delegation of Ulrich. The record dispositions are `Stored` and `Refused`.
 - RULED 2026-10-22 under the delegation of Ulrich. The producer of the root span is `scheduler`.
 - RULED 2026-10-22 under the delegation of Ulrich. The root span ends with `Error` when the execution stops or when the claim is lost, and with `Ok` otherwise.
-- RULED 2026-10-22 under the delegation of Ulrich. `tracking.retention_days` defaults to 30. A sweep runs at the start and every hour, with at most 20 rows in each transaction and 50 transactions in one sweep.
+- REPLACED 2026-11-03 by the ruling of no automatic delete. RULED 2026-10-22 under the delegation of Ulrich. `tracking.retention_days` defaults to 30. A sweep runs at the start and every hour, with at most 20 rows in each transaction and 50 transactions in one sweep.
 - RULED 2026-10-22 under the delegation of Ulrich. The entry bound is 61440 bytes, and the cut limits are 4096, 1024 and 256 characters.
 - RULED 2026-10-22 under the delegation of Ulrich. `tracking.facet.get` answers at most 200 values for each facet. The dashboard reads an open trace again every 5 seconds.
 - RULED 2026-10-25 by Ulrich. The timeline read answers depth 1 or 2 across traces in the order of the trace start, at most 1000 items, 500 by default.
@@ -496,6 +500,9 @@ The service builds the answer in memory from these rows. The answer holds raw nu
 - RULED 2026-10-25 by Ulrich. The analytics reads answer at most 1000 items, and they take a range of 7 days by default and 31 days at most.
 - RULED 2026-10-25 by Ulrich. The schema of `tracking.db` stays unchanged. The span row holds no column for a read, and the store adds no index for the timeline or the analytics.
 - RULED 2026-10-31 by Ulrich. `tracking_trace` adds 23 flow columns. `tracking.db` adds `tracking_flow_rollup`, `tracking_flow_histogram` and `tracking_usage_rollup` with primary keys only. This ruling supersedes the ruling of 2026-10-25 on the schema.
+- RULED 2026-11-03 by Ulrich. No automatic delete of a trace or a rollup. A human deletes a trace through `tracking.trace.delete`.
+- RULED 2026-11-04 by Ulrich. `tracking.retention_days` becomes `tracking.trace_writable_days`, with the default 30 and the range 1 to 3650. It deletes nothing, and `trace_expired` stays. One configuration step renames the key and keeps its value.
+- RULED 2026-11-04 by Ulrich. `tracking.trace.delete` refuses only an open trace. The predicate is `trace_id = ? AND state != 'open'`.
 - RULED 2026-11-03 by Ulrich. The full entry bound is the request body limit minus 65536 bytes. The rebuild adds no column, and `truncated: true` alone marks a rebuildable entry.
 - RULED 2026-10-25 by Ulrich. The cause lives only as `kanthord.cause.*` on the root span end. The Tracking Service derives no cause and adds no cause column. `tracking.trace.list` filters by `cause_category`, and `tracking.facet.get` answers `cause_categories`.
 - RULED 2026-10-25 by Ulrich. `tracking.cause.label` writes the span `tracking.cause_label` with the span identity `<root_span_id>.cause_label`. A new label replaces the old one, and every reader takes the label over the rule cause.

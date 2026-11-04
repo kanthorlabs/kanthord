@@ -560,7 +560,7 @@ The component computes the status of a group in this order. The first rule that 
 ### The triggers
 
 - After the commit of a binding-set write, also of `environment set`, `bindingsChanged(projectId)` sets the record of each changed repository binding to `pending` synchronously. A repository binding is changed when the write changed its row or its target. The write wakes the work pulls only after that call, and the component then computes each repository binding of the project again. A computation of the project whose read runs during the call writes no record and reads the inputs again. A pull between the commit and the computation therefore claims no node of a changed binding.
-- At the server start, it computes each repository binding of each project. It then collects the files and the images of each identity path that no current repository binding holds.
+- At the server start, it computes each repository binding of each project. No start collects an image, a proof or a cache volume of an identity path that no current repository binding holds.
 - At the execution setup of a `container` instance, the Worker Service calls `environmentClaimed(projectId, resourceIdentity)` with the repository binding of the instance. The component reads the inputs again in the background. A changed digest starts a run, so a push of a repository file reaches the `container` instances at their next claim.
 - While the status of a group is `pending`, the component reads the inputs again every 60 seconds.
 - While the status of a group is `failed`, the component reads the commit of its base branch every 60 seconds (`COMMIT_CHECK_MS`). The read is one `git ls-remote` through the Repository component.
@@ -605,6 +605,23 @@ The component computes the status of a group in this order. The first rule that 
 - A removal that fails, for example for an image that a `container` instance still runs, leaves the image to the next collection.
 - It removes each proof file of the identity path whose digest is not the current digest.
 - A repository that fails again and again therefore keeps one digest on the disk.
+- This removal is a replace inside one run. It touches only the other digests of the identity path of the run.
+- No start and no run removes an image, a proof file or a cache volume of an identity path that no current repository binding holds, and no proof run removes a cache volume. A human removes them through a [cleanup](footprint-service.md#cleanup) with the rule `unbound`.
+- The Project Service answers the measures and the candidates of the kinds `environment` and `cache_volume` to the [Footprint Service](footprint-service.impl.md#the-kinds-and-their-measures). `boundPaths()` answers the identity paths and the cache volume groups that a current repository binding holds.
+
+The delete operations of the Project Service:
+
+| Operation                                 | Route                                               | Policy                       | Input                      | Answer                         |
+| ----------------------------------------- | --------------------------------------------------- | ---------------------------- | -------------------------- | ------------------------------ |
+| `project.environment.delete`              | `POST /api/project/environment/delete`              | `human_or_service`, mutation | `{ keys, requested_by? }`  | `{ removed, absent, refused }` |
+| `project.environment.cache_volume.delete` | `POST /api/project/environment/cache-volume/delete` | `human_or_service`, mutation | `{ names, requested_by? }` | `{ removed, absent, refused }` |
+
+- A key of `project.environment.delete` is `<identity path>@<digest>`, or the image id of an untagged image with the owner label.
+- `project.environment.delete` removes the image tags and the proof file of each key together, through `removeTags` and the proof removal of the environment state. For an image id, it removes the image.
+- It refuses the bound current digest of a path and an image that a container uses, with the reason `live`.
+- `project.environment.cache_volume.delete` removes each named volume through `removeCacheVolume`. It refuses a volume of a group that a current binding holds and a volume that a container uses, with the reason `live`.
+- Each operation lists the Footprint Service in `services`. The Project Service trusts `requested_by` only from the Footprint service identity, and a human caller that sends it answers 400 `gateway.request.validation_failed`.
+- A key that is already gone counts in `absent`.
 
 ### Detection
 
@@ -684,10 +701,10 @@ The component computes the status of a group in this order. The first rule that 
 - One shared function, `prepareCacheVolume`, runs the owner step before a launch or a proof mounts the volume. It runs after the wait for the image, with the resolved image and `--pull=never`.
 - The step runs once for each cache volume without the file `.kanthord_owner`. The auto container runs `chown -R 10001:10001` on the volume. Each carrier writes `.kanthord_owner` after the owner change.
 - The KanthorD layer writes `npm_config_cache`, `npm_config_store_dir`, `PIP_CACHE_DIR`, `GOMODCACHE` and `CARGO_HOME` below that path into `ENV`, unless the document sets the variable.
-- The volume key is the group and not the digest, so a new digest keeps the cache warm. Garbage collection removes the volume of a group that no current binding holds.
-- Garbage collection lists the names with `<runtime> volume ls --filter label=io.kanthord.owner=<owner> --filter label=io.kanthord.cache_project --format '{{.Name}}'`.
+- The volume key is the group and not the digest, so a new digest keeps the cache warm. No start and no proof run removes a cache volume. The rule `unbound` proposes the volume of a group that no current binding holds.
+- The `unbound` candidate list reads the names with `<runtime> volume ls --filter label=io.kanthord.owner=<owner> --filter label=io.kanthord.cache_project --format '{{.Name}}'`.
 - It then reads the labels of all listed volumes from the JSON output of one `<runtime> volume inspect <name>...`. An empty list runs no inspect.
-- A volume without a nonempty `io.kanthord.cache_project` or `io.kanthord.cache_resource` label stays.
+- A volume without a nonempty `io.kanthord.cache_project` or `io.kanthord.cache_resource` label is no candidate.
 
 ### The limits of a run
 

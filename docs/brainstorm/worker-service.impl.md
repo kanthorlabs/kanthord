@@ -154,7 +154,8 @@ It is the `worker` wrapper of [the worker unit](#the-worker-unit-and-its-wrapper
 - The wrapper resolves the [instance configuration](#the-instance-configuration). It reads no `cli.yaml`.
 - The bindings, the worker and the agent configuration come from the server through the [connection answer](#the-instance-exchange). The worker application reads the setup of one execution through `worker.execution.setup.get`.
 - One process hosts one instance. The instance serves each binding that lists it through one registration of that binding.
-- The data directory of an instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/` and `pi/` of the worker unit.
+- The data directory of an instance is `$XDG_DATA_HOME/kanthord/workers/<name>/`. It holds `workspaces/` and `pi/` of the worker unit, and `tmp/`.
+- Before the worker unit starts, the wrapper sets `process.env.TMPDIR` to `tmp/` of the data directory and creates that directory with mode `0700`. Each temporary file of the instance then belongs to that instance.
 - The log directory of an instance is `$XDG_STATE_HOME/kanthord/workers/<name>/`.
 - The wrapper gives the worker unit these directories. The worker unit names no placement and no instance.
 - The startup order is:
@@ -532,7 +533,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `worker.instance.token`      | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                     | 200 `{ server_version, sealed }`                                                                                                                             |
 | `worker.instance.connect`    | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`                 | 200 `{ connection_id, binding_version, sealed }`                                                                                                             |
 | `worker.instance.heartbeat`  | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`                  | 200 `{ server_version, binding_version, credential_version, work_version }`                                                                                  |
-| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                   | 200 `{ work_version, login_sessions, session_reads }`                                                                                                        |
+| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                   | 200 `{ work_version, login_sessions, session_reads, footprint_orders }`                                                                                      |
 | `worker.session_read.report` | `POST /api/worker/session-read/:read_id/report`     | `worker`, mutation                        | `SessionReadResult`                                   | 204                                                                                                                                                          |
 | `worker.ssh.sign`            | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                 | 200 `{ nonce, ciphertext }`                                                                                                                                  |
 
@@ -571,6 +572,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.in_use`                | An archive names an instance that a binding lists, or an archive without `force` names an instance whose registration holds a live execution. `details.bindings` or `details.executions` lists them. |
 | 409  | `worker.instance.connection_superseded` | A `connect`, a heartbeat or a work read names a connection that is not current.                                                                                                                      |
 | 404  | `worker.session_read.not_found`         | A report names an unknown or expired session read, or a read of another instance.                                                                                                                    |
+| 404  | `worker.footprint.order_unknown`        | A footprint report names a cleanup that is neither an order of the instance in memory nor a `queued` or `running` cleanup of the instance.                                                           |
 | 400  | `worker.ssh.sign_refused`               | The relay refuses the payload. `details.reason` names the reason.                                                                                                                                    |
 | 400  | `worker.ssh.sign_invalid`               | The sealed sign request does not open, or its plaintext does not match the schema.                                                                                                                   |
 | 403  | `worker.ssh.placement_refused`          | The instance of the execution is not at the `worker` placement. `details.placement` names its placement.                                                                                             |
@@ -625,12 +627,12 @@ The heartbeat and the renewal:
 - The process calls `worker.instance.heartbeat` once at its start, then every `INSTANCE_HEARTBEAT_INTERVAL`, 15 s. One interval serves every case.
 - The heartbeat is a liveness signal. The answer is `{ server_version, binding_version, credential_version, work_version }`. Each value comes from memory, and the handler reads no store. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) defines `credential_version`.
 - `work_version` is an in-memory counter of the Worker Service for each instance. A server start sets each counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
-- The counter rises by one when the Worker Service queues a [session read](#the-session-read) of the instance. It also rises by one at each call of `workChanged(holder)` of the LLM Service, under [The login of an instance](llm.impl.md#the-login-of-an-instance). The composition root connects `workChanged` to `raiseWorkVersion(holder)` of the Worker Service.
+- The counter rises by one when the Worker Service queues a [session read](#the-session-read) or a [footprint order](#the-footprint-operations) of the instance. It also rises by one at each call of `workChanged(holder)` of the LLM Service, under [The login of an instance](llm.impl.md#the-login-of-an-instance). The composition root connects `workChanged` to `raiseWorkVersion(holder)` of the Worker Service.
 - The process keeps the `work_version` of its last successful work read. It holds none at its start.
 - When a heartbeat answer holds another `work_version`, the process calls the work read `worker.instance.work`: `POST /api/worker/instance/work`, policy `worker`, read, body `{ connection_id }`.
-- The answer of the work read is `{ work_version, login_sessions, session_reads }`. [The login of an instance](llm.impl.md#the-login-of-an-instance) defines `login_sessions`, and [The session read](#the-session-read) defines `session_reads`.
+- The answer of the work read is `{ work_version, login_sessions, session_reads, footprint_orders }`. [The login of an instance](llm.impl.md#the-login-of-an-instance) defines `login_sessions`, [The session read](#the-session-read) defines `session_reads`, and [The footprint operations](#the-footprint-operations) define `footprint_orders`.
 - A `connection_id` that is not current answers 409 `worker.instance.connection_superseded`. The work read renews no liveness.
-- After the work read, the process syncs its logins with `login_sessions` and its session reads with `session_reads`, then keeps the new version.
+- After the work read, the process syncs its logins with `login_sessions`, its session reads with `session_reads` and the orders of its unit with `footprint_orders`, then keeps the new version.
 - A failed work read keeps the old version, so the next heartbeat calls the work read again.
 - The heartbeat and the work read run in series.
 - A `server_version` that differs from the package version stops the worker unit and exits 1 with `worker.version.mismatch`.
@@ -705,6 +707,68 @@ One function, `readSessionFileEntry(sessionRoot, read, signal)` of `src/worker/u
 - The instance opens every connection. The Gateway keeps one listener on one port. The answer carries no credential, and no model call passes through the server.
 - The route `/api/worker/session-read/` lies outside `/api/worker/instance/`, so it reserves no instance name.
 - Pre-condition: the instance process runs and holds a current connection, and its data directory holds the execution directory. A stateless host loses the directory.
+
+## The footprint operations
+
+[footprint-service.md](footprint-service.md#placements) requires that the Worker Service measures and deletes the stores of each instance for the Footprint Service.
+
+- The Worker Service owns the kinds `session`, `workspace`, `tool_output`, `log` and `slot_residue` of each instance, the kind `slot_image`, and the `disk` statistic of the container runtime store.
+- [footprint-service.impl.md](footprint-service.impl.md#the-kinds-and-their-measures) states each measure.
+
+The unit measurement:
+
+- The worker unit measures its data directory every `FOOTPRINT_MEASURE_INTERVAL_MS` with asynchronous directory reads, outside the turn of an execution.
+- A unit at the `server` or `container` placement measures `workspace`, `tool_output`, `log` and `slot_residue`. A unit at the `worker` placement also measures `session` and the `disk` of its data directory.
+- `tool_output` lists the temporary directory of the instance with no recursion. It keeps only the regular files whose name matches `pi-*-<16 hex>.*`, checked with `lstat`.
+- `slot_residue` walks the slot root less the session root, `workspaces/`, the unit log and the `tool_output` files. At the `container` placement, it also skips `.cache`. At the `worker` placement, it walks only `tmp/` of the data directory, less the `tool_output` files.
+- The unit sends `worker.footprint.report` after each measurement and after each order, through the transport of its first registration.
+- The unit of an instance measures and runs orders only while it runs and holds a registration.
+
+`worker.footprint.report`:
+
+- `POST /api/worker/footprint`, policy `client`, mutation. The body is `footprintReportSchema` of [the instance report](footprint-service.impl.md#the-instance-report).
+- The handler authorizes the instance of the registration through `instanceOfRegistration`. It accepts the items of every project of that instance.
+- The handler calls `recordMeasurement(instance_id, measurement)` and `recordResults(instance_id, results)` of the Footprint Service inside its transaction on `kanthord.db`.
+- A result for a cleanup that is neither an order in memory nor a `queued` or `running` cleanup of the instance answers 404 `worker.footprint.order_unknown`.
+- At the `server` and `container` placements, the answer lists the `queued` and `running` orders of the instance as `{ orders: [{ cleanup_id, kind, keys }] }`. At the `worker` placement, the answer is `{ orders: [] }`.
+- The report is no heartbeat. It renews no liveness and changes no `work_version`.
+- At the `server` and `container` placements, the Worker Service adds the `stderr.log` item of the slot root to the `log` kind of the instance.
+
+The instance delete operations:
+
+| Operation                            | Route                                                | Policy                       | Input                                          | Answer                                                                                                     |
+| ------------------------------------ | ---------------------------------------------------- | ---------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `worker.instance.session.delete`     | `POST /api/worker/instance/:name/session/delete`     | `human_or_service`, mutation | `{ cleanup_id, execution_ids, requested_by? }` | `server`, `container`: 200 `{ removed, removed_bytes, absent, refused }`; `worker`: 202 `{ queued: true }` |
+| `worker.instance.workspace.delete`   | `POST /api/worker/instance/:name/workspace/delete`   | `human_or_service`, mutation | `{ cleanup_id, keys, requested_by? }`          | 202 `{ queued: true }`                                                                                     |
+| `worker.instance.tool_output.delete` | `POST /api/worker/instance/:name/tool-output/delete` | `human_or_service`, mutation | `{ cleanup_id, keys, requested_by? }`          | 202 `{ queued: true }`                                                                                     |
+| `worker.slot_image.delete`           | `POST /api/worker/slot-image/delete`                 | `human_or_service`, mutation | `{ references, requested_by? }`                | 200 `{ removed, absent, refused }`                                                                         |
+| `worker.footprint.report`            | `POST /api/worker/footprint`                         | `client`, mutation           | `footprintReportSchema`                        | 200 `{ orders }`                                                                                           |
+
+- Each `human_or_service` operation lists the Footprint Service in `services`. The Worker Service trusts `requested_by` only from the Footprint service identity, and a human caller that sends it answers 400 `gateway.request.validation_failed`.
+- An unknown instance name answers 404 `worker.instance.not_found`.
+- `session` at the `server` and `container` placements: the Worker Service refuses an execution with a null `ended_at` through `executionEndTimes`, with the reason `live`. It then deletes `execution/<execution_id>/` below the session root on the server host.
+- The session walk and the session delete on the server follow one rule: lstat each path below the session root; follow no symlink; a symlink or a changed directory stops the walk for that execution. The delete then answers `refused` with the reason `unreadable` for that key.
+- At the `server` and `container` placements, the Worker Service measures `session` on the server side at the measure interval, under the same rule. The unit of these placements reports no `session` kind.
+- `session` at the `worker` placement: the unit refuses the session of its live execution with the reason `live`.
+- `workspace`: the unit refuses a held key with the reason `live`.
+- `tool_output`: the unit refuses a file whose `mtime` is at or after the start of its oldest running execution, with the reason `live`. With no running execution, no file is live.
+- `worker.slot_image.delete` refuses the configured `worker.container_image` of the running version and an image that a live container uses, with the reason `live`.
+
+The order delivery:
+
+- `session` at the `server` and `container` placements needs no order, because the Worker Service deletes on the server side.
+- Every other instance order stays in memory under the instance: `session` at the `worker` placement, and `workspace` and `tool_output` at every placement.
+- At the `worker` placement, the Worker Service raises `work_version` of the instance by one only when it queues an order. The work read answers `footprint_orders: [{ cleanup_id, kind, keys }]`. The instance process passes the orders to its unit in the same process.
+- At the `server` and `container` placements, the answer of the next report lists the orders. An order waits at most one measurement interval.
+- The unit runs each order and reports the result through `worker.footprint.report`. The Worker Service then drops the order. A result raises no `work_version`.
+- The unit skips an order whose `cleanup_id` it runs now. A repeated order answers `absent` for each key that it already removed.
+- A queued order lives in memory only. After a server restart, the Footprint Service calls the delete operation again.
+- `worker.instance.archive` calls `instanceArchived(name)` of the Footprint Service. It fails each open order of the instance and resolves each open alert episode of the instance.
+
+The container runtime store:
+
+- The Worker Service reads the container runtime store only when a `container` placement instance exists, under [the container runtime store](footprint-service.impl.md#the-container-runtime-store).
+- The pool host reads `<runtime> system df -v` for `slot_image`, and `podman info` or `docker info` for the `disk` of the store.
 
 ## The server instances
 
@@ -826,7 +890,7 @@ Tests of the slot driver:
 - The pool host creates the slot root. After that, it appends `stderr.log` in the slot root. At the `container` placement, it also creates `sessions.partial/`, renames it to `sessions/` and writes the host marker `sessions.volume`, under [The session directory](#the-session-directory).
 - It reads nothing in the slot root, except the host marker `sessions.volume` and regular files below the session root for a session read. The session root is `state/kanthord/pi/sessions/` at the `server` placement and `sessions/` at the `container` placement. It follows no symlink.
 - After an archived server instance ends, the pool host removes its slot root and its slot volume.
-- At each start, the pool host removes slot roots under `workers/` and slot volumes of the owner. It removes only those whose name belongs to no live server instance.
+- At each start, the pool host removes the slot root and the slot volume of each `server` or `container` instance whose revision has `ended_at` set. It keeps every other entry under `workers/` and every other volume, also a name that the store does not hold.
 - A removal of the instance from a binding keeps the slot root and the slot volume, because the instance keeps its workspaces until its archive.
 - A failed removal or sweep writes `worker.pool.cleanup_failed` with the slot root or the volume name and `err` to the server log. It blocks no start and no launch.
 - The slot root of a `server` instance holds `state/kanthord/kanthord.log` and `stderr.log`. The slot root of a `container` instance holds `stderr.log`, the host marker `sessions.volume` and `sessions/`, the [session directory](#the-session-directory) of the instance. The [slot volume](#the-slot-volume) holds the rest of the state.
@@ -835,6 +899,7 @@ Tests of the slot driver:
 - The thread refuses a start with `worker.thread.directory_invalid` when any of `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` is absent or not absolute.
 - The pool host sets `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` to `config/`, `state/`, `data/` and `cache/` of the slot root.
 - The `env` is an allowlist of these server variables, when they are set: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR`.
+- `launch` sets `TMPDIR` to `tmp/` of the slot root in place of the inherited value, and creates that directory with mode `0700`. `threadEnvironment` keeps the inherited `TMPDIR`, so the environment host proof keeps the inherited value.
 - The allowlist also holds `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
 - The `env` holds no other variable, so it holds no `KANTHORD_*` variable, no `NODE_OPTIONS` and no `SSH_AUTH_SOCK`.
 - `HOME` is the value of the server user. The `thread` driver keeps no OS-containment guarantee, under [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
@@ -1367,7 +1432,7 @@ The relay lets a worker unit authenticate a git operation with an SSH key that o
 The worker unit uses it for each repository binding whose SSH identity the handover does not carry.
 The relay serves only the `worker` placement, and the `server` and `container` placements keep `ssh_identities` in the handover.
 
-- The worker unit serves a private agent socket for one git operation, in `TMPDIR` under the path rule of the [Repository implementation](repository.impl.md#the-ssh-identity). `src/repository/ssh-relay-agent.ts` serves the socket.
+- The worker unit serves a private agent socket for one git operation, below `/tmp` on POSIX under the path rule of the [Repository implementation](repository.impl.md#the-ssh-identity). `src/repository/ssh-relay-agent.ts` serves the socket.
 - The socket answers `SSH_AGENTC_REQUEST_IDENTITIES` with `ssh_public_key` of the execution setup.
 - It relays `SSH_AGENTC_SIGN_REQUEST` to `worker.ssh.sign`, and it answers `SSH_AGENT_FAILURE` to every other message.
 - It answers `SSH_AGENT_FAILURE` to a sign request for another key and to each failure of the relay. git then fails with `repository.connector.git_failed`.
@@ -1962,8 +2027,9 @@ The spans of the affected run follow [tracking-service.impl.md](tracking-service
 - When the workspace holds the remote-tracking ref, `fetchAndCheckout` checks the remote node branch with `git ls-remote` before `git fetch --prune`. A refusal therefore keeps the ref, and the next execution refuses again.
 - A first execution of a node branch has neither record and starts from the base branch. An attempt with the start point `base_branch` has a new node branch name, so a missing earlier node branch does not refuse it.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
-- The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the node.
-- A sweep at the start and every hour removes an expired workspace.
+- No start and no timer removes a workspace of a node. The workspace stays until a human [cleanup](footprint-service.md#cleanup) of the kind `workspace`.
+- The rule `node_closed` proposes the workspace of a node that is `Completed`, `Discarded` or retired, with no idle wait. It also proposes each execution workspace that a crash left.
+- `removeWorkspace` refuses a held key with the reason `live`.
 - The workspace stays on the disk of the instance because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
 
 ## Action performer
@@ -2240,7 +2306,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - An `agent.turn` span stays a child of its enclosing worker span: `worker.task` for a turn on a unit, `worker.phase` for a conflict turn, and `worker.evaluation` for the reviewer. Its `gen_ai.conversation.id` names its session.
 - The start of an `agent.turn` span holds `kanthord.prompt.template`: the `PromptTemplate` value of the instruction that drove the turn. It also holds `kanthord.prompt.template.digest`, the sha-256 hex digest of the source template, and `kanthord.prompt.work.digest`, the `WorkPrompt.digest` that `renderWorkPrompt` computes. The digest names the rendered work prompt before the redaction.
 - Before the worker sends an entry, it applies the sensitive text rule set to its copy. The secrets of every credential of the execution are the known secrets. Each finding becomes `<redacted:RULE>`.
-- The host of an execution keeps its own copy of each agent session. A reader [rebuilds](tracking-service.impl.md#the-rebuild-read) a cut entry from that copy while the host can serve it. The rebuild answers an error when the host cannot serve the entry, and never the cut entry. A stateless host loses the copy, and the Tracking Service still holds every entry that reached it.
+- The host of an execution keeps its own copy of each agent session. A reader [rebuilds](tracking-service.impl.md#the-rebuild-read) a cut entry from that copy while the host can serve it. The rebuild answers an error when the host cannot serve the entry, and never the cut entry. A stateless host loses the copy, and the Tracking Service still holds every entry that reached it. A human cleanup of the kind `session` removes the execution directory, and a later rebuild answers `session_absent` with the reason `not_kept`.
 - The span identity of a worker span hashes the execution identity, a run key and the local key. The run key is 8 random hexadecimal characters, new in each process run of the execution. A resumed execution therefore writes new spans and keeps the spans of the earlier run.
 
 pi keeps its own compaction logic, and kanthord designs nothing for it.

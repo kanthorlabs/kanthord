@@ -219,7 +219,7 @@ KanthorD owns its SSH identities. It reads and writes no file under `~/.ssh` of 
 `access` is `SshAccess`, in memory only. `SshKeyAccess` is `{ private_key, public_key, known_hosts, port }`. `SshRelayAccess` is `{ relay, public_key, known_hosts, port }` of [the relay agent](#the-relay-agent). `known_hosts` holds complete lines. `port` is `sshPortOf` of the address host: its value in `SSH_HOST_PORTS`, else 22.
 
 1. Sweep the expired SSH agent directories under [crash and abort cleanup](#crash-and-abort-cleanup).
-2. Create the directory with `mkdtemp(join(tmpdir(), "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`.
+2. Create the directory with `mkdtemp(join(root, "kd-ssh-<deadline at, base 36>-"))`. Assert mode `0700`. `root` is `SSH_AGENT_ROOT`, `/tmp`, on POSIX, as OpenSSH does, and `tmpdir()` on every other platform. The temporary directory of a worker instance lies below its slot root or its data directory, and that path leaves no room for the socket.
 3. Refuse a socket path above 100 bytes, because `sun_path` holds 104 bytes on macOS and `ssh-agent` fails without a message on a longer path. Refuse a path that holds a character outside `A-Za-z0-9/._-`.
 4. Write `id.pub` with the public key and `known_hosts` with the lines of `access`, each with mode `0600` and flag `wx`. The directory holds no private key at any time.
 5. Spawn `sh -c 'exec 3<&0; ssh-agent -D -a "$1" & agent=$!; { cat; kill 0; } <&3 2>/dev/null & wait "$agent"' sh <dir>/a` with the environment `{ PATH }` and the spawn option `detached: true`, so `sh` leads its own process group. Node holds the stdin pipe of `sh`. `sh` copies it to file descriptor 3, and the background `cat` reads it, because a background command of a non-interactive `sh` reads `/dev/null` by default. Wait until the socket accepts a connection, the deadline ends, `sh` exits or a cancel arrives.
@@ -258,7 +258,7 @@ ssh -F none -o Port=<port> -o IdentitiesOnly=yes -o IdentityFile=<dir>/id.pub -o
 - A crash of the process closes the stdin pipe of `cat`, so `cat` ends and the background subshell ends the process group of `sh` at once.
 - A terminated worker thread closes its child pipes, so the background subshell also ends the process group of `sh` at once.
 - The key lifetime of `ssh-add -t` removes the key from the SSH agent at the deadline in every case.
-- Each `withSshAgent` call first sweeps the `kd-ssh-*` directories of the same user in the system temporary directory. It removes each directory whose deadline lies more than 60 s in the past and whose socket accepts no connection. The sweep kills no process and reads no pid.
+- Each `withSshAgent` call first sweeps the `kd-ssh-*` directories of the same user below `/tmp` on POSIX, else in the system temporary directory. It removes each directory whose deadline lies more than 60 s in the past and whose socket accepts no connection. The sweep kills no process and reads no pid.
 
 ### Core dumps
 

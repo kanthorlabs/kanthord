@@ -140,7 +140,7 @@ erDiagram
         integer tool_count "stored agent.tool spans"
         integer error_count "spans with status Error"
         text first_error_span_id "first span with status Error, root, tool_error and stopped excluded"
-        integer created_at "Unix ms, start of the retention"
+        integer created_at "Unix ms, the creation of the trace"
     }
 
     tracking_span {
@@ -261,8 +261,8 @@ erDiagram
                   <td>Tracking Service</td>
                   <td>
                     Derived: the Tracking Service deduplicates by the record
-                    identity that its producer mints, within the retention of
-                    the trace. The identity has the form
+                    identity that its producer mints, within the writable period
+                    of the trace. The identity has the form
                     <code>&lt;span_id&gt;:&lt;name&gt;</code> and holds at most
                     128 characters.
                   </td>
@@ -278,8 +278,8 @@ erDiagram
                     >
                     holds the telemetry text;
                     <a
-                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention"
-                      >retention</a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#writable-period-and-deletes"
+                      >a trace delete</a
                     >
                     deletes it with its trace. The columns are derived, and the
                     identity of a text has the form
@@ -297,8 +297,8 @@ erDiagram
                     >
                     holds the entries of an agent session;
                     <a
-                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#retention"
-                      >retention</a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#writable-period-and-deletes"
+                      >a trace delete</a
                     >
                     deletes them with their trace.
                   </td>
@@ -339,7 +339,6 @@ erDiagram
               a stored record stays <code>Stored</code> and adds no row. The
               bound is 50,000 records for each trace.
             </li>
-            <li>The retention sweep runs in bounded transactions.</li>
           </ul>
           <h3 id="traces">Traces</h3>
           <ul>
@@ -388,10 +387,9 @@ erDiagram
               refused.
             </li>
             <li>
-              A record that arrives after its trace expires is refused with
-              <code>trace_expired</code>. The predicate is the predicate of the
-              retention sweep on the ULID time of the execution identity, so it
-              needs no tombstone.
+              A record that arrives after the writable period of its execution
+              is refused with <code>trace_expired</code>. The predicate reads
+              the ULID time of the execution identity, so it needs no tombstone.
             </li>
             <li>
               The admission of a span updates the summary columns of its trace
@@ -494,7 +492,7 @@ erDiagram
               span.
             </li>
             <li>
-              A telemetry text holds no retention of its own and no
+              A telemetry text holds no deletion of its own and no
               <code>expired_at</code>, and <code>content</code> is
               <code>NOT NULL</code>. The deletion of its trace deletes it, and a
               reference to a deleted trace resolves to expired. Today the store
@@ -506,22 +504,30 @@ erDiagram
               <code>404 tracking.text.not_found</code>.
             </li>
           </ul>
-          <h3 id="retention-and-deletion">Retention and deletion</h3>
+          <h3 id="deletion">Deletion</h3>
           <ul>
             <li>
-              The trace is the only unit of retention. The deletion of a trace
+              The trace is the only unit of deletion. The deletion of a trace
               row deletes its spans, its records, its telemetry texts and its
               session entries through <code>ON DELETE CASCADE</code>. The
               deletion of a span deletes no telemetry text.
             </li>
             <li>
-              The operator configures the retention of a trace once for the
-              server, never per project, as
-              <code>tracking.retention_days</code>, default 30, a safe integer
-              from 1 to 3650. The retention starts at <code>created_at</code> of
-              the trace row. A sweep at the start and every hour deletes the
-              expired rows, at most 20 in each transaction and 50 transactions
-              in one sweep.
+              A human deletes a trace through
+              <code>tracking.trace.delete</code>, directly or through a cleanup
+              of the Footprint Service. The delete runs
+              <code
+                >DELETE FROM tracking_trace WHERE trace_id = ? AND state !=
+                'open'</code
+              >, so an open trace stays. No start and no timer deletes a trace
+              or a rollup row.
+            </li>
+            <li>
+              The operator configures the writable period of a trace once for
+              the server, never per project, as
+              <code>tracking.trace_writable_days</code>, default 30, a safe
+              integer from 1 to 3650. It bounds only the admission of a record,
+              and it deletes nothing.
             </li>
             <li>
               A deletion of a telemetry row changes no outcome, removes no
@@ -534,9 +540,11 @@ erDiagram
                 href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters"
                 >architecture.impl.md</a
               >
-              rules. <code>scheduler_execution.trace_id</code> and
+              rules. A human delete removes a trace that a peer references.
+              <code>scheduler_execution.trace_id</code> and
               <code>root_span_id</code> keep their values after the deletion of
-              their trace, and they resolve to expired.
+              their trace, and a read of them answers
+              <code>404 tracking.trace.not_found</code>.
             </li>
           </ul>
           <h2 id="cross-store-references">Cross-store references</h2>
