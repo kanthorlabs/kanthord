@@ -186,13 +186,13 @@ A session entry is a record of the kind `session_entry` in `tracking.telemetry.w
 - A cut keeps the first half and the last half of the limit around the marker `[cut <n> characters]`. `<n>` counts the removed characters.
 - When the entry stays above the bound, the producer cuts again with the limits 1024 and then 256.
 - When the entry stays above the bound after the limit 256, the producer sends only `type`, `id`, `parentId` and `timestamp`. It also keeps `role`, `toolCallId`, `toolName`, `isError`, `usage` and `stopReason` of `message`.
-- Before the cut, the producer replaces each secret of the LLM credential of the agent with `[redacted]` in every string value of the entry. It matches the exact secret strings only, so an identity, a commit or a tool call identity stays whole.
+- Before the cut, the producer applies the [sensitive text rule set](agent.impl.md#sensitive-text-redaction) to every string value of the entry. The secrets of every credential of the execution are the known secrets. Each finding becomes `<redacted:RULE>`. An identity, a commit or a tool call identity stays whole.
 - `entry_id` and `tool_call_id` come from the entry before the redaction.
 - A `pi` entry holds its tool call identity in `toolCallId` of a tool result message. A `claude_code` entry holds `tool_call_id: null`, and a reader finds its tool result through the `tool_use_id` of the content blocks.
 - When the session opens, the native producer appends one entry of type `custom` with `customType` `kanthord.pinned_context` as the marker of the system prompt. The entry takes its own entry bound.
   The entry holds `{ part: "system_prompt" }` and no text, so the entry cut never removes a part of the system prompt. The [prompt composer](agent.md#prompt-composer) owns this shape.
   pi writes a `model_change` and a `thinking_level_change` entry at the session open, so this entry follows them.
-  The worker injects the system prompt into each model call and pi persists no entry of it. The `agent.prompt` span of the execution is the record of it, and `agent.prompt.resolve` rebuilds the text.
+  The worker injects the system prompt into each model call and pi persists each change of the prompt sections as a `system` message, after the redaction. The `agent.prompt` span of the execution is the record of it, and `agent.prompt.resolve` rebuilds the text.
 - pi persists each change of the prompt sections as a message with `role` `system`. Such an entry is a session entry as every other.
 
 ## Trace summary

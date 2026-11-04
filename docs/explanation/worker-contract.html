@@ -683,7 +683,14 @@ flowchart TB
                     <code>claude_code</code>,
                     <code>kanthord.session.format_version</code>,
                     <code>kanthord.harness.session_id</code> (harness only). At
-                    the end, <code>kanthord.session.entry_count</code>
+                    the end, <code>kanthord.session.entry_count</code>,
+                    <code>kanthord.session.redaction_count</code>,
+                    <code>kanthord.session.redaction_rules</code>,
+                    <code>kanthord.session.redaction_failed</code>,
+                    <code>kanthord.session.unkept</code>,
+                    <code>kanthord.session.restore_blocked</code>,
+                    <code>kanthord.session.compaction_residual</code> and
+                    <code>kanthord.session.thinking_kept</code>
                   </td>
                   <td>None</td>
                 </tr>
@@ -862,9 +869,9 @@ flowchart TB
             </li>
             <li>
               The producer cuts an entry above 61440 bytes of JSON and sets
-              <code>truncated: true</code>. It replaces the exact secret strings
-              of the LLM credential of the agent with
-              <code>[redacted]</code> first.
+              <code>truncated: true</code>. It applies the sensitive text rule
+              set first, and each finding becomes
+              <code>&lt;redacted:RULE&gt;</code>.
             </li>
             <li>
               A native <code>agent.turn</code> stays a child of the worker span
