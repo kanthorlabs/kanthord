@@ -575,7 +575,7 @@
                 <tr>
                   <td><code>413 gateway.request.body_too_large</code></td>
                   <td>Both</td>
-                  <td>The body exceeds 1 KiB.</td>
+                  <td>The body exceeds 32 MiB.</td>
                 </tr>
                 <tr>
                   <td><code>400 gateway.idempotency.invalid_key</code></td>
@@ -728,7 +728,7 @@
           <h2 id="api-shape">API shape</h2>
           <p>
             Both operations use the <code>human</code> access policy, a
-            30-second timeout and a 1 KiB body limit. Both are mutations and
+            30-second timeout and the 32 MiB body limit. Both are mutations and
             need <code>Idempotency-Key</code>. The workbench agent has no tool
             for either operation.
           </p>

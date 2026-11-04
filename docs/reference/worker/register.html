@@ -309,8 +309,8 @@
   -H 'Authorization: Bearer &lt;machine-jwt&gt;' \
   -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST'</code></pre>
           <p>
-            The 40 KiB body limit does not permit a registration payload. Worker
-            runtimes can call this API directly with their existing machine JWT.
+            The input holds no registration payload. Worker runtimes can call
+            this API directly with their existing machine JWT.
           </p>
           <h2 id="cli-shape">CLI shape</h2>
           <pre><code class="language-text">kanthord worker register [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;] [--idempotency-key &lt;key&gt;]</code></pre>

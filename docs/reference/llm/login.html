@@ -393,9 +393,9 @@ address:
             <a href="../errors.html#api-failures">error envelope</a>. The shared
             gateway failures of the
             <a href="credential.html#failures">credential page</a> also apply:
-            authentication, request validation, body limit, media type, timeout,
-            and the idempotency failures of <code>login</code> and
-            <code>login-code</code>.
+            authentication, request validation, the 32 MiB body limit, media
+            type, timeout, and the idempotency failures of
+            <code>login</code> and <code>login-code</code>.
           </p>
           <div class="table-wrap">
             <table>
@@ -587,7 +587,7 @@ address:
                   <td><code>POST /api/llm/credential/login</code></td>
                   <td><code>llm.credential.login</code></td>
                   <td>Yes</td>
-                  <td>16 KiB</td>
+                  <td>32 MiB</td>
                 </tr>
                 <tr>
                   <td><code>login-code</code></td>
@@ -596,7 +596,7 @@ address:
                   </td>
                   <td><code>llm.credential.login_code</code></td>
                   <td>Yes</td>
-                  <td>16 KiB</td>
+                  <td>32 MiB</td>
                 </tr>
                 <tr>
                   <td><code>login-status</code></td>
@@ -616,7 +616,7 @@ address:
                   </td>
                   <td><code>llm.credential.login_report</code></td>
                   <td>Yes</td>
-                  <td>64 KiB</td>
+                  <td>32 MiB</td>
                 </tr>
               </tbody>
             </table>
@@ -689,7 +689,9 @@ address:
           <h3 id="login-code-1">login-code</h3>
           <p>
             The path parameter <code>session_id</code> is required. The body is
-            <code>{ value }</code>, a nonempty string.
+            <code>{ value }</code>, a nonempty string of at most 1024
+            characters. A longer value answers
+            <code>400 gateway.request.validation_failed</code>.
           </p>
           <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/llm/credential/login/login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W/code \
   -H 'Authorization: Bearer &lt;human-jwt&gt;' \

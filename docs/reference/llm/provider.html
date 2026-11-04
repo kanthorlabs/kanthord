@@ -284,7 +284,8 @@
                   <td><code>400 llm.provider.invalid_input</code></td>
                   <td>
                     The body is not exactly <code>{ credential }</code> with a
-                    nonempty string.
+                    nonempty string. A <code>credential</code> above 63
+                    characters also answers this code.
                   </td>
                 </tr>
                 <tr>
@@ -316,7 +317,7 @@
                 </tr>
                 <tr>
                   <td><code>413 gateway.request.body_too_large</code></td>
-                  <td>The body exceeds 16 KiB.</td>
+                  <td>The body exceeds 32 MiB.</td>
                 </tr>
                 <tr>
                   <td>
@@ -389,7 +390,7 @@
                     <code
                       >{ &quot;credential&quot;:
                       &quot;&lt;credential-name&gt;&quot; }</code
-                    >; 16 KiB limit
+                    >; 32 MiB limit
                   </td>
                 </tr>
               </tbody>
