@@ -1130,7 +1130,7 @@ Every kanthord change to the behaviour of pi is a pi extension handler, one file
 The adapter pins the work prompt and the system prompt against the compaction of pi, so both survive a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
 The binary embeds `engine/static/prompt/base.md` as the Standard, the Role files `swe@1.md`, `re@1.md` and `env@1.md`, and `workbench.md` of that directory, as [shipped assets](architecture.impl.md#shipped-assets).
-The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
+The engine texts are the source. [assets/prompt/](assets/prompt/base.md) holds a copy of each text and of the template `framing-worker.md`, and `scripts/docs/check.sh` fails when a copy differs from its engine text.
 The source of the texts is the ideals file of Ulrich, split by single obligation: a rule that every agent shares goes to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor goes to `workbench.md`.
 `base.md` holds no rule that only code, a commit, a test, a repository or a review needs, because a non-coding agent also reads it.
 A rule for code or tests goes to both `swe@1.md` and `re@1.md` in the same words, because `re@1` enforces it. The finding rule differs: `swe@1.md` writes each finding as a bullet of its reply, and `re@1.md` writes each finding only in the `findings` array of the judgement line. Both files end with the code, test and finding sections.
