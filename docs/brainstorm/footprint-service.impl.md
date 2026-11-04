@@ -313,7 +313,7 @@ Each owner states its live check on its own page.
 
 - Each `human_or_service` body also takes `requested_by: humanActorSchema`, from the service caller only.
 - [gateway-service.impl.md](gateway-service.impl.md#access-policy) rules the access policy `human_or_service`. Each operation lists `[FOOTPRINT_SERVICE_NAME]` in `services`.
-- `footprint.backup.delete` keeps `human` access, because the Footprint Service owns it and runs it in process. It refuses a name outside the backup form. It never removes the newest backup of a file through a cleanup, because the candidate set holds none.
+- `footprint.backup.delete` keeps `human` access, because the Footprint Service owns it and runs it in process. It refuses a name outside the backup form. No candidate set and no checkbox offers the newest backup of a file, because `footprint.item.list` marks it `kept: true`.
 - [tracking-service.impl.md](tracking-service.impl.md#writable-period-and-deletes), [project-service.impl.md](project-service.impl.md#garbage-collection) and [worker-service.impl.md](worker-service.impl.md#the-footprint-operations) state the live check of each other operation.
 
 ## The instance report
