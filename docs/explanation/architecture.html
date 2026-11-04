@@ -239,6 +239,16 @@ flowchart TB
         Candidates --&gt;|"human pick"| Cleanups
     end
 
+    subgraph Workbench["Workbench Service"]
+        Sessions["Workbench sessions"]
+        Runs["Agent runs"]
+        Tools["Operation tools"]
+        Approvals["Mutation approvals"]
+        Sessions --&gt;|"one run at a time"| Runs
+        Runs --&gt;|"tool calls"| Tools
+        Approvals --&gt;|"human decision"| Tools
+    end
+
     subgraph Persistence["Persistence"]
         OperationalDB[("kanthord.db")]
         TrackingDB[("tracking.db")]
@@ -287,12 +297,19 @@ flowchart TB
     Ingestion --&gt;|"imports"| TrackingDB
     Invocation --&gt;|"footprint operations"| Cleanups
     Cleanups --&gt;|"owner deletes"| DirectAdapter
+    Invocation --&gt;|"workbench operations"| Sessions
+    Prompts --&gt;|"composed prompt"| Runs
+    Runs --&gt;|"inference"| Model
+    Runs --&gt;|"credential release"| Custody
+    Tools --&gt;|"human operations"| DirectAdapter
+    Sessions --&gt;|"session files"| StateFiles
+    Statistics --&gt;|"owner measure"| Sessions
 
     classDef focal fill:#fbe9e0,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
     classDef component fill:#ffffff,stroke:#4f5d75,color:#2d3142;
     classDef shared fill:#ececec,stroke:#7a8399,color:#2d3142;
     class Project,Graph focal;
-    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,RegistrationHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion,Statistics,Candidates,Alerts,Cleanups component;
+    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,RegistrationHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion,Statistics,Candidates,Alerts,Cleanups,Sessions,Runs,Tools,Approvals component;
     class Config,Keys,Context,Lifecycle,Health,Log,Store,OperationalDB,TrackingDB,ConfigFiles,StateFiles,Cache shared;
     style Runtime fill:#ececec,stroke:#bfc0c0,color:#2d3142
     style Gateway fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
@@ -303,6 +320,7 @@ flowchart TB
     style Intake fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
     style Tracking fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
     style Footprint fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style Workbench fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
     style Persistence fill:#ececec,stroke:#bfc0c0,color:#2d3142
 </pre>
           <p>
@@ -545,6 +563,16 @@ flowchart TB
               each cleanup and holds the alerts. Each delete runs through the
               delete operation of the owner of the data. No alert deletes
               anything.
+            </li>
+            <li>
+              <strong>Workbench and agents:</strong> A human drives a workbench
+              session through the API. Each session holds one agent run at a
+              time, and the run executes in the server process. Workbench holds
+              the session files in the state directory and owns no table in
+              <code>kanthord.db</code>. The agent calls the non-secret
+              operations that a human can call, and a human approves each
+              mutation before it runs. Workbench owns no worker, no registration
+              and no claim.
             </li>
           </ul>
           <h2 id="persistence-and-deployment">Persistence and deployment</h2>
