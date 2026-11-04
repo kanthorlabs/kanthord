@@ -355,7 +355,6 @@ The Agent component owns these keys of the section `agent`.
 - The workbench keeps one redaction object for the life of its session in the process. Each later `openAgent` passes that object, so a marker from before `configure` restores after it.
 - The tracer applies rule 0 and rules 1 to 17 to its entry copy, with one `KnownMatcher` for each session and the tracer marker `<redacted:RULE>`.
 - No `bash`, `grep` or `sed` runs at run time. The rule set extends the port of the reference scanner `hooks/secret-guard/` of `kanthorlabs/dotagents`. A citation of `scan.sh`, `test.sh` or `pi.ts` names a file of that directory.
-- `src/` means `engine/src/`. `pi/` means `engine/node_modules/@earendil-works/pi-coding-agent/dist/` at 1.1.0. `pi-core/` means `engine/node_modules/@earendil-works/pi-agent-core/dist/`, and `pi-ai/` means `engine/node_modules/@earendil-works/pi-ai/dist/`.
 
 ### The rule set
 
@@ -393,7 +392,6 @@ Constants:
 | `JWT_SEGMENT_MIN_CHARACTERS`       | 11, 11 and 16                                 |
 | `COMMAND_ARGUMENTS_MAX_CHARACTERS` | 512                                           |
 | `SENSITIVE_SCAN_MAX_CHARACTERS`    | 8388608                                       |
-| `REDACTION_TABLE_MAX`              | 4096                                          |
 
 - Each free bound uses a named constant. A format bound stays in the pattern text.
 - `SensitiveRule` is a `const` object of the rule ids. `SCAN_FAILED` is `scan_failed`.
@@ -520,8 +518,8 @@ Patterns:
 - A **part** of a secret matches when it holds `KNOWN_PART_MIN_CHARACTERS` or more characters after the public prefix of the secret. The public prefix is the match of `KNOWN_PREFIX_PATTERN` at the start of the secret, for example `sk-ant-api03-`.
 - The part checks apply only to the known secrets, not to the table values of rule 0b.
 - A **window map** maps each window of `KNOWN_PART_MIN_CHARACTERS` characters of each secret body to the secret and the offset. The matcher builds it with the automaton.
-- Suffix part: at each string start and each line start, the scanner looks up the next 12 characters in the window map. On a hit, it compares the rest of the line with the rest of the secret (`pi/core/tools/bash.js:243`).
-- Prefix part: the scanner finds each `... [truncated]` text (`pi/core/tools/truncate.js:209-213`). It looks up the 12 characters before it in the window map. On a hit, it compares the text that ends there with the start of the secret.
+- Suffix part: at each string start and each line start, the scanner looks up the next 12 characters in the window map. On a hit, it compares the rest of the line with the rest of the secret (`pi-coding-agent/core/tools/bash.js`).
+- Prefix part: the scanner finds each `... [truncated]` text (`pi-coding-agent/core/tools/truncate.js`). It looks up the 12 characters before it in the window map. On a hit, it compares the text that ends there with the start of the secret.
 - So each line start and each cut costs one lookup, whatever the number of secrets.
 - The part checks run on the source and on each escaped view.
 - Each form and each part counts as `llm_credential`.
@@ -543,6 +541,7 @@ Patterns:
 
 #### Rule 5, anchored
 
+- The regex form of rule 5 is the bounded form of the `scan.sh` DSN pattern: `/[^/\s:@"']{1,NM}:[^/\s@"'$<]{1,V}@(?:tcp|unix)\([^):\s]{1,253}/g`. The scanner does not run it.
 - The scanner finds each `@tcp(` and `@unix(` with `indexOf`.
 - From that anchor, it walks backward over the value class `[^/\s@"'$<]` for at most `V` characters. That run is the value window.
 - Inside the window, it takes the first `:` that has a value of 1 or more characters after it.
@@ -559,7 +558,7 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 - When the walk reaches a `-----END ... PRIVATE KEY-----` or `-----END PGP PRIVATE KEY BLOCK-----` line, the span runs from the first body line to the line before the END line.
 - When the walk reaches any other line, or the text end, the span is the run of body lines from the first body line.
 - So a header and an END line with code lines between them give no END span. Only the base64 run after the header can be masked.
-- The header and the END line of a key stay visible, because they carry no secret. A later text with the same header loses no character, for example `src/repository/ssh-key.ts:24`.
+- The header and the END line of a key stay visible, because they carry no secret. A later text with the same header loses no character, for example `engine/src/repository/ssh-key.ts`.
 - An earlier key can still mask the END line of a later key. Their bodies can share a start of 32 or more characters.
 - The walk state lives for one rule 6 pass over one string. It holds the line end and the body start of the last walk.
 - A header with the same body start in the same pass adds no second span and skips the walk. A later scan, also of an equal string, starts with a new state.
@@ -585,20 +584,20 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 - An offset map links each view character to its source characters. A span of the view masks the source characters that produced it.
 - A view span starts at the first source character of its first view character. It ends after the last source character of its last view character.
 - The part checks and the wrapped view also run on each escaped view.
-- So a `.env` line inside the JSON `tail` of `env@1` (`src/project/environment-agent.ts:305-318`) is found, also with CRLF line ends.
+- So a `.env` line inside the JSON `tail` of `env@1` (`engine/src/project/environment-agent.ts`) is found, also with CRLF line ends.
 
 #### Exclusions
 
 - **Fixture value.** The scanner marks a fixture span on each line that matches `/^PH*(?:-H+|exportH+)?(?:E2E_|TEST_|DEBUG_)[A-Za-z0-9_]{0,NM}(?:=|:H+)(?<value>"[^"\n]*"|'[^'\n]*'|\S*)/gmd`, case-sensitive.
 - The fixture span drops a finding of the context rules 2 to 5, 12 to 15 and 17 only. The token rules 0, 1, 6 to 11 and 16 ignore it, because a provider token is real whatever the name of its variable.
-- **Deviation.** The reference allows `TEST_GITHUB_TOKEN` and `- E2E_GITHUB_TOKEN` with a token (`test.sh:69`, `:75`). The port denies both, because `E2E_GH_TOKEN` in `engine/.env.e2e` is a real token (`AGENTS.md:177`).
-- **Local host.** Rules 4 and 5 drop a finding whose `host` equals `localhost` or `127.0.0.1`, or matches `192\.168\.\d{1,3}\.\d{1,3}` in full (`scan.sh:20`).
-- **Fixture password.** Rules 4, 5, 14 and 17 drop a finding whose password starts with `debug_` or `test_` (`scan.sh:22`). For rule 4, the password is the group `password`. For the other rules, it is `value`.
-- **Fixture assignment.** Rules 12 and 13 drop a finding whose `value` starts with `debug_` or `test_`, case-sensitive (`scan.sh:21`; `test.sh:53`).
-- **Placeholder.** Rules 4, 5, 12 to 15 and 17 refuse a value that starts with `$`, `<` or `{` (`test.sh:80`, `:97-102`). For rule 4, the check applies to the group `password`.
+- **Deviation.** The reference allows `TEST_GITHUB_TOKEN` and `- E2E_GITHUB_TOKEN` with a token (`test.sh`). The port denies both, because `E2E_GH_TOKEN` in `engine/.env.e2e` is a real token (`AGENTS.md`).
+- **Local host.** Rules 4 and 5 drop a finding whose `host` equals `localhost` or `127.0.0.1`, or matches `192\.168\.\d{1,3}\.\d{1,3}` in full (`scan.sh`).
+- **Fixture password.** Rules 4, 5, 14 and 17 drop a finding whose password starts with `debug_` or `test_` (`scan.sh`). For rule 4, the password is the group `password`. For the other rules, it is `value`.
+- **Fixture assignment.** Rules 12 and 13 drop a finding whose `value` starts with `debug_` or `test_`, case-sensitive (`scan.sh`; `test.sh`).
+- **Placeholder.** Rules 4, 5, 12 to 15 and 17 refuse a value that starts with `$`, `<` or `{` (`test.sh`). For rule 4, the check applies to the group `password`.
 - **curl user.** Rule 15 drops a `curl -u` value of the form `digits:digits`, for example a uid and a gid.
 - **Marker.** The scanner drops a span only inside a valid marker. A text such as `<redacted:` plus a token plus `>` is no valid marker, and every rule scans it.
-- **JSON Web Token.** Rule 16 finds a JWT. This is a deviation from `test.sh:89`, which lets a JWT pass.
+- **JSON Web Token.** Rule 16 finds a JWT. This is a deviation from `test.sh`, which lets a JWT pass.
 
 #### Overlaps
 
@@ -655,7 +654,7 @@ The tag:
 - The session part is the first 8 characters of the sha-256 hex digest of the pi session id.
 - The process part is 8 random hexadecimal characters from `randomBytes`. It names one redaction object. A worker session and an `env@1` session have one object; a workbench session has one object for its life in the process.
 - Example: `<redacted:url_userinfo:3:9f2c41ab07d1e5c3>`.
-- `openSession` builds the redaction object from `sessionManager.getSessionId()` before it creates the pi session (`src/agent/agent-session.ts:75-76`, `:90-104`). So `text()` of the system prompt, `text()` of the work and every handler use one tag. With two tags, the pins find no equal text and insert a second copy.
+- `openSession` builds the redaction object from `sessionManager.getSessionId()` before it creates the pi session (`engine/src/agent/agent-session.ts`). So `text()` of the system prompt, `text()` of the work and every handler use one tag. With two tags, the pins find no equal text and insert a second copy.
 
 The table:
 
@@ -666,9 +665,9 @@ The table:
 - A merged span with a view part maps to its source range. When the view text of that range differs from the source text, the table keeps no value, and the marker takes index 0. A span of the wrapped view is such a case.
 - The same value always gets the same marker for one redaction object, also when another rule finds it later.
 - Index 0 marks a value that the session could not keep: `<redacted:scan_failed:0:TAG>` for a scan failure. `<redacted:RULE:0:TAG>` marks a value above `REDACTION_TABLE_MAX`, a span longer than `SENSITIVE_VALUE_MAX_CHARACTERS`, or a value whose view text differs from its source text.
-- `REDACTION_TABLE_MAX` is 4096 values.
+- The hook module owns `REDACTION_TABLE_MAX`: 4096 values.
 - The workbench table holds at most `REDACTION_TABLE_MAX` values for the life of the session in the process. Above it, each new value takes index 0, and `unkept` counts each such marker.
-- A marker starts with `<`, as the current URL userinfo marker `<redacted>` does (`src/repository/connector.ts:249`).
+- A marker starts with `<`, as the current URL userinfo marker `<redacted>` does (`engine/src/repository/connector.ts`).
 
 ### The two-pass scan
 
@@ -682,20 +681,20 @@ The two-pass scan applies to `message_end`, `text()` and the `context` handler:
 
 ### The handlers
 
-| Handler           | Extension | Effect                                                                                                                                                                                                                                       |
-| ----------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tool_call`       | `restore` | For each valid marker in each string of `event.input`, act on its tag and on the tool. The cases follow below.                                                                                                                               |
-| `turn_start`      | `hook`    | Refresh the known secrets with `await known()`. On a rejection, keep the last set (`src/worker/unit/agent-telemetry.ts:253-258`).                                                                                                            |
-| `message_end`     | `hook`    | For an `assistant` message, refresh the known secrets first, because pi resolves the key in the stream call (`pi-core/agent-loop.js:269-270`).                                                                                               |
-| `message_end`     | `hook`    | Return a redacted copy of a `system`, `user`, `assistant`, `toolResult` or `custom` message. Return nothing when no string changes.                                                                                                          |
-| `context`         | `hook`    | Redact the `summary` of each `compactionSummary` message, and each `custom` message. This cleans the summary of a resumed session file, because `SessionManager.open` loads the raw text.                                                    |
-| `session_compact` | `hook`    | Redact `compactionEntry.summary` in place, and count each finding as `compaction_residual`. This cleans the projection of this process (`pi/core/session-manager.js:186-190`) and the tracer copy. The session file keeps the residual (G1). |
+| Handler           | Extension | Effect                                                                                                                                                                                                                                            |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tool_call`       | `restore` | For each valid marker in each string of `event.input`, act on its tag and on the tool. The cases follow below.                                                                                                                                    |
+| `turn_start`      | `hook`    | Refresh the known secrets with `await known()`. On a rejection, keep the last set (`engine/src/worker/unit/agent-telemetry.ts`).                                                                                                                  |
+| `message_end`     | `hook`    | For an `assistant` message, refresh the known secrets first, because pi resolves the key in the stream call (`pi-agent-core/agent-loop.js`).                                                                                                      |
+| `message_end`     | `hook`    | Return a redacted copy of a `system`, `user`, `assistant`, `toolResult` or `custom` message. Return nothing when no string changes.                                                                                                               |
+| `context`         | `hook`    | Redact the `summary` of each `compactionSummary` message, and each `custom` message. This cleans the summary of a resumed session file, because `SessionManager.open` loads the raw text.                                                         |
+| `session_compact` | `hook`    | Redact `compactionEntry.summary` in place, and count each finding as `compaction_residual`. This cleans the projection of this process (`pi-coding-agent/core/session-manager.js`) and the tracer copy. The session file keeps the residual (G1). |
 
-The `context` handler sees no `system` message (`pi/core/extensions/runner.js:1010-1014`). The `systemMessage` of a compaction entry is a copy of the redacted `system` message, so it needs no handler.
+The `context` handler sees no `system` message (`pi-coding-agent/core/extensions/runner.js`). The `systemMessage` of a compaction entry is a copy of the redacted `system` message, so it needs no handler.
 
 The `context` handler and the `custom` messages:
 
-- A `context` handler of a consumer can add a `custom` message that never passes `message_end`. `pinnedLayersHook` adds `kanthord.prompt-layer` (`src/agent/hooks/pinned-layers.ts:12-18`, `:20-52`).
+- A `context` handler of a consumer can add a `custom` message that never passes `message_end`. `pinnedLayersHook` adds `kanthord.prompt-layer` (`engine/src/agent/hooks/pinned-layers.ts`).
 - `hook` runs last, so its `context` handler sees that message and redacts it.
 - A persisted `custom` message already holds markers, and the scanner keeps a valid marker unchanged. So its second scan changes no text.
 
@@ -734,36 +733,36 @@ Block reasons:
 
 Schema validation:
 
-- pi validates the arguments against the tool schema before `tool_call` (`pi-core/agent-loop.js:491-499`). So the schema checks the marker, not the value.
-- pi does no validation after the restore (`pi/core/extensions/types.d.ts:957-958`). A `pattern`, a `format` or an enum of a parameter never checks the restored value.
+- pi validates the arguments against the tool schema before `tool_call` (`pi-agent-core/agent-loop.js`). So the schema checks the marker, not the value.
+- pi does no validation after the restore (`pi-coding-agent/core/extensions/types.d.ts`). A `pattern`, a `format` or an enum of a parameter never checks the restored value.
 - A marker can fail a strict parameter. The model then gets the validation error and can choose another input.
-- The restore changes the validated copy of the arguments (`pi-ai/utils/validation.js:281`). So the persisted assistant message keeps the marker. A test pins this behavior of pi.
+- The restore changes the validated copy of the arguments (`pi-ai/utils/validation.js`). So the persisted assistant message keeps the marker. A test pins this behavior of pi.
 
 Strings that the `message_end` handler redacts:
 
 - On the message object and on each content block, the handler skips the structural keys. The keys are `type`, `role`, `id`, `toolCallId`, `toolName`, `customType`, `api`, `provider`, `model` and `stopReason`.
 - More structural keys: `timestamp`, `mimeType`, `textSignature`, `thinkingSignature`, `thoughtSignature`, `namespace` and `responseId`. The handler also skips the `data` of an image block.
 - Inside `arguments`, `details`, `nestedCalls`, `sections`, `toolsAdded` and custom `content`, the handler redacts every string at any depth.
-- For a `toolResult` message, the handler walks every string of every key, not only `content` and `details`. pi 1.1.0 drops `structuredContent` from the message (`pi-core/agent-loop.js:656-668`). A later pi version that keeps it gets the same redaction, and a test pins the persisted keys.
+- For a `toolResult` message, the handler walks every string of every key, not only `content` and `details`. pi 1.1.0 drops `structuredContent` from the message (`pi-agent-core/agent-loop.js`). A later pi version that keeps it gets the same redaction, and a test pins the persisted keys.
 
 Thinking blocks:
 
 The handler applies the first thinking rule that matches, in this order:
 
-1. A block of `openai-completions` whose `thinkingSignature` is a reasoning field name is redacted. pi replays its text in that field with no signature check (`pi-ai/api/openai-completions.js:138-141`, `:1003-1008`).
+1. A block of `openai-completions` whose `thinkingSignature` is a reasoning field name is redacted. pi replays its text in that field with no signature check (`pi-ai/api/openai-completions.js`).
 2. A block with `redacted: true` or a non-empty `thinkingSignature` stays whole, and each finding in it counts as `thinking_kept`.
 3. Every other block is redacted.
 
 - Each redacted block keeps its `thinkingSignature`.
-- Rule 3 redacts an unsigned Google block and an unsigned Bedrock block (`pi-ai/api/google-generative-ai.js:95-98`; `pi-ai/api/bedrock-converse-stream.js:471`).
+- Rule 3 redacts an unsigned Google block and an unsigned Bedrock block (`pi-ai/api/google-generative-ai.js`; `pi-ai/api/bedrock-converse-stream.js`).
 - For a kept block, the handler scans its text and its signature. It adds each finding to the table and counts it as `thinking_kept`. Rule 0b then masks each later occurrence.
 
 Hook order:
 
 - `restore` runs before every consumer `tool_call` handler. So every gate checks the input that the tool executes: the restored input of `write` and `edit`, and the unchanged input of every other tool.
-- `checkoutConfinement` checks the path that `read` opens (`src/agent/hooks/checkout-confinement.ts:56-61`).
-- The workbench approval acts only on a mutation operation tool (`src/workbench/service.ts:367-371`, `:394-395`). It holds the input that the operation receives, in memory only, in `session.approvals` (`:431-449`). For an operation tool, that input holds the marker text, because a pattern value restores only into `write` and `edit`.
-- A block from a consumer gate ends the chain (`pi/core/extensions/runner.js:963-967`). The tool does not run.
+- `checkoutConfinement` checks the path that `read` opens (`engine/src/agent/hooks/checkout-confinement.ts`).
+- The workbench approval acts only on a mutation operation tool (`engine/src/workbench/service.ts`). It holds the input that the operation receives, in memory only, in `session.approvals`. For an operation tool, that input holds the marker text, because a pattern value restores only into `write` and `edit`.
+- A block from a consumer gate ends the chain (`pi-coding-agent/core/extensions/runner.js`). The tool does not run.
 - A nested call of `ctx.executeTool` passes the same chain.
 - `hook` runs last, so no later `message_end` handler adds text after the redaction.
 
@@ -772,32 +771,32 @@ Hook order:
 
 ### Gaps
 
-| Entry or payload                                                                                  | Covered by                                                                                                                  | State                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| User message (work prompt, instruction, workbench human text, `env@1` JSON failure)               | `message_end`, escaped view; the worker also redacts before `session.prompt`                                                | Covered                                                                                                                                                                                                |
-| System message (prompt sections, `toolsAdded`), with the instruction file and the Binding prompts | `message_end`; `openSession` redacts the loader input                                                                       | Covered                                                                                                                                                                                                |
-| Assistant text, tool call arguments, `errorMessage`                                               | `message_end`                                                                                                               | Covered                                                                                                                                                                                                |
-| Thinking with a provider signature                                                                | Scanned, kept whole, counted, values added to the table                                                                     | Kept                                                                                                                                                                                                   |
-| Tool result content, `details` and every other key of every tool                                  | `message_end` of the `toolResult` message; rules 0 and 0b                                                                   | Covered                                                                                                                                                                                                |
-| Restored value in a later tool output                                                             | Rule 0b for a restored value that spreads; the result of the same call for a shorter value                                  | Covered, except a later output of a short value                                                                                                                                                        |
-| Truncated, encoded or wrapped LLM credential                                                      | Rule 0 forms, parts and the wrapped view                                                                                    | Covered                                                                                                                                                                                                |
-| Custom message of a run                                                                           | `message_end` of the `custom` message                                                                                       | Covered                                                                                                                                                                                                |
-| Custom message of a consumer `context` handler (`kanthord.prompt-layer`)                          | The `context` handler of `hook`                                                                                             | Covered                                                                                                                                                                                                |
-| System prompt and work text in the pins of the model input                                        | `openSession` redacts the system prompt once; the worker and the workbench pin that text; the worker pins the redacted work | Covered                                                                                                                                                                                                |
-| `kanthord.pinned_context` custom entry                                                            | `{ part: "system_prompt" }` only (`src/worker/unit/native-agent.ts:249-253`)                                                | No free text                                                                                                                                                                                           |
-| Workbench configuration entry                                                                     | `agent_provider` only (`src/workbench/service.ts:486-488`)                                                                  | No free text                                                                                                                                                                                           |
-| Virtual model state entry                                                                         | `provider`, `modelId`, `state` (`pi/core/agent-session.js:473-475`)                                                         | No free text                                                                                                                                                                                           |
-| `model_change`, `thinking_level_change`, session header                                           | `pi/core/session-manager.d.ts:27-35`                                                                                        | No free text                                                                                                                                                                                           |
-| **G1** Compaction summary                                                                         | No event edits the summary before the append (`pi/core/agent-session.js:2235`, `:2524`)                                     | Gap. The summarizer reads only redacted messages. A residual needs a value that the model makes, or one that no rule matched.                                                                          |
-| **G2** `sendCustomMessage` outside a run, `appendEntry`, turn boundary drafts                     | No extension `message_end`                                                                                                  | Gap, unreachable: no KanthorD code calls them. Rule: a hook passes each injected text through `redaction.text` first.                                                                                  |
-| **G3** Direct `appendCustomEntry` of KanthorD                                                     | No event                                                                                                                    | Closed: the worker entry holds no text, and the workbench entry holds `agent_provider` only.                                                                                                           |
-| **G4** User `!` bash message, branch summary                                                      | No `message_end` (`pi/core/agent-session.js:3140`, `:3168`, `:3322`)                                                        | Gap, unreachable: interactive mode only.                                                                                                                                                               |
-| **G5** `message_update`, `tool_execution_update`, `tool_execution_end` payloads                   | No persistence                                                                                                              | Out of scope: no session file. No KanthorD listener reads their content.                                                                                                                               |
-| **G6** Image content                                                                              | No text rule                                                                                                                | Out of scope.                                                                                                                                                                                          |
-| **G7** Encoded value of a pattern rule                                                            | No decoder                                                                                                                  | Out of scope. Rule 0 covers the encoded forms of the LLM credential.                                                                                                                                   |
-| **G8** Session files written before this hook                                                     | Not rewritten, and no rule-set version entry                                                                                | No change: the old files are dogfood data only. A workbench resume of an old file sends its values to the model. The worker never resumes an old file (`docs/brainstorm/worker-service.impl.md:2069`). |
-| **G9** `bash` full output file                                                                    | Not redacted (`pi/core/tools/bash.js:238-249`, `:289-290`)                                                                  | No change by the hook. A `read` of the file goes through `message_end`. The Footprint Service measures the files, and a human removes them.                                                            |
-| **G10** A value in an earlier message, before any rule found it                                   | That entry is already persisted                                                                                             | Gap. Rule 0b masks only later text.                                                                                                                                                                    |
+| Entry or payload                                                                                  | Covered by                                                                                                                  | State                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| User message (work prompt, instruction, workbench human text, `env@1` JSON failure)               | `message_end`, escaped view; the worker also redacts before `session.prompt`                                                | Covered                                                                                                                                                                                          |
+| System message (prompt sections, `toolsAdded`), with the instruction file and the Binding prompts | `message_end`; `openSession` redacts the loader input                                                                       | Covered                                                                                                                                                                                          |
+| Assistant text, tool call arguments, `errorMessage`                                               | `message_end`                                                                                                               | Covered                                                                                                                                                                                          |
+| Thinking with a provider signature                                                                | Scanned, kept whole, counted, values added to the table                                                                     | Kept                                                                                                                                                                                             |
+| Tool result content, `details` and every other key of every tool                                  | `message_end` of the `toolResult` message; rules 0 and 0b                                                                   | Covered                                                                                                                                                                                          |
+| Restored value in a later tool output                                                             | Rule 0b for a restored value that spreads; the result of the same call for a shorter value                                  | Covered, except a later output of a short value                                                                                                                                                  |
+| Truncated, encoded or wrapped LLM credential                                                      | Rule 0 forms, parts and the wrapped view                                                                                    | Covered                                                                                                                                                                                          |
+| Custom message of a run                                                                           | `message_end` of the `custom` message                                                                                       | Covered                                                                                                                                                                                          |
+| Custom message of a consumer `context` handler (`kanthord.prompt-layer`)                          | The `context` handler of `hook`                                                                                             | Covered                                                                                                                                                                                          |
+| System prompt and work text in the pins of the model input                                        | `openSession` redacts the system prompt once; the worker and the workbench pin that text; the worker pins the redacted work | Covered                                                                                                                                                                                          |
+| `kanthord.pinned_context` custom entry                                                            | `{ part: "system_prompt" }` only (`engine/src/worker/unit/native-agent.ts`)                                                 | No free text                                                                                                                                                                                     |
+| Workbench configuration entry                                                                     | `agent_provider` only (`engine/src/workbench/service.ts`)                                                                   | No free text                                                                                                                                                                                     |
+| Virtual model state entry                                                                         | `provider`, `modelId`, `state` (`pi-coding-agent/core/agent-session.js`)                                                    | No free text                                                                                                                                                                                     |
+| `model_change`, `thinking_level_change`, session header                                           | `pi-coding-agent/core/session-manager.d.ts`                                                                                 | No free text                                                                                                                                                                                     |
+| **G1** Compaction summary                                                                         | No event edits the summary before the append (`pi-coding-agent/core/agent-session.js`)                                      | Gap. The summarizer reads only redacted messages. A residual needs a value that the model makes, or one that no rule matched.                                                                    |
+| **G2** `sendCustomMessage` outside a run, `appendEntry`, turn boundary drafts                     | No extension `message_end`                                                                                                  | Gap, unreachable: no KanthorD code calls them. Rule: a hook passes each injected text through `redaction.text` first.                                                                            |
+| **G3** Direct `appendCustomEntry` of KanthorD                                                     | No event                                                                                                                    | Closed: the worker entry holds no text, and the workbench entry holds `agent_provider` only.                                                                                                     |
+| **G4** User `!` bash message, branch summary                                                      | No `message_end` (`pi-coding-agent/core/agent-session.js`)                                                                  | Gap, unreachable: interactive mode only.                                                                                                                                                         |
+| **G5** `message_update`, `tool_execution_update`, `tool_execution_end` payloads                   | No persistence                                                                                                              | Out of scope: no session file. No KanthorD listener reads their content.                                                                                                                         |
+| **G6** Image content                                                                              | No text rule                                                                                                                | Out of scope.                                                                                                                                                                                    |
+| **G7** Encoded value of a pattern rule                                                            | No decoder                                                                                                                  | Out of scope. Rule 0 covers the encoded forms of the LLM credential.                                                                                                                             |
+| **G8** Session files written before this hook                                                     | Not rewritten, and no rule-set version entry                                                                                | No change: the old files are dogfood data only. A workbench resume of an old file sends its values to the model. The worker never resumes an old file ([Traces](worker-service.impl.md#traces)). |
+| **G9** `bash` full output file                                                                    | Not redacted (`pi-coding-agent/core/tools/bash.js`)                                                                         | No change by the hook. A `read` of the file goes through `message_end`. The Footprint Service measures the files, and a human removes them.                                                      |
+| **G10** A value in an earlier message, before any rule found it                                   | That entry is already persisted                                                                                             | Gap. Rule 0b masks only later text.                                                                                                                                                              |
 
 ### Performance
 
@@ -809,7 +808,7 @@ Hook order:
 
 ### Telemetry
 
-The worker writes seven attributes at the end of the `agent.session` span (`src/worker/unit/native-agent.ts:140-160`):
+The worker writes seven attributes at the end of the `agent.session` span (`engine/src/worker/unit/native-agent.ts`):
 
 | Attribute                              | Value                                                                                                |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -827,20 +826,20 @@ The worker writes seven attributes at the end of the `agent.session` span (`src/
 
 ### Errors
 
-- A rule throws for a string, for example a `RangeError`. The string becomes `<redacted:scan_failed:0:TAG>`, and `scan_failed` grows. The reference also fails closed (`pi.ts:17-19`, `:36-38`).
-- The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi/core/extensions/runner.js:886-894`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:0:TAG>`.
+- A rule throws for a string, for example a `RangeError`. The string becomes `<redacted:scan_failed:0:TAG>`, and `scan_failed` grows. The reference also fails closed (`pi.ts`).
+- The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi-coding-agent/core/extensions/runner.js`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:0:TAG>`.
 - The `context` handler catches every error, and the summary becomes `<redacted:scan_failed:0:TAG>`.
-- The `tool_call` handler catches every error and returns `{ block: true, reason }`. On a throw, pi also fails the call (`pi-core/agent-loop.js:532-539`).
+- The `tool_call` handler catches every error and returns `{ block: true, reason }`. On a throw, pi also fails the call (`pi-agent-core/agent-loop.js`).
 - `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply.
 
 ### Tests
 
-A test file builds every fake key from parts at run time, for example `["AKIA", "KANTHORDCANARY01"].join("")`. No file of the repositories holds a literal that a secret scanner matches. The reference test file `pi.test.mjs:33` is a counter-example: a local scanner blocks its read.
+A test file builds every fake key from parts at run time, for example `["AKIA", "KANTHORDCANARY01"].join("")`. No file of the repositories holds a literal that a secret scanner matches. The reference test file `pi.test.mjs` is a counter-example: a local scanner blocks its read.
 
-`src/agent/sensitive-text.test.ts`:
+`engine/src/agent/sensitive-text.test.ts`:
 
-- `findPatternText`: a case table with one row for each decision case of `test.sh:30-102`. A deny case gives a span, and an allow case gives none.
-- The two deviations: `test.sh:69` and `:75` are deny cases. The JWT case of `test.sh:89` is a deny case of rule 16.
+- `findPatternText`: a case table with one row for each decision case of `test.sh`. A deny case gives a span, and an allow case gives none.
+- The two deviations: the `TEST_GITHUB_TOKEN` case and the `- E2E_GITHUB_TOKEN` case of `test.sh` are deny cases. The JWT case of `test.sh` is a deny case of rule 16.
 - Category positives: one row for each of the 86 shapes of the 11 categories, built from parts at run time. Each row names the expected rule.
 - Category negatives: one row for each text of [Text that stays visible](#text-that-stays-visible). Each row gives no span.
 - Rule 4: a URL with a user and a password, and a URL with an empty user and a password, mask the whole userinfo. A userinfo with no `:` gives no span. A password that starts with `test_` or `$` gives no span.
@@ -865,7 +864,7 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - Rule 5: anchored on the performance inputs and on a valid DSN. A user that ends with `$` or `<` matches.
 - Rule 5 differential: 200000 random short strings against the regex form of rule 5. Every regex finding is found.
 - Rule 6: a full PEM block masks only its body lines; the header and the END line stay. A header with base64 lines to the text end; a header in a JSON string keeps the rest of its line.
-- Rule 6: a table with the body of one RSA 4096 key masks nothing in `src/repository/ssh-key.ts`.
+- Rule 6: a table with the body of one RSA 4096 key masks nothing in `engine/src/repository/ssh-key.ts`.
 - Rule 6: a body of 20000 base64 characters between a header and its END line gets index 0, and its restore blocks.
 - Rule 6: a header constant and an END constant 300 code lines apart give no END span and mask no code line.
 - Rule 6: an encrypted PEM block with `Proc-Type:`, `DEK-Info:` and an empty line masks only its base64 lines, also with no END line.
@@ -901,7 +900,7 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - `redactValue`: keeps structural keys, masks a pattern finding of rules 1 to 17 with `<redacted:RULE>`, and leaves a session marker unchanged.
 - `redactValue`: one matcher masks a secret that `addSecret` added after an earlier call.
 
-`src/agent/hooks/sensitive-text-redaction.test.ts`:
+`engine/src/agent/hooks/sensitive-text-redaction.test.ts`:
 
 - `message_end` for each role, with `system` sections and `toolsAdded`.
 - Same message: line 1 of a tool result holds the value in a form that no rule matches. Line 2 holds a rule 4 finding. Both lines hold the marker.
@@ -940,17 +939,17 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 
 Engine consumers:
 
-- `src/worker/unit/agent-session.test.ts`: `openSession` installs `restore` after `homeRelativeCwd` and `hook` last, and returns the redacted system prompt. A passed `redaction` is used, and none is created.
+- `engine/src/worker/unit/agent-session.test.ts`: `openSession` installs `restore` after `homeRelativeCwd` and `hook` last, and returns the redacted system prompt. A passed `redaction` is used, and none is created.
 - In that test: the tag of the returned system prompt equals the tag of a later `message_end` marker of the same session.
-- `src/worker/unit/native-agent.test.ts`: `openNativeAgent` with `scriptedProvider` and `SessionManager.create` on a temporary directory. The work prompt and the system prompt hold a fake key.
+- `engine/src/worker/unit/native-agent.test.ts`: `openNativeAgent` with `scriptedProvider` and `SessionManager.create` on a temporary directory. The work prompt and the system prompt hold a fake key.
 - In that test: the script calls `write` with the marker of the work prompt key, then `bash` with the same marker.
 - In that test: the written file holds the real value, and the `bash` call blocks with the shell reason. The session file and the model context of each call hold no fake key.
 - In that test: the pins insert no second work prompt. `work.digest` equals the digest of the rendered work prompt.
 - In that test: the seven span attributes are present, and each prompt finding counts once.
-- `src/worker/unit/session-entries.test.ts`: `sessionEntryRecord` redacts a known secret and a pattern finding with `<redacted:RULE>`.
-- `src/worker/unit/agent-telemetry.test.ts`: the tracer matcher of a session masks a secret of a refresh.
-- `src/worker/unit/pinned-layers.test.ts`: `pinInference` with a redacted system prompt and work inserts nothing. The request roles are `system, user`, and the request holds no value.
-- `src/apps/server/e2e-workbench.test.ts`: a fake key in the workbench prompt reaches no model request.
+- `engine/src/worker/unit/session-entries.test.ts`: `sessionEntryRecord` redacts a known secret and a pattern finding with `<redacted:RULE>`.
+- `engine/src/worker/unit/agent-telemetry.test.ts`: the tracer matcher of a session masks a secret of a refresh.
+- `engine/src/worker/unit/pinned-layers.test.ts`: `pinInference` with a redacted system prompt and work inserts nothing. The request roles are `system, user`, and the request holds no value.
+- `engine/src/apps/server/e2e-workbench.test.ts`: a fake key in the workbench prompt reaches no model request.
 - In that test: a marker from before `session.configure` restores into `write` after it, and `closeAgent` writes the log record with `unkept`.
 - In that test: a `llm_credential` marker from before `configure` to another credential blocks after it.
-- `src/project/environment-agent.test.ts`: the `env@1` session opens with the redaction, keeps the confinement, and redacts its JSON failure message. The log record follows `drive`.
+- `engine/src/project/environment-agent.test.ts`: the `env@1` session opens with the redaction, keeps the confinement, and redacts its JSON failure message. The log record follows `drive`.
