@@ -98,6 +98,26 @@ One run of the agent loop of one agent for one consumer.
 The term names no closed set.
 Execution 1 opens one agent session of `swe@1` under worker binding `coder-main`.
 
+## session hook
+
+A pi extension handler that KanthorD ships in `engine/src/agent/hooks/` and that `openSession` installs in an agent session.
+The term names no closed set.
+The hook `pinnedLayersHook` pins the work prompt in each model call of Execution 1.
+
+## sensitive text
+
+A text in an agent session that a rule of the sensitive text rule set matches.
+The closed set is the rule ids of [agent.impl.md](agent.impl.md#sensitive-text-redaction).
+The session of Execution 1 reads a `.env` file, and the rule `env_assignment` matches its database password.
+
+## redaction marker
+
+The text that replaces one sensitive text.
+In an agent session it is `<redacted:RULE:N:TAG>`, and in a tracer copy it is `<redacted:RULE>`.
+The term names no closed set.
+The term differs from the marker line of a judgement.
+Execution 1 shows `<redacted:url_userinfo:3:9f2c41ab07d1e5c3>` in place of the user and the password of a database address.
+
 ## prompt layer
 
 One of the three layers of the system prompt of an agent session, read from the most general to the most specific.

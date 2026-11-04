@@ -785,7 +785,7 @@ At every placement, the server derives the client identity of an instance for a 
 - The help states that the new binding revision makes the Onboarding component clear the mark that the stored environment came from `env@1`.
 - The help of the Repository prompt and of each Binding prompt states "Each work-product sentence is a rule. The reviewer judges a violation as a blocker. A rule about the method, the tools, the repository operations or the release is guidance: the reviewer reports a violation as a suggestion."
 - The help of the `re@1` Binding prompt row states "Put each rule that the reviewer judges into the Repository prompt, so the coder reads it too. Use this text only to relax the judgement of a rule."
-- The help states "A prompt holds no secret."
+- The help states "A prompt holds no secret." The sensitive text redaction still replaces a finding in the system prompt.
 - The binding draft carries `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
 - The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows each record as `<name> (v<revision>)` with its fingerprint.

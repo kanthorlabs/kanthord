@@ -74,6 +74,23 @@ Added 2026-10-06 by Ulrich, from the evaluation of the agent. The Worker Service
 - [ ] Give an agent session a budget input that the consumer supplies. `ExecutionBudget` reads `createdAt` and `expiredAt` of the claim.
 - [ ] Move the native agent runtime, the prompt composer and the tool table from the Worker pages to the Agent pages, and split `NativeAgentInput` of `engine/src/worker/unit/native-agent.ts` into a session input that names no execution.
 - [ ] Added 2026-10-13 from the rewrite of the worker explanation pages. Show the cooldown of each chain entry on the agent page of `apps`, with a badge and a Clear action, as [agent.md](agent.md#views) requires. Since 2026-10-21 the Fallback chain card of the agent page shows the cooldown of each entry, but it has no Clear action, so only `kanthord agent cooldown clear` clears it. [native-agent.md](../explanation/native-agent.html#the-fallback-chain) states the gap.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q1). The mechanism is "session hook". The first hook is "sensitive text redaction" (`sensitiveTextRedaction`). [agent.impl.md](agent.impl.md#sensitive-text-redaction) holds the design, and `.dev/agent-hooks/plan.md` holds the build steps.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q2). The hook replaces each sensitive value with `<redacted:RULE:N:TAG>` before pi persists the message and before the model reads it. The `restore` handler acts before every consumer gate.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q3). The restore writes a value of rules 1 to 17 back only into `write` and `edit`. A restored value in a `bash` call blocks. A rule 0 value blocks in every tool. Accepted cost: a real third-party secret that the model moves can reach the workspace. Accepted cost: a `bash` command that needs a masked value blocks. Reason: the block closes the `bash` exfiltration path of a prompt injection with `curl`.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q4). A thinking block with `redacted: true` or a non-empty provider `thinkingSignature` stays whole. Its findings enter the table and count as `thinking_kept`. An `openai-completions` field-name block, an unsigned Google block and an empty-signature Bedrock block are redacted.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q5). The tracer moves to the new rule set now, with one `KnownMatcher` for each session and the tracer marker `<redacted:RULE>`. `redactSecrets` and `[redacted]` go. `redactReason`, the git userinfo marker, the onboarding marker and the e2e `SECRET_PATTERN` stay.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q6). Old session files get no change, no rewrite and no rule-set version entry. The old files are dogfood data only. A human removes an old session file through the `session` cleanup of the Footprint Service.
+- [ ] RULED 2026-11-04 by Ulrich (Q7). The live canary is the `swe@1` Binding prompt of the run binding. Engine #431 moves the key to `prompts.agents["swe@1"]`.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q8). Rules 12 and 13 both stay. A false positive of rule 12 or 13 that the model copies into `bash` blocks the call.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q8b). Rule 4 masks the whole userinfo, and the user part is optional. Rule 14 masks an unquoted `password=` or `pwd=` parameter of a key-value DSN or a query string.
+- [ ] RULED 2026-11-04 by Ulrich (AH-Q9). The hook does nothing for the `bash` full output file. The Footprint Service tracks the files in the kind `tool_output`, and a human measures and cleans them.
+- [ ] RULED 2026-11-04 by Ulrich (AH-C1). The rule set holds 11 categories and 17 pattern rules plus rules 0 and 0b. It also holds the list of text that stays visible.
+- [ ] RULED 2026-11-04 by Ulrich (AH-D1). Rule 14 is `connection_secret`. It also covers `AccountKey=`, `SharedAccessKey=`, query credentials and presigned URL signatures.
+- [ ] RULED 2026-11-04 by Ulrich (AH-D2). Rule 16 `jwt` is an anchored walk. It is a deviation from `test.sh:89` of the reference scanner.
+- [ ] RULED 2026-11-04 by Ulrich (AH-D3). Rules 7, 8 and 9 are `platform_token` (C2), `chat_token` (C4) and `saas_token` (C5).
+- [ ] RULED 2026-11-04 by Ulrich (AH-D4). Stripe test keys stay visible. Rule 9 matches only `sk_live_` and `rk_live_` for Stripe. Rule 13 still masks a test key by the name of its variable.
+- [ ] RULED 2026-11-04 by Ulrich (AH-D5). Rule 13 holds the lower-case YAML and INI form, with the value to the line end. The value refuses `(`, `)`, `,`, `;` and the backtick.
+- [ ] RULED 2026-11-04 by Ulrich (AH-D6). All 17 pattern rules stay if the build gate holds 200 ms on every performance row. Otherwise the build drops rules 15 and 17, records the drop and reports it once.
 
 ### Workbench Service
 

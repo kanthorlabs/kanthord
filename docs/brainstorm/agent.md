@@ -180,3 +180,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The runtime owns its data directory, and kanthord deletes no file in it.
 - The consumer names the identity of each agent session that it opens.
 - A resume opens only the session of that identity.
+- Every agent session replaces each sensitive text with a redaction marker before the runtime stores a message and before the model reads it.
+- Two findings stay in the stored session: a finding in a thinking block that the provider signs, and a residual in a compaction summary. Each is a value that the model made, or a value that no rule matched where the model read it.
+- The `write` and `edit` tools receive the value of each marker of their own redaction, so a write to the workspace keeps the real text. A command receives no masked value, and no tool receives an LLM credential.
+- The rule set is one standard configuration for every consumer.
