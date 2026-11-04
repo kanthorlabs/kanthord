@@ -1076,11 +1076,11 @@
             host allowlist, readiness checks, and CORS middleware. Request IDs
             follow the
             <a href="identities.html#request-ids">prefixed identity contract</a
-            >. Each operation adds a timeout, body limit, and the shared
-            invocation chain for schema validation and its access policy.
-            Failures use the shared JSON error envelope with a
-            <code>request_id</code>. Public access still requires an allowed
-            host and a ready server.
+            >. Each operation adds a timeout and the shared invocation chain for
+            schema validation and its access policy. Every operation has one
+            body limit of 32 MiB, <code>REQUEST_BODY_MAX_BYTES</code>. Failures
+            use the shared JSON error envelope with a <code>request_id</code>.
+            Public access still requires an allowed host and a ready server.
           </p>
         </article>
       </main>

@@ -526,7 +526,7 @@
                 <tr>
                   <td><code>413 gateway.request.body_too_large</code></td>
                   <td>Mutations</td>
-                  <td>The body exceeds 64 KiB.</td>
+                  <td>The body exceeds 32 MiB.</td>
                 </tr>
               </tbody>
             </table>
@@ -661,8 +661,8 @@
             Mutations also require
             <code>Content-Type: application/json</code> and an
             <code>Idempotency-Key</code> header with a fresh
-            <code>idempotency_key_&lt;ulid&gt;</code>. The mutation body limit
-            is 64 KiB. The HTTP client of the CLI has a 31-second deadline.
+            <code>idempotency_key_&lt;ulid&gt;</code>. The body limit is 32 MiB.
+            The HTTP client of the CLI has a 31-second deadline.
           </p>
           <div class="table-wrap">
             <table>

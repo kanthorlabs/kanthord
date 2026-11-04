@@ -401,7 +401,9 @@
                   <td>
                     Params, query or body fail the schema, for example a
                     <code>fingerprint</code> that is not
-                    <code>SHA256:</code> and 43 base64 characters.
+                    <code>SHA256:</code> and 43 base64 characters. A
+                    <code>scan</code> <code>host</code> above 253 characters
+                    also answers this code.
                   </td>
                 </tr>
                 <tr>
@@ -421,7 +423,7 @@
                 <tr>
                   <td><code>413 gateway.request.body_too_large</code></td>
                   <td><code>scan</code>, <code>pin</code></td>
-                  <td>The body exceeds 1 KiB.</td>
+                  <td>The body exceeds 32 MiB.</td>
                 </tr>
                 <tr>
                   <td><code>400 gateway.request.unexpected_body</code></td>
@@ -664,7 +666,7 @@
                 </tr>
                 <tr>
                   <td>Body limit</td>
-                  <td>1 KiB</td>
+                  <td>32 MiB</td>
                 </tr>
               </tbody>
             </table>
@@ -719,7 +721,7 @@
                 </tr>
                 <tr>
                   <td>Body limit</td>
-                  <td>1 KiB</td>
+                  <td>32 MiB</td>
                 </tr>
               </tbody>
             </table>

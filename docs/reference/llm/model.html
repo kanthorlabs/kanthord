@@ -233,7 +233,10 @@
                   <td><code>400 gateway.request.validation_failed</code></td>
                   <td>
                     The body is not exactly the three properties below, each a
-                    nonempty string.
+                    nonempty string. A <code>credential</code> above 63
+                    characters, or a <code>model_identifier</code> or
+                    <code>reasoning_effort</code> above 256 characters, also
+                    answers this code.
                   </td>
                 </tr>
                 <tr>
@@ -269,7 +272,7 @@
                 </tr>
                 <tr>
                   <td><code>413 gateway.request.body_too_large</code></td>
-                  <td>The body exceeds 16 KiB.</td>
+                  <td>The body exceeds 32 MiB.</td>
                 </tr>
                 <tr>
                   <td>
@@ -342,7 +345,7 @@
                     <code
                       >{ &quot;credential&quot;, &quot;model_identifier&quot;,
                       &quot;reasoning_effort&quot; }</code
-                    >; 16 KiB limit
+                    >; 32 MiB limit
                   </td>
                 </tr>
               </tbody>
