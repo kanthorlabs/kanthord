@@ -1113,10 +1113,10 @@ flowchart TB
             working directory and its home directory. That load is behavior of
             the Claude Code harness. It is no KanthorD support. The working
             directory is the candidate, so a <code>claude-code@1</code> coder
-            reads the instruction file of the binding only when the
-            <code>CLAUDE.md</code> of the candidate imports it, and it reads no
-            pinned commit. The harness calls no <code>worker.handover</code>, so
-            it writes no attempt prompt pin.
+            reads the instruction file of the binding only through the
+            <code>CLAUDE.md</code> files that Claude Code loads from the
+            candidate, and it reads no pinned commit. The harness calls no
+            <code>worker.handover</code>, so it writes no attempt prompt pin.
           </p>
           <h3 id="launch">Launch</h3>
           <ol>

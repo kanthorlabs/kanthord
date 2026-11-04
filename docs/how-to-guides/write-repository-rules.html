@@ -142,7 +142,7 @@
                     <code>agent.prompt.agent_directory</code> on the server
                     host.
                   </td>
-                  <td>Every agent of every project</td>
+                  <td>Every native agent of every project</td>
                 </tr>
                 <tr>
                   <td>2</td>
@@ -170,8 +170,8 @@
             and the framing of KanthorD. So the stored Repository prompt can
             override a rule of the instruction file, and a Binding prompt can
             override a rule of the Repository prompt for its own agent. No text
-            overrides the framing, which owns the commit, the branch, the push,
-            the verification and the release.
+            overrides the framing. The framing states that the worker owns the
+            commit, the branch, the push, the verification and the release.
           </p>
           <p>Put each rule into one place:</p>
           <div class="table-wrap">
@@ -254,12 +254,12 @@
           <p>
             A layer 2 or layer 3 text joins the
             <strong>default standard</strong> of the agent. The first paragraph
-            of <code>base.md</code> states: "This text, the rules of your role,
-            and the repository prompt and the binding prompt of each repository
-            of the work form the default standard. The default standard binds
-            every work product." So the reviewer reads each work-product
-            sentence as a rule. A violation is a blocker, and the node goes back
-            to the coder.
+            of <code>base.md</code> holds these sentences: "This text, the rules
+            of your role, and the repository prompt and the binding prompt of
+            each repository of the work form the default standard. The default
+            standard binds every work product." So the reviewer reads each
+            work-product sentence as a rule. A violation is a blocker, and the
+            node goes back to the coder.
           </p>
           <p>
             Write each sentence so that a reviewer can decide yes or no. Replace
@@ -576,10 +576,12 @@
             KanthorD sends no prompt text to the external harness
             <code>claude-code@1</code>. Claude Code loads its own
             <code>CLAUDE.md</code> files from its working directory, which is
-            the node branch. When a project runs <code>claude-code@1</code> as
-            the coder, the <code>CLAUDE.md</code> of the repository holds
-            <code>@AGENTS.md</code>, so the coder reads the instruction file of
-            the binding.
+            the candidate on the node branch. When a project runs
+            <code>claude-code@1</code> as the coder, add the line
+            <code>@AGENTS.md</code> to the <code>CLAUDE.md</code> of the base
+            branch, so the coder reads the instruction file of the binding. When
+            the binding names <code>CLAUDE.md</code> itself, Claude Code loads
+            that file with no import.
           </p>
           <ul>
             <li>
@@ -646,7 +648,7 @@
                 </tr>
                 <tr>
                   <td>
-                    An execution stops with
+                    The execution setup answers
                     <code>409 agent.prompt.source_invalid</code>
                   </td>
                   <td>
@@ -656,7 +658,12 @@
                   </td>
                   <td>
                     Fix the file on the base branch. A new attempt pins the new
-                    base head.
+                    base head, for example the attempt that a human unblock
+                    opens. Today a refused setup releases no stop, and the
+                    worker instance takes no more work; see
+                    <a href="../explanation/native-agent.html#the-prompt-record"
+                      >the prompt record</a
+                    >.
                   </td>
                 </tr>
                 <tr>

@@ -584,9 +584,9 @@ Binding prompt of repository app:
           </div>
           <p>
             Rows 1 to 7 form the system prompt. Rows 4, 5 and 6 repeat for each
-            repository binding of the node, in binding order. So the rules of
-            one repository stay together in one block. A row with no text adds
-            no part.
+            repository binding of the node, in the order of the repository
+            bindings of the node revision. So the rules of one repository stay
+            together in one block. A row with no text adds no part.
           </p>
           <p>
             The <strong>work prompt</strong> is the task message of a Worker
@@ -631,7 +631,7 @@ Binding prompt of repository app:
                 <tr>
                   <td>1</td>
                   <td>KanthorD prompt</td>
-                  <td>Every agent</td>
+                  <td>Every native agent</td>
                   <td>
                     The files <code>base.md</code>,
                     <code>&lt;agent_name&gt;.md</code> and
@@ -741,9 +741,9 @@ Binding prompt of repository app:
               A file that is larger than 32768 bytes, is not UTF-8, cannot be
               read or holds a control character other than a tab and a newline
               is invalid. A carriage return is a control character, so a file
-              with CRLF line ends is invalid. An invalid file stops the
-              execution with <code>409 agent.prompt.source_invalid</code>. A
-              human fixes the file on the base branch.
+              with CRLF line ends is invalid. An invalid file refuses the
+              execution setup with <code>409 agent.prompt.source_invalid</code>.
+              A human fixes the file on the base branch.
             </li>
             <li>
               KanthorD reads no nested per-directory file, no
@@ -789,11 +789,11 @@ Binding prompt of repository app:
           </p>
           <h3 id="the-default-standard">The default standard</h3>
           <p>
-            The first paragraph of <code>base.md</code> states: "This text, the
-            rules of your role, and the repository prompt and the binding prompt
-            of each repository of the work form the default standard. The
-            default standard binds every work product." So layers 2 and 3 are
-            rules, not advice.
+            The first paragraph of <code>base.md</code> holds these sentences:
+            "This text, the rules of your role, and the repository prompt and
+            the binding prompt of each repository of the work form the default
+            standard. The default standard binds every work product." So layers
+            2 and 3 are rules, not advice.
           </p>
           <ul>
             <li>
@@ -812,8 +812,8 @@ Binding prompt of repository app:
               the release is no ground for a blocker. The reviewer gives a
               finding on such a rule <code>action: no</code>, so it causes no
               rework. The coder still reads the rule as guidance. The framing
-              owns the commit, the branch, the push, the verification and the
-              release.
+              states that the worker owns the commit, the branch, the push, the
+              verification and the release.
             </li>
             <li>
               Each instruction file is a gate input. Rule 8 of
@@ -881,13 +881,17 @@ Binding prompt of repository app:
               <code>422 project.bindings.repository.ssh_unreachable</code>, or
               <code>422 project.bindings.repository.base_branch_absent</code>
               when the remote does not hold the base branch. A force-push that
-              removes a pinned commit stops each later execution of the attempt
-              with <code>ssh_unreachable</code>.
+              removes a pinned commit makes a later git read of that commit fail
+              with <code>ssh_unreachable</code>, and that execution setup is
+              refused. A file that the server still caches at that commit reads
+              no git.
             </li>
           </ul>
           <p>
             Layer 1 has no pin. A change of a file in the agent directory takes
-            effect at the next composition.
+            effect at the next composition. A refused setup releases no stop
+            today; <a href="#the-prompt-record">the prompt record</a> states the
+            gap.
           </p>
           <h3 id="precedence">Precedence</h3>
           <p>Two rules decide which text wins a conflict:</p>
@@ -1020,7 +1024,7 @@ Binding prompt of repository app:
               <code>kanthord.engine.version</code>. It holds no text.
             </li>
             <li>
-              The span write is part of the setup. A failed write stops the
+              The span write is part of the setup. A failed write refuses the
               setup with <code>503 worker.execution.prompt_record_failed</code>.
             </li>
             <li>
@@ -1057,10 +1061,11 @@ Binding prompt of repository app:
             gives the command.
           </p>
           <p>
-            Today the worker releases no <code>stop</code> after a setup
-            refusal, the same as for
-            <code>worker.execution.credential_not_pinned</code>. The worker
-            reports the code as a diagnostic.
+            Today the worker releases no <code>stop</code> after a refused
+            execution setup, the same as for
+            <code>worker.execution.credential_not_pinned</code>. The worker unit
+            logs the code as a diagnostic and ends its pull loop, so it takes no
+            more work, and the execution gets no release.
           </p>
           <h3 id="why-the-work-prompt-is-pinned">
             Why the work prompt is pinned
@@ -1137,9 +1142,12 @@ Binding prompt of repository app:
             </li>
             <li>
               <code>--node &lt;node-id&gt; [--attempt &lt;k&gt;]</code> answers
-              exactly what the agent of one node reads, at the commit that the
-              attempt pins. Without <code>--attempt</code>, the read takes the
-              open attempt, else the latest attempt.
+              the stack that the next execution of the attempt reads, with the
+              instruction file at the commit that the attempt pins. To see what
+              a past execution served, use
+              <code>kanthord agent prompt resolve</code>. Without
+              <code>--attempt</code>, the read takes the open attempt, else the
+              latest attempt.
             </li>
           </ul>
           <p>

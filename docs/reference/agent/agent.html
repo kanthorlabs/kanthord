@@ -388,7 +388,8 @@
               Workbench system prompt.
             </li>
             <li>
-              For each repository binding, in binding order:
+              For each repository binding, in the order of the repository
+              bindings of the node revision:
               <code>instruction_file</code>, then <code>repository</code>, then
               <code>binding</code>. An absent instruction file, an absent text
               and a blank text add no part.
@@ -518,7 +519,9 @@
                     is <code>unreachable</code> when the read of the remote
                     fails or exceeds its deadline, and <code>invalid</code> when
                     the file is larger than 32768 bytes, is not UTF-8, cannot be
-                    read or holds a control character.
+                    read or holds a control character other than a tab and a
+                    newline. A carriage return counts, so a file with CRLF line
+                    ends is invalid.
                     <a href="prompt.html">The prompt resolve</a> also answers
                     <code>changed</code>.
                   </td>

@@ -327,7 +327,10 @@
               </tbody>
             </table>
           </div>
-          <p>The prompt codes of the execution setup have these causes:</p>
+          <p>
+            With the reason <code>operation_failed</code>, the prompt codes of
+            the execution setup have these causes:
+          </p>
           <ul>
             <li>
               <code>agent.prompt.source_invalid</code> with a file reason,
@@ -341,8 +344,9 @@
               <code>reason: changed</code>,
               <code>worker.execution.prompt_not_pinned</code> and
               <code>worker.execution.prompt_record_failed</code> give
-              <code>infrastructure</code> / <code>prompt_record</code>. The next
-              execution composes the prompt again.
+              <code>infrastructure</code> / <code>prompt_record</code>. For
+              <code>reason: changed</code>, the next execution composes the
+              prompt again.
             </li>
             <li>
               <code>project.bindings.repository.ssh_unreachable</code> gives

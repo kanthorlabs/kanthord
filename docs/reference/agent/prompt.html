@@ -99,8 +99,10 @@
                   </td>
                   <td>
                     <code>unreachable</code> when the read of the remote fails
-                    or exceeds its deadline, <code>invalid</code> for an invalid
-                    file, <code>changed</code> for an absent file
+                    or exceeds its deadline, <code>invalid</code> for a file
+                    that is larger than 32768 bytes, is not UTF-8, cannot be
+                    read or holds a control character other than a tab and a
+                    newline, <code>changed</code> for an absent file
                   </td>
                 </tr>
                 <tr>
@@ -119,7 +121,9 @@
                   </td>
                   <td>
                     <code>changed</code> for an absent file or another digest,
-                    <code>invalid</code> for an invalid file
+                    <code>invalid</code> for a file that is larger than 32768
+                    bytes, is not UTF-8, cannot be read or holds a control
+                    character other than a tab and a newline
                   </td>
                 </tr>
               </tbody>
@@ -212,7 +216,9 @@
             <code>changed</code> for that part, with <code>final: null</code>.
             To read the old text of a <code>changed</code> part of origin
             <code>binary</code>, run one of these commands in a root checkout of
-            the kanthord repository:
+            the kanthord repository. Run <code>git fetch --tags</code> and
+            <code>git -C engine fetch</code> first, so that the checkout holds
+            the release tag and the engine commit:
           </p>
           <pre><code class="language-sh">git -C engine show "$(git rev-parse "v&lt;engine_version&gt;:engine"):static/prompt/&lt;name&gt;"
 git -C engine show "$(git rev-parse "v&lt;engine_version&gt;:engine"):static/prompt/template/&lt;name&gt;.md"</code></pre>
