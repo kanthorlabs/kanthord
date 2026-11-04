@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { REDACTION_CANARY_PARTS, REDACTION_MARKER_PREFIX } from "./canary.mjs";
 import {
+  daemonStateDirectory,
+  executionSessionFiles,
   githubAuthHeader,
   matchesScratch,
   matchesSecret,
@@ -234,5 +239,46 @@ test("session: a re@1 file without the marker passes", () => {
       },
     ]),
     null,
+  );
+});
+
+test("executionSessionFiles: lists the jsonl files of the execution", () => {
+  const root = mkdtempSync(join(tmpdir(), "kanthord-check-"));
+  try {
+    const sessions = (instance, execution) =>
+      join(
+        root,
+        "workers",
+        instance,
+        "state/kanthord/pi/sessions/execution",
+        execution,
+      );
+    const directory = sessions("e2e-server-coder-1", "execution_one");
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(directory, "x.jsonl"), "");
+    writeFileSync(join(directory, "x.txt"), "");
+    const other = sessions("e2e-server-reviewer-1", "execution_two");
+    mkdirSync(other, { recursive: true });
+    writeFileSync(join(other, "y.jsonl"), "");
+    assert.deepEqual(executionSessionFiles(root, "execution_one"), [
+      join(directory, "x.jsonl"),
+    ]);
+    assert.deepEqual(executionSessionFiles(root, "execution_three"), []);
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
+
+test("daemonStateDirectory: reads XDG_STATE_HOME", () => {
+  assert.equal(
+    daemonStateDirectory({ XDG_STATE_HOME: "/xdg/state" }, "/home/u"),
+    "/xdg/state/kanthord",
+  );
+});
+
+test("daemonStateDirectory: falls back to ~/.local/state", () => {
+  assert.equal(
+    daemonStateDirectory({}, "/home/u"),
+    "/home/u/.local/state/kanthord",
   );
 });
