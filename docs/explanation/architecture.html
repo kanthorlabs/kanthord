@@ -229,6 +229,16 @@ flowchart TB
         SpanProcessor --&gt;|"exports"| Exporter
     end
 
+    subgraph Footprint["Footprint Service"]
+        Statistics["Statistics"]
+        Candidates["Cleanup candidates"]
+        Alerts["Alert episodes"]
+        Cleanups["Cleanup records"]
+        Statistics --&gt;|"cleanup rules"| Candidates
+        Statistics --&gt;|"thresholds"| Alerts
+        Candidates --&gt;|"human pick"| Cleanups
+    end
+
     subgraph Persistence["Persistence"]
         OperationalDB[("kanthord.db")]
         TrackingDB[("tracking.db")]
@@ -275,12 +285,14 @@ flowchart TB
     Objects --&gt;|"completion facts"| Outcomes
     Exporter --&gt;|"persists"| TrackingDB
     Ingestion --&gt;|"imports"| TrackingDB
+    Invocation --&gt;|"footprint operations"| Cleanups
+    Cleanups --&gt;|"owner deletes"| DirectAdapter
 
     classDef focal fill:#fbe9e0,stroke:#eb6c36,color:#2d3142,stroke-width:2px;
     classDef component fill:#ffffff,stroke:#4f5d75,color:#2d3142;
     classDef shared fill:#ececec,stroke:#7a8399,color:#2d3142;
     class Project,Graph focal;
-    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,RegistrationHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion component;
+    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,RegistrationHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion,Statistics,Candidates,Alerts,Cleanups component;
     class Config,Keys,Context,Lifecycle,Health,Log,Store,OperationalDB,TrackingDB,ConfigFiles,StateFiles,Cache shared;
     style Runtime fill:#ececec,stroke:#bfc0c0,color:#2d3142
     style Gateway fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
@@ -290,6 +302,7 @@ flowchart TB
     style Worker fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
     style Intake fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
     style Tracking fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
+    style Footprint fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
     style Persistence fill:#ececec,stroke:#bfc0c0,color:#2d3142
 </pre>
           <p>
@@ -526,6 +539,13 @@ flowchart TB
               assessment. Tracking telemetry explains behavior and stays until a
               human deletes it. Operational logs are a third, separate facility.
             </li>
+            <li>
+              <strong>Footprint and owners:</strong> Footprint measures the
+              stores that grow with time, proposes cleanup candidates, records
+              each cleanup and holds the alerts. Each delete runs through the
+              delete operation of the owner of the data. No alert deletes
+              anything.
+            </li>
           </ul>
           <h2 id="persistence-and-deployment">Persistence and deployment</h2>
           <div class="table-wrap">
@@ -615,7 +635,7 @@ flowchart TB
             effects cannot commit atomically with SQLite.
           </p>
           <p>
-            <strong>No service split is implied.</strong> All seven services
+            <strong>No service split is implied.</strong> All nine services
             target one server process. The platform connector, action performer
             and MCP server stay server-side. Native model/repository calls can
             run on a trusted worker host after the required authorization and
