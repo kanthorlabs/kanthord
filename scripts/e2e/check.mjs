@@ -1,7 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
-import { mainCheckout, readEnvFile } from "./api.mjs";
+import { client, mainCheckout, readEnvFile, tokenOf } from "./api.mjs";
+import { REDACTION_CANARY, REDACTION_MARKER_PREFIX } from "./canary.mjs";
 
 export const SCRATCH_PATTERN =
   /(^|\/)\.kanthord|scratch|\.tmp$|\.log$|\.bak$|~$|\.orig$|(^|\/)\.env$|\.db$|node_modules\//i;
@@ -10,6 +18,10 @@ export const SECRET_PATTERN =
   /gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|xox[baprs]-|nvapi-/;
 
 const CHILD_TIMEOUT_MS = 10 * 60 * 1000;
+const CODER_AGENT = "swe@1";
+const SESSION_PLACEMENT = "server";
+const EXECUTION_PAGE_LIMIT = 1000;
+const TOOL_OUTPUT_UNEXERCISED = "tool output leg not exercised";
 
 export function matchesScratch(path) {
   return SCRATCH_PATTERN.test(path);
@@ -33,6 +45,89 @@ export function githubAuthHeader(token) {
 export function pendingCheckAction(completedCount, checkRunning) {
   if (completedCount === 0) return "none";
   return checkRunning ? "queue" : "start";
+}
+
+export function daemonStateDirectory(env = process.env, home = homedir()) {
+  const base =
+    env.XDG_STATE_HOME && isAbsolute(env.XDG_STATE_HOME)
+      ? env.XDG_STATE_HOME
+      : join(home, ".local/state");
+  return join(base, "kanthord");
+}
+
+function isMarkedToolResult(line) {
+  let entry;
+  try {
+    entry = JSON.parse(line);
+  } catch {
+    return false;
+  }
+  return (
+    entry?.type === "message" &&
+    entry.message?.role === "toolResult" &&
+    JSON.stringify(entry.message).includes(REDACTION_MARKER_PREFIX)
+  );
+}
+
+export function sessionFailure(sessions) {
+  const leaked = sessions.filter((session) =>
+    session.text.includes(REDACTION_CANARY),
+  );
+  if (leaked.length)
+    return `canary stored in ${leaked.map((session) => session.file).join(" ")}`;
+  const exercised = sessions.some(
+    (session) =>
+      session.agents.includes(CODER_AGENT) &&
+      session.text.split("\n").some(isMarkedToolResult),
+  );
+  return exercised ? null : TOOL_OUTPUT_UNEXERCISED;
+}
+
+async function runExecutions(api, projectId) {
+  const executions = [];
+  let cursor = null;
+  do {
+    const query = new URLSearchParams({ limit: String(EXECUTION_PAGE_LIMIT) });
+    if (cursor) query.set("cursor", cursor);
+    const page = await api.get(
+      `/api/scheduler/project/${projectId}/execution?${query}`,
+    );
+    executions.push(...page.items);
+    cursor = page.next_cursor;
+  } while (cursor);
+  return executions;
+}
+
+function listDirectory(path) {
+  return existsSync(path) ? readdirSync(path) : [];
+}
+
+export function executionSessionFiles(stateDirectory, executionId) {
+  const workers = join(stateDirectory, "workers");
+  return listDirectory(workers).flatMap((instance) => {
+    const directory = join(
+      workers,
+      instance,
+      "state/kanthord/pi/sessions/execution",
+      executionId,
+    );
+    return listDirectory(directory)
+      .filter((name) => name.endsWith(".jsonl"))
+      .map((name) => join(directory, name));
+  });
+}
+
+async function runSessions(state, runDir) {
+  const api = client(state.endpoint, tokenOf(join(runDir, "human.cli.yaml")));
+  const stateDirectory = daemonStateDirectory();
+  return (await runExecutions(api, state.project_id)).flatMap((execution) => {
+    const agents = execution.agent_selections.map(
+      (selection) => selection.agent_name,
+    );
+    return executionSessionFiles(stateDirectory, execution.execution_id).map(
+      (file) => ({ file, agents, text: readFileSync(file, "utf8") }),
+    );
+  });
 }
 
 function exec(command, args, cwd, timeoutMs, env) {
@@ -221,6 +316,18 @@ export async function runCheck(run, MAIN) {
   } else {
     fail("secrets");
     failed = true;
+  }
+
+  if (state.placement !== SESSION_PLACEMENT) {
+    console.log(`session skipped: placement ${state.placement}`);
+  } else {
+    const detail = sessionFailure(await runSessions(state, runDir));
+    if (detail) {
+      fail("session", detail);
+      failed = true;
+    } else {
+      ok("session");
+    }
   }
 
   const result = failed ? "fail" : "pass";
