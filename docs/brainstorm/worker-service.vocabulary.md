@@ -334,7 +334,7 @@ It holds `placement`, `available`, `reason`, `detail` and `container_runtime`.
 
 - **`server_in_container`**, the server itself runs in a container
 - **`runtime_absent`**, no `podman` and no `docker` resolves on the `PATH` of the server
-- **`runtime_failed`**, no container runtime answers its check
+- **`runtime_failed`**, a runtime that does not answer, which is transient, or a failed check that stays until a human changes the host. The pool host retries both with a backoff.
 - **`runtime_rootful`**, the runtime runs as root on Linux and the server user is not root
 
 `container_runtime` is `podman`, `docker` or null.

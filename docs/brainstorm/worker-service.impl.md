@@ -823,7 +823,8 @@ Tests of the slot driver:
 ## Isolation of a thread slot
 
 - The slot root of a server instance is `workers/<instance name>/` of the state directory of the server, with mode `0700`. Every server instance holds a slot root.
-- The pool host creates the slot root. After that, it only appends `stderr.log` in the slot root. It reads nothing in it, except regular files below `sessions/` for a session read. It follows no symlink.
+- The pool host creates the slot root. After that, it appends `stderr.log` in the slot root. At the `container` placement, it also creates `sessions.partial/`, renames it to `sessions/` and writes the host marker `sessions.volume`, under [The session directory](#the-session-directory).
+- It reads nothing in the slot root, except the host marker `sessions.volume` and regular files below the session root for a session read. The session root is `state/kanthord/pi/sessions/` at the `server` placement and `sessions/` at the `container` placement. It follows no symlink.
 - After an archived server instance ends, the pool host removes its slot root and its slot volume.
 - At each start, the pool host removes slot roots under `workers/` and slot volumes of the owner. It removes only those whose name belongs to no live server instance.
 - A removal of the instance from a binding keeps the slot root and the slot volume, because the instance keeps its workspaces until its archive.
@@ -1016,7 +1017,10 @@ src="$1/state/kanthord/pi/sessions"; if [ -d "$src" ]; then cp -a "$src/." "$2/"
 - While a `keep-id` container runs, auto containers cannot start. `ContainerDriver` offers `exclusive(run)` and `shared(run)`. A full-map `keep-id` container runs in `exclusive`, and it waits for every `shared` run.
 - The start of a slot container, a proof container, an auto migration container and an auto cache volume container runs in `shared`. For a slot container, `shared` holds until its first frame or its exit. For a detached container, `shared` holds until `<runtime> run` exits.
 - After the full-map migration, every volume file belongs to the container uid 10001, so each later auto range reads it.
-- The cache volume of a group takes the same rules, under [project-service.impl.md](project-service.impl.md#the-cache-volume). A cache volume without the label takes the full-map carrier once. After the carrier exits 0, the pool host writes the host record `<state>/volumes/<cache volume name>.owner`, mode `0600`, with the `CreatedAt` of the volume.
+- The cache volume of a group takes the same rules, under [project-service.impl.md](project-service.impl.md#the-cache-volume). A cache volume without the label takes the full-map carrier once.
+- The cache volume carrier on Linux with a local Podman: `unshareOwnerArguments` runs `podman unshare chown -R 0:0 <mount point>`.
+- The cache volume carrier on macOS, and on Linux with a remote Podman client: a one-shot container with `--userns=keep-id:uid=10001,gid=10001` runs `chown -R 10001:10001` on the volume. It runs in `exclusive`.
+- A cache volume with the label, or with a host record equal to its `CreatedAt`, takes the auto cache volume container. After the carrier exits 0, the pool host writes the host record `<state>/volumes/<cache volume name>.owner`, mode `0600`, with the `CreatedAt` of the volume.
 - The host marker and the host record are files in the server state, not store columns.
 
 ### The run command
