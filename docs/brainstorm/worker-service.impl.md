@@ -1969,7 +1969,7 @@ After a violation stop of gate G, the execution makes no checkpoint commit and p
 A failed checkpoint or push of a stop logs `checkpoint failed` with the redacted reason.
 A reviewer execution writes no commit and releases with the `stop` only.
 A failed push still releases with the `stop`, and the next execution starts from the pushed head.
-A failed release ends the host of the execution with no release, and the loss settlement routes the node.
+A failed release ends the execution with no release, and the loss settlement routes the node.
 A reply with no valid marker line gets one repair turn, for the evaluation judgement and the review reply of `reviewer@1`.
 The repair instruction is `The reply holds no valid <marker> line. Reply again with exactly one such line.` With a nonempty `issues` list, it adds ` Correct each issue of the last line: <issues as JSON>`.
 A second invalid judgement stops the execution with `judgement_invalid`, and a second invalid review reply ends the review of that task.
