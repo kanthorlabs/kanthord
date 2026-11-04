@@ -223,6 +223,10 @@
               >
               and the pending session reads of the instance.
             </li>
+            <li>
+              <code>worker.session_read.report</code> sends the outcome of each
+              pending session read.
+            </li>
           </ol>
           <p>
             The seal is HPKE base mode with the suite
@@ -1050,6 +1054,63 @@
               </tbody>
             </table>
           </div>
+          <h3 id="workersessionreadreport">
+            <code>worker.session_read.report</code>
+          </h3>
+          <p>
+            The API returns HTTP <code>204</code> with no body. No CLI command
+            calls this operation. The instance reads the entry of one item of
+            <code>session_reads</code> from its session files and reports the
+            outcome. The server checks <code>id</code> and <code>type</code> of
+            a resolved entry. No report within 25 seconds drops the read. A
+            report of an unknown or dropped read, or of a read of another
+            instance, answers <code>404 worker.session_read.not_found</code>.
+          </p>
+          <pre><code class="language-json">{
+  "outcome": "too_large",
+  "bytes": 40000000
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><code>outcome</code></th>
+                  <th>Other properties</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>resolved</code></td>
+                  <td><code>entry</code>, an object</td>
+                  <td>The pi entry, as pi wrote it.</td>
+                </tr>
+                <tr>
+                  <td><code>too_large</code></td>
+                  <td><code>bytes</code>, an integer of at least 1</td>
+                  <td>
+                    The UTF-8 byte length of the entry line is above the full
+                    entry bound. The instance sends no entry.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>session_absent</code></td>
+                  <td>None</td>
+                  <td>No session file of the session is on the instance.</td>
+                </tr>
+                <tr>
+                  <td><code>entry_absent</code></td>
+                  <td>None</td>
+                  <td>The session file holds no entry with the identity.</td>
+                </tr>
+                <tr>
+                  <td><code>unreadable</code></td>
+                  <td>None</td>
+                  <td>The instance cannot read the session file.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <h3 id="failures">Failures</h3>
           <p>
             API failures use the shared
@@ -1071,7 +1132,7 @@
                   <td>
                     Missing or invalid token, or a token of the wrong kind.
                     Create, list, get, rotate and archive require a human token.
-                    Connect, heartbeat and work require a worker token.
+                    Connect, heartbeat, work and report require a worker token.
                   </td>
                 </tr>
                 <tr>
@@ -1201,6 +1262,14 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><code>404 worker.session_read.not_found</code></td>
+                  <td><code>report</code></td>
+                  <td>
+                    The read is unknown or dropped, or it is a read of another
+                    instance.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>409 worker.instance.name_conflict</code></td>
                   <td><code>create</code></td>
                   <td>A live or an archived instance holds the name.</td>
@@ -1256,7 +1325,7 @@
                   <td>
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>connect</code>,
-                    <code>heartbeat</code>
+                    <code>heartbeat</code>, <code>report</code>
                   </td>
                   <td>Missing or malformed idempotency key.</td>
                 </tr>
@@ -1265,7 +1334,7 @@
                   <td>
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>connect</code>,
-                    <code>heartbeat</code>
+                    <code>heartbeat</code>, <code>report</code>
                   </td>
                   <td>
                     Conflicting reuse of an idempotency key. For
@@ -1280,7 +1349,7 @@
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>token</code>,
                     <code>connect</code>, <code>heartbeat</code>,
-                    <code>work</code>
+                    <code>work</code>, <code>report</code>
                   </td>
                   <td>The body exceeds 32 MiB.</td>
                 </tr>
@@ -1292,7 +1361,7 @@
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>token</code>,
                     <code>connect</code>, <code>heartbeat</code>,
-                    <code>work</code>
+                    <code>work</code>, <code>report</code>
                   </td>
                   <td>
                     The request body is not <code>application/json</code>.
@@ -1310,9 +1379,9 @@
             </table>
           </div>
           <p>
-            Within the replay TTL, a repeated <code>archive</code> or
-            <code>heartbeat</code> key with the same request and caller returns
-            the recorded response.
+            Within the replay TTL, a repeated <code>archive</code>,
+            <code>heartbeat</code> or <code>report</code> key with the same
+            request and caller returns the recorded response.
           </p>
           <p>
             A declared failure makes the CLI exit <code>1</code> and print
@@ -1474,14 +1543,23 @@
                   <td><code>worker</code> (worker JWT)</td>
                   <td>No</td>
                 </tr>
+                <tr>
+                  <td><code>report</code></td>
+                  <td>
+                    <code>POST /api/worker/session-read/:read_id/report</code>
+                  </td>
+                  <td><code>worker.session_read.report</code></td>
+                  <td><code>worker</code> (worker JWT)</td>
+                  <td>Yes</td>
+                </tr>
               </tbody>
             </table>
           </div>
           <p>
             Every operation has a timeout of 30 seconds. The body limit is 32
             MiB. The Gateway skips the Host allowlist for the
-            <code>token</code>, <code>connect</code>, <code>heartbeat</code> and
-            <code>work</code> routes.
+            <code>token</code>, <code>connect</code>, <code>heartbeat</code>,
+            <code>work</code> and <code>report</code> routes.
           </p>
           <div class="table-wrap">
             <table>
@@ -1503,6 +1581,17 @@
                   </td>
                   <td>None</td>
                   <td>Instance name. An unknown name answers not found.</td>
+                </tr>
+                <tr>
+                  <td><code>read_id</code></td>
+                  <td>path</td>
+                  <td><code>report</code></td>
+                  <td>None</td>
+                  <td>
+                    <code>read_id</code> of an item of
+                    <code>session_reads</code>, a
+                    <code>session_read_&lt;ulid&gt;</code> value.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>worker</code></td>
@@ -1613,6 +1702,17 @@
                   <td><code>{ &quot;connection_id&quot; }</code>.</td>
                 </tr>
                 <tr>
+                  <td><code>report</code></td>
+                  <td>
+                    <code
+                      >{ &quot;outcome&quot;, &quot;entry&quot;?,
+                      &quot;bytes&quot;? }</code
+                    >. <code>resolved</code> holds <code>entry</code>,
+                    <code>too_large</code> holds <code>bytes</code>, and the
+                    other outcomes hold no other property.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>list</code>, <code>get</code></td>
                   <td>None.</td>
                 </tr>
@@ -1643,7 +1743,7 @@
                   <td>
                     <code>create</code>, <code>rotate</code>,
                     <code>archive</code>, <code>connect</code>,
-                    <code>heartbeat</code>
+                    <code>heartbeat</code>, <code>report</code>
                   </td>
                   <td>
                     Fresh <code>idempotency_key_&lt;ulid&gt;</code> for a new

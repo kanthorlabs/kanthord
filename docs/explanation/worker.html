@@ -1282,8 +1282,16 @@ sequenceDiagram
                 <tr>
                   <td><code>runtime_failed</code></td>
                   <td>
-                    The runtime does not answer or fails a check. The condition
-                    is transient.
+                    The runtime does not answer or fails a check. A runtime that
+                    does not answer is transient: a stopped Podman machine,
+                    Docker <code>ServerErrors</code>, a nonzero
+                    <code>info</code> exit, or a Podman answer with no
+                    <code>host</code>. A failed check stays until a human
+                    changes the host: the uid 10001 cover check, a Docker client
+                    below 23, a Docker answer with no server version (the
+                    <code>podman-docker</code> shim), rootless Docker on Linux
+                    and a Podman below 4.1.0. The pool host retries with a
+                    backoff in both cases.
                   </td>
                 </tr>
                 <tr>
@@ -1459,8 +1467,11 @@ sequenceDiagram
             <code>workers/&lt;name&gt;/</code> of the state directory of the
             server. A container at the <code>container</code> placement uses
             <code>state/kanthord/</code> of its volume, which carries the
-            instance name. The archive of the instance removes both. Two
-            instances share no file.
+            instance name. The container mounts <code>sessions/</code> of its
+            slot root, <code>workers/&lt;name&gt;/sessions/</code> of the state
+            directory of the server, as <code>pi/sessions/</code>. The archive
+            of the instance removes the volume and the slot root. Two instances
+            share no file.
           </p>
           <div class="table-wrap">
             <table>
@@ -1499,7 +1510,7 @@ sequenceDiagram
                     any pi installation of the user.
                     <code>pi/sessions/execution/&lt;execution_id&gt;/</code>
                     holds the pi session files of one execution. The instance
-                    keeps the newest 50 execution directories.
+                    keeps every execution directory.
                   </td>
                 </tr>
               </tbody>

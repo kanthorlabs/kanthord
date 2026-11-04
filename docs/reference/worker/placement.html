@@ -227,8 +227,14 @@
                   <td><code>runtime_failed</code></td>
                   <td>
                     The runtime does not answer, or it fails a check.
-                    <code>detail</code> states why. A stopped Podman machine
-                    gives it.
+                    <code>detail</code> states why. A runtime that does not
+                    answer is transient: a stopped Podman machine, Docker
+                    <code>ServerErrors</code>, a nonzero <code>info</code> exit,
+                    or a Podman answer with no <code>host</code>. A failed check
+                    stays until a human changes the host: the uid 10001 cover
+                    check, a Docker client below 23, a Docker answer with no
+                    server version (the <code>podman-docker</code> shim),
+                    rootless Docker on Linux and a Podman below 4.1.0.
                   </td>
                 </tr>
                 <tr>
@@ -242,10 +248,10 @@
             </table>
           </div>
           <p>
-            The reason <code>runtime_failed</code> is transient. The
-            <code>container</code> instances start again with a backoff when the
-            runtime recovers. The other reasons stay until a human changes the
-            host.
+            For both kinds of <code>runtime_failed</code>, the
+            <code>container</code> instances start again with a backoff. They
+            start when the runtime recovers or a human fixes the host. The other
+            reasons stay until a human changes the host.
           </p>
           <p>
             The check runs with the full environment of the server. A server

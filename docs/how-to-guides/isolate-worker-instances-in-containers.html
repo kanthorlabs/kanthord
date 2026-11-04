@@ -104,8 +104,8 @@
               <ul>
                 <li>On a Mac: a Podman machine or Docker Desktop.</li>
                 <li>
-                  On Linux: rootless Podman or rootless Docker. The server
-                  refuses a rootful runtime when the server user is not root.
+                  On Linux: rootless Podman 4.1.0 or later. The server refuses a
+                  rootful runtime when the server user is not root.
                 </li>
               </ul>
             </li>
@@ -324,7 +324,7 @@ sudo systemctl restart kanthord</code></pre>
             Podman&quot;. When the option is off, it shows the reason. Under
             <code>runtime_failed</code>, the option stays on and shows the
             detail, because a create passes and the instance starts after the
-            runtime recovers. See
+            runtime recovers or a human fixes the host. See
             <a href="#troubleshooting">Troubleshooting</a>.
           </p>
           <h2 id="4-add-the-instances-and-the-worker-binding">
@@ -402,17 +402,18 @@ sudo systemctl restart kanthord</code></pre>
           </p>
           <p>
             The Conversation tab of the trace page of the dashboard shows the
-            session entries of each execution. The pi session files also stay in
-            the volume of the instance. To list the files of one execution:
+            session entries of each execution. The pi session files stay in
+            <code>workers/&lt;name&gt;/sessions/</code> of the state directory.
+            The container mounts that directory, and the instance keeps every
+            execution directory. To list the files of one execution:
           </p>
-          <pre><code class="language-sh">podman run --rm -v kanthord_slot_&lt;name&gt;:/v:ro --entrypoint ls docker.io/kanthorlabs/kanthord:&lt;version&gt; /v/state/kanthord/pi/sessions/execution/&lt;execution_id&gt;</code></pre>
+          <pre><code class="language-sh">ls ~/.local/state/kanthord/workers/&lt;name&gt;/sessions/execution/&lt;execution_id&gt;</code></pre>
           <p>
-            On the VPS, write
+            On the VPS, run
             <code
-              >sudo -u kanthord -H env XDG_RUNTIME_DIR=/run/kanthord
-              podman</code
-            >
-            in place of <code>podman</code>.
+              >sudo -u kanthord ls
+              /var/lib/kanthord/.local/state/kanthord/workers/&lt;name&gt;/sessions/execution/&lt;execution_id&gt;</code
+            >.
           </p>
           <h2 id="limits">Limits</h2>
           <ul>
@@ -435,10 +436,11 @@ sudo systemctl restart kanthord</code></pre>
               repositories with <code>container</code> instances on one server.
             </li>
             <li>
-              The server removes the container and the volume
-              <code>kanthord_slot_&lt;name&gt;</code> at the archive of the
-              instance. A removal of the instance from a binding keeps both, and
-              the container keeps running with no binding.
+              The server removes the container, the volume
+              <code>kanthord_slot_&lt;name&gt;</code> and the directory
+              <code>workers/&lt;name&gt;/</code> at the archive of the instance.
+              A removal of the instance from a binding keeps all three, and the
+              container keeps running with no binding.
             </li>
           </ul>
           <h2 id="troubleshooting">Troubleshooting</h2>
@@ -501,8 +503,9 @@ sudo systemctl restart kanthord</code></pre>
                 </tr>
                 <tr>
                   <td>
-                    The sheet or <code>reason: runtime_failed</code> names the
-                    server user and the uid map
+                    The sheet or <code>reason: runtime_failed</code> shows
+                    &quot;the subordinate uid range of &lt;user&gt; does not
+                    cover the container uid 10001…&quot;
                   </td>
                   <td>
                     The user has no subordinate uid range that covers uid 10001
@@ -514,14 +517,70 @@ sudo systemctl restart kanthord</code></pre>
                 </tr>
                 <tr>
                   <td>
+                    The sheet or <code>reason: runtime_failed</code> shows
+                    &quot;rootless Docker cannot map the container uid 10001 to
+                    the server user. Use rootless Podman or a rootful
+                    runtime.&quot;
+                  </td>
+                  <td>
+                    The server runs rootless Docker on Linux. Do
+                    <a href="#on-linux-as-a-desktop-user"
+                      >On Linux, as a desktop user</a
+                    >
+                    or
+                    <a href="#on-a-vps-with-the-service-user"
+                      >On a VPS with the service user</a
+                    >, then restart the server. The server checks Podman before
+                    Docker.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet or <code>reason: runtime_failed</code> shows
+                    &quot;podman &lt;version&gt; refuses
+                    --userns=auto:uidmapping=. Upgrade Podman to 4.1.0 or
+                    later.&quot;
+                  </td>
+                  <td>
+                    Rootless Podman is below 4.1.0. Upgrade Podman to 4.1.0 or
+                    later, then restart the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet or <code>reason: runtime_failed</code> shows
+                    &quot;docker client &lt;version&gt; is below 23. Upgrade the
+                    Docker client to 23 or later.&quot;
+                  </td>
+                  <td>
+                    The Docker client is below 23. Upgrade the Docker client to
+                    23 or later, then restart the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The sheet or <code>reason: runtime_failed</code> shows
+                    &quot;docker answers no server version. Remove the
+                    podman-docker shim, or point docker at a Docker
+                    Engine.&quot;
+                  </td>
+                  <td>
+                    <code>docker</code> on the <code>PATH</code> of the server
+                    is the <code>podman-docker</code> shim. Remove the shim, or
+                    point <code>docker</code> at a Docker Engine. Then restart
+                    the server.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
                     The sheet shows &quot;… runs as root on this host…&quot;, or
                     <code>reason: runtime_rootful</code>
                   </td>
                   <td>
                     The runtime runs as root on this Linux host. Use rootless
-                    Podman or rootless Docker. A Linux VM runtime other than
-                    Docker Desktop, for example Rancher Desktop, gets this
-                    refusal too. Use Podman there.
+                    Podman. A Linux VM runtime other than Docker Desktop, for
+                    example Rancher Desktop, gets this refusal too. Use Podman
+                    there.
                   </td>
                 </tr>
                 <tr>
@@ -546,6 +605,23 @@ sudo systemctl restart kanthord</code></pre>
                     failed pull shows there. Pull the image as the user of the
                     server, then wait for the next start of the instance. The
                     server tries again after a pause of up to 30 s.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    On rootless Podman, a container instance never starts while
+                    6 KanthorD containers run, and its
+                    <code>stderr.log</code> shows a user namespace error
+                  </td>
+                  <td>
+                    A default subordinate range of 65536 ids runs 6 KanthorD
+                    containers next to the other <code>--userns=auto</code>
+                    containers of the user. For more instances, raise the range
+                    with
+                    <code
+                      >sudo usermod --add-subuids &lt;range&gt; --add-subgids
+                      &lt;range&gt; &lt;user&gt;</code
+                    >, then run <code>podman system migrate</code> as the user.
                   </td>
                 </tr>
                 <tr>
