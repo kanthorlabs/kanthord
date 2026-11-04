@@ -217,10 +217,11 @@
               at the start, then every 15 seconds. When its answer holds another
               <code>work_version</code>, the instance calls
               <code>worker.instance.work</code>. The work read answers the
-              pending work of the instance, for example a
+              pending
               <a href="../llm/login.html#login-on-a-worker-instance"
-                >login on the instance</a
-              >.
+                >logins on the instance</a
+              >
+              and the pending session reads of the instance.
             </li>
           </ol>
           <p>
@@ -233,12 +234,13 @@
             The server keeps only the current connection of each instance in
             memory, with its last heartbeat. A connect without
             <code>connection_id</code> creates a new connection, and the
-            previous connection ends at once. A connect or a heartbeat with
-            another <code>connection_id</code> fails with
+            previous connection ends at once. A connect, a heartbeat or a work
+            read with another <code>connection_id</code> fails with
             <code>409 worker.instance.connection_superseded</code>. After a
             server start, no connection is current. The first connect, heartbeat
             or <code>client</code> request with a valid
-            <code>connection_id</code> makes that connection current.
+            <code>connection_id</code> makes that connection current. A work
+            read makes no connection current.
           </p>
           <p>
             The dashboard shows an instance as connected while its last
