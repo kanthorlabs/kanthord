@@ -661,8 +661,8 @@
                 </tr>
                 <tr>
                   <td>
-                    The worker logs <code>agent.prompt.source_invalid</code> and
-                    takes no more work
+                    An execution ends with a <code>stop</code> that holds
+                    <code>agent.prompt.source_invalid</code>
                   </td>
                   <td>
                     The execution setup answered
@@ -679,12 +679,8 @@
                   <td>
                     Fix the file on the base branch. A new attempt pins the new
                     base head, for example the attempt that a human unblock
-                    opens. Today a refused setup releases no stop, and the
-                    worker instance takes no more work. After the fix, restart
-                    <code>kanthord serve worker</code> for an instance at the
-                    <code>worker</code> placement. For the
-                    <code>server</code> or the <code>container</code> placement,
-                    restart the server with <code>kanthord serve</code>. See
+                    opens. The worker instance pulls the next work, so no
+                    restart is necessary. See
                     <a href="../explanation/native-agent.html#the-prompt-record"
                       >the prompt record</a
                     >.
