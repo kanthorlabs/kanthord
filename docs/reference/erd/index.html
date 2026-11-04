@@ -95,11 +95,12 @@
                   </td>
                   <td>
                     Projects, credentials, worker instances, bindings, agent
-                    enablement, the mission plan and the work queue.
+                    enablement, the mission plan, the work queue, and the
+                    footprint cleanups and alerts.
                   </td>
                   <td>
                     Custody, Repository, Worker, Project, Agent, Mission,
-                    Scheduler
+                    Scheduler, Footprint
                   </td>
                 </tr>
                 <tr>
@@ -150,6 +151,7 @@ flowchart TB
             w1["Worker: instance"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job, queue place"]
+            f1["Footprint: cleanup, alert"]
         end
         subgraph v2["ERD 2: Execution"]
             w2["Worker: registration"]
@@ -181,6 +183,7 @@ flowchart TB
     t4 -.-&gt;|trace of execution| s2
     s2 -.-&gt;|trace and root span| t4
     t4 -.-&gt;|trace of project| p1
+    f1 -.-&gt;|cleanup and alert name instance| w1
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
@@ -191,6 +194,7 @@ flowchart TB
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
     classDef intake fill:#e8daef,stroke:#6c3483,color:#212529
     classDef tracking fill:#d1f2eb,stroke:#117a65,color:#212529
+    classDef footprint fill:#f0f4c3,stroke:#827717,color:#212529
 
     class c1 custody
     class r1 repository
@@ -201,6 +205,7 @@ flowchart TB
     class s1,s2 scheduler
     class i3 intake
     class t4 tracking
+    class f1 footprint
 </pre>
           <h2 id="dependencies-between-views">Dependencies between views</h2>
           <div class="table-wrap">
@@ -265,9 +270,9 @@ flowchart TB
             <li>
               <code>kanthord.db</code> of the data directory holds every table
               of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission,
-              Scheduler, Worker and Intake Services, custody, the Repository
-              component and the Agent component share that file. One file gives
-              a collaboration of two services one transaction.
+              Scheduler, Worker, Intake and Footprint Services, custody, the
+              Repository component and the Agent component share that file. One
+              file gives a collaboration of two services one transaction.
             </li>
             <li>
               <code>tracking.db</code> of the data directory holds every table
@@ -332,10 +337,11 @@ flowchart TB
             </li>
             <li>
               An owner deletes no row that a peer can reference. It retires or
-              disables that row. Telemetry is the one exception: the Tracking
-              Service deletes a trace at its retention, and a peer value that
-              names it resolves to expired. Today the store keeps no tombstone,
-              and a read answers <code>404 tracking.trace.not_found</code>.
+              disables that row. Telemetry is the one exception: a human delete
+              removes a trace through <code>tracking.trace.delete</code>, and a
+              peer value that names it then answers
+              <code>404 tracking.trace.not_found</code>. The store keeps no
+              tombstone.
             </li>
           </ul>
           <h2 id="diagram-notation">Diagram notation</h2>

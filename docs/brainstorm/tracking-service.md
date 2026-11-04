@@ -46,7 +46,7 @@ An execution that kanthord hosts writes to the primary store.
 No local store and no import stand between that execution and the Tracking Service.
 An external harness holds its capture on its own host until an import.
 The Tracking Service holds its records apart from the records of every other service.
-A retention sweep of telemetry touches no record of another service.
+A cleanup of telemetry touches no record of another service.
 An observation of the server never waits for an import.
 The late admission of an externally captured record is the whole difference between the two paths.
 
@@ -174,8 +174,8 @@ The Tracking Service resolves the trace identity of a record through its own rec
 A record states its execution identity and its trace identity, and the two agree.
 An ingestion assigns no trace and reassigns no trace.
 Every record carries an identity that its producer mints.
-The Tracking Service deduplicates by that identity within the retention of the trace.
-It refuses a record that arrives after its trace expires.
+The Tracking Service deduplicates by that identity within the writable period of the trace.
+It refuses a record that arrives after the writable period of its trace ends.
 The Tracking Service holds no state of the progress of an ingestion between two ingestions.
 The Tracking Service accepts records in any order.
 The delivery promise holds after a human issues an ingestion.
@@ -203,18 +203,19 @@ An ingestion is no resource operation.
 An execution identity inside a record is a correlation and authorizes nothing.
 The [Project Service](project-service.md#authorization-and-credential-custody) owns this authorization.
 
-## Retention and deletion
+## Deletion
 
-The trace is the only unit of retention.
-A span, a telemetry text and a session entry hold no retention of their own.
+The trace is the only unit of deletion.
+A span, a telemetry text and a session entry hold no deletion of their own.
 A deletion of a trace deletes every span, every record, every telemetry text and every session entry of that trace.
 A deletion of a span deletes no telemetry text.
-A reference to a deleted trace resolves to expired and never to missing.
+A human deletes a trace through `tracking.trace.delete`, directly or through a [cleanup](footprint-service.md#cleanup) of the Footprint Service.
+`tracking.trace.delete` refuses an open trace.
+No retention exists, and no start and no timer deletes a trace.
 The store keeps no tombstone, so the read answers 404 `tracking.trace.not_found` for a deleted trace, the same answer as for an unknown trace.
-The operator configures the retention of a trace once for the server, and never per project.
-The retention of a trace starts when the trace opens.
-The server deletes a trace when its retention ends.
-The [architecture](architecture.md#tracking-service) owns the difference between telemetry retention and evidence retention.
+The operator configures the [writable period](tracking-service.vocabulary.md#writable-period) of a trace once for the server, and never per project.
+`tracking.trace_writable_days` bounds only the admission of a record. It deletes nothing.
+The [architecture](architecture.md#tracking-service) rules that no service deletes telemetry or evidence automatically.
 A deletion of a telemetry record changes no outcome, removes no evidence and changes no state of a node.
 
 ## Loss and absence
@@ -249,4 +250,4 @@ The [Project Service](project-service.md#authorization-and-credential-custody) o
 The [Mission Service](mission-service.md#outcome-and-completion) owns evidence, assessment and outcome.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) owns the execution record, the claim and the lease.
 The [Worker Service](worker-service.md#boundary) owns the hosting and lifecycle of an execution and the local copy of an agent session.
-The Tracking Service owns the trace, span, telemetry text, session entry, trace summary, record disposition, the retention of a trace and the drop.
+The Tracking Service owns the trace, span, telemetry text, session entry, trace summary, record disposition, the writable period of a trace and the drop.

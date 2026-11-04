@@ -20,6 +20,7 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 - [Worker Service](worker-service.md), [vocabulary](worker-service.vocabulary.md), and [implementation proposals](worker-service.impl.md)
 - [Workbench Service](workbench-service.md), [vocabulary](workbench-service.vocabulary.md), and [implementation proposals](workbench-service.impl.md)
 - [Tracking Service](tracking-service.md), [vocabulary](tracking-service.vocabulary.md), and [implementation proposals](tracking-service.impl.md)
+- [Footprint Service](footprint-service.md), [vocabulary](footprint-service.vocabulary.md), and [implementation proposals](footprint-service.impl.md)
 - [Gateway Service](gateway-service.md), [vocabulary](gateway-service.vocabulary.md), and [implementation proposals](gateway-service.impl.md)
 - [Open work and handoff](HANDOFF.md)
 - [Engine CLI specification](../../engine/docs/cli/README.md): proposed command contracts, with one file per service and one for remaining commands.

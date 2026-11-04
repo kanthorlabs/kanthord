@@ -13,10 +13,10 @@ It describes no mechanism inside a service.
 ## Application diagram
 
 The application view shows the three [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
-The `server` application runs the eight services.
+The `server` application runs the nine services.
 The `cli` application operates the system on a terminal.
 The `worker` application runs one worker instance.
-The eight services are logical boundaries inside the server, not separate applications.
+The nine services are logical boundaries inside the server, not separate applications.
 The design targets one server on one host.
 A `worker` application runs on the host of the server or on another host. A human registers each of its instances once on the server.
 
@@ -86,9 +86,16 @@ It owns no worker, no registration and no claim.
 
 The Tracking Service holds telemetry.
 It holds no other kind of record.
-Telemetry retention differs from evidence retention.
+No service deletes telemetry or evidence automatically. A human deletes it through the delete operation of its owner.
 No outcome depends on telemetry.
 Each service that writes telemetry takes responsibility to secure its own sensitive information.
+
+### Footprint Service
+
+The [Footprint Service](footprint-service.md) holds the statistics of the stores that grow with time.
+It proposes the cleanup candidates, records each cleanup and holds the alerts of each store and each device.
+It deletes no data of another service. Each delete runs through the delete operation of the owner of the data.
+KanthorD deletes no user data automatically.
 
 ### Gateway Service
 
@@ -111,7 +118,7 @@ That component owns the credential records of the platform and stores them throu
 
 ## Service diagram
 
-The service view shows the eight services inside the server.
+The service view shows the nine services inside the server.
 It shows the relations that the sections below name.
 
 ## Invocation
@@ -225,3 +232,6 @@ Every service that versions a resource follows these rules.
 - An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the Gateway Service.
 - A human reads a trace from the Tracking Service through the Gateway Service.
 - The Tracking Service reads a full session entry from the host of the execution through the Worker Service.
+- Each owner of a store answers its measurement and its candidates to the Footprint Service.
+- The Footprint Service calls the delete operation of the owner for a cleanup that a human confirmed.
+- A worker instance reports its measurement and its cleanup results to the Footprint Service through the Worker Service.

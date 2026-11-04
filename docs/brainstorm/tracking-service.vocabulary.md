@@ -233,14 +233,17 @@ The set is closed and it holds two values.
 - **Stored**
 - **Refused**
 
-## retention
+## writable period
 
-Retention is the period for which the Tracking Service holds a trace.
-The trace is the unit of retention of every stored span.
-The flow rollups outlive their traces for a longer period.
-The server deletes the trace of an execution of project `Billing` when its retention ends.
-The deletion removes every span, record, telemetry text and session entry of that trace.
-The retention of a trace of project `Billing` ends 30 days after the trace opens.
+The writable period is the number of days after the start of an execution during which the Tracking Service admits the records of its trace.
+`tracking.trace_writable_days` sets it, 30 days by default. It deletes nothing.
+An import of a record of an execution of project `Billing` that started 31 days ago is refused with `trace_expired`. The trace stays.
+
+## trace delete
+
+A trace delete is the removal of one ended trace through `tracking.trace.delete`, by a human or by a cleanup of the Footprint Service.
+The deletion removes every span, record, telemetry text and session entry of that trace. The flow rollups stay.
+Ulrich deletes the traces of `Billing` older than 60 days through a cleanup. An open trace of a running execution stays.
 
 ## acknowledgement
 

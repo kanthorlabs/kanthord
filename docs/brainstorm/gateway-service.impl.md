@@ -54,8 +54,12 @@ After the listener opens, the Gateway Service writes one log record at level `in
 
 ## Access policy
 
-Every registered operation declares one access policy value: `human`, `client`, `worker`, `human_or_worker`, `public`, `delivery` or `service`.
+Every registered operation declares one access policy value: `human`, `client`, `worker`, `human_or_worker`, `human_or_service`, `public`, `delivery` or `service`.
 A `worker` operation accepts only a [worker token](gateway-service.vocabulary.md#worker-token). A `human_or_worker` operation accepts a human JWT or a worker token, and its handler reads the kind of the caller identity.
+A `human_or_service` operation declares `services`, a non-empty list of service names. Every other policy declares no `services`, and registration throws otherwise.
+The route of a `human_or_service` operation accepts a human JWT. The direct adapter accepts a human identity or the [service identity](project-service.vocabulary.md#service-identity) of a listed service.
+The direct adapter refuses every other service identity with 403 `gateway.access.service_refused`. The handler reads the kind of the caller identity.
+The emitted contract gives a `human_or_service` route the `bearerAuth` scheme, as for `human`. A `human_or_service` operation is a workbench tool, because the policy accepts a human.
 Registration throws at startup when an operation declares none.
 A request that matches no route returns 404.
 A `service` operation and a `direct: true` operation have no route, so a request for either returns 404.
@@ -609,7 +613,7 @@ The server serves the RESTful API on one listener on one port, and the delivery 
 A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [llm.impl.md](llm.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
-It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential` and `DELETE /api/worker/registration/:runtime_identity` for a worker instance.
+It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential`, `POST /api/worker/footprint` and `DELETE /api/worker/registration/:runtime_identity` for a worker instance.
 It forwards `POST /api/worker/instance/token`, `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat`, `POST /api/worker/instance/work`, `POST /api/worker/session-read/:read_id/report` and `POST /api/worker/ssh/sign` for a worker instance at the `worker` placement.
 It forwards the LLM credential routes that a worker token calls, under [llm.impl.md](llm.impl.md#instance-copies).
 These routes are `POST /api/llm/credential` of `create`, `POST /api/llm/credential/:credential_name/revision` of `rotate`, `GET /api/llm/credential` of `list` and `GET /api/llm/credential/:credential_name` of `get`.
@@ -640,7 +644,7 @@ Each operation declares its own access policy; a path prefix grants no policy.
 `GET /api/liveness` and the OpenAPI routes declare the `public` policy.
 `GET /api/healthcheck` declares the `human` policy.
 `GET /api/auth/verify`, the registration inspection operations and the instance record operations of the Worker Service declare the human policy.
-`POST /api/worker/register` and the registration lifecycle, credential, SSH signature and MCP operations declare the client policy, and delivery operations declare the delivery policy.
+`POST /api/worker/register` and the registration lifecycle, credential, SSH signature, footprint report and MCP operations declare the client policy, and delivery operations declare the delivery policy.
 `POST /api/worker/instance/token` declares the public policy. `POST /api/worker/instance/connect`, `POST /api/worker/instance/heartbeat`, `POST /api/worker/instance/work` and `POST /api/worker/session-read/:read_id/report` declare the worker policy.
 
 ## The client configuration file

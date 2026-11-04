@@ -10,7 +10,7 @@ This file is not a design document, and `architecture.md` stays the single sourc
 ## service
 
 A logical part of one process with a boundary that separates authority.
-The set is closed and it holds seven values.
+The set is closed and it holds nine values.
 
 - **Project Service**
 - **Mission Service**
@@ -19,10 +19,11 @@ The set is closed and it holds seven values.
 - **Worker Service**
 - **Workbench Service**
 - **Tracking Service**
+- **Footprint Service**
 - **Gateway Service**
 
 The server holds no other service.
-The eight services are logical boundaries inside one server.
+The nine services are logical boundaries inside one server.
 
 ## connector
 
@@ -108,14 +109,14 @@ An application of kanthord that a user runs. The set is closed and it holds thre
 `app` is the short form of `application`, and the two words name one term.
 The application view shows the applications. A service is not an application.
 
-- The `server` application holds the eight services and the worker instances of the `server` and `container` placements.
+- The `server` application holds the nine services and the worker instances of the `server` and `container` placements.
 - `kanthord serve slot` is an internal mode of the `server` application. It runs one instance of the `container` placement inside its container.
 - The `worker` application holds one worker instance. One `kanthord serve worker` process is one instance, and its instance configuration names it.
 - A service boundary separates authority inside the server, so it describes no application.
 
 ## server
 
-The server is one process, and it holds the eight services.
+The server is one process, and it holds the nine services.
 A client reaches it through the API or the CLI.
 The server runs on one host.
 

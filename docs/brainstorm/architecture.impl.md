@@ -121,7 +121,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The server writes no file in the cache directory today.
 - The state directory holds `environments/` of the [Onboarding component](project-service.impl.md#the-onboarding-component): one directory for each identity path with the proof file of each digest, and one `run-<id>/` directory for each active run.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
-- The SSH agent directory of a network git operation lives in the system temporary directory. The reason: its socket path holds at most 100 bytes.
+- The SSH agent directory of a network git operation lives below `/tmp` on POSIX, as OpenSSH does, and in the system temporary directory on every other platform. The reason: its socket path holds at most 100 bytes, and the temporary directory of a worker instance lies below its data directory or its slot root.
 
 ## The file index
 
@@ -131,6 +131,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `kanthord.db` of the data directory with its `-wal` and `-shm` files, a default expansion of `$XDG_DATA_HOME/kanthord/kanthord.db` that this sibling declares.
 - `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
+- `<file>.bak-<timestamp>` beside `kanthord.yaml`, `kanthord.db` and `tracking.db`, the backups that `kanthord upgrade` writes, a path template that [the upgrade](#the-upgrade) of this sibling declares. [footprint-service.impl.md](footprint-service.impl.md#the-kinds-and-their-measures) measures them, and a human deletes them through `footprint.backup.delete`.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
 - `workers/<instance name>.yaml` of the configuration directory, the instance configuration file of a worker instance, a path template that [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares. `kanthord worker join` and `kanthord worker instance create --output` write it, and the server reads it never.
 - `workers/<instance name>/` of the data directory and of the state directory: the data and log directories of a worker instance. [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares both path templates. On the server host, `workers/<instance name>/` of the state directory of the server is the slot root of a server instance, which [worker-service.impl.md](worker-service.impl.md#the-server-instances) declares.
@@ -138,7 +139,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
 - `workspaces/<node identity>/` of the state directory: the workspace of a steps execution on an `implement` node. At the `worker` placement, it sits under `workers/<instance name>/` of the data directory. It holds one checkout `checkouts/<binding name>/` for each repository binding. [worker-service.impl.md](worker-service.impl.md#workspace) declares the path template.
 - `workspaces/<execution identity>/` of the same directory: the workspace of an evaluation execution or of a steps execution on an `examine` node. [worker-service.impl.md](worker-service.impl.md#workspace) declares the path template.
-- `kd-ssh-<deadline>-<random>/` of the system temporary directory, the private SSH agent directory of one network git operation, a path template that [repository.impl.md](repository.impl.md#the-ssh-identity) declares.
+- `kd-ssh-<deadline>-<random>/` of `/tmp` on POSIX, else of the system temporary directory, the private SSH agent directory of one network git operation, a path template that [repository.impl.md](repository.impl.md#the-ssh-identity) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 
 ## The operational database
@@ -432,7 +433,9 @@ This sibling declares the fields below.
 - `worker.container_image`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `scheduler.stop_backoff`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
-- `tracking.retention_days`, which [tracking-service.impl.md](tracking-service.impl.md#configuration) declares.
+- `tracking.trace_writable_days`, which [tracking-service.impl.md](tracking-service.impl.md#configuration) declares.
+- `footprint.disk_free_ratio`, which [footprint-service.impl.md](footprint-service.impl.md#configuration) declares.
+- `footprint.thresholds`, which [footprint-service.impl.md](footprint-service.impl.md#configuration) declares.
 - `mission.consecutive_failure_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - `mission.text_max_bytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
@@ -843,6 +846,7 @@ Caller propagation carries identity per call.
 - The composition root of the `server` application mints one frozen service identity for each service at construction and passes it in `Dependencies`.
 - A service identity names its service and nothing else.
 - A background producer of a service calls a peer through the direct adapter with its service identity in `ClientOptions.identity`.
+- A background producer that acts for a recorded human request calls a `human_or_service` operation with its service identity. The body names the recorded human for the log of the owner. [gateway-service.impl.md](gateway-service.impl.md#access-policy) rules the policy.
 - A value that no authority mints authorizes nothing on either adapter.
 - Every adapter carries the trace identity and the parent span of the caller.
 
@@ -851,7 +855,7 @@ A handler separates asynchronous work from its commit.
 - A store transaction is synchronous and spans no `await`.
 - A handler may open a synchronous transaction on the declared store for reads before `caller.commit`. It writes nothing in that transaction, except a ruled write of the index below.
 - A ruled write commits in a synchronous transaction that the handler owns, before, between or after asynchronous steps, at the point that the owning sibling rules. The owning sibling states the state that the write leaves when the handler fails after it.
-- The index of ruled writes: the `pending` insert and the `failed` write of an [outbound request](intake-service.impl.md#the-outbound-record), the pin and the drain of a [custody release](custody.impl.md#the-release-of-a-secret) before a remote call, and the per-result commit of [`mission.node.check`](mission-service.impl.md#the-request-record).
+- The index of ruled writes: the `pending` insert and the `failed` write of an [outbound request](intake-service.impl.md#the-outbound-record), the pin and the drain of a [custody release](custody.impl.md#the-release-of-a-secret) before a remote call, the per-result commit of [`mission.node.check`](mission-service.impl.md#the-request-record), and the `queued` insert of a [footprint cleanup](footprint-service.impl.md#cleanup).
 - A handler completes its asynchronous work, including every client call, before its final `caller.commit`.
 - A handler that answers a result performs one `caller.commit` at the end on the declared store. An error exit requires no additional `caller.commit`. A failure before or inside the final `caller.commit` undoes no ruled write that committed earlier.
 - Before that commit, a `wait` handler can run its commit write in a probe transaction on the declared store. The handler always rolls back a probe transaction.
@@ -880,7 +884,7 @@ The invocation chain holds idempotency in memory.
 - [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) holds the mechanism.
 - The telemetry sink uses a client of a Tracking operation with a lossy guarantee and a handler idempotent by a natural key.
 - The Tracking Service keeps `tracking.db` separate because telemetry and operational records grow fast.
-- One file couples their locking, retention and maintenance.
+- One file couples their locking, growth and maintenance.
 
 Every adapter implements one transport-neutral value and error contract.
 
@@ -904,7 +908,9 @@ Cross-service references tolerate a deleted target.
 - A peer holds the identity of a record of another service as a correlation value, which resolves to not found after a delete.
 - An owner that exposes no delete operation keeps its records, and no sweep deletes one.
 - A referencing service tolerates a disabled target.
-- The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion. Today the store keeps no tombstone, and a read answers `404 tracking.trace.not_found`.
+- A human deletes a trace through `tracking.trace.delete`. A peer holds a trace identity as a correlation value, which then answers `404 tracking.trace.not_found`.
+- A run deletes only the scratch that it created, before it ends. No start, no timer and no later run deletes data that an earlier run left. Key material, secret files and a ruled checkout reset are the exceptions. Rule G9 of [gate G](worker-service.impl.md#gate-g) is a ruled checkout reset.
+- A human deletes the data that an earlier run left through a [cleanup](footprint-service.md#cleanup) of the Footprint Service.
 - No existence operation exists.
 
 The applications compare package versions.
@@ -1033,8 +1039,8 @@ A process split retains these boundaries.
 Imports point downward through four layers.
 
 - `src/kernel/` holds the runtime with no domain authority.
-- `src/<service>/` holds one directory for each of the eight services, as peers.
-- `src/gateway/` is one of the eight services and also the transport.
+- `src/<service>/` holds one directory for each of the nine services, as peers.
+- `src/gateway/` is one of the nine services and also the transport.
 - `src/apps/` holds the composition roots of the `server`, `worker` and `cli` applications.
 
 The configuration module sits above the services and below the applications.
@@ -1240,6 +1246,7 @@ The rules of the credential sections follow.
 - The sidebar item `Timeline` of the group `Work` opens `/timeline`, after `Traces`.
 - The sidebar item `Analytics` of the group `Work` opens `/analytics`, after `Timeline`.
 - [The timeline page](#the-timeline-page) and [the analytics page](#the-analytics-page) hold the rules of the two pages.
+- The sidebar item `Footprint` of the group `System` opens `/footprint`. The group `System` follows the group `Credentials`. [footprint-service.impl.md](footprint-service.impl.md#the-dashboard) holds the rules of its screens and of its badge.
 - The sign-in screens call a saved KanthorD address a server, for example `Saved servers` and `Sign in to a KanthorD server`. The word instance names only a worker instance on the screen.
 
 ## The worker pages
@@ -1737,7 +1744,7 @@ The rules of the board model follow.
 The screen shows these regions, top to bottom, at every width:
 
 1. The header row: the h2 "Overview", `Resume onboarding` when the onboarding can resume, the filter on expanded width, the keyboard shortcuts button and the refresh status.
-2. The system health alert, then the read faults alert.
+2. The system health alert, then the [footprint alert](footprint-service.impl.md#the-dashboard), then the read faults alert.
 3. The filter, on compact and medium width.
 4. The summary with the workforce fact and the cooling lines.
 5. The tab strip, the card list and the detail.

@@ -64,7 +64,9 @@
             plan. After this group, a human creates a project, stores
             credentials and pins SSH host keys. The human also adds worker
             instances, binds repositories, a storage bucket and workers, enables
-            agents and imports the mission plan. No execution runs yet.
+            agents and imports the mission plan. No execution runs yet. The
+            Footprint group holds the cleanups that a human confirms and the
+            alert episodes of the stores that grow with time.
           </p>
           <p>
             The <a href="index.html">README</a> holds the conventions, the
@@ -251,6 +253,31 @@ erDiagram
         text job_id "job_ + ULID of the first job of the node"
     }
 
+    footprint_cleanup {
+        text id PK "cleanup_ + ULID, ULID time is requested_at"
+        text kind "CleanableKind"
+        text instance_name "worker instance name, null for a server kind"
+        text rule "JSON cleanup rule, or null for a hand-picked set"
+        text keys "JSON list of keys of the kind"
+        text requested_by "JSON human actor"
+        text state "queued | running | completed | failed | cancelled"
+        integer finished_at "Unix ms, null while open"
+        text outcome "JSON removed, removed_bytes, absent, refused, or null"
+    }
+
+    footprint_alert {
+        text id PK "alert_ + ULID, ULID time is fired_at"
+        text kind "FootprintKind"
+        text instance_name "worker instance name, null at the server and the runtime store"
+        text item_key "device key or log file name, else null"
+        text threshold "JSON threshold that fired"
+        real value "measured value at the fire"
+        integer resolved_at "Unix ms, null while open"
+        text acknowledged_by "JSON human actor, or null"
+        integer acknowledged_at "Unix ms, or null"
+        integer acknowledged_until "bytes, end of the acknowledgement, or null"
+    }
+
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
     project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
@@ -271,6 +298,9 @@ erDiagram
     mission_node ||..o| scheduler_queue_place : "ref, no FK"
     scheduler_queue_place ||..o| scheduler_job : "job_id = id, no FK"
 
+    footprint_cleanup }o..o| worker_instance : "ref instance_name by name, no FK"
+    footprint_alert }o..o| worker_instance : "ref instance_name by name, no FK"
+
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef repository fill:#efe3d3,stroke:#8d6e63,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
@@ -278,6 +308,7 @@ erDiagram
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
+    classDef footprint fill:#f0f4c3,stroke:#827717,color:#212529
 
     class credential custody
     class repository_host_key repository
@@ -286,6 +317,7 @@ erDiagram
     class worker_instance worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job,scheduler_queue_place scheduler
+    class footprint_cleanup,footprint_alert footprint
 </pre>
           <h2 id="tables">Tables</h2>
           <p>
@@ -443,6 +475,28 @@ erDiagram
                       href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service"
                       >the identities of the Scheduler Service</a
                     >; the columns are derived.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>footprint_cleanup</code></td>
+                  <td>Footprint Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/footprint-service.impl.md#the-store"
+                      >the store</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>footprint_alert</code></td>
+                  <td>Footprint Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/footprint-service.impl.md#the-store"
+                      >the store</a
+                    >.
                   </td>
                 </tr>
               </tbody>
@@ -1216,6 +1270,47 @@ erDiagram
               <a href="02-execution.html">ERD 2</a>.
             </li>
           </ul>
+          <h3 id="footprint-service">Footprint Service</h3>
+          <ul>
+            <li>
+              <code>footprint_cleanup</code> and
+              <code>footprint_alert</code> have <code>id</code> as the primary
+              key. No <code>CHECK</code>
+              holds a closed set. The Footprint Service validates
+              <code>kind</code>, <code>rule</code>, <code>state</code>,
+              <code>keys</code>, <code>outcome</code> and
+              <code>threshold</code> with its schemas before each write.
+            </li>
+            <li>
+              <code>footprint_alert_open</code> is a partial unique index on
+              <code
+                >(kind, IFNULL(instance_name, ''), IFNULL(item_key, ''))</code
+              >
+              where <code>resolved_at</code> is null. It holds one open episode
+              for each kind, host and item. SQLite treats two null values as
+              distinct in a unique index, so the index uses <code>IFNULL</code>.
+            </li>
+            <li>
+              <code>requested_at</code> of a cleanup and
+              <code>fired_at</code> of an episode are the ULID time of
+              <code>id</code>. No column holds them.
+            </li>
+            <li>
+              The store holds <code>removed</code>, <code>removed_bytes</code>,
+              <code>absent</code> and <code>refused</code> in
+              <code>outcome</code>. The read computes <code>pending</code>.
+            </li>
+            <li>
+              <code>instance_name</code> names a worker instance by name. A name
+              stays taken after an archive, so the reference survives the
+              archive.
+            </li>
+            <li>
+              No table holds a measurement, and no column holds the state
+              <code>pending</code> or <code>recovering</code>. The service
+              computes both from the next measurement.
+            </li>
+          </ul>
           <h2 id="cross-group-references">Cross-group references</h2>
           <div class="table-wrap">
             <table>
@@ -1269,6 +1364,19 @@ erDiagram
                   <td>
                     Reference in <code>worker_instances</code> JSON by name, no
                     FK.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>footprint_cleanup.instance_name</code></td>
+                  <td><code>worker_instance.name</code></td>
+                  <td>Reference by name, no FK. Null for a server kind.</td>
+                </tr>
+                <tr>
+                  <td><code>footprint_alert.instance_name</code></td>
+                  <td><code>worker_instance.name</code></td>
+                  <td>
+                    Reference by name, no FK. Null at the server and the runtime
+                    store.
                   </td>
                 </tr>
                 <tr>
