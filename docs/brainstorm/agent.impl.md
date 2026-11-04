@@ -645,7 +645,7 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 
 Marker grammar:
 
-- Session marker: `<redacted:RULE:N:TAG>`. `RULE` is a value of `SensitiveRule` or `scan_failed`. `N` is the decimal index with each digit 0-9 written as `a`-`j`: `[a-j]{1,10}`. `TAG` is the hexadecimal tag with each nibble 0-f written as `a`-`p`: `[a-p]{16}`.
+- Session marker: `<redacted:RULE:N:TAG>`. `RULE` is a value of `SensitiveRule` or `scan_failed`. `N` is the decimal index with each digit 0-9 written as `a`-`j`, with no leading `a` except the single `a` for 0: `a|[b-j][a-j]{0,9}`. `TAG` is the hexadecimal tag with each nibble 0-f written as `a`-`p`: `[a-p]{16}`.
 - A session marker holds no digit, so that no status scanner reads a status code in it.
 - Tracer marker: `<redacted:RULE>`, with no index and no tag, because the tracer holds no table.
 - Any other text that starts with `<redacted:` is no marker.
