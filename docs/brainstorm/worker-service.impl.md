@@ -1212,7 +1212,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - A conformance case sends an answer body that holds a `Date` and an `undefined` field over both port sides.
 - Child-process tests of `serve slot` cover `worker.slot.init_absent`, and `worker.slot.channel_closed` at the end of stdin and at the frame deadline. A test checks that a `console.log` of the thread never reaches fd 3.
 - A Worker test covers the 409 `worker.instance.placement_unavailable` on a create at the `container` placement for each of its three reasons, and the pass of `runtime_failed`.
-- `make test-container` runs the driver against a live runtime on Linux rootless Podman and on the macOS Podman machine. It runs in a pull-request workflow on `ubuntu-24.04` with rootless Podman. It asserts these criteria:
+- `make test-container` runs the driver against a live runtime on Linux rootless Podman and on the macOS Podman machine. It runs in a pull-request workflow on `ubuntu-26.04` with rootless Podman. It asserts these criteria:
   1. A launch registers within 120 s, the first pull included, with `placement: container`.
   2. `<runtime> inspect` shows no `client_secret` and no `KANTHORD_*` in the `env` or the command. It shows the read-only root file system, `CapDrop` `ALL` and `no-new-privileges`.
   3. A `stop` of an idle instance exits 0. No container of the instance remains after 10 s, and the slot volume remains.
