@@ -104,8 +104,13 @@
               <ul>
                 <li>On a Mac: a Podman machine or Docker Desktop.</li>
                 <li>
-                  On Linux: rootless Podman 4.1.0 or later. The server refuses a
-                  rootful runtime when the server user is not root.
+                  On Linux: rootless Podman. The server refuses a rootful
+                  runtime when the server user is not root.
+                </li>
+                <li>
+                  On every platform: Podman 6.0.0 or later, rootless or rootful.
+                  On a Mac, the Podman machine runs this version. The server
+                  refuses an older Podman.
                 </li>
               </ul>
             </li>
@@ -537,13 +542,12 @@ sudo systemctl restart kanthord</code></pre>
                 <tr>
                   <td>
                     The sheet or <code>reason: runtime_failed</code> shows
-                    &quot;podman &lt;version&gt; refuses
-                    --userns=auto:uidmapping=. Upgrade Podman to 4.1.0 or
-                    later.&quot;
+                    &quot;podman &lt;version&gt; is below the required version
+                    6.0.0. Upgrade Podman to 6.0.0 or later.&quot;
                   </td>
                   <td>
-                    Rootless Podman is below 4.1.0. Upgrade Podman to 4.1.0 or
-                    later, then restart the server.
+                    Podman is below 6.0.0. Upgrade Podman to 6.0.0 or later,
+                    then restart the server.
                   </td>
                 </tr>
                 <tr>
