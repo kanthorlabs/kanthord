@@ -21,6 +21,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The [Intake Service](intake-service.md#boundary) calls every platform implementation method, with the material of a credential release.
 - The Intake Service calls the platform connector to check the external object of a request evidence for the [Mission Service](mission-service.md#delivery-admission-and-check), and the platform implementation folds the platform state into an end state.
 - The Mission Service calls the payload decoders, and the GitHub decoding of a delivery answers the `PlatformAddress` of its pull request or of its push.
+- The GitHub decoder also answers the link update of an issue comment of a conversation inbound.
 - The [Worker execution](worker-service.md#executions) calls the repository connector for node-branch transport.
 - The Intake Service calls the configured-action write for the [action performer](worker-service.md#action-performer-and-mcp-server).
 - The Intake Service calls the read methods of a platform implementation for the [Worker MCP server](worker-service.md#action-performer-and-mcp-server).
@@ -62,7 +63,8 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - Another git platform requires one platform implementation, its permitted read methods, a platform value and the required action performer behaviour.
 - It changes no other rule.
 - A platform with a different resource model requires its binding kind, its authorization and its action semantics.
-- The [Storage component](storage.md) owns object storage. No page defines those rules for another platform.
+- The [Storage component](storage.md) owns object storage.
+- The [Intake Service](intake-service.md#conversation-platforms) owns the platforms `jira` and `slack`. A GitHub issue stays in this component.
 
 ## Credential records
 

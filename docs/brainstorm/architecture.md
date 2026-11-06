@@ -46,6 +46,7 @@ It stores the content of evidence that no other system holds.
 It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
+It holds the update rows of the external threads of a mission and the inbox of the developer.
 It admits the inbound events that the [Intake Service](intake-service.md#handoff) hands over, and it sets the end state of a request evidence through the check of the Intake Service.
 Every write of a criterion, of an assessment and of an outcome passes through the Mission Service.
 It owns the separation between the claimant that executes a node's steps and the claimant that evaluates the node.
@@ -113,8 +114,8 @@ The [LLM component](llm.md) is a shared component for model credentials and the 
 The [Repository component](repository.md) is a shared component for repository transport, git platform operations and payload decoders.
 The [Storage component](storage.md) is a shared component for object storage operations.
 The [Agent component](agent.md) is a shared component for the agent catalog, the agent configuration, the runtime of a native agent and the agent session.
-Each [platform](architecture.vocabulary.md#platform) belongs to exactly one of the LLM, Repository and Storage components.
-That component owns the credential records of the platform and stores them through custody.
+Each [platform](architecture.vocabulary.md#platform) belongs to exactly one of the LLM, Repository and Storage components, the Project Service and the Intake Service.
+That owner owns the credential records of the platform and stores them through custody.
 
 ## Service diagram
 
@@ -144,7 +145,7 @@ The inventory has these owners.
 
 - [Project Service](project-service.md#resource-and-binding-model): a repository binding.
 - The [LLM](llm.md#resource-healthcheck), [Repository](repository.md#resource-healthcheck) and [Storage](storage.md#resource-healthcheck) components: a credential store record of their platforms.
-- [Intake Service](intake-service.md#inbounds): an inbound.
+- [Intake Service](intake-service.md#inbounds): an inbound, and a credential store record of the platforms `jira`, `slack` and `slack_signing_secret`.
 - [Worker Service](worker-service.md#instances-and-hosting): a registration.
 - [Agent component](agent.md#agent-configuration): an agent provider.
 

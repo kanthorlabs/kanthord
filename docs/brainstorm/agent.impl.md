@@ -360,6 +360,7 @@ The Agent component owns these keys of the section `agent`.
 - The worker passes the secrets of every credential of the execution as the known secrets of each session. The workbench passes the secrets of the holder of its current configuration. `env@1` passes the secrets of the server agent credentials.
 - The workbench keeps one redaction object for the life of its session in the process. Each later `openAgent` passes that object, so a marker from before `configure` restores after it.
 - The tracer applies rule 0 and rules 1 to 17 to its entry copy, with one `KnownMatcher` for each session and the tracer marker `<redacted:RULE>`.
+- The Intake Service is the second consumer of the rule set. `intake.inbound.event.describe` and `intake.inbound.event.get` apply rule 0 and rules 1 to 17 to the text of a stored inbound event before they answer.
 - No `bash`, `grep` or `sed` runs at run time. The rule set extends the port of the reference scanner `hooks/secret-guard/` of `kanthorlabs/dotagents`. A citation of `scan.sh`, `test.sh` or `pi.ts` names a file of that directory.
 
 ### The rule set

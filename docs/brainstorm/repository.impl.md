@@ -21,6 +21,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 
 - A second shape for GitHub is another platform, for example `github-app`.
 - The GitHub rate-limit probe reports `rate-limit read` and spends no rate limit.
+- A `github` credential of a conversation binding needs the fine-grained permission "Issues: read" for the issue comment reads and "Issues: write" for the reply.
 - An `ssh` record holds the private key of one [SSH identity](repository.vocabulary.md#ssh-identity). It belongs to no git platform and names no host.
 - The key type is ed25519. The server generates the key with `crypto.generateKeyPairSync("ed25519")`.
 - `src/repository/ssh-key.ts` writes the private key as an unencrypted `openssh-key-v1` text from the DER export `Buffer`, and it zeroes that buffer. `ssh-add` refuses the PKCS8 PEM that Node exports.
@@ -126,6 +127,17 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 - Each item maps to the event id `pull_request:<number>:<closed_at>` and to the metadata `{ "event": "pull_request_closed" }`. `closed_at` is the exact text of the item. A reopen and a second close give a new event id.
 - An item without a positive integer `number` or a `closed_at` text fails the read with the unreadable-body result class.
 
+### The issue comment read and the reply
+
+- The issue comment read calls `GET /repos/{owner}/{repo}/issues/comments` with `sort=updated`, `direction=desc` and `per_page=100`. It reads one page and sends `If-None-Match` with the ETag that its caller supplies.
+- A 200 answer answers the ETag and the items. A 304 answer answers no item. The read follows the wait and the rate limit rules of the events read.
+- Each item maps to the event id `issue_comment:<id>` and to the metadata `{ "event": "issue_comment_listed" }`. An edit of a comment keeps its event id.
+- The link read of Check now calls `GET /repos/{owner}/{repo}/issues/{number}/comments` with `per_page=100`. When the `Link` header names a last page, it also reads that page, so it makes at most two requests. Its items map to the same event id and metadata.
+- A `github_issue` number can name a pull request, because GitHub numbers issues and pull requests in one sequence. The link then follows the conversation comments of that pull request.
+- The reply `github.issue_comment` calls `POST /repos/{owner}/{repo}/issues/{number}/comments` and answers `{ update_key: issue_comment:<id>, actor_id }`. It has no read-back.
+- The reply account of GitHub is `id` of `GET /user`.
+- The GitHub description of an `issue_comment` event answers `{ author, body, url, occurred_at }`.
+
 ### The event decoder
 
 `decodeGitHubEvent` is the pure decoder of a GitHub inbound event. `metadata.event` selects its entry, and an unknown value decodes to no address.
@@ -142,6 +154,22 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 - The repository of the event must equal the resource of the inbound: `repository.full_name` of a webhook, `repo.name` of the events read and `base.repo.full_name` of the closed pull request read. Another repository decodes to no address.
 - A merged item without a 40-character lower-case hexadecimal `merge_commit_sha` decodes to no address. A `merge_commit_sha` of 40 zeros decodes to no address. An item with an empty or absent `base.ref` decodes to no address.
 - A merged item decodes as a push of its base branch. [Delivery admission](mission-service.impl.md#the-request-record) then checks every unresolved `pull_request` request on that base branch: the merged request folds to `expected`, and another request that cannot merge folds to `conflict`.
+
+### The link update decoder
+
+`decodeLinkUpdate` is the pure decoder of a link update of a GitHub inbound event. It answers `{ external_link, update_key, actor_id, actor_automated, occurred_at, mentions }`, or null. It reads facts of the payload only and makes no platform call.
+
+| `metadata.event`       | Source                           | `update_key`                 | `actor_id`                          | `actor_automated` is true when                                                                    |
+| ---------------------- | -------------------------------- | ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `issue_comment`        | Webhook, action `created`        | `issue_comment:<comment id>` | `user.id` of the comment, as a text | `user.type` is not `User`, the login ends with `[bot]`, or `performed_via_github_app` is not null |
+| `issue_comment_listed` | Issue comment read and link read | `issue_comment:<comment id>` | `user.id` of the comment, as a text | The same rule                                                                                     |
+
+- `occurred_at` is `created_at` of the comment.
+- `mentions` holds the lower-case logins of the `@<login>` mentions in the body of the comment, outside code spans and fenced code. It holds at most 50 logins.
+- The decoder answers a link update only for an event of a `conversation` inbound. A repository inbound answers null for an issue event.
+- A close, a reopen, an edit and a delete decode to null.
+- An event of another repository decodes to null.
+- An absent or malformed field reads null for `actor_id`.
 
 ## Git-only platforms
 
@@ -175,7 +203,7 @@ The platform connector is a registry keyed by the platform value of the binding.
 The registry uses static registration and loads no runtime plugin.
 The GitHub implementation decodes a GitHub inbound event under [the event decoder](#the-event-decoder).
 Every method returns a discriminated union: the success with the result of the operation, or the result class.
-The check method folds the state of an external object into `expected`, `other`, `conflict` or `none` against the expected end state that its caller names, and it answers the landed commits of an `expected` repository result. The GitHub fold answers `other` for an open pull request with a current change request. A change request is current when it is the latest `APPROVED`, `CHANGES_REQUESTED` or `DISMISSED` review of its reviewer and names the head commit. The GitHub fold answers `conflict` for another open pull request whose `mergeable_state` is `dirty`.
+The check method folds the state of an external object into `expected`, `other`, `conflict` or `none` against the expected end state that its caller names, and it answers the landed commits of an `expected` repository result. The GitHub fold answers `other` for an open pull request with a current change request. A change request is current when it is the latest `APPROVED`, `CHANGES_REQUESTED` or `DISMISSED` review of its reviewer and names the head commit. The fold takes `link_trust` of the pinned repository binding and drops each review whose author fails the trust rule. The GitHub fold answers `conflict` for another open pull request whose `mergeable_state` is `dirty`.
 The GitHub merge of a pull request reads the allowed merge methods of the repository, then calls `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` with the head guard `sha`.
 The [retry rules](repository.md#result-classes) use the deadline that the caller supplies.
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
