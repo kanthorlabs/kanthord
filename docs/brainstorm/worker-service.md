@@ -8,7 +8,7 @@ title: Worker Service
 
 This document describes the Worker Service.
 It describes the workers and their agents, the worker instances and how they host an execution, the lifecycle of an execution, the performance of a required external action and the owner of memory.
-For a required external action, it describes the configured repository action only.
+For a required external action, it describes the configured repository action and the reply action of a conversation binding.
 The Worker Service uses the [Repository component](repository.md) for repository operations and the [Intake Service](intake-service.md#outbound-operations-and-checks) for platform operations.
 It describes the MCP server through which a native agent and an external harness reach the server tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
@@ -373,6 +373,10 @@ The agent stops when its turn count or wall time reaches the budget.
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
 It fetches the external content that the request evidence addresses through `intake.action.read` of the [Intake Service](intake-service.md#outbound-operations-and-checks).
+Every attempt, attempt 1 included, also reads the trusted link updates of its node through `worker.execution.link_update.get`.
+The Mission Service applies `link_trust` of the binding revision that the node pins for each link resource.
+The Intake Service describes the stored content of each update and redacts it under the sensitive text rule set.
+The update text is context, and the requirement stays in the node revision.
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
@@ -447,6 +451,11 @@ A merge commit is no new work.
 A turn of the verdict that brings no new work counts as no progress.
 No part of the verdict routes work to a task by name.
 After a human unblock with no verdict, a cleared assessment that does not pass gives its rationale to the node unit as one instruction.
+The verdict of an attempt also holds the trusted link updates of its node.
+It holds the newest 20 updates with their `new` marks, and the count of older updates.
+The coder reads older updates through the host tool `link_update_list`.
+When no other verdict exists, the link updates are the verdict.
+A verdict of link updates alone names no judged commit, so the release gate decides.
 
 Before a release with evidence, the execution runs the release gate.
 The release gate merges `origin/<base_branch>` again in every checkout and runs every verification of the node and of each task in a clean local clone of each checkout. A repeated command copies its first result.
@@ -681,6 +690,15 @@ The action performer requests each eligible action for the reviewer execution un
 A request of a repository action calls `intake.action.perform`, and the Intake Service uses the [configured-action write](repository.md#write-operations) of the Repository component.
 The action performer derives every operand from the records of the attempt, the evidence snapshot and the request evidence.
 The agent supplies no operand, and an external harness supplies none.
+
+A required action of a conversation binding is the reply to one external link.
+The action performer requests a reply through the Intake Service with the outbound operation of the platform of the binding.
+A reply follows the passing assessment, and it posts with the one account of the developer.
+The reply holds the outcome that the review passed: the node name, the attempt and the platform address of each request evidence of the attempt.
+No agent tool writes to a link during an execution.
+A call that ends with no answer sets the request `failed`, and a repeat posts the reply again.
+A crash during the call leaves the request `pending`, and a repeat of a pending request with no running call posts the reply again.
+A duplicate reply after a lost answer is accepted.
 
 Before it performs a request, the action performer reads the request evidence of the node.
 The request reuses the external object of a request evidence of an earlier attempt when three conditions hold.
