@@ -20,6 +20,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An outcome uses `outcome_<ulid>`.
 - A review finding uses `finding_<ulid>`.
 - An evidence asset uses `evidence_asset_<ulid>`.
+- A link update uses `link_update_<ulid>`.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>`.
 - An attempt uses its attempt number as its key within the node. An attempt takes no prefix.
 - The Scheduler Service declares the execution identity.
@@ -48,8 +49,13 @@ An execution assessment is the exception: it stores the execution identity, and 
 - `criterion` is nonblank text that can hold several checkable statements.
 - `verifications` is a nonempty ordered list of nonblank bash command strings.
 - `bindings` is a list of binding identities of the project. A read answers the pinned identities, and a node write and an unblock content change take identities. A plan file names each binding by its name.
+- `external_links` is an ordered list of at most 10 distinct external links. Two links are equal when their canonical JSON is equal. An absent list reads `[]`.
+- An external link is a discriminated union on `kind`. `ExternalLinkKind` is a closed enum in code: `github_issue` holds `resource_identity` and `number`, `jira_issue` holds `resource_identity` and `key`, and `slack_thread` holds `resource_identity`, `channel` and `thread_ts`. `resource_identity` is the identity of a conversation binding.
+- `number` is a positive integer. `key` matches `^<project_key>-[1-9][0-9]*$` of its resource identity. `channel` matches `^[CG][A-Z0-9]{2,31}$`, and `thread_ts` matches `^[0-9]+\.[0-9]{6}$`.
+- A `github_issue` number can name a pull request, because GitHub numbers issues and pull requests in one sequence. The link then follows the conversation comments of that pull request.
+- `mission_node_revision.external_links` is `TEXT NOT NULL`. It holds the canonical JSON list, and `[]` for none.
 
-A node write, and an import that creates a node, resolve each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding. The write pins that revision and checks the rule table.
+A node write and an unblock content change keep each submitted binding identity as its pin. The revision must belong to the current binding of its resource. An import that creates a node resolves each binding name of a plan file to the identity of the latest revision of that binding. An import of a node with no pin of that binding does the same. The write pins the identities that it resolves and checks the rule table. Only [the rebind](#the-rebind) moves a pin.
 An import of an existing nonterminal node keeps a pinned revision with the same name and the same `resource_identity`, unless a removal of that binding follows the pin. An import resolves no binding of a terminal node under [Export and the two formats](#export-and-the-two-formats).
 The write accepts the identity of a revision of the current binding of that resource. An identity from before a removal of that binding answers `mission.node.bindings_invalid`, also when a binding of the same resource exists again.
 The intent of the node determines the column.
@@ -63,9 +69,11 @@ A new binding kind adds a row.
 | Repository   | 1 or more   | 0 or more |
 | Worker       | 0           | 0         |
 | Storage      | 0 or more   | 0 or more |
+| Conversation | 0 or more   | 0 or more |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or unknown `intent`, a nonlist `tags`, a repeated or malformed tag, a `commit_type` outside its closed set, and a task on an `examine` node answer `mission.node.content_invalid`.
+These cases answer 400 `mission.node.content_invalid` with `details: { field: "external_links" }`: an invalid list, an invalid link, a duplicate link, more than 10 links, and a link whose `resource_identity` names no conversation binding of the node.
 A write that changes `intent` of a node whose attempt reads 1 or more answers 409 `mission.node.intent_locked` with `details: { node_id, attempt }`.
 A node write whose node names two repository bindings or more answers 400 `mission.node.environment_mixed` with `details: { bindings }` when a worker binding of the project lists a `container` instance and two of the repository bindings hold different stored `environment` documents, because one `container` instance runs one image. `environmentsMixed(projectId, resourceIdentities)` of the [Project Service](project-service.impl.md#the-gate-collaborations) reads the stored documents of the binding set inside the write transaction, never the records in memory, so the answer does not depend on timing. A binding with no stored environment counts as no environment. Two bindings with one equal document pass. The guard thus misses two bindings whose repository, detected or universal sources differ. Such a node runs the image of the binding that the worker binding names, and the docs of the node content state this limit. The node writes are the node writes of the next paragraph, and the import preview lists the violation for each node file.
 A node write that adds an unmatched pair of a node and a claimable state under the [Scheduler Service](scheduler-service.md#match) answers 409 `mission.node.tags_unmatched` with `details: { claims }`. `claims` lists each added pair as `{ node_id, revision, claim }`. The before and after reads compare pairs by `(node_id, claim)` alone, and `revision` is a report field. The node writes are import apply, node create, node update, a rebind, an unblock with a change and a proposal decision.
@@ -103,17 +111,20 @@ An import carries no priority.
 
 `FrozenAction` is the read shape of a required external action.
 The service derives one `FrozenAction` for each configured action of each repository binding row that the pinned revision of the attempt names.
+The service also derives one `FrozenAction` for each pair of a `reply` action and a link. The `reply` action belongs to a conversation binding row of the pinned `implement` revision, and the `resource_identity` of the link names that binding.
 
 - A `FrozenAction` holds `key`, `binding_id`, `action`, `expected_end_state`, `follows` and `configuration`.
-- `action` is `pull_request` or `merge_push` for a repository binding, under the action catalog of [project-service.impl.md](project-service.impl.md).
-- `expected_end_state` is `pull_request_merged` for `pull_request` and `base_branch_pushed` for `merge_push`.
+- `action` is `pull_request` or `merge_push` for a repository binding and `reply` for a conversation binding, under the action catalog of [project-service.impl.md](project-service.impl.md).
+- `expected_end_state` is `pull_request_merged` for `pull_request`, `base_branch_pushed` for `merge_push` and `posted` for `reply`.
 - `follows` is the key of the action that this action follows, or null when it follows the passing assessment. It is null while a strategy holds at most one action; the field stays for a later action kind. The Project Service refuses `follows.type = "action_end_state"` in a binding write until a retry-safe claim-source contract exists, because no claim answer carries its claim source. Until then every evaluation claim comes from `Waiting`, a reviewer execution performs the evaluation on every claim, and the continuation claim from `External.Requested` of [worker-service.md](worker-service.md#evaluation-and-required-external-actions) stays unreachable.
 - `configuration` holds the operands that the action performer takes from the strategy: `base_branch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `binding_id` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
-- `binding_id` is the repository binding revision of the action, which the pinned node revision names.
+- `configuration` of a `reply` holds `external_link`, the link of its pair.
+- `binding_id` is the binding revision of the action, which the pinned node revision names.
 - No action of one binding follows an action of another binding.
 - A configured action of another binding kind adds its own `action` value, `expected_end_state` values and `configuration` shape with its design; the service refuses every other value.
 - An `examine` node requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
+- The key of a `reply` is `<binding name>.reply.<position>`, where `<position>` is the zero-based position of the link in `external_links` of the pinned revision. It matches `^[a-z][a-z0-9-]{0,62}\.reply\.[0-9]$`.
 - `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:node_id/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
   Its input holds `execution_id`, `attempt`, `node_revision`, `requirement_key`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
@@ -141,13 +152,14 @@ The service derives one `FrozenAction` for each configured action of each reposi
   - `tags`: a list of tags; absent reads `[]`.
   - `commit_type`: one value of the closed set of the node content; absent stays absent.
   - `bindings`: the project binding names under the node content rules, in order. An `implement` node file names one or more repository bindings.
+  - `external_links`: a list of external link objects under the node content rules, in order; absent reads `[]`.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
 - The front matter of a task file permits only these keys:
   - `id`: the task identity `task_<ulid>`; absent on a new task.
   - `node`: the plan file name of a node file of the import set with `intent: implement`; required.
   - `bindings`: an empty list; another list answers `mission.node.bindings_invalid`.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
-- A task file refuses `depends_on`, `tags` and `intent`.
+- A task file refuses `depends_on`, `tags`, `external_links` and `intent`.
 - After the front matter, exactly one H1 supplies `name`.
 - Exactly one `## Requirement` section supplies `requirement`.
 - Exactly one `## Criterion` section supplies `criterion`.
@@ -180,12 +192,12 @@ The service derives one `FrozenAction` for each configured action of each reposi
 ## Export and the two formats
 
 - `mission.export` uses `GET /api/mission/:mission_id/export?format=markdown|json` with `human` access.
-- The JSON answer is `{ mission_id, mission_version, entries: [{ filename, id, intent, node, name, requirement, criterion, verifications, bindings, tags, commit_type, depends_on }] }`. A node entry holds `commit_type` only when the node sets it.
+- The JSON answer is `{ mission_id, mission_version, entries: [{ filename, id, intent, node, name, requirement, criterion, verifications, bindings, tags, external_links, commit_type, depends_on }] }`. A node entry holds `commit_type` only when the node sets it, and `external_links` only for a nonempty list.
 - The Markdown answer is `{ mission_id, mission_version, files: [{ filename, content }] }`.
 - Each Markdown `content` follows the plan file grammar.
 - JSON entries use the same node content, task and dependency rules as Markdown.
 - `node` and `depends_on` name plan files in the import set, not node identities.
-- A node entry omits `node`, and a task entry omits `intent`, `tags`, `commit_type` and `depends_on` in both formats.
+- A node entry omits `node`, and a task entry omits `intent`, `tags`, `external_links`, `commit_type` and `depends_on` in both formats.
 - Each answer is the exact plan payload that the import of its format accepts.
 - The import accepts `format: markdown` with raw `files: { filename, content }[]`, which the Mission Service parses.
 - The import accepts `format: json` with `entries`.
@@ -307,9 +319,10 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 
 ## The request record
 
-- `requirement_key` of a request evidence holds the key of its `FrozenAction`. The expected end state is `expected_end_state` of that `FrozenAction`: `pull_request_merged` or `base_branch_pushed` for a repository action; a configured action of another binding kind adds its own values with its design.
-- `PlatformAddress` holds `kind` and `resource_identity` of the binding, for example `repository:github:kanthorlabs/kanthord`, and never a `binding_id`. A `pull_request` address adds `number`. A `branch_push` address adds `branch` and `commit`, the commit that the Intake Service pushed. The service stores it as RFC 8785 canonical JSON under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- `requirement_key` of a request evidence holds the key of its `FrozenAction`. The expected end state is `expected_end_state` of that `FrozenAction`: `pull_request_merged` or `base_branch_pushed` for a repository action, and `posted` for a `reply` action; a configured action of another binding kind adds its own values with its design.
+- `PlatformAddress` holds `kind` and `resource_identity` of the binding, for example `repository:github:kanthorlabs/kanthord`, and never a `binding_id`. A `pull_request` address adds `number`. A `branch_push` address adds `branch` and `commit`, the commit that the Intake Service pushed. A `comment` address adds `update_key`, the key of the reply that the Intake Service posted. The service stores it as RFC 8785 canonical JSON under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
 - The Intake check takes the binding and its credential from the pinned `FrozenAction` of the request, and it answers `end_state` and `landed_commits`.
+- The Intake check of a request evidence of a `reply` action answers `expected`, the end state `posted`, when its outbound request is `succeeded`. It makes no platform call.
 - `end_state` is one of `expected`, `other`, `conflict` and `none`. `expected` establishes the expected end state. `other` establishes another end state. `conflict` and `none` establish no end state.
 - The service sets `end_state` of the request evidence to `expected` or `other` once and refuses a later conclusive result for the same request. `none` writes nothing.
 - An `expected` result of a repository action holds a nonempty `landed_commits`. The service writes each commit as its own evidence with the provenance `{ kind: "service", service: "mission" }` and the attempt of the request. Delivery admission adds `inbound_event_id`, the identity of the inbound event, to that provenance. Every other result holds an empty list.
@@ -318,23 +331,41 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - `end_state` of a pull request check is also `conflict` for another open pull request that cannot merge. `conflict` writes no end state. When the node is `External.Requested` in the attempt of the request, `conflict` moves the node to `Available`, and the request stays unresolved for the rework of the same attempt.
 - `mission.delivery.admit` is the `service` operation of delivery admission. It writes no record of its own. This contract serves acceptance as an observation. Acceptance as a human act stays under the delivery admission page and the disposition vocabulary, and this contract does not redefine it.
 - The input holds `inbound_event_id`, `project_id`, `platform`, `resource`, `event` and `metadata`. The Intake Service fills them from the inbound event and its inbound: `resource` from `configuration`, and `event` as the exact bytes in canonical base64.
-- The answer holds `disposition` and `reason`. `disposition` is `accepted_observation`, `refused` or `duplicate`. `reason` is `ambiguous`, `unmatched` or `undecodable` for `refused`, and null otherwise.
-- Admission decodes the event first. A decoding with no address answers `undecodable`. Then a read transaction matches the canonical JSON of the address against the `platform` asset of each request evidence of the project. One unresolved match of an open attempt goes to the Intake check. More unresolved matches answer `ambiguous`. No unresolved match answers `duplicate` when a resolved request matches, and `unmatched` otherwise.
+- The answer holds `disposition` and `reason`. `disposition` is `accepted_observation`, `refused` or `duplicate`. `reason` is `ambiguous`, `unmatched`, `undecodable` or `actor_ignored` for `refused`, and null otherwise.
+- Admission decodes the event first. A decoding with no address goes to the link update steps. A decoding with an address goes to a read transaction that matches the canonical JSON of the address against the `platform` asset of each request evidence of the project. One unresolved match of an open attempt goes to the Intake check. More unresolved matches answer `ambiguous`. No unresolved match answers `duplicate` when a resolved request matches, and `unmatched` otherwise.
 - A `branch_push` address selects each unresolved `pull_request` request of the same resource whose frozen `base_branch` equals the pushed branch. The selection runs with an exact match and without one. Each selected request goes to the Intake check, and the commit applies each result. A `none` result writes nothing, and a node with a live claim keeps its request unchanged. A non-empty selection with no exact match answers `accepted_observation`. Automatic detection needs a poll or webhook inbound for the repository.
 - The handler calls the Intake check before its commit, because a transaction awaits nothing. A failed check propagates as an operation failure and writes nothing.
 - Every answer that carries a disposition returns through the one final `caller.commit`. A `none` result answers `accepted_observation` with a null `reason`. A refusal or a duplicate found at the match of a `branch_push` address still runs the selection, and a non-empty selection answers `accepted_observation`. A duplicate found at the commit still applies the selected results. An ambiguous exact match at the commit applies none. A live claim on the exact request fails the admission with 409 `mission.node.claim_live` and writes no selected result. The event stays `failed` and a human can retry it.
 - For an `expected` or `other` result, the commit first reads the checked request evidence. An end state on it answers `duplicate`. Otherwise the commit repeats the match with the same priority and the same refusal and duplicate answers. Another evidence that became the one unresolved match answers 409 `mission.delivery.match_changed`. A live claim on the node answers 409 `mission.node.claim_live` with `details: { node_id, execution_id }`.
 - With an exact match, the commit applies the exact request first and then each selected result in the same transaction. The answer is the answer of the exact request. A refusal of the exact request applies no selected result.
 - Otherwise the commit sets the end state. An `expected` result of a repository action writes each landed commit as its own evidence with `inbound_event_id` in its provenance, and every other result adds no landed-commit evidence. The same transaction writes the node transition and the attempt closure that the [state transitions](mission-service.md#state-transitions) require, and the commit answers `accepted_observation`.
+- `decodeLinkUpdate` of the platform implementation answers the link update `{ external_link, update_key, actor_id, actor_automated, occurred_at, mentions }`, or null. A null answers `undecodable`. A close, a reopen, a Jira status transition, an edit and a delete decode to null.
+- Admission answers `actor_ignored` when the platform object id equals `update_key` of the result of a succeeded reply request. It answers `actor_ignored` when a reply request on the same link is pending and `actor_id` equals the reply account.
+- The reply account is the author of the last succeeded reply on that link. Before the first reply succeeds, it is the account of the binding token. The Intake Service reads that account once at the first reply call of a link with no succeeded reply, and records it in the result of the pending request.
+- Admission reads the succeeded reply and the pending reply account of a link through the direct Intake read `intake.outbound.reply.match`.
+- Admission answers `actor_ignored` when `actor_automated` is true or `actor_id` is null.
+- Admission answers `duplicate` when `mission_link_update` holds a row with the same `(mission_id, external_link, update_key)`.
+- Admission decides `reason` and `binding_id` of the row under [The inbox](#the-inbox). With no reason, it answers `unmatched`.
+- Admission inserts one `mission_link_update` row for the update and answers `accepted_observation`. The insert reads no `link_trust`. A link update needs no Intake check.
+- In the same transaction, each terminal node that links the thread opens a follow-up proposal under [The fix-node proposal](#the-fix-node-proposal). For that proposal, admission reads `link_trust` of the binding revision that the terminal node pins for the link resource. Only an actor that passes the trust rule opens a proposal.
+- A link update never changes the state of a node, closes no attempt and revokes no claim.
+- The span of the operation also holds `actor_id` of a refused link update. It holds no content of the update.
 - The span of the operation holds the disposition and the refusal reason.
-- `mission.delivery.unresolved_request.count` is a `service` operation that only the Intake Service calls. Its input holds `project_id` and `resource_identity`. It answers `{ count }`, the count of request evidences of the open attempts of the project that hold no end state and whose `PlatformAddress` names that `resource_identity`. The count covers every address kind. It writes nothing. The service-name check of `mission.delivery.admit` refuses every other caller with 403 `mission.authorization.refused`.
-- `mission.node.check` uses `POST /api/mission/node/:node_id/check` with `human` access and names `expected_mission_version`. It calls the Intake check for each request evidence of the open attempt with no end state, commits each result in its own transaction and answers `{ results: { evidence_id, requirement_key, resolution }[], failures: { evidence_id, error }[] }`. A result that establishes an end state on a node with a live claim writes nothing, and its request answers `failures` with `mission.node.claim_live`. A node with no unresolved request answers 409 `mission.node.no_unresolved_request`.
+- `mission.delivery.unresolved_request.count` is a `service` operation that only the Intake Service calls. Its input holds `project_id` and `resource_identity`. It answers `{ count, link_count, inbox }`. `count` is the count of request evidences of the open attempts of the project that hold no end state and whose `PlatformAddress` names that `resource_identity`. The count covers every address kind. `link_count` counts the links whose `resource_identity` equals the input, over the current revisions of the nodes of the project that are not retired. A terminal node, `Completed` or `Discarded`, counts while fewer than 14 days pass after `mission_attempt.closed_at` of its last attempt. The 14 days are a constant in code, and no column records the window. `inbox` is true while the current revision of a conversation binding of that resource holds the key `inbox`. A conversation poll with `inbox` keeps a standing demand with no window. It writes nothing. The service-name check of `mission.delivery.admit` refuses every other caller with 403 `mission.authorization.refused`.
+- `mission.node.check` uses `POST /api/mission/node/:node_id/check` with `human` access and names `expected_mission_version`. It calls the Intake check for each request evidence of the open attempt with no end state, commits each result in its own transaction and answers `{ results: { evidence_id, requirement_key, resolution }[], failures: { evidence_id, error }[], link_updates: { external_link, admitted, duplicate, refused }[] }`. A result that establishes an end state on a node with a live claim writes nothing, and its request answers `failures` with `mission.node.claim_live`. A node with no unresolved request and no external link answers 409 `mission.node.no_unresolved_request`. A terminal node with an external link takes the check.
+- The check also reads each external link of the current revision through `intake.link.read`. The read takes one custody release of `credential` of the binding revision that the node pins for the link resource. It records no outbound request.
+- The link read stores each item under the newest inbound of the link resource in the project of the node. An item with an existing event id keeps its stored row. Each item goes through `mission.delivery.admit` with its `inbound_event_id`.
+- A link with no such inbound refuses the whole check with 409 `intake.link.inbound_missing` and `details: { external_link }`, before any read. A failed platform call answers 502 `repository.platform.github.<class>` or `intake.platform.<platform>.<class>`.
 - This record decides no order of contradictory results, no reversal of an accepted platform state and no request for which no end state arrives. The B9 Mission items of [HANDOFF.md](HANDOFF.md#mission-service-1) own the open recovery rules.
 
 ## The fix-node proposal
 
 - `mission.proposal.list` uses `GET /api/mission/node/:node_id/proposal` with `human` access, and it answers a page of proposals with an optional `attempt` filter.
 - A proposal record holds `approved_at` and `rejected_at`. A proposal is `open` while both are null, `approved` after the approval and `rejected` after the rejection. A decided proposal never changes again.
+- A follow-up proposal is a `mission_proposal` row of a terminal node, `Completed` or `Discarded`. It holds `attempt` of the last attempt of the node, or 0 for a node with no attempt (U2), a null `assessment_id` and the content `{ node_revision }`. The column `assessment_id` is nullable.
+- A trusted link update of a terminal node writes one follow-up proposal when the node holds no open proposal and no live follow-up node. The insert of its `mission_link_update` row and the proposal share one transaction.
+- A live follow-up node is the node that an approved follow-up proposal of the terminal node created, when that node is not retired. The newest node of the follow-up chain owns the link.
+- An update of a node with an open follow-up proposal writes no second proposal. A retired node writes no proposal.
 - RULED 2026-10-29 by Ulrich: a human takes one decision for each assessment. `mission.proposal.decide` uses `POST /api/mission/assessment/:assessment_id/decide` with `human` access. Its body holds `expected_mission_version`, `approved_proposal_ids` and an optional nonblank `reason`.
 - `approved_proposal_ids` is a duplicate-free list of 1 to 10 proposal identities. Another list answers 400 `gateway.request.validation_failed` with an issue at `approved_proposal_ids`.
 - An unknown assessment answers 404 `mission.record.not_found`.
@@ -348,6 +379,161 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - An assessment with no open proposal answers 409 `mission.proposal.decided` with `details: { assessment_id }`. A repeated decision answers this code.
 - A proposer that is not `Blocked` in the attempt of the assessment answers 409 `mission.node.state_conflict`. A new unmatched pair answers 409 `mission.node.tags_unmatched`. A refused decision writes nothing.
 - A node unblock, a node discard or a node override of a `Blocked` proposer sets `rejected_at` of every open proposal of the assessment that blocked the proposer, in the same transaction. That is the rejection of every proposal.
+
+## The follow-up proposal
+
+- `mission.proposal.decide` stays as ruled on 2026-10-29. It decides the fix-node proposals of one assessment and never a follow-up proposal.
+- `mission.followup.decide` uses `POST /api/mission/node/:node_id/followup/decide` with `human` access. Its body holds `expected_mission_version`, `approve`, an optional nonblank `requirement`, an optional nonblank `criterion` and an optional nonblank `reason`.
+- An unknown node answers 404 `mission.node.not_found`.
+- A node with no open follow-up proposal answers 409 `mission.proposal.decided` with `details: { node_id }`. A repeated decision answers this code.
+- A stale `expected_mission_version` answers 409 `mission.version.conflict`.
+- An approval creates one node in the transaction of the decision. The content copies the current revision of the terminal node, `intent`, every task and `external_links` included. The body replaces `requirement` and `criterion` when it names them.
+- The file names of the new node are `followup-<proposal id suffix>.md` and `followup-<proposal id suffix>-<n>.md`. The bindings keep the pins of the terminal node.
+- The new node depends on the terminal node only when that node is `Completed`. A follow-up node of a `Discarded` origin takes no dependency.
+- No row is copied. The new node reads the rows of its links in the mission, under [The link update](#the-link-update).
+- The proposal gets `created_node_id` and `approved_at`. The same transaction marks done the newest inbox row of each thread of `external_links` of the proposal revision.
+- A rejection sets `rejected_at`, creates nothing and marks the same rows done.
+- `mission.followup.list` uses `GET /api/mission/project/:project_id/followup` with `human` access. It answers a page of the open follow-up proposals of the project, each with its `node_id`. A project with no mission answers 404 `mission.mission.not_found`. The board reads it once for each project at each poll.
+
+## The link update
+
+- One table `mission_link_update` holds one row for each update of one external thread in one mission. Delivery admission appends the rows.
+- A node reads the rows of its links, and the inbox groups the rows of one thread into one card. No act copies a row, and no column holds a state or a count.
+- A follow-up node reads the rows of its links in the mission, so an approval copies no row.
+
+```sql
+CREATE TABLE mission_link_update (
+  id TEXT NOT NULL PRIMARY KEY,
+  mission_id TEXT NOT NULL REFERENCES mission_mission(id),
+  external_link TEXT NOT NULL,
+  update_key TEXT NOT NULL,
+  inbound_event_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  occurred_at INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  binding_id TEXT,
+  done_at INTEGER,
+  snoozed_until INTEGER
+);
+CREATE UNIQUE INDEX mission_link_update_key ON mission_link_update (mission_id, external_link, update_key);
+```
+
+- `id` is the identity `link_update_<ulid>`. The acts name it. Its ULID time is the insert time, so the `new` mark derives from it.
+- `mission_id` is the owner of the row. A thread with no node has no other key, and one row serves every node of the mission that links the thread.
+- `external_link` is the canonical JSON of the thread address. It groups a card, matches a node read and fills Create node. A human can delete the inbound event, so the event cannot supply it.
+- `update_key` is the dedupe key across inbounds, redeliveries and Check now. The event identity of one update differs for each read.
+- `inbound_event_id` is the pointer of `intake.inbound.event.describe` to the stored text. It has no foreign key, because the event lives in the Intake schema.
+- `actor_id` is the input of the trust check at each read and of the label "not trusted". A human can delete the event.
+- `occurred_at` is the platform time of the update. It orders a thread and decides its newest row. The insert order differs, because a poll page arrives newest first and Check now admits an older comment late.
+- `reason` is the `InboxReason` that admission decided for the row. A row outside the inbox holds `linked`.
+- `binding_id` is the conversation binding revision whose `inbox` key admitted the row to the inbox. A null value marks a row outside the inbox.
+- `done_at` and `snoozed_until` hold Mark done and Snooze on the newest inbox row. A null value means that no act covers the row.
+- The table holds one unique index, `mission_link_update_key`, and no other index. It holds no `CHECK` constraint.
+- The table holds no column `node_id`, `created_at`, `project_id`, `state`, `attempt`, `new`, `trusted`, `actor_automated` or count. A node finds its rows through its links. The ULID of `id` holds the insert time. `mission_mission.project_id` is unique. Each other value derives at the read.
+- `reason` is an enum in code. The Mission Service validates it before the write.
+- A row stays until a human deletes the mission data. It counts toward `operational_database` of the Footprint Service. The table has no delete operation, as `mission_proposal` has none.
+
+### The access paths
+
+- Only the unique index serves a read.
+- The dedupe of admission probes `(mission_id, external_link, update_key)`.
+- Each thread read uses the prefix `(mission_id, external_link)`. The rows of one thread sort in memory by `(occurred_at, id)`.
+- A node read reads at most 10 threads, because a node holds at most 10 links.
+- `mission.inbox_item.list` with `project_id` reads the prefix `mission_id`. Without `project_id`, it reads the whole index in order and groups each thread in one pass. Its cost grows with the rows, and the Footprint Service reports the growth.
+
+### The node read
+
+- `mission.link_update.list` uses `GET /api/mission/node/:node_id/link-update` with `human` access. An unknown node answers 404 `mission.node.not_found`. It reads the current revision of the node and answers a page of `{ id, external_link, update_key, inbound_event_id, actor_id, occurred_at, new }`.
+- `linkUpdatesOf(tx, nodeId, attempt, page)` reads the node revision of the attempt. The read takes the rows of the mission whose `external_link` equals a link of that revision.
+- For each link, the read takes `link_trust` of the binding revision that the revision pins for the link resource. A row passes when `actor_ids` holds its `actor_id`. A revision that pins no binding of the link resource reads no row of that link.
+- The order is newest first by `(occurred_at, id)`. The cursor holds both values. `limit` is at most 100. `total` counts the rows that pass.
+- `new` is true when the ULID time of `id` is at or after `mission_attempt.opened_at` of attempt N − 1. At attempt 1, every row is `new`. `mission.link_update.list` marks `new` against the latest attempt, and a node at attempt 0 marks every row `new`.
+- A rebind moves the pin, and the next read applies the new `link_trust` to every row. A content change that adds a link gives the node the rows of that thread, the rows before the change included.
+- A row of an untrusted actor reaches no node. The inbox shows it with the label "not trusted".
+
+## The inbox
+
+- An inbox item is one thread of one mission: the rows of `mission_link_update` that share `(mission_id, external_link)`. No record stores the item.
+- Every reason needs the key `inbox` on the pin of the thread, `linked` included. An update of an automated actor gets no row.
+- A project whose conversation binding of a resource holds no `inbox` shows the link updates of that resource on the node sheet only.
+- `InboxReason` is a closed enum in code. The rank sets the card order, highest first.
+
+| Rank | `reason`           | The rule holds when                                                                                     | Layer                  |
+| ---- | ------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1    | `linked`           | A node of the mission that is not retired holds the link in its current revision. Trust does not apply. | I1                     |
+| 2    | `review_requested` | The platform requests a review from the developer.                                                      | I2                     |
+| 3    | `assigned`         | The platform assigns the issue to the developer.                                                        | I2 (GitHub), I3 (Jira) |
+| 4    | `direct`           | A Slack direct message to the developer.                                                                | I4                     |
+| 5    | `mentioned`        | The update mentions the developer.                                                                      | I1 (GitHub), I3, I4    |
+| 6    | `participating`    | The thread holds a row, or the developer started the thread (I2 for GitHub, I4 for Slack).              | I1                     |
+
+- The pin of a thread is `binding_id` of a row of the thread that holds one. A thread with no such row reads the current revision of the conversation binding of the inbound resource. That revision is the pin when it holds the key `inbox`. Else the thread has no pin.
+- With no pin, the row takes `linked` when a node of the mission that is not retired holds the link. Else admission answers `unmatched`.
+- With a pin, an update whose `actor_id` equals `inbox.actor_id` takes `participating` and `done_at`, the time of the admission. Every other update takes the highest rank of `linked`, `mentioned` and `participating`. When no reason holds, admission answers `unmatched`.
+- A mention of `inbox.handle` or `inbox.actor_id` sets `mentioned`. On GitHub, a mention is `@<handle>` of `inbox.handle`, case-insensitive, and the decoder lists the lower-case logins. `participating` holds when the thread holds a row.
+- A change of `inbox` changes no pinned thread, because no inbox rebind exists. A thread with no pin takes the new revision at its next update.
+
+### The card state
+
+- The inbox rows of a thread are its rows with a `binding_id`. The newest inbox row is the inbox row with the highest `(occurred_at, id)`.
+
+| State     | Condition on the newest inbox row          |
+| --------- | ------------------------------------------ |
+| `snoozed` | `snoozed_until` is in the future.          |
+| `done`    | `done_at` is not null, and no snooze runs. |
+| `open`    | Every other case.                          |
+
+- `InboxItemState` is an enum in code. No column stores it.
+- A new update with a higher `(occurred_at, id)` is the new newest inbox row. It holds no `done_at`, so it reopens the thread and ends a snooze. An older update changes no state.
+- The card reason of a done thread is the reason of its newest inbox row.
+- The card reason of an open or a snoozed thread is the highest rank among the inbox rows after the newest row with a `done_at`. With no such row, it is the highest rank among all inbox rows.
+- The card is `trusted` when `link_trust.actor_ids` of the pin holds `actor_id` of the newest inbox row. Else the card shows the label "not trusted".
+
+### The acts
+
+| Act              | Write on the named row                                                                                | Operation                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Mark done        | `done_at` to the time of the act, when it is null. `snoozed_until` to null.                           | `mission.inbox_item.done` with no `snoozed_until` |
+| Snooze           | `snoozed_until` to the body value. `done_at` to null.                                                 | `mission.inbox_item.done` with `snoozed_until`    |
+| Reply (I2)       | Mark done after the post succeeds.                                                                    | `mission.inbox_item.reply`                        |
+| Decide follow-up | Mark done on the newest inbox row of each thread of the proposal, in the transaction of the decision. | `mission.followup.decide`                         |
+
+- The board names the newest inbox row of the card, `link_update_id`. When a newer row arrives before the act, the write lands on the named row, the thread stays open, and the answer holds `state: open`.
+- Reply names the newest inbox row too. When the named row is not the newest inbox row, Reply posts nothing.
+- A row with a null `binding_id` takes no act.
+- No act changes a node, so no act takes `expected_mission_version`. No act reopens a thread, and no act deletes a row.
+- `mission.inbox_item.done` takes `{ snoozed_until }`. `snoozed_until` is optional and nullable, in the future and at most 30 days ahead. 30 days is a constant in code. It answers the item.
+- `mission.inbox_item.reply` takes `{ reply_id, body }`. `body` is nonblank and at most 65536 characters. The request key is `inbox_reply:<reply_id>`. The Mission Service requests the Intake reply operation. It answers the item.
+
+### The inbox read
+
+- `mission.inbox_item.list` answers one item for each thread with an inbox row in the scope.
+- Its input is `project_id` (optional), `state` (`open` by default, `snoozed` or `done`), `cursor` and `limit` (at most 100). A `project_id` with no mission answers 404 `mission.mission.not_found`.
+- Its answer is `{ items, next_cursor, counts: { open, snoozed } }`.
+- An item holds `link_update_id`, `project_id`, `external_link`, `reason`, `state`, `occurred_at`, `done_at`, `snoozed_until`, `inbound_event_id`, `actor_id`, `trusted`, `linked_node_ids` and `content`. Each value except `project_id`, `reason`, `state`, `trusted` and `linked_node_ids` comes from the newest inbox row.
+- `linked_node_ids` lists the nodes that are not retired whose current revision holds the link.
+- `content` is `{ author, body, url, occurred_at }` of `intake.inbound.event.describe`, or null when the event no longer exists. The Mission Service is the second caller of that read beside the Worker Service.
+- The order is `occurred_at` of the newest inbox row ascending, then `link_update_id`.
+
+### The inbox operations
+
+| Operation                  | Access  | Route                                                | Layer |
+| -------------------------- | ------- | ---------------------------------------------------- | ----- |
+| `mission.inbox_item.list`  | `human` | `GET /api/mission/inbox-item`                        | I1    |
+| `mission.inbox_item.done`  | `human` | `POST /api/mission/inbox-item/:link_update_id/done`  | I1    |
+| `mission.inbox_item.reply` | `human` | `POST /api/mission/inbox-item/:link_update_id/reply` | I2    |
+| `mission.link_update.list` | `human` | `GET /api/mission/node/:node_id/link-update`         | 1     |
+
+- `mission.inbox_item.list` reads every project. Its `counts` give the exact tab count of the board.
+- The identity prefix `link_update_` stands in the identities section of this page.
+
+### The inbox error codes
+
+| HTTP | Code                                   | Condition                                                                                                                   |
+| ---- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 404  | `mission.inbox_item.not_found`         | `done` or `reply` of an unknown row, or of a row with a null `binding_id`. `details: { link_update_id }`.                   |
+| 400  | `mission.inbox_item.snooze_invalid`    | `snoozed_until` is in the past or more than 30 days ahead.                                                                  |
+| 409  | `mission.inbox_item.activity_mismatch` | I2: `reply` of a row that is not the newest inbox row of its thread. `details: { link_update_id }` of the newest inbox row. |
 
 ## The review finding
 
@@ -550,7 +736,7 @@ The route at the insert:
 - A release that fails the predicate answers 409 `mission.release.obligation_unmet` with `details: { obligation }`, where `obligation` is `evidence`, `assessment` or `request`. The refusal writes no execution row, no node state and no job, and the execution stays `running`.
 - The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
 - A reviewer release that moves the node to `External.Requested` calls `foldExternalState` on the node in the same transaction. If one required external action holds end state `other`, `foldExternalState` sets `External.Failed`. `closeExternalAttempt` then moves the node to `Blocked`, even when sibling actions are unresolved. If every required external action holds end state `expected`, `foldExternalState` sets `External.Success` and `closeExternalAttempt` moves the node to `Completed`. Otherwise the node stays in `External.Requested`.
-- After a reviewer release to `External.Requested`, the service calls `scheduleDeferredCheck`. That function schedules `runDeferredCheck` through `setImmediate`. The deferred check reads the node and its unresolved `pull_request` and `branch_push` evidence in one transaction, then calls `intakeCheck.check` for each. It applies the result with `applyEndState` when no live claim exists. A failed check logs a warning and changes no state.
+- After a reviewer release to `External.Requested`, the service calls `scheduleDeferredCheck`. That function schedules `runDeferredCheck` through `setImmediate`. The deferred check reads the node and its unresolved `pull_request`, `branch_push` and `comment` evidence in one transaction, then calls `intakeCheck.check` for each. It applies the result with `applyEndState` when no live claim exists. A failed check logs a warning and changes no state.
 - At quiescence, the Mission Service cancels every scheduled deferred check round and starts no new round. A round in flight completes its current Intake call, then checks no further request and requests no merge. The drain joins every round in flight. The `intakeCheck.check` and `intakeCheck.merge` calls use the shutdown context of the service, so quiescence does not cancel them. `stop()` cancels that context. At the next start, `resumeDeferredChecks` schedules the deferred check again for each `External.Requested` node with an unresolved request, up to 50 nodes.
 - Tests release a steps claim on an `implement` node with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record. A test releases a reviewer claim with a `stop` and no assessment and asserts `Evaluating -> Waiting`.
 - Tests in `transitions.test.ts` assert that a reviewer release folds all expected end states to `Completed` and folds an other end state to `Blocked`. They also assert that the deferred check applies `expected`, `other`, `conflict` and `none` correctly for `pull_request` evidence. They assert that it resolves a `branch_push` request, and that a failed deferred check leaves the node unchanged.
@@ -797,9 +983,11 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 Each human act on a node writes one [act trace](tracking-service.vocabulary.md#act-trace) after its commit, through `serverTraceSpan` of [the server spans](tracking-service.impl.md#server-spans) with the producer `mission`. The trace names the project, the node and the attempt of the node after the act. A node with no attempt gives the trace a null attempt.
 
-- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.decide`, `mission.evidence.delete`, `mission.finding.create`, `mission.finding.update` and `mission.finding.decide`. The operation of the root span is the operation identity of the act.
+- The acts are `mission.node.pause`, `mission.node.resume`, `mission.node.ready`, `mission.node.block`, `mission.node.unblock`, `mission.node.discard`, `mission.node.override`, `mission.proposal.decide`, `mission.followup.decide`, `mission.evidence.delete`, `mission.finding.create`, `mission.finding.update` and `mission.finding.decide`. The operation of the root span is the operation identity of the act.
 - The act trace of `mission.evidence.delete` names the node of the evidence and holds `kanthord.evidence.id`. Its two node states are equal when the delete changes no state. It is the Tracking span of the delete that [evidence retention](#evidence-retention) names.
 - The act traces of `mission.finding.create`, `mission.finding.update` and `mission.finding.decide` name the node of the finding. Their two node states are equal, because a finding act edits no node.
+- The act trace of `mission.followup.decide` names the terminal node of the proposal. Its two node states are equal, because the decision moves no state of that node.
+- `mission.inbox_item.done` and `mission.inbox_item.reply` name no node, so they write no act trace.
 - The root span starts and ends at the time of the act, with the status `Ok`.
 - It holds `kanthord.project.id`, `kanthord.node.id`, `kanthord.attempt`, `kanthord.node.state.from`, `kanthord.node.state.to` and `kanthord.mission.version` of the act. A null attempt omits `kanthord.attempt`. `mission.proposal.decide` names the proposer, and `kanthord.node.state.from` is `Blocked`.
 - The reason of the act is the telemetry text `reason` of the root span, with the text identity `<root_span_id>:reason`. An act with no reason holds no text.
@@ -905,7 +1093,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - An import writes no node revision on a node that it retires. The last revision of that node holds its tasks.
 - When a task moves out of a node that the import retires, the new node takes a node revision with a `moved-in` task change. The import writes no `moved-out` on the retired node.
 - `change.previous_revision` is the previous revision, or null on revision 1.
-- `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent`, `tags`, `commit_type` and `tasks`.
+- `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings`, `intent`, `tags`, `external_links`, `commit_type` and `tasks`.
 - `change.tasks` lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`. A `retired` task change removes the task from the content of its node. An import that omits a task of a node that it does not retire writes it. A node update that drops the task also writes it.
 - The result of the change is the `content` of the same record.
 
@@ -925,6 +1113,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - The Mission tab offers `Export JSON` and `Export Markdown`. `Export Markdown` downloads one zip archive `<project name>-mission-v<mission version>.zip` that holds each plan file under its `filename`.
 - The node sheet of an `examine` node shows the section `Fix proposals`. Each proposal shows the badge `open`, `approved` or `rejected`. An approved proposal links to its fix node.
 - While the proposer is `Blocked` in the attempt of an assessment with open proposals, the section `Fix proposals` and the Overview card of the proposer in the tab Decide proposal each offer one `Decide` action. No proposal row holds its own approve action.
+- While a terminal node, `Completed` or `Discarded`, holds an open follow-up proposal, its Overview card in the tab Decide proposal offers `Decide` and `Last trace`. The board finds the node through `mission.followup.list`.
 - `Decide` opens one dialog. The dialog lists each open proposal of the assessment with a checkbox and holds the optional reason. It states "Checked proposals become fix nodes. Unchecked proposals become rejected. A decision cannot be undone."
 - The confirm stays disabled until the human checks one proposal or more. Its reason reads "Check one proposal or more. To reject every proposal, use Unblock or Discard." The confirm sends `mission.proposal.decide`.
 
@@ -980,7 +1169,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests derive the human, execution and service actors from the verified caller, reject an actor in any input, and keep the copied client identity after deregistration.
 - Tests derive the key, binding revision, action, expected end state, a null predecessor and the base branch from the binding row that the pinned revision names, keep them after a strategy change without a rebind, and resolve the pinned binding revision for the credential.
 - Tests fold `expected`, `other` and `none` into `External.Success`, `External.Failed` and an unresolved request, set `end_state` once and refuse a second conclusive result, and write one landed-commit evidence for each commit of an `expected` repository result.
-- Tests run `node check` on each unresolved request, commit each result alone, answer `failures` for a failed check, and refuse a node with no unresolved request with `mission.node.no_unresolved_request`. Under a live claim, a `none` result answers `unresolved`, and a conclusive result answers `failures` with `mission.node.claim_live` and writes nothing.
+- Tests run `node check` on each unresolved request, commit each result alone, answer `failures` for a failed check, and refuse a node with no unresolved request and no external link with `mission.node.no_unresolved_request`. Under a live claim, a `none` result answers `unresolved`, and a conclusive result answers `failures` with `mission.node.claim_live` and writes nothing.
 
 - Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
   They also write `attempt: 0` for the landed-commit evidence of a success override on such a node.
@@ -1047,7 +1236,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests refuse each absent or repeated H1, Requirement section and Criterion section with the same error and file name.
 - Tests check front matter delimiters, the permitted `intent` values and the required nonblank content.
 - Tests accept an absent `id` for a new node or task and preserve a known identity.
-- Tests require exactly one of `intent` and `node` in each file, and refuse `depends_on`, `tags` and `intent` in a task file.
+- Tests require exactly one of `intent` and `node` in each file, and refuse `depends_on`, `tags`, `external_links` and `intent` in a task file.
 - Tests refuse a `node` key that names a task file or an `examine` node with `mission.import.reference_kind_invalid`.
 - Tests reject unresolved `node` and dependency names and references outside the import set.
 - Tests refuse a self-dependency and a dependency cycle of two or more nodes through dependency add and import with `mission.import.cycle`.
@@ -1144,7 +1333,8 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - Tests reject absent and empty verifications with `mission.node.verifications_missing`.
 - Tests reject nonlist verifications and blank or nontext items with `mission.node.content_invalid`.
 - A test accepts `true` for a node with no verification need.
-- Tests resolve project binding identities, and the binding names of a plan file, to the identities of their latest revisions at a node write and at an import that creates a node.
+- Tests keep the submitted binding identity as the pin at a node write and at an unblock content change.
+- Tests resolve the binding name of a plan file to the latest revision only for a node with no pin of that binding.
 - Tests reject absent or nonlist bindings and unknown or foreign-project identities and names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject a repeated binding name in the `bindings` of one node.

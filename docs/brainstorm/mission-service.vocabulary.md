@@ -12,10 +12,14 @@ This file is not a design document, and `mission-service.md` stays the single so
 
 The bindings of a node are the project binding identities in its content.
 A plan file names each binding by its name.
-A node write, and an import that creates a node, resolve each identity or name to the latest revision of its binding and check these counts.
+A node write and an unblock content change keep each submitted identity as its pin.
+The revision must belong to the current binding of its resource.
+A name of a plan file resolves to the latest revision of its binding only for a node with no pin of that binding.
+The write checks these counts.
 A node names every binding that it uses, and no node takes a binding from the project.
 The storage bindings of a node form an ordered list, and an upload uses the first working binding of that list.
 A task names no binding.
+A node also names the conversation binding of each external link.
 A new binding kind adds a row.
 
 | Binding kind | `implement` | `examine` |
@@ -23,11 +27,12 @@ A new binding kind adds a row.
 | Repository   | 1 or more   | 0 or more |
 | Worker       | 0           | 0         |
 | Storage      | 0 or more   | 0 or more |
+| Conversation | 0 or more   | 0 or more |
 
 ## node content
 
 - Every node and every task has the same five required plan content fields and a plan file name.
-- A node also holds its `intent` and its `tags` list.
+- A node also holds its `intent`, its `tags` list and its `external_links` list.
 - A name is a nonblank title, not an identity, and is not unique.
 - A criterion can hold several checkable statements.
 - Identity, revision, state, attempt, priority and edges stay outside content.
@@ -463,7 +468,7 @@ The reviewer places that evidence in the workspace, and the tested input is the 
 ## node revision
 
 One immutable snapshot of the whole content of a node.
-It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the intent, the tags and the tasks.
+It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the intent, the tags, the external links and the tasks.
 A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.
 
@@ -556,6 +561,38 @@ An external object takes one of many forms, and these five are examples of it.
 - a reply in the "Account recovery" thread
 - a notification in `#account-recovery` that must be posted
 
+## external link
+
+The structured address of an external object that a node follows, in the `external_links` list of its content.
+Each link names the conversation binding of its platform.
+The set of kinds is closed and it holds three values.
+
+- **github_issue**
+- **jira_issue**
+- **slack_thread**
+
+The `implement` node "Add password reset" holds the link `github_issue` 117 of `conversation:github:acme/app`.
+
+## inbox item
+
+One thread of one mission that waits for the developer.
+The rows of the thread derive the item, and no record stores it.
+The term names no closed set.
+
+The developer is mentioned on issue 117 of `acme/app`, and no node links that issue.
+The Inbox of the board shows one inbox item for issue 117 until the developer marks it done.
+
+## link update
+
+An update of an external thread that delivery admission records for a mission.
+Admission records one row for each update of one thread in one mission.
+A node reads the rows of its links that pass its trust.
+The term names no closed set.
+
+A teammate that `link_trust` of the binding `acme-issues` lists comments on issue 117 with the text "also handle the empty list".
+Delivery admission records one link update for the mission.
+The node "Add password reset" reads it at its next read, and the state of the node does not change.
+
 ## human block
 
 The human block of a paused node.
@@ -591,6 +628,18 @@ Example of an external failure case:
 - requirement key: `kanthord-repo.pull_request`
 - asset: pull request 57 of `repository:github:kanthorlabs/kanthord`
 - end state: other, because pull request 57 closed without merge
+
+## follow-up proposal
+
+The proposal that delivery admission opens on a terminal node when a trusted link update arrives.
+A terminal node is `Completed` or `Discarded`.
+It names no assessment, and a human decides it with `mission.followup.decide`.
+The term names no closed set.
+
+A teammate comments on issue 117 a week after "Add password reset" completes.
+Delivery admission opens one follow-up proposal on that node.
+A human approves it, and a new node with the same external link starts.
+The new node reads the same link updates, and the Mission Service copies no row.
 
 ## import
 

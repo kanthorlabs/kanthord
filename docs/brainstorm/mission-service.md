@@ -10,6 +10,7 @@ This document describes the Mission Service.
 It describes the mission graph, the criterion authority, the evidence record and the assessment record.
 It describes the outcome record and the state of a node.
 It describes delivery admission and the human check of a request.
+It describes the update rows of the external threads of a mission and the inbox of the developer.
 It describes no mechanism of another service.
 
 ## Mission structure and nodes
@@ -18,7 +19,7 @@ The [overview](overview.vocabulary.md) defines a mission, a node, a task, an exe
 A mission comes into existence with its project, empty and at mission version 1. No operation creates or deletes a mission.
 The mission is a directed graph, and it is the only container of its nodes.
 A node of that graph is a unit of scheduling.
-Every node holds a name, a requirement, a criterion, its verifications, its bindings, its intent, its tags and its tasks.
+Every node holds a name, a requirement, a criterion, its verifications, its bindings, its intent, its tags, its external links and its tasks.
 A node holds a [plan file name](mission-service.vocabulary.md#plan-file-name) that is unique among the nodes of its mission that are not retired.
 A retired node keeps its plan file name as a record, and a node that is not retired can take that name.
 An export writes that name.
@@ -36,6 +37,11 @@ The [tags](mission-service.vocabulary.md#tags) of a node state the facts of a ho
 The [Scheduler Service](scheduler-service.md#match) matches the intent and the tags of a node against each worker binding of the project.
 A node write that adds an unmatched pair of a node and a claimable state answers `mission.node.tags_unmatched`.
 A node write that keeps an existing unmatched pair succeeds.
+The [external links](mission-service.vocabulary.md#external-link) of a node name the external objects that the node follows.
+An external object is, for example, a GitHub issue, a Jira issue or a Slack thread.
+A link is the structured address of one external object, and a human writes it.
+A node holds an ordered list of at most 10 distinct links, and a node revision covers the list.
+A node write refuses a link whose conversation binding the node does not name.
 
 A task is content of an `implement` node.
 Each task holds its own identity, its own plan file, its name, its requirement, its criterion and its verifications.
@@ -83,6 +89,9 @@ A task names no binding, and a task acts on every repository that its node names
 A node names zero or more storage bindings as an ordered list.
 An upload of a node uses the first working storage binding of that list, under [Evidence](#evidence).
 A node that names no storage binding accepts only inline evidence content.
+A node names zero or more conversation bindings.
+A conversation binding holds the trust list, the credential and the reply policy of one external platform resource.
+Each external link of the node names one of them.
 Two `implement` nodes name the same binding or different bindings.
 An `examine` node requires no external action, also when it names a repository binding.
 
@@ -204,7 +213,7 @@ The import decides a modification on the resolved graph and never on the text of
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one immutable snapshot of the whole content of a node.
-It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the intent, the tags and the tasks.
+It covers the plan file name, the name, the requirement, the criterion, the verifications, the bindings, the intent, the tags, the external links and the tasks.
 A node starts at node revision 1.
 A node revision changes no attempt.
 The attempt is independent of the revision number.
@@ -510,6 +519,7 @@ The start point applies to every repository binding of the node.
 The start point of an `examine` attempt has no effect, because an `examine` node has no node branch.
 An execution pins the attempt that it starts under.
 The required external actions of an attempt are the configured actions of the repository bindings that its pinned `implement` revision names.
+They also hold the reply action of each external link of that revision, when the conversation binding of the link configures a reply policy.
 Every record names its attempt, and it stays the record of that attempt forever.
 An attempt closure ends every execution in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
@@ -946,6 +956,7 @@ The next execution reads the node revision that its attempt pins.
 It reads the outcome of the cleared attempt and the cause that the outcome names.
 After a rework, it reads the assessment that caused the latest rework of its attempt, and the open findings of the attempt.
 It reads the opener of its attempt.
+It reads every trusted link update of the node, as every attempt does.
 A read of a record of a closed attempt migrates nothing.
 
 The external conversation stays with its platform.
@@ -1006,19 +1017,39 @@ Acceptance promises no execution.
 Admission operates when a project has no live worker instance.
 Processing occurs at least once and produces idempotent effects.
 The Mission Service deduplicates effects per project and per request evidence across inbounds, redeliveries and checks.
+It also deduplicates the effects of a link update per mission, per thread and per update key.
 The deduplication key of an unchanged state is the open item C3 of [HANDOFF](HANDOFF.md#mission-service-1).
 The Mission Service bounds admission processing separately from its other operations.
 It retries no unauthorized request.
 
 Admission resolves the project from the [inbound](intake-service.vocabulary.md#inbound) of the event.
-It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the [Repository component](repository.md#platform-connector-and-platform-implementations), which answers the address of the external object.
+It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the component that owns the platform of the inbound.
+The decoding answers the address of an external object or a link update.
+The [Repository component](repository.md#platform-connector-and-platform-implementations) owns the decoder of `github`, and the Intake Service owns the decoder of `jira` and `slack`.
 Admission interprets no platform payload.
 It finds the request evidence of that address among the requests of an open attempt of the project that hold no end state.
 More than one match refuses the inbound event as ambiguous.
 If no unresolved request of an open attempt matches, admission answers duplicate when a resolved request of the project matches, and otherwise refuses the event as unmatched.
-If the platform implementation answers no address of an external object, admission refuses the event as undecodable.
+If the platform implementation answers no address of an external object, admission decodes a link update.
+If that decoding answers no link update, admission refuses the event as undecodable.
 A matching pull request identifier never attaches an inbound event to the newest attempt by itself.
 The address correlates the request evidence of one remote thing across attempts, and correlation never depends on the continued existence of the originating instance.
+
+Admission applies these rules in order to a link update.
+Admission refuses the update as `actor_ignored` when its object id equals the update key of a succeeded reply request.
+Admission also refuses it as `actor_ignored` when its author is the reply account and a reply request on the same link is pending.
+Admission refuses it as `actor_ignored` when the actor is automated or unknown.
+Admission answers duplicate when the mission holds a row with the same thread and the same update key.
+Admission decides the reason of the update.
+The reason is `linked` when a node that is not retired holds the link in its current revision.
+Otherwise the [inbox rules](mission-service.impl.md#the-inbox) decide the reason.
+Admission refuses the update as `unmatched` when no reason holds.
+Admission writes one row for each update of one thread in one mission, and it answers accepted as an observation.
+Admission applies no trust rule at the insert.
+The trust rule applies at the read of a node, with the binding revision that the node pins.
+A link update needs no Intake check.
+In the same transaction, each terminal node that links the thread can open a follow-up proposal.
+For that proposal, admission applies the trust rule with the binding revision that the terminal node pins.
 
 Acceptance as an observation calls the check of the [Intake Service](intake-service.md#boundary) for the request evidence before the admission transaction.
 The check reads the platform under the [service identity](project-service.vocabulary.md#service-identity) of the Mission Service and answers the end state.
@@ -1032,15 +1063,27 @@ Acceptance as a human act invokes the Mission operation under the [linked human 
 Refusal admits no effect.
 A duplicate creates no second effect.
 
-The Mission Service answers the Intake Service the count of unresolved request evidences of the open attempts of a project on one resource.
-A poll of the Intake Service requests its platform only while that count is above zero.
+A link update never changes the state of a node, closes no attempt and revokes no claim.
+The Inbox card of the thread is the alert.
+The human acts with the existing controls.
+
+The Mission Service answers the Intake Service `count`, `link_count` and `inbox` for one resource of a project.
+`count` is the count of unresolved request evidences of the open attempts of the project on that resource.
+`link_count` counts the external links on that resource in the current revisions of the nodes that are not retired.
+A terminal node counts while fewer than 14 days pass after the closure of its last attempt, a `Discarded` node included.
+A terminal node with no attempt counts nothing (U2).
+`inbox` is true while a binding of that resource holds the key `inbox`.
+A poll of a repository inbound requests its platform only while `count` is above zero.
+A poll of a conversation inbound requests its platform while `link_count` is above zero or `inbox` is true.
+A conversation poll with `inbox` keeps a standing demand with no window.
+A webhook delivery reaches admission at every time, so the 14 days bound only the poll demand.
 
 A reviewer release to `External.Requested` applies the fold to the node in the same transaction.
 If one required external action holds end state `other`, the fold moves the node to `External.Failed`, then to `Blocked`, even when sibling actions are unresolved.
 If every required external action holds end state `expected`, the fold moves the node to `External.Success`, then to `Completed`.
 Otherwise the node stays in `External.Requested`.
 After a reviewer release to `External.Requested`, the Mission Service schedules one deferred check.
-The deferred check calls the Intake check for each unresolved `pull_request` and `branch_push` evidence of the attempt.
+The deferred check calls the Intake check for each unresolved `pull_request`, `branch_push` and `comment` evidence of the attempt.
 It applies the result when no live claim exists on the node.
 An `expected` result moves the node to `Completed` only when every required action then holds end state `expected`.
 An `other` result moves the node to `Blocked`.
@@ -1050,8 +1093,12 @@ A failed deferred check makes no change.
 
 A human requests the check of a node.
 The check calls the Intake check for each request evidence of the open attempt that holds no end state.
+The check also reads each external link of the current revision through the Intake link read.
+Each item of a link read goes through delivery admission, so the deduplication, the loop rule and the inbox rules apply.
+A terminal node with an external link takes the check.
 Each result commits in its own transaction.
-A node with no unresolved request refuses the check.
+A node with no unresolved request and no external link refuses the check.
+A link whose resource has no inbound refuses the whole check before any read.
 The Mission Service decides the end state from the folded result and never from platform content.
 
 The [external input](mission-service.vocabulary.md#external-input) identifies the business effect that admission considers.
@@ -1059,9 +1106,28 @@ A request for new WHAT creates no node and receives no acceptance as a schedulin
 [Criterion and authority](#criterion-and-authority) owns node writes and their authority.
 The [unblock](#the-unblock) requires human authority.
 The acceptance of an inbound event alone creates no claim, unblocks no node and starts no execution.
+The acceptance of a link update appends a row, and it can open a follow-up proposal on a terminal node.
+It blocks no node.
 A change request produces an end state that is not the expected end state.
 [State transitions](#state-transitions) own the resulting block, and the unblock opens the next attempt.
 The Scheduler Service serves the node after that unblock.
+
+A trusted link update of a terminal node opens one [follow-up proposal](mission-service.vocabulary.md#follow-up-proposal) on that node.
+A terminal node is a node in `Completed` or `Discarded`.
+The node must hold no live follow-up node.
+A live follow-up node is the node that an approved follow-up proposal of the terminal node created, when that node is not retired.
+The trust rule reads `link_trust` of the binding revision that the terminal node pins for the link resource.
+An update of a node with an open follow-up proposal records its row and opens no second proposal, so one burst opens one proposal.
+A retired node opens no proposal.
+A human decides the follow-up proposal with `mission.followup.decide`.
+An approval creates one node in the transaction of the decision.
+The new node copies the content of the current revision of the terminal node, its intent and its external links included.
+The new node depends on the terminal node only when that node is `Completed`.
+A new node of a `Discarded` origin takes no dependency.
+The decision can replace the requirement and the criterion of the new node.
+The Mission Service copies no row, because the new node reads the rows of its links.
+The decision marks the inbox thread of each link of the proposal done.
+A rejection creates nothing.
 
 The receipt of an inbound event is inbound, the request of an external action is outbound, and the Intake Service performs both.
 The [boundary](#boundary) assigns the performance of the request of a required external action and its idempotency to the Worker Service.
