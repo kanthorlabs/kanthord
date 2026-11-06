@@ -244,6 +244,7 @@ It is a credential holder with its own X25519 key pair. It holds no token, no co
 Each instance at the `worker` placement names one live machine at its create, and the machine never changes.
 The term names no closed set.
 A worker machine is no [host](#host). The host of a worker stays kanthord or an external harness.
+The word machine in machine identity and machine JWT keeps its Gateway meaning.
 The machine `homelab` runs the instances `box-coder` and `box-reviewer`. Both use the one `anthropic-subscription` copy of `homelab`, so a human signs in once.
 
 ## machine configuration
@@ -386,7 +387,8 @@ The trust boundary is the containment that the operator provides.
 The Worker Service runs the tool of an agent and the verifications of a node inside it.
 The term names no closed set.
 The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
-At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance. They therefore reach every project that the same instance serves.
+At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance. They also reach the machine key and the machine copies.
+They therefore reach every project that the same instance serves, and every project that the instances of the same machine serve.
 At the `server` placement, they reach every resource of the server.
 At the `container` placement, they reach the slot volume, the network and their own instance, and no file of the server.
 

@@ -1031,10 +1031,10 @@
                     Version of the pending work of the instance. A server start
                     sets it to the start time in Unix milliseconds. It rises by
                     <code>1</code> when the server queues a session read of the
-                    instance, and when a login that the instance runs starts,
-                    takes its code or ends. When the value differs from the
-                    value of the last work read, the instance calls the work
-                    read.
+                    instance. It also rises by <code>1</code> when a login that
+                    the instance runs starts, takes its code or ends. When the
+                    value differs from the value of the last work read, the
+                    instance calls the work read.
                   </td>
                 </tr>
               </tbody>

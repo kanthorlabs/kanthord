@@ -20,7 +20,7 @@ Custody grants no authority through possession of a credential reference.
 
 - A [credential store](custody.vocabulary.md#credential-store) holds a credential as one [credential store record](custody.vocabulary.md#credential-store-record) for each [credential revision](custody.vocabulary.md#credential-revision) of its secret.
 - A human chooses its [credential name](custody.vocabulary.md#credential-name), and every revision of the credential holds that name.
-- Each record has one [holder](custody.vocabulary.md#holder): `server`, the name of one live [worker machine](worker-service.vocabulary.md#worker-machine), or the name of one live [worker instance](overview.vocabulary.md#worker-instance) of the [`worker` placement](worker-service.md#worker-instances). A machine and an instance at the `worker` placement each hold an X25519 key. An instance at the `server` or the `container` placement is no holder.
+- Each record has one [holder](custody.vocabulary.md#holder). The holder is `server`, a live [worker machine](worker-service.vocabulary.md#worker-machine) or a live [worker instance](overview.vocabulary.md#worker-instance) of the [`worker` placement](worker-service.md#worker-instances). A machine and an instance at the `worker` placement each hold an X25519 key. An instance at the `server` or the `container` placement is no holder.
 - A credential name holds one copy for each holder. Each copy keeps its own revisions, its own cooldown and its own archive.
 - The [copy holder](custody.vocabulary.md#copy-holder) of an instance for one name is `server` at the `server` and the `container` placements.
 - At the `worker` placement, it is the instance when the instance holds a live copy of the name. Else it is the machine of the instance.
@@ -57,8 +57,8 @@ Custody grants no authority through possession of a credential reference.
 - Dependents include every inbound that names the record.
 - Dependents include every binding revision that names the record and that no tombstone follows, while it is the latest revision of its binding or a node that is not terminal and not retired pins it. A binding edit that names another credential leaves a pinned older revision a dependent.
 - These dependents apply to the copy of the holder `server`.
-- The dependents of a machine copy are the worker bindings that list an instance whose copy holder for the name is the machine, and whose agent configuration names the credential.
-- An instance copy has no dependent while the machine of the instance holds a live copy of the name sealed to the current machine key. Else its dependents are the worker bindings that list its instance and whose agent configuration names the credential.
+- The dependents of a machine copy are worker bindings. Each one lists an instance whose copy holder for the name is the machine. Its agent configuration names the credential.
+- An instance copy has no dependent while its machine holds a live copy of the name. That machine copy is sealed to the current machine key. Else its dependents are the worker bindings that list its instance and whose agent configuration names the credential.
 - The archive of a worker instance archives every copy of that instance in the same transaction. The archive of a worker machine archives every copy of that machine in the same transaction.
 - The dependency check and the archive are atomic.
 - Every record answer contains metadata and no secret.
@@ -96,7 +96,7 @@ Custody grants no authority through possession of a credential reference.
 - An instance at every [placement](worker-service.vocabulary.md#placement) receives its credentials only through the credential handover, and it reads no record of the credential store.
 - An instance at the `server` or the `container` placement uses the copy of the holder `server`. Its handover crosses only the slot channel on the server host.
 - Custody never releases a server-held credential, LLM or SSH, to an identity of the `worker` placement, on any network.
-- At the `worker` placement, the handover carries only the copy of the copy holder of the instance of the identity, sealed to the key of that holder. It carries no SSH key.
+- At the `worker` placement, the handover carries only the copy of the copy holder of the instance of the identity. That copy is sealed to the key of its holder. It carries no SSH key.
 - The git operations of the `worker` placement sign through the [SSH signature relay](repository.md#repository-connector), so no SSH key leaves the server.
 - kanthord has no server-side LLM proxy. A worker instance calls its provider directly.
 - Custody refuses a release on the server of a copy of a machine or an instance, because the server cannot open it.

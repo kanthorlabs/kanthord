@@ -37,7 +37,7 @@ A mechanism here never overrides a rule there.
 - An archive calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
 - An archive calls the Intake collaboration `inboundsNaming(tx, credentialName)` in that transaction. It answers every inbound that names the credential.
 - These dependents apply to the group of the holder `server`. An archive of an instance copy calls the Project collaboration `bindingsListingInstance(tx, instanceName, credentialName)` in that transaction. It answers every worker binding that lists the instance and whose agent configuration names the credential.
-- An instance copy has no dependent while the machine of the instance holds a live copy of the name sealed to the current machine key. The archive then calls no collaboration.
+- An instance copy has no dependent while its machine holds a live copy of the name. That machine copy is sealed to the current machine key. The archive then calls no collaboration.
 - An archive of a machine copy reads the live instances of the machine through `InstanceKeys.instancesOfMachine`. For each instance whose [copy holder](custody.vocabulary.md#copy-holder) for the name is the machine, it calls `bindingsListingInstance(tx, instanceName, credentialName)`. The union of the answers is the dependents.
 - An archive sets `ended_at` on every live revision of the group and keeps the rows, because an execution record references them.
 - A group with no live revision is archived. A drain and a revoke never end the newest live revision, so only an archive produces that state.
@@ -58,7 +58,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 ## The sealed object
 
-- The plaintext under the credential envelope of a copy of a machine or an instance is the [sealed object](custody.vocabulary.md#sealed-object) `{ alg, enc, ciphertext }` in canonical JSON. `enc` and `ciphertext` are base64url.
+- A copy of a machine or an instance holds a [sealed object](custody.vocabulary.md#sealed-object) under its credential envelope. The sealed object is `{ alg, enc, ciphertext }` in canonical JSON. `enc` and `ciphertext` are base64url.
 - `alg` is `hpke-x25519-sha256-aes128gcm`: RFC 9180 base mode with DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and AES-128-GCM.
 - The recipient key is the X25519 public key of the machine revision or the instance revision that `sealed_to` names. The info is `kanthord/credential/v1`.
 - The additional authenticated data is the canonical JSON `{ name, platform, holder, sealed_to }`. For a machine copy, `holder` is the machine name and `sealed_to` the machine fingerprint.
@@ -90,7 +90,8 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - For an instance holder, it answers the instance when the `(name, instance)` group holds a live revision, else the machine of the instance.
 - A stale own copy is a live revision, so `copyHolderOf` answers the instance. The holder rule and the handover then refuse it, and no path falls back to the machine copy.
 - An archive of the own copy leaves the group with no live revision, so `copyHolderOf` answers the machine. The archive stays final.
-- These paths resolve an instance name through `copyHolderOf`: `copyHeld` of the [Agent holder rule](agent.impl.md#the-holder-rule), `holdOf` at the claim, the handover, the worker-token reads of the LLM component, the credentials of `worker.instance.get` and the archive dependents.
+- These paths resolve an instance name through `copyHolderOf`: `copyHeld` of the [Agent holder rule](agent.impl.md#the-holder-rule), `holdOf` at the claim and the handover.
+- The worker-token reads of the LLM component, the credentials of `worker.instance.get` and the archive dependents also use it.
 - The bindings and the claimant keep the instance names. Custody resolves each name to its copy holder.
 - `usedCopies(tx, instanceName)` answers each own live copy of the instance and each live machine copy of a name with no own copy. Each item holds `holder`.
 - Custody decrypts a stored secret only through one private open function `openSecret(row)`. It refuses a row whose holder is not `server` with 409 `credential.credential.held_by_instance` before the decrypt.
@@ -100,7 +101,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `heldCopy(tx, set, name, holder)` answers the newest live revision of the copy of a machine holder or an instance holder, or null. `sealedCopy(tx, set, name, holder)` answers that revision with its sealed object for [the health of an instance copy](llm.impl.md#the-health-of-an-instance-copy), and it refuses a copy sealed to an ended key with 404 `credential.credential.not_found`.
 - A record answer adds `holder`, `sealed_to` and `sealed_current`. `sealed_current` is true when `sealed_to` equals the current fingerprint of the holder, and it is true for `server`.
 - `sealed_current` of a machine copy is true when `sealed_to` equals the current fingerprint of the machine. After a Reset key of the machine, each machine copy has `sealed_current` false. The handover refuses it with `held_elsewhere`, and each instance that uses it shows `holder_mismatch` true.
-- Recovery of such a machine copy is a new login on the machine for an OAuth copy, or a rotation with a new secret for an API key copy.
+- To recover an OAuth machine copy, a human signs in again on the machine. To recover an API key machine copy, a human rotates it with a new secret.
 
 ## Suitability
 
@@ -200,7 +201,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - It calls the pi-ai function with that value, then sends one report, also for an unchanged value. The report ends the lease.
 - Before each retry of its report, `modify()` takes the lease again to renew it, and it keeps the value of the report.
 - The view refuses `delete()`.
-- At every placement, the view reads the decrypted handover. The worker unit reads no custody record directly. At the `worker` placement, the worker unit opens the sealed item of the handover with the private key of the item `holder`: its instance or its machine.
+- At every placement, the view reads the decrypted handover. The worker unit reads no custody record directly. At the `worker` placement, the worker unit opens the sealed item of the handover with the private key of the item `holder`. That holder is its instance or its machine.
 - Custody drops the view at execution end.
 - A workbench view reads the newest live revision and pins no revision.
 
@@ -210,7 +211,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The payload is canonical JSON. It holds the credential of the pinned agent selection of the execution and the SSH identities of the execution.
 - `custody.handover` takes the instance of the identity and the placement of that instance, and it chooses each item from those values.
 - At the `server` and the `container` placements, its sole item is `{ credential_id, provider_id, credential }`. These are the record identity, the pi adapter id and the pi-ai credential of a row of the holder `server`.
-- At the `worker` placement, its sole item is `{ credential_id, provider_id, name, platform, holder, sealed }`: the sealed object of the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance of the identity. `holder` is the holder of the row: the instance or its machine. The server never opens it. The worker unit builds the additional authenticated data from `name`, `platform`, `holder` and the current fingerprint of the key of that holder.
+- At the `worker` placement, its sole item is `{ credential_id, provider_id, name, platform, holder, sealed }`. `sealed` is the sealed object of one copy. That copy belongs to the [copy holder](custody.vocabulary.md#copy-holder) of the instance of the identity. `holder` is the holder of the row: the instance or its machine. The server never opens it. The worker unit builds the additional authenticated data from `name`, `platform`, `holder` and the current fingerprint of the key of that holder.
 - At the first use of a name in an execution, the handover pins the newest live row of the copy holder of the instance. A later handover of that execution reads the pinned row, whatever the copy holder is then.
 - At the `worker` placement, an item of the holder `server` answers 403 `custody.handover.holder_refused` with `details.reason` `server_held`. A copy sealed to a fingerprint that is not the current fingerprint of its holder answers the same code with `reason` `held_elsewhere`. The handover compares `sealed_to` with the key of the row holder.
 - `itemOfRow(tx, row)` builds a plain item or a sealed item from one row. The handover and the [refresh lease](#the-refresh-lease) call it, so both answers carry `holder`.
@@ -219,7 +220,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `ssh_identities` stays out of `CredentialStore`. The execution store keeps its one pi-ai credential.
 - The handover authorizes each `ssh_identities` entry through the `ssh_identity` grant under the machine identity with the proven claim, and it pins each revision.
 - A refresh report never carries an SSH key. A report with a credential type other than `api_key` and `oauth` answers 400 `custody.handover.report_invalid`.
-- The plaintext of a refresh report is `{ credential_id, digest, credential }` for a row of the holder `server`, and `{ credential_id, digest, sealed }` for a copy of a machine or an instance. The worker instance seals the refreshed credential to the key of the item `holder`.
+- The plaintext of a refresh report is `{ credential_id, digest, credential }` for a row of the holder `server`. It is `{ credential_id, digest, sealed }` for a copy of a machine or an instance. The worker instance seals the refreshed credential to the key of the item `holder`.
 - `applyReport` reads `holder` of the row before any other step.
   - For a copy of a machine or an instance, `digest` is the digest of the stored sealed object. Custody compares it with the stored sealed object and never decrypts.
   - For a row of the holder `server`, `applyReport` calls `openSecret` and compares `digest` with the digest of the stored credential value.

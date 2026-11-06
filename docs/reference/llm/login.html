@@ -123,8 +123,8 @@
             </li>
             <li>
               The runner reports the address and the code. The human submits the
-              <code>code#state</code> value with <code>login-code</code>, and
-              the value reaches the runner in the work read after its next
+              <code>code#state</code> value with <code>login-code</code>. The
+              value reaches the runner in the work read after its next
               heartbeat, at most 15 seconds later.
             </li>
             <li>
@@ -377,7 +377,8 @@ address:
           <h3 id="login-status">login-status</h3>
           <p>
             The API returns HTTP <code>200</code>. The CLI writes the same
-            object as one JSON line:
+            object as one JSON line. The answer holds no <code>holder</code> and
+            no <code>runner</code>:
           </p>
           <pre><code class="language-json">{
   "session_id": "login_session_01K6ZB3Q8X2M4N5P6R7S8T9V0W",

@@ -104,7 +104,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ### The holder rule
 
 - The holders of a worker binding are the names in `worker_instances` of its instances at the `worker` placement, which the Project Service answers through `workerBindingOf`. The holder `server` joins them when the binding lists an instance at the `server` or the `container` placement. The holder is `server` for a workbench session.
-- For each holder and each agent provider of the chain, head and every fallback, custody checks the copy of the [copy holder](custody.vocabulary.md#copy-holder) of that holder. The copy holder of an instance is its own copy when it holds one, else its machine.
+- The chain holds the head and every fallback. For each holder and each agent provider of the chain, custody checks the copy of the [copy holder](custody.vocabulary.md#copy-holder) of that holder. The copy holder of an instance is its own copy when it holds one, else its machine.
 - That copy is a live `(credential, copy holder)` group, and its `sealed_current` is true.
 - A failure answers 400 `agent.configuration.credential_holder_mismatch` with `details: { agent, agent_provider, credential, holder }`.
 - The rule runs at enablement write for every dependent worker binding, at worker binding write and at resolution. It refuses, and it never filters a chain entry.
@@ -215,7 +215,7 @@ The Agent component owns these keys of the section `agent`.
 
 - The claim transaction calls the Agent component with the pinned worker binding row and the native agents of the worker.
 - The component builds the chain of each agent and reads the hold of the credential copy of the claimant holder for each chain entry.
-- The claimant holder is the instance of the registration when that instance is at the `worker` placement, and `server` at the `server` and the `container` placements.
+- At the `worker` placement, the claimant holder is the instance of the registration. At the `server` and the `container` placements, it is `server`.
 - `holdOf` at the claim resolves the claimant holder through the copy holder of custody. The hold of a claimant is thus the hold of its copy holder. Every instance that uses one machine copy shares its hold.
 - Custody pins the row of the `(name, copy holder)` group at first use.
 - It returns the first chain entry whose credential is not cooling.
@@ -258,7 +258,7 @@ The Agent component owns these keys of the section `agent`.
 - The check calls the [check of the LLM provider](llm.impl.md#the-llm-provider) of its credential and reports provider readiness.
 - It groups calls by credential and attributes the result to each agent provider.
 - A credential whose platform has no LLM provider reports `unknown`.
-- The check reads the copy of the holder `server`. A credential with only instance copies reports `unknown` with `failure_reason: held_by_instance`, and the check releases nothing.
+- The check reads the copy of the holder `server`. A credential with only machine or instance copies reports `unknown` with `failure_reason: held_by_instance`, and the check releases nothing.
 - Its `capability` is the [capability of the LLM provider](llm.impl.md#the-llm-provider) of its credential, which the LLM component answers.
 - The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
 - [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden calls, unavailable calls and OAuth expiry without refresh.

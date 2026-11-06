@@ -196,12 +196,27 @@
               claim again.
             </li>
             <li>
+              A <code>worker.machine.config_conflict</code> or
+              <code>worker.machine.config_invalid</code> read at a heartbeat
+              closes the gate and logs its code with the machine name once, as
+              <code>config_absent</code> does.
+            </li>
+            <li>
               The instance reads the machine key at each use, by the holder of
               the copy. A Reset key of the machine thus needs no restart.
             </li>
             <li>
               The instance checks the name with the instance name form before it
-              builds the file path.
+              builds the file path. <code>join</code>,
+              <code>create --output</code> and <code>rotate --output</code> do
+              the same check, and answer
+              <code>worker.machine.config_invalid</code>.
+            </li>
+            <li>
+              Without <code>--force</code>, <code>join</code>,
+              <code>create --output</code> and <code>rotate --output</code>
+              refuse an existing machine file with the local code
+              <code>cli.worker.machine.config_exists</code>.
             </li>
             <li>
               The agent processes of the instance do not receive
@@ -234,9 +249,18 @@
                 <tr>
                   <td><code>worker.machine.config_invalid</code></td>
                   <td>
-                    The name breaks the instance name form, the value fails the
-                    schema, or the file <code>name</code> differs from its file
-                    name.
+                    The name breaks the instance name form, or the value fails
+                    the schema. The file
+                    <code>name</code> differs from its file name, or the env
+                    value names another machine.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.machine.config_exists</code></td>
+                  <td>
+                    <code>join</code>, <code>create --output</code> or
+                    <code>rotate --output</code> meets an existing machine file
+                    without <code>--force</code>.
                   </td>
                 </tr>
               </tbody>

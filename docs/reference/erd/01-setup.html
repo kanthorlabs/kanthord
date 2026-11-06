@@ -617,10 +617,10 @@ erDiagram
             </li>
             <li>
               The plaintext under the envelope of a machine or an instance row
-              is the sealed object <code>{ alg, enc, ciphertext }</code>: HPKE
-              base mode to the key of the holder. The server cannot open it. A
-              row sealed to a fingerprint that is no live revision of its holder
-              has no holder.
+              is the sealed object <code>{ alg, enc, ciphertext }</code>. HPKE
+              base mode seals it to the key of the holder. The server cannot
+              open it. A row sealed to a fingerprint that is no live revision of
+              its holder has no holder.
             </li>
             <li>
               A rotation inserts the next revision and, in the same transaction,
@@ -693,16 +693,16 @@ erDiagram
               holder are the worker bindings that list the instance and whose
               agent configuration names the credential. The Project Service
               answers them through <code>bindingsListingInstance</code>. An
-              instance group has no dependent while the machine of the instance
-              holds a live group of the name that is sealed to the current
+              instance group has no dependent while its machine holds a live
+              group of the name. That machine group is sealed to the current
               machine key.
             </li>
             <li>
-              The dependents of a group of a machine holder are the worker
-              bindings that list an instance whose copy holder for the name is
-              the machine, and whose agent configuration names the credential.
-              The copy holder of an instance is the instance while its own group
-              of the name holds a live revision, else its machine.
+              The dependents of a group of a machine holder are worker bindings.
+              Each one lists an instance whose copy holder for the name is the
+              machine. Its agent configuration names the credential. The copy
+              holder of an instance is the instance while its own group of the
+              name holds a live revision, else its machine.
             </li>
             <li>
               A login session is a runtime record of the LLM component, and no
@@ -1025,12 +1025,12 @@ erDiagram
               credential copy is the hold on revision 1 of its
               <code>(name, holder)</code> group, and the hold covers every model
               of that copy. A claim reads the copy of the copy holder of its
-              claimant: at the <code>worker</code> placement, the own group of
-              the instance of the registration, else the group of its machine.
-              At the other placements, it reads <code>server</code>. A stop
-              writes the hold of the group of the row that the execution pins. A
-              machine group thus holds one cooldown for every instance of the
-              machine.
+              claimant. At the <code>worker</code> placement, that copy is the
+              own group of the instance of the registration, else the group of
+              its machine. At the other placements, it reads
+              <code>server</code>. A stop writes the hold of the group of the
+              row that the execution pins. A machine group thus holds one
+              cooldown for every instance of the machine.
             </li>
             <li>
               <code>available_at</code> of a hold is the clock plus

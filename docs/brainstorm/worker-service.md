@@ -229,7 +229,7 @@ The instance carries the compatibility declarations of its worker: the worker na
 
 - An execution at every placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
 - A server instance receives the credentials of the holder `server` through its slot channel. It holds no key and no credential copy.
-- At the `worker` placement, the handover carries only the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance, sealed to the key of that holder, and no SSH key. Custody never releases a server-held credential there, under [custody.md](custody.md).
+- At the `worker` placement, the handover carries only the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance, and no SSH key. That copy is sealed to the key of its holder. Custody never releases a server-held credential there, under [custody.md](custody.md).
 - At the `worker` placement, each git operation signs through the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay), and the server keeps the SSH key.
 - It performs its network git read, network git write and model inference calls in its own worker unit.
 - Its platform actions run through the server like every execution.
@@ -322,7 +322,7 @@ sequenceDiagram
 ## Worker instances
 
 A human adds an instance once on the server, on the details page of its worker.
-kanthord has no runner concept. A [worker machine](worker-service.vocabulary.md#worker-machine) is one computer that runs `worker` instances, and it is no host.
+A [worker machine](worker-service.vocabulary.md#worker-machine) is one computer that runs `worker` instances, and it is no host.
 The Worker Service holds an [instance record](worker-service.vocabulary.md#instance-record) for it: a name, one worker, one placement and a revision.
 The name, the worker and the placement never change.
 A worker binding lists only instances of its worker, under [the binding rules](project-service.md#execution-configuration-and-instance-count).
@@ -332,7 +332,7 @@ At the `worker` placement, the instance record also holds one X25519 public key.
 - At the `worker` placement, the instance keeps its id and its private key in its [instance configuration](worker-service.vocabulary.md#instance-configuration). The configuration lives in the instance file under the configuration directory, or in the env value `KANTHORD_WORKER_CONFIG` on a host without a writable configuration.
 - The instance keeps its state in its own data directory. Two instances on one host hold two data directories. A server instance keeps it in its slot root or its slot volume.
 - One `kanthord serve worker` process is one instance. A restart with the same instance configuration is the same instance.
-- The instance key is the only machine credential of a `worker` instance. The server seals each answer to the public key, so only the key holder opens a worker token or a connection answer.
+- A `worker` instance keeps its own key pair. That key stays the only credential of its identity: the worker token, the connection and the client secrets. The server seals each answer to the public key, so only the key holder opens a worker token or a connection answer.
 - The connection answer gives a `worker` instance the client token and the `client_secret` of each binding that lists it. The slot channel gives a server instance the same entries. `master_key` never leaves the server.
 - The newest connection of an instance supersedes the previous one. A superseded process stops its tools and exits, and its supervisor does not restart it.
 - Each `worker` instance names one live worker machine at its create. The machine never changes. A server instance names no machine.

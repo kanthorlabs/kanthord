@@ -87,9 +87,9 @@
           <p>
             When the instance of the caller is at the
             <code>worker</code> placement, the server releases only the copy of
-            the copy holder of that instance, sealed to the current key of that
-            holder. The copy holder is the instance when the instance holds a
-            live own copy of the name. Else it is the
+            the copy holder of that instance. That copy is sealed to the current
+            key of its holder. The copy holder is the instance when the instance
+            holds a live own copy of the name. Else it is the
             <a href="machine.html">worker machine</a> of the instance. Each item
             of the envelope is
             <code
@@ -346,9 +346,9 @@
                   <td><code>403 custody.handover.holder_refused</code></td>
                   <td>
                     <code>worker</code> placement only: the copy holder of the
-                    instance holds no live copy sealed to its current key, for
-                    example a stale own copy or a machine copy after a Reset key
-                    of the machine. <code>details.reason</code> is
+                    instance holds no live copy sealed to its current key.
+                    Examples are a stale own copy and a machine copy after a
+                    Reset key of the machine. <code>details.reason</code> is
                     <code>server_held</code> when only the
                     <code>server</code> copy exists, else
                     <code>held_elsewhere</code>.

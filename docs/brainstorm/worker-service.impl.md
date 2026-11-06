@@ -220,26 +220,29 @@ The machine configuration holds `name` and `private_key` of one [worker machine]
 - The configuration value is the unpadded base64url form of the canonical JSON of the configuration. It has no prefix.
 - The machine file is `$XDG_CONFIG_HOME/kanthord/machines/<name>.yaml`, with mode `0600` in a directory with mode `0700`. It holds the same two keys.
 - The env value `KANTHORD_MACHINE_CONFIG` holds the value on a computer without a writable configuration.
-- `kanthord worker machine join [--force]` reads one value from standard input, validates it and writes the machine file. Without `--force`, a file that exists refuses the write.
+- `kanthord worker machine join [--force]` reads one value from standard input, validates it and writes the machine file.
+- `join`, `create --output` and `rotate --output` check `name` against the instance name form before they build the file path, and answer `worker.machine.config_invalid`.
+- Without `--force`, `join`, `create --output` and `rotate --output` refuse an existing machine file with the local code `cli.worker.machine.config_exists`.
 - The `worker` application reads the machine configuration by a name. It checks the name against the instance name form before it builds a path. A name that breaks the form answers `worker.machine.config_invalid`.
 - Neither source for the name answers `worker.machine.config_absent`. The diagnostic names the variable and each path that it read.
 - Both sources for one name answer `worker.machine.config_conflict`.
-- A value that fails the schema, or a file whose `name` differs from its file name, answers `worker.machine.config_invalid`.
+- These cases answer `worker.machine.config_invalid`: a value that fails the schema, a file whose `name` differs from its file name, and an env value that names another machine.
 - The `worker` application reads the machine key at each use, by the holder name of the sealed item or the copy. It caches no machine key. A Reset key of the machine thus needs no restart of an instance.
 - The claim gate of `kanthord serve worker` is closed at the start. The instance claims no work before the first heartbeat answer.
 - Each heartbeat answer names `machine`. A null `machine` opens the gate.
 - For a `machine` value, the application reads the machine configuration. A key opens the gate. An absent configuration closes the gate.
 - When the gate closes, the application logs `worker.machine.config_absent` with the machine name once. It logs again only after the gate opened in between.
+- A `worker.machine.config_conflict` or `worker.machine.config_invalid` read at a heartbeat closes the gate and logs its code with the machine name once, as `config_absent` does.
 - The pull loop reads the gate before each claim. A closed gate sends no claim and waits for the next read.
 - An absent machine key also refuses the handover item of the machine with `worker.handover.sealed_unopened`, under [The credential handover](#the-credential-handover).
 - `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_MACHINE_CONFIG` from each child process.
 - A Reset key of the machine gives a new machine configuration. The operator replaces the file with `kanthord worker machine join --force` or replaces the env value.
-- Tests cover each source, the conflict, the absence with its paths, an invalid value, a file name mismatch and a name that breaks the form. They also cover the file modes, the claim gate and the environment of a child process.
+- Tests cover each source, the conflict, the absence with its paths and an invalid value. They cover a file name mismatch and a name that breaks the form. They also cover the file modes, the claim gate and the environment of a child process.
 
 ### The copy blocks
 
 The Add instance sheet and the Reset key result show the one copy block of the host kind that the human selects, under [The worker pages](architecture.impl.md#the-worker-pages).
-No block puts the instance configuration on a command line. `<name>` is the instance name, and `<version>` is the server version.
+No block puts the instance configuration on a command line. `<name>` is the instance name, `<machine>` is the machine name of the instance, and `<version>` is the server version.
 The machine form and the machine Reset key result show the [machine copy block](#the-machine-copy-block) of the host kind, under [The machine pages](architecture.impl.md#the-machine-pages).
 
 `Linux (systemd)` runs the instance as a systemd user unit:
@@ -336,6 +339,7 @@ A container host kind adds the field **Container runtime** with the values `Podm
 `Container` runs the instance on a container platform with no writable configuration:
 
 - Store the instance configuration as a secret of the platform, and expose it to the container as the env value `KANTHORD_WORKER_CONFIG`.
+- Expose the machine secret of the [machine copy block](#the-machine-copy-block) to the container as the env value `KANTHORD_MACHINE_CONFIG`.
 - Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
 - Run the container with no health check, for example with `podman run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
 - Set a memory limit on the container, for example with `podman run --memory=4g`. Give the host 1 GiB for the server plus the limit of each instance. An out-of-memory kill then stops a process of this container only.
@@ -360,12 +364,13 @@ A container host kind adds the field **Container runtime** with the values `Podm
 3. Start the instance. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG --secret kanthord-machine-<machine>,type=env,target=KANTHORD_MACHINE_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
 The Docker form of `Container` replaces the first bullet, the health check bullet and the memory bullet:
 
 - Write the line `KANTHORD_WORKER_CONFIG=<value>` to an env file of mode 0600. Give the file to `docker run` with `--env-file`, then delete the file. `docker inspect` shows the value to every user that can run `docker`.
+- Give the machine env file `kanthord-machine-<machine>.env` of the machine copy block to `docker run` with a second `--env-file`.
 - Run the container with no health check, for example with `docker run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
 - Set a memory limit on the container, for example with `docker run --memory=4g`. Give the host 1 GiB for the server plus the limit of each instance. An out-of-memory kill then stops a process of this container only.
 
@@ -384,13 +389,13 @@ The Docker form of `Container on this host`:
    (umask 077 && cat > <name>.env)
    ```
 
-3. Start the instance. `docker run` reads the env file once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
+3. Start the instance. `docker run` reads both env files once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
 
    ```sh
-   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env --env-file kanthord-machine-<machine>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
-4. Delete the env file. The container keeps the value:
+4. Delete the env file of the instance. The container keeps the value. Keep the machine env file for the next instance of the machine:
 
    ```sh
    rm <name>.env
@@ -401,7 +406,7 @@ The Docker form of `Container on this host`:
 The machine copy block writes the machine configuration once for each machine, before the first instance of the machine starts. `<machine>` is the machine name.
 No block puts the machine configuration on a command line.
 
-`Linux (systemd)` and `macOS (foreground)` write the machine file. `kanthord worker machine join` reads the machine configuration from standard input. Paste the value, press `Enter`, then press `Ctrl-D`:
+`Linux (systemd)` and `macOS (foreground)` write the machine file. Install kanthord first, by steps 1 and 2 of the instance copy block of the host kind. `kanthord worker machine join` reads the machine configuration from standard input. Paste the value, press `Enter`, then press `Ctrl-D`:
 
 ```sh
 kanthord worker machine join
@@ -412,8 +417,19 @@ After a Reset key of the machine, the same step runs with `--force`, and it repl
 A container host kind sets `KANTHORD_MACHINE_CONFIG` in place of the machine file:
 
 - `Container` stores the machine configuration as a second secret of the platform. Each instance container of the machine receives it as the env value `KANTHORD_MACHINE_CONFIG`.
-- The Podman form of `Container on this host` stores it once with `podman secret create kanthord-machine-<machine> -`. Each instance container adds `--secret kanthord-machine-<machine>,type=env,target=KANTHORD_MACHINE_CONFIG` to its `podman run`.
-- The Docker form writes the line `KANTHORD_MACHINE_CONFIG=<value>` into the env file of each instance container of the machine.
+- The Podman form of `Container on this host` stores it once as a Podman secret. Each instance container adds `--secret kanthord-machine-<machine>,type=env,target=KANTHORD_MACHINE_CONFIG` to its `podman run`. Paste the value, press `Enter`, then press `Ctrl-D`:
+
+  ```sh
+  podman secret create kanthord-machine-<machine> -
+  ```
+
+- The Docker forms write one env file of mode 0600 once. Each instance container of the machine gives it to `docker run` with a second `--env-file`. Type `KANTHORD_MACHINE_CONFIG=`, paste the value, press `Enter`, then press `Ctrl-D`:
+
+  ```sh
+  (umask 077 && cat > kanthord-machine-<machine>.env)
+  ```
+
+- After a Reset key of the machine, replace the secret or the env file, then start each instance container of the machine again.
 
 ## The worker unit and its wrappers
 
@@ -599,7 +615,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - The server keeps no copy of the private key. It clears the key buffer in a `finally` block after the answer, also after a failure.
 - `connection` is `{ connection_name, connected_at, last_heartbeat_at }`, or null when the instance holds no current connection. It is null for a server instance.
 - `credentials` lists each copy that the instance uses: each own copy, and each machine copy of a name with no own copy. `holder` names the instance or its machine. `health` adds `reported_by`, under [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy).
-- `holder_mismatch` is true when a binding that lists a `worker` instance names a credential whose copy of the [copy holder](custody.vocabulary.md#copy-holder) is not live and current. A current copy is sealed to the current fingerprint of its holder. It is false for a server instance. The worker page shows its badge from it.
+- `holder_mismatch` is true when a binding that lists a `worker` instance names a credential with no live current copy. The copy is the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance. A current copy is sealed to the current fingerprint of its holder. It is false for a server instance. The worker page shows its badge from it.
 - `bindings` lists the bindings of every project that list the instance. The dashboard reads the cross-project bindings of an instance from it.
 - No answer holds a secret except the sealed objects and `instance_configuration`.
 - [gateway-service.impl.md](gateway-service.impl.md#access-policy) rules the access policies `worker` and `public`.
@@ -702,7 +718,7 @@ The table `worker_machine` holds one row for each revision of a machine, after t
 
 ## The instance exchange
 
-The instance key is the only machine credential of an instance at the `worker` placement. A server instance holds no key and takes no part in this exchange.
+An instance at the `worker` placement keeps its own key pair. That key stays the only credential of its identity: the worker token, the connection and the client secrets. A server instance holds no key and takes no part in this exchange.
 HPKE base mode with the suite `DhkemX25519HkdfSha256`, HKDF-SHA256 and AES-128-GCM seals each answer to the public key of the live revision.
 HPKE base mode gives confidentiality to the key holder only, and it does not authenticate the server. TLS or the same host authenticates the server to an instance.
 [The HPKE dependency](architecture.impl.md#the-hpke-dependency) names the library.
@@ -1531,7 +1547,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - At the `worker` placement, custody carries only the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance. It refuses each server-held item and each stale copy with 403 `custody.handover.holder_refused`. `ssh_identities` is `[]`. [custody.impl.md](custody.impl.md#the-credential-handover) rules the refusal.
 - The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it. It opens the item with the key of the item `holder`: the instance key, or the key of the [machine configuration](#the-machine-configuration). An item that does not open ends the execution with `worker.handover.credential_open_failed`.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204.
-- The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential, or `{ credential_id, digest, sealed }` for a copy of an instance or a machine. For such a copy, the worker unit seals the refreshed credential to the key of the item `holder` through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
+- The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential. It is `{ credential_id, digest, sealed }` for a copy of an instance or a machine. For such a copy, the worker unit seals the refreshed credential to the key of the item `holder` through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
 - The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `execution_id` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
@@ -2490,14 +2506,16 @@ These declarations match the error table of `engine/docs/cli/worker.md`.
 
 ## Machine CLI validation
 
-`kanthord worker machine join` and `kanthord worker machine create --output` write the machine file. Without `--force`, they refuse a machine file that exists.
+`kanthord worker machine join`, `kanthord worker machine create --output` and `kanthord worker machine rotate --output` write the machine file. Without `--force`, they refuse an existing machine file with `cli.worker.machine.config_exists`.
+They check `name` against the instance name form before they build the file path, and answer `worker.machine.config_invalid`.
 `kanthord serve worker` answers the same codes when it reads the machine configuration, under [The machine configuration](#the-machine-configuration).
 
-| HTTP  | Code                             | Condition                                                                                                          |
-| ----- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| local | `worker.machine.config_absent`   | No env value and no machine file holds the name. The diagnostic names the variable and the path.                   |
-| local | `worker.machine.config_conflict` | The env value and the machine file both hold a value for one name.                                                 |
-| local | `worker.machine.config_invalid`  | The value fails the schema, the file `name` differs from its file name, or the name breaks the instance name form. |
+| HTTP  | Code                               | Condition                                                                                                                                               |
+| ----- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| local | `cli.worker.machine.config_exists` | The machine file of the name exists, and `--force` is absent. `--force` is the only overwrite.                                                          |
+| local | `worker.machine.config_absent`     | No env value and no machine file holds the name. The diagnostic names the variable and the path.                                                        |
+| local | `worker.machine.config_conflict`   | The env value and the machine file both hold a value for one name.                                                                                      |
+| local | `worker.machine.config_invalid`    | The value fails the schema, the file `name` differs from its file name, the name breaks the instance name form, or the env value names another machine. |
 
 ## Handover CLI validation
 
