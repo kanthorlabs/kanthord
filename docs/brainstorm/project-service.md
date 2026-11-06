@@ -26,7 +26,7 @@ The mission of a project is intrinsic to that project, so no binding allocates i
 
 ## Resource and binding model
 
-A project binds each resource that it uses directly: a repository, a worker and an evidence storage.
+A project binds each resource that it uses directly: a repository, a worker, an evidence storage and a conversation.
 A delivery source is no binding of the Project Service.
 A binding that needs a credential references a [credential store record](custody.vocabulary.md#credential-store-record), and the project names no credential.
 The Project Service answers the bindings that name a credential, for the component that owns the platform of that credential.
@@ -40,6 +40,9 @@ A project holds one binding for each repository that it uses.
 It holds any number of bindings of one worker and any number of [storage bindings](project-service.vocabulary.md#storage-binding).
 A storage binding names one S3-compatible bucket for object evidence.
 A node names zero or more storage bindings as an ordered list for its uploads, and a node without one accepts only inline evidence content.
+A [conversation binding](project-service.vocabulary.md#conversation-binding) names one resource: a GitHub repository for its issue comments, a Jira project of one site, or a Slack workspace.
+A project holds any number of conversation bindings.
+A node names zero or more conversation bindings, and each external link of the node names the resource of one of them.
 A node names every binding that it uses under the [rule table of the bindings of a node](mission-service.vocabulary.md#bindings-of-a-node), and the [Mission Service](mission-service.md#mission-structure-and-nodes) takes no binding from the project.
 A binding references no other binding.
 A project shares a resource with another project.
@@ -79,6 +82,17 @@ A binding write refuses an instruction file that is invalid at the base head. An
 A change of a `prompts` key creates a binding revision. A node keeps the texts of its pinned binding revision until `mission node rebind`.
 The new binding ID of that revision counts as a changed binding for the Onboarding component, and it clears the mark that the stored environment came from `env@1`.
 The Binding prompts of the agents are separate texts. A rule that the reviewer judges goes into the Repository prompt, so the coder reads it too.
+
+## Conversation configuration and link trust
+
+A conversation binding is no delivery source. It holds the credential of its platform, the reply policy, the link trust and the inbox opt-in of one resource.
+The reply policy states that the reply of a node follows the passing assessment of the node. An absent reply policy configures no reply action.
+The [link trust](project-service.vocabulary.md#link-trust) lists the immutable account ids that the binding trusts as authors of link updates. An absent list trusts no actor. A bot or an app is never trusted.
+A repository binding also holds link trust, for the reviewers of a pull request change request.
+The optional key `inbox` names the account of the developer on the platform. It makes the Mission Service record the threads of the resource in the Inbox of the developer.
+One project at most holds `inbox` on one resource. The key grants no authority.
+Delivery admission records the update of a thread without the trust rule. A node applies the link trust of the binding revision that it pins when it reads the updates.
+A binding write makes no platform call. The credential suitability check compares the platform of the credential with the platform of the binding.
 
 ## Environment of a repository binding
 
