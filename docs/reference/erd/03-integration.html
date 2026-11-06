@@ -74,8 +74,10 @@
           <h2 id="capability-limits">Capability limits</h2>
           <ul>
             <li>
-              The ruled acquisition machinery supports the GitHub platform only.
-              Slack, Telegram and Jira wait for their platform entries and
+              The ruled acquisition machinery supports the platforms
+              <code>github</code>, <code>jira</code> and <code>slack</code>. A
+              <code>jira</code> inbound and a <code>slack</code> inbound are
+              webhook inbounds only. Telegram waits for its platform entry and
               credential types in
               <a
                 href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#project-service"
@@ -83,8 +85,19 @@
               >.
             </li>
             <li>
+              The <code>configuration</code> of a <code>github</code> inbound
+              also holds <code>resource_kind</code>, <code>repository</code> or
+              <code>conversation</code>, under the
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-conversation-poll"
+                >conversation poll</a
+              >. The <code>checkpoint</code> of a conversation poll holds
+              <code>comments_etag</code>.
+            </li>
+            <li>
               The schema of <code>configuration</code> per kind and platform
-              beyond <code>resource</code> is open in the
+              beyond <code>resource</code> and <code>resource_kind</code> is
+              open in the
               <a
                 href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/intake.md"
                 >Intake CLI</a
@@ -101,8 +114,12 @@
             <li>
               The outbound operations are <code>github.pull_request</code>,
               <code>github.pull_request_merge</code>,
-              <code>git.merge_push</code> and <code>s3.delete_object</code>. A
-              native push send and a CLI write wait for their designs.
+              <code>git.merge_push</code>, <code>s3.delete_object</code>,
+              <code>github.issue_comment</code>,
+              <code>jira.issue_comment</code> and
+              <code>slack.thread_reply</code>. The three reply operations have
+              no read-back. A native push send and a CLI write wait for their
+              designs.
             </li>
             <li>
               The Intake Service is extractable in principle: it declares one
@@ -159,14 +176,17 @@ erDiagram
     mission_evidence {
         text id PK "evidence_ + ULID, ERD 2"
     }
+    mission_link_update {
+        text id PK "link_update_ + ULID, ERD 2"
+    }
 
     intake_inbound {
         text id PK "inbound_ + ULID"
         text project_id
         text kind "webhook | poll"
-        text platform "for example github"
+        text platform "for example github, jira or slack"
         text consumer "mission.delivery.admit"
-        text credential "credential name for a poll, null for a webhook"
+        text credential "credential name for a poll and for a slack webhook, null for another webhook"
         text configuration "JSON per kind and platform, holds resource"
         text checkpoint "poll cursor, JSON per platform, or null"
         integer created_at "Unix ms"
@@ -202,6 +222,7 @@ erDiagram
     credential |o..o{ intake_outbound_request : "ref by name, no FK"
 
     intake_inbound_event |o..o{ mission_evidence : "ref inbound_event_id in provenance, no FK"
+    intake_inbound_event ||..o{ mission_link_update : "ref inbound_event_id, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
@@ -211,8 +232,8 @@ erDiagram
 
     class credential custody
     class project_project project
-    class mission_evidence mission
-    class credential,project_project,mission_evidence stub
+    class mission_evidence,mission_link_update mission
+    class credential,project_project,mission_evidence,mission_link_update stub
     class intake_inbound,intake_inbound_event,intake_outbound_request intake
 </pre>
           <h2 id="tables">Tables</h2>
@@ -318,11 +339,13 @@ erDiagram
             </li>
             <li>
               <code>credential</code> holds a credential name. A poll names a
-              credential, and a webhook holds a null <code>credential</code>.
-              The insert transaction checks that the name exists and that its
-              platform suits the inbound. A credential archive calls
-              <code>inboundsNaming</code> in its own transaction and is refused
-              while an inbound names the credential.
+              credential, a <code>slack</code> webhook names its
+              <code>slack_signing_secret</code> credential, and another webhook
+              holds a null <code>credential</code>. The insert transaction
+              checks that the name exists and that its platform suits the
+              inbound. A credential archive calls <code>inboundsNaming</code> in
+              its own transaction and is refused while an inbound names the
+              credential.
             </li>
             <li>
               kanthord registers no webhook at a platform. A human sets the
@@ -430,6 +453,11 @@ erDiagram
               A read-back sets <code>succeeded</code> on <code>pending</code> or
               <code>failed</code>, and it runs only inside a repeat of the
               caller. A read-back that finds nothing changes no row.
+            </li>
+            <li>
+              A reply operation has no read-back. A repeat of its
+              <code>pending</code> request with no running call, or of its
+              <code>failed</code> request, posts again.
             </li>
             <li>
               A human discard sets <code>discarded</code> on a
@@ -542,6 +570,11 @@ erDiagram
                   </td>
                   <td><code>intake_inbound_event.id</code></td>
                   <td>Reference in JSON, no FK.</td>
+                </tr>
+                <tr>
+                  <td><code>mission_link_update.inbound_event_id</code></td>
+                  <td><code>intake_inbound_event.id</code></td>
+                  <td>Reference, no FK.</td>
                 </tr>
               </tbody>
             </table>

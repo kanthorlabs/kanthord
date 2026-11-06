@@ -77,7 +77,8 @@
           <ul>
             <li>
               A project binds the kinds <code>repository</code>,
-              <code>storage</code> and <code>worker</code>.
+              <code>storage</code>, <code>worker</code> and
+              <code>conversation</code>.
             </li>
             <li>
               A worker binding of a native worker needs an enabled
@@ -237,6 +238,7 @@ erDiagram
         text bindings "JSON list of binding identities"
         text intent "implement | examine"
         text tags "JSON set of tags"
+        text external_links "JSON list of external links, [] for none"
         text commit_type "feat | fix | docs | style | refactor | test | chore, or null"
         text tasks "JSON task content, [] for an examine node"
         text change "JSON: write, previous_revision, changed_fields, tasks"
@@ -644,7 +646,12 @@ erDiagram
                 href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/storage.impl.md#platform-validators"
                 >Storage</a
               >
-              components state.
+              components and the
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-credential-platforms"
+                >Intake Service</a
+              >
+              state.
             </li>
             <li>
               Each revision holds its own <code>metadata</code>. A rotation
@@ -740,10 +747,13 @@ erDiagram
             <li>
               Every kind holds a <code>resource_identity</code>:
               <code>repository:github:&lt;owner&gt;/&lt;name&gt;</code>,
-              <code>worker:kanthord:&lt;binding name&gt;</code> and
-              <code>storage:s3:&lt;endpoint host&gt;/&lt;bucket&gt;</code>. Its
-              first part is the binding kind, and no column holds the kind. A
-              read derives the kind from that part.
+              <code>worker:kanthord:&lt;binding name&gt;</code>,
+              <code>storage:s3:&lt;endpoint host&gt;/&lt;bucket&gt;</code> and
+              <code>conversation:github:&lt;owner&gt;/&lt;name&gt;</code>,
+              <code>conversation:jira:&lt;site&gt;/&lt;project key&gt;</code> or
+              <code>conversation:slack:&lt;team id&gt;</code>. Its first part is
+              the binding kind, and no column holds the kind. A read derives the
+              kind from that part.
             </li>
             <li>
               The write refuses a name that another current binding of the
@@ -838,6 +848,24 @@ erDiagram
               in an entry, an agent name and an agent provider name. SQLite
               enforces no foreign key inside JSON, so the write validates each
               reference.
+            </li>
+            <li>
+              The <code>config</code> of a
+              <a
+                href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#conversation-configuration"
+                >conversation binding</a
+              >
+              holds <code>platform</code>, the resource keys of its platform,
+              <code>credential</code>, <code>reply_policy</code>,
+              <code>link_trust</code> and the optional <code>inbox</code>. The
+              <code>config</code> of a repository binding also holds
+              <code>link_trust</code>. <code>link_trust</code> holds
+              <code>actor_ids</code>, at most 32 immutable account ids.
+            </li>
+            <li>
+              At most one project holds <code>inbox</code> on one resource. The
+              binding write checks it with no index, and a second project is
+              refused with 409 <code>project.bindings.inbox_taken</code>.
             </li>
           </ul>
           <h3 id="worker-service">Worker Service</h3>
@@ -1155,6 +1183,18 @@ erDiagram
             </li>
             <li>
               <p>
+                <code>external_links</code> holds an ordered list of at most 10
+                distinct external links in canonical JSON. An absent list reads
+                <code>[]</code>. Each link names the resource identity of a
+                conversation binding of the node. An invalid list, an invalid
+                link, a duplicate, more than 10 links and a link with no binding
+                of its resource answer 400
+                <code>mission.node.content_invalid</code>. A terminal node takes
+                no change of the list.
+              </p>
+            </li>
+            <li>
+              <p>
                 <code>commit_type</code> holds the commit type of the node, or
                 <code>null</code> when the node sets none. The owning service
                 validates the closed set before the write. The worker reads
@@ -1198,6 +1238,11 @@ erDiagram
                     </tr>
                     <tr>
                       <td>Storage</td>
+                      <td>0 or more</td>
+                      <td>0 or more</td>
+                    </tr>
+                    <tr>
+                      <td>Conversation</td>
                       <td>0 or more</td>
                       <td>0 or more</td>
                     </tr>
