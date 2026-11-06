@@ -222,7 +222,7 @@ erDiagram
     credential |o..o{ intake_outbound_request : "ref by name, no FK"
 
     intake_inbound_event |o..o{ mission_evidence : "ref inbound_event_id in provenance, no FK"
-    intake_inbound_event ||..o{ mission_link_update : "ref inbound_event_id, no FK"
+    intake_inbound_event |o..o{ mission_link_update : "ref inbound_event_id, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
