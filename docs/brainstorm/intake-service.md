@@ -18,7 +18,8 @@ The Intake Service performs every operation of kanthord on an external platform,
 It performs an outbound operation or a check on the request of the service that owns its effect, and it decides no business meaning.
 It decides nothing about the meaning of an inbound event.
 It interprets no payload field for a business meaning.
-It reads a payload only to identify an inbound event and to acknowledge it.
+It reads a payload only to identify, to acknowledge and to describe an inbound event.
+A decoder or a description of the Intake Service answers platform facts only, and the Mission Service gives those facts their meaning.
 A platform operation establishes no Mission outcome by itself.
 
 The Intake Service owns the connection lifetime of every acquisition.
@@ -26,9 +27,10 @@ It receives a webhook and runs a poll.
 It holds the transport knowledge of a platform.
 That knowledge identifies the signature header, the field that carries the platform event identity and the metadata of an event.
 It defines the meaning of a poll checkpoint.
-The [Repository component](repository.md#platform-connector-and-platform-implementations) owns platform implementations and payload decoders.
+The [Repository component](repository.md#platform-connector-and-platform-implementations) owns the platform implementations and payload decoders of the git platforms.
 The Intake Service calls a platform implementation of that component for every git platform operation, with the material of a credential release.
 It calls the [Storage component](storage.md) for every object storage operation in the same way.
+The Intake Service owns the [platform implementations of Jira and Slack](#conversation-platforms) and their payload decoders.
 
 The Intake Service reaches a peer through an [operation](architecture.md#invocation) only.
 It declares one collaboration, `inboundsNaming`, which [custody](custody.md#credential-records) calls in the transaction of a credential archive.
@@ -44,6 +46,7 @@ The bytes of an object and the git transport of an execution travel directly, th
 The Intake Service performs the operations on a platform that an inbound or a project binding names.
 A model inference call and the provider check belong to the model connector of the Worker Service.
 The Intake Service verifies the signature of a webhook event with a secret that it derives, and it stores no secret.
+A `slack` webhook inbound is the exception, because Slack issues its signing secret. The Intake Service takes that secret from a custody release for each receipt.
 One server holds one Intake Service that serves every project.
 
 ## Inbounds
@@ -51,7 +54,8 @@ One server holds one Intake Service that serves every project.
 An [inbound](intake-service.vocabulary.md#inbound) belongs to one project.
 It has one [inbound kind](intake-service.vocabulary.md#inbound-kind).
 It names its platform and its [consumer](intake-service.vocabulary.md#consumer).
-A poll names its credential by its name, and a webhook names no credential.
+A poll names its credential by its name.
+A webhook names no credential, except a `slack` webhook, which names one credential of platform `slack_signing_secret`.
 Its configuration holds the remote resource and the options of its kind and platform.
 No field of its configuration changes after its insert, and a change is a new inbound.
 A human creates an inbound to start its acquisition and deletes it to stop the acquisition.
@@ -72,7 +76,9 @@ An inbound row holds no state of its acquisition health.
 A poll inbound holds its [checkpoint](intake-service.vocabulary.md#checkpoint).
 A poll runs while its inbound exists, and every poll is permanent.
 The create and the delete of the inbound are the only switch of its poll.
-A poll requests its platform only while its project holds an unresolved request evidence on the resource of the inbound.
+A poll requests its platform only while its project holds demand on the resource of the inbound.
+The demand of a repository poll is an unresolved request evidence. The demand of a conversation poll is a counted link of that resource.
+A conversation poll also holds a standing demand while a binding of the resource holds the key `inbox`. That demand has no window.
 The validation requests of the inbound create are the one exception.
 The [Mission Service](mission-service.md#delivery-admission-and-check) answers that demand.
 A poll cycle performs the requests that the platform implementation names, one after the other.
@@ -131,15 +137,30 @@ The [admission contract](mission-service.md#delivery-admission-and-check) assign
 ## Outbound operations and checks
 
 The Intake Service performs a configured action for the action performer of the Worker Service: it opens a pull request, or it merges the node branch into the base branch and pushes.
+It also posts a reply to an external link.
 For a network git write, it creates a fresh clone through the repository connector with the SSH identity of the binding.
 It performs the write and removes the clone after the call.
 It checks the state of the external object of a request evidence for the Mission Service, and it answers the end state that the platform implementation folds.
 It reads a pull request and its review comments for an execution.
+It reads the items of an external link for the Mission Service, and it stores each item as an inbound event.
+It describes a stored inbound event for the Worker Service and the Mission Service. The description holds no credential, calls no platform and passes the text through the sensitive text rule set.
 It signs a presigned PUT or GET, checks an uploaded object and deletes an object of a storage binding for the Mission Service.
 Each operation serves one caller kind, and [intake-service.impl.md](intake-service.impl.md) declares the operations.
 An [outbound operation](intake-service.vocabulary.md#outbound-operation) is named `<platform>.<operation>` with the full name of the operation, for example `github.pull_request` and `git.merge_push`.
 The Intake Service maps a catalog action of the Project Service and the platform of its binding to one outbound operation through a declared table.
 It refuses an action without a row in that table.
+
+## Conversation platforms
+
+The Intake Service owns the platform code of Jira and Slack.
+It owns the credential records of the platforms `jira`, `slack` and `slack_signing_secret`.
+A `jira` inbound and a `slack` inbound are webhook inbounds only. No poll of these platforms exists.
+A poll inbound of a GitHub conversation resource reads the issue comments of one repository.
+A link read of Check now reads the items of one external link.
+It stores each item as an inbound event of the newest inbound of the link resource.
+A link with no such inbound refuses the whole check before any read.
+A reply operation posts one reply to a link with the credential of the conversation binding, and it has no read-back.
+The [implementation](intake-service.impl.md#the-credential-platforms) defines the credential platforms, the receipts, the link read and the reply operations.
 
 ## Outbound requests
 
@@ -160,23 +181,25 @@ The [outbound request state](intake-service.vocabulary.md#outbound-request-state
 - Every other result sets failed and appends its error. A failed request proves no absence of the effect.
 - A deadline aborts the call, so a late answer writes nothing.
 - A call that ends without a write of its state, for example at a crash, leaves pending.
-- Only a [read-back](intake-service.vocabulary.md#read-back) moves pending or failed to succeeded.
+- Only a [read-back](intake-service.vocabulary.md#read-back) moves pending or failed to succeeded. A reply operation has no read-back. A repeat of a failed reply request, or of a pending reply request with no running call, sets it pending and posts again, and the answer of that call sets its state.
 - A human discard turns a pending request to discarded, and it is refused while the call runs.
 - Succeeded and discarded are terminal.
 - Every write of the state is conditional on the state that the write expects.
 
-A repeat with the same key never calls the write again.
+A repeat with the same key never calls the write again, except a repeat of a reply request with no running call.
 
 - A repeat of a succeeded request answers its result.
-- A repeat of a pending request with no running call, or of a failed request, runs the read-back once.
+- A repeat of a pending request with no running call, or of a failed request, runs the read-back once. A repeat of such a reply request posts again.
 - A repeat of a running request or of a discarded request is refused.
 
 A read-back is one read call to the platform that checks whether the write of a request took effect.
 It runs only inside a repeat, under the authorization and the release path of the write.
 No timer, no restart and no background process starts a read-back.
 A read-back that finds the effect sets succeeded with its result, and a read-back that finds nothing changes no state.
-The [Repository component](repository.md#platform-connector-and-platform-implementations) declares the read-back of each write operation, or declares none.
-An operation without a read-back leaves pending only through a human discard. A failed request leaves through a delete.
+The [Repository component](repository.md#platform-connector-and-platform-implementations) declares the read-back of each git platform write operation, or declares none.
+The reply operations `github.issue_comment`, `jira.issue_comment` and `slack.thread_reply` have no read-back, and no reply body holds a hidden marker.
+A duplicate reply after a lost answer is accepted.
+An operation without a read-back, a reply operation excepted, leaves pending only through a human discard. A failed request leaves through a delete.
 
 A caller tracks its request by a repeat with the same key, and no caller operation reads a request.
 

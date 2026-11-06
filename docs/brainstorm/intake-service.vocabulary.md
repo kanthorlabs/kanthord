@@ -16,8 +16,9 @@ The GitHub webhook inbound `inbound_01J9QK3T` of `kanthord-web` receives the eve
 An inbound kind names the way an inbound acquires its events.
 The closed set holds `webhook` and `poll`.
 
-A webhook inbound names no credential, and kanthord does not register it at its platform.
+A webhook inbound names no credential, except a `slack` webhook inbound, which names one `slack_signing_secret` credential. kanthord does not register a webhook inbound at its platform.
 A human pastes the address `/hooks/inbound_01J9Y3PL` and its secret into the webhook settings of `kanthorlabs/kanthord` on GitHub.
+The `slack` webhook inbound of the team `T0123ABCD` names the credential `slack-signing`.
 
 ## consumer
 
@@ -44,6 +45,13 @@ GitHub assigns `a438bd70-72ed-4d5e-96b2-9c9bf5c3807f` to the webhook delivery ab
 
 A checkpoint is the cursor from which the next request of a poll continues acquisition.
 The poll inbound `inbound_01J9R2MX` of `kanthord-docs` keeps the ETag of the last answer of each read of `kanthorlabs/kanthord` as its checkpoint.
+A conversation poll keeps one ETag, `comments_etag`, as its checkpoint.
+
+## conversation poll
+
+A conversation poll is a poll inbound of platform `github` that reads the issue comments of one repository for the external links of a project.
+It reads only while the Mission Service counts a link of its resource or a binding of the resource holds the key `inbox`.
+The poll inbound `inbound_01J9T4NB` of `acme/app` reads the comments of issue 117 for the node that links it.
 
 ## inbound event state
 
@@ -56,6 +64,12 @@ A human sets `discarded` on the `failed` event of pull request 42 after a check 
 
 An outbound operation names one operation of a platform that the Intake Service performs for a caller, as `<platform>.<operation>`.
 The action `pull_request` of the GitHub binding `kanthord-repo` maps to `github.pull_request`, and the action `merge_push` maps to `git.merge_push`.
+The action `reply` of the conversation binding `acme-issues` maps to `github.issue_comment`. A reply operation posts one comment or one thread reply and has no read-back.
+
+## link read
+
+A link read is one read call that fetches the items of one external link of a node for Check now.
+The link read of the node `l1-demo.md` fetches the comments of issue 117 of `acme/app` and stores each comment as an inbound event.
 
 ## outbound request
 
@@ -68,6 +82,7 @@ A request key is the identity that a caller derives from the durable intent of a
 The action performer derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request` for attempt 2.
 It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6` for the merge of snapshot commit `d4e5f6`.
 It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9` when attempt 3 reuses pull request 42 with snapshot commit `e7f8a9`.
+It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV:2:{"kind":"github_issue","number":117,"resource_identity":"conversation:github:acme/app"}` for the reply of attempt 2 to issue 117.
 
 ## outbound request state
 
@@ -80,3 +95,4 @@ GitHub creates pull request 42 and its answer times out, so the request stays `f
 
 A read-back is one read call that checks whether the write of an outbound request took effect.
 A repeat of the `failed` request of pull request 42 lists the open pull requests from the node branch into `main` and finds pull request 42.
+The three reply operations have no read-back, so a repeat of a `failed` reply request posts the reply again.
