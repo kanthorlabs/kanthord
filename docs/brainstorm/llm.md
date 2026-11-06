@@ -26,14 +26,16 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - It stores each record through [custody](custody.md#credential-records), which holds the revisions, the pin, the drain, the revoke and the archive.
 - Each [platform validator](architecture.vocabulary.md#platform-validator) of the component declares the secret shape, the metadata schema and the validation of its platform.
 - The component refuses a record of a platform that it does not own.
-- A credential of an LLM platform holds one copy for each [holder](custody.vocabulary.md#holder): `server` or one [worker instance](worker-service.md#worker-instances).
-- A human enters a secret once and names its holders. The server seals each instance copy and drops the plaintext.
+- A credential of an LLM platform holds one copy for each [holder](custody.vocabulary.md#holder): `server`, one [worker machine](worker-service.md#worker-instances) or one [worker instance](worker-service.md#worker-instances).
+- A `worker` instance uses the copy of its [copy holder](custody.vocabulary.md#copy-holder): its own copy when it holds one, else the copy of its machine. The instances of one machine thus share one copy.
+- A human enters a secret once and names its holders. The server seals each copy of a machine or an instance and drops the plaintext.
 - A worker instance enters a copy of its own holder only, already sealed to its own key.
-- An instance copy skips the pre-save check and the provider check. The human types the model ids of an `openai-compatible` instance copy.
+- A copy of a machine or an instance skips the pre-save check and the provider check. The human types the model ids of such an `openai-compatible` copy.
 - A rotation of one copy offers the rotation of every other copy of the name in the same act.
 - An OAuth credential enters only through a [login session](llm.vocabulary.md#login-session).
 - A login session of the holder `server` runs on the server.
 - A login session of an instance holder runs on that instance, in copy-code mode or device mode only. The instance seals the result to its own key, and the server stores only the ciphertext.
+- A login session of a machine holder runs on one connected instance of that machine, in the same modes. That instance seals the result to the machine key.
 - A login session offers the interaction modes that its platform supports.
 - It states the address and the code that the human needs.
 - The human completes the interaction and returns a provider code when necessary.
@@ -62,13 +64,13 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The component runs in the process of its caller.
 - The model connector runs in the worker unit for an execution at every placement, with the material of a [credential handover](custody.vocabulary.md#credential-handover).
 - At the `server` and the `container` placements, the handover carries the copy of the holder `server`.
-- At the `worker` placement, the worker unit opens the copy of its instance with the instance key. A worker instance calls its provider directly, and no server-side LLM proxy exists.
+- At the `worker` placement, the handover carries the copy of the copy holder of the instance. The worker unit opens it with the key of that holder: the instance key or the machine key. A worker instance calls its provider directly, and no server-side LLM proxy exists.
 - The caller keeps its runtime duties.
 
 ## Resource healthcheck
 
 The component owns the [resource healthcheck](architecture.vocabulary.md#resource-healthcheck) of the credential records of its platforms.
 The check of its LLM provider validates a record on demand.
-The server checks no instance copy. Each worker instance checks its own copies and reports the result to the component.
+The server checks no copy of a machine or an instance. Each worker instance checks each copy that it uses and reports the result to the component.
 The [implementation](llm.impl.md#the-resource-healthcheck) defines each remote probe and its limits.
 A healthcheck changes no credential and authorizes no operation.

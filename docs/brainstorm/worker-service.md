@@ -229,7 +229,7 @@ The instance carries the compatibility declarations of its worker: the worker na
 
 - An execution at every placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
 - A server instance receives the credentials of the holder `server` through its slot channel. It holds no key and no credential copy.
-- At the `worker` placement, the handover carries only credential copies that the instance holds, sealed to its key, and no SSH key. Custody never releases a server-held credential there, under [custody.md](custody.md).
+- At the `worker` placement, the handover carries only the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance, sealed to the key of that holder, and no SSH key. Custody never releases a server-held credential there, under [custody.md](custody.md).
 - At the `worker` placement, each git operation signs through the [SSH signature relay](worker-service.impl.md#the-ssh-signature-relay), and the server keeps the SSH key.
 - It performs its network git read, network git write and model inference calls in its own worker unit.
 - Its platform actions run through the server like every execution.
@@ -269,12 +269,17 @@ One worker instance is one trust boundary over every project that it serves.
 A tool process of any binding that the instance serves runs as the OS user of the instance.
 At the `worker` placement, it can read the instance configuration, the private key and the data directory of the instance with its earlier workspaces.
 With the key, it can take a worker token and connect. It can then take the client tokens of every binding that lists the instance and open every credential copy of the instance.
+It can also read the machine configuration of the [worker machine](worker-service.vocabulary.md#worker-machine) of the instance, and open every copy of that machine.
+One worker machine is thus one trust boundary over every project that its instances serve.
 At the `server` and the `container` placements, it reaches the workspaces and the slot root or the slot volume of the instance.
 A repository of one project therefore reaches the credentials and the work of each other project that the same instance serves.
 kanthord accepts this reach in v1.
 The binding sheet and the instance page show a notice when an instance serves bindings of two or more projects.
+The machine page shows the same notice when the instances of a machine serve bindings of two or more projects.
 The per-command sandbox item of [HANDOFF](HANDOFF.md#worker-service) is the later fix, and it covers the cross-project reach.
-Recovery at the `worker` placement is a Reset key, a new secret for each credential copy of the instance and a key rotation at the provider.
+A leaked instance configuration also exposes the key of its machine.
+Recovery at the `worker` placement is a Reset key of the instance and a Reset key of its machine.
+A human then signs in again for each OAuth copy of the instance and of the machine, and rotates each API key at its provider.
 
 The sequence diagram below shows the start of a steps instance at the `server` placement and its first work pull.
 The node holds no attempt.
@@ -317,7 +322,7 @@ sequenceDiagram
 ## Worker instances
 
 A human adds an instance once on the server, on the details page of its worker.
-kanthord has no host, machine or runner concept.
+kanthord has no runner concept. A [worker machine](worker-service.vocabulary.md#worker-machine) is one computer that runs `worker` instances, and it is no host.
 The Worker Service holds an [instance record](worker-service.vocabulary.md#instance-record) for it: a name, one worker, one placement and a revision.
 The name, the worker and the placement never change.
 A worker binding lists only instances of its worker, under [the binding rules](project-service.md#execution-configuration-and-instance-count).
@@ -330,14 +335,26 @@ At the `worker` placement, the instance record also holds one X25519 public key.
 - The instance key is the only machine credential of a `worker` instance. The server seals each answer to the public key, so only the key holder opens a worker token or a connection answer.
 - The connection answer gives a `worker` instance the client token and the `client_secret` of each binding that lists it. The slot channel gives a server instance the same entries. `master_key` never leaves the server.
 - The newest connection of an instance supersedes the previous one. A superseded process stops its tools and exits, and its supervisor does not restart it.
-- Each credential that a `worker` instance uses is a copy that the instance holds, sealed to its public key. The server stores only the ciphertext. [custody.md](custody.md) rules the holder of a credential.
+- Each `worker` instance names one live worker machine at its create. The machine never changes. A server instance names no machine.
+- Each credential that a `worker` instance uses is its own copy or the copy of its machine. The own copy is sealed to the instance key, and the machine copy to the machine key. The server stores only the ciphertext. [custody.md](custody.md) rules the copy holder of an instance.
 - An OAuth sign-in for a `worker` instance runs on the instance, in copy-code or device-code mode only, under [llm.md](llm.md).
-- A Reset key gives a `worker` instance a new key pair and a new revision. Every token, connection and registration of the old revision ends. Every credential copy sealed to the old key has no holder until a human enters its secret again. A server instance has no Reset key.
+- A Reset key gives a `worker` instance a new key pair and a new revision. Every token, connection and registration of the old revision ends. Every own copy of the instance sealed to the old key has no holder until a human enters its secret again. A server instance has no Reset key.
+- A Reset key of a machine gives the machine a new key pair and a new revision. Every machine copy sealed to the old key has no holder until a human signs in again or enters its secret again. No token, connection or registration of an instance ends.
 - An archive ends the instance for good, and it ends every registration of the instance. The server refuses it while a binding lists the instance. An archived name stays taken.
 - An archive without force refuses while an execution of the instance is live. A forced archive revokes that execution with no loss and no failure count. The node returns to `Available`, or to `Waiting` for an evaluation claim.
 - A human removes the instance from each listing binding, then archives it. A forced archive of a draining instance stops its live execution at once.
 
+A worker machine is one computer that runs `worker` instances. It is a credential holder with its own X25519 key pair.
+It holds no token, no connection, no binding and no execution. A human adds it once on the server, before its first instance.
+
+- A machine name follows the instance name rules. A machine name and an instance name never match, and an archived name stays taken.
+- No two revisions of any instance or any machine share one fingerprint.
+- The machine keeps its name and its private key in its machine configuration on the computer. The server stores only the public key.
+- Each instance of the machine reads the machine key at each use. A Reset key of the machine thus needs no restart of an instance.
+- An archive of a machine ends it for good. The server refuses it while a live instance names the machine. The archive ends every credential copy of the machine.
+
 [worker-service.impl.md](worker-service.impl.md#worker-instances) states the record, the operations and the exchange.
+[worker-service.impl.md](worker-service.impl.md#worker-machines) states the machine record and its operations.
 
 ## Executions
 

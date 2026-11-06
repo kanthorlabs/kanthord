@@ -45,11 +45,11 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `openai-compatible.base_url` uses `https` or `http`, with no query, no fragment and no trailing slash.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it answers 409 `llm.metadata.base_url_fixed`, and a rotation can set a new one.
 - The first revision of an `openai-compatible` copy of the holder `server` starts with `models: []`.
-- The first revision of an `openai-compatible` [instance copy](#instance-copies) takes the `models` that the human types, because no provider check runs for it.
+- The first revision of an `openai-compatible` [copy of a machine or an instance](#instance-copies) takes the `models` that the human types, because no provider check runs for it.
 - Each approved model holds a required `id` and optional `context_window`, `max_tokens` and `reasoning_levels`. An `id` is unique inside `models`.
 - An omitted value takes the default of pi 1.1.0: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
 - `context_window` and `max_tokens` are positive integers, and `max_tokens` does not exceed `context_window` after the defaults apply.
-- A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check). A metadata edit of an instance copy takes the model ids that the human types.
+- A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check). A metadata edit of a copy of a machine or an instance takes the model ids that the human types.
 - A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it. A fallback configuration is a dependent too.
 - The dependency check and the metadata update commit in one transaction; a refusal lists the dependents in `details` as `{ models: [{ model, agents }] }`.
 
@@ -81,7 +81,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - HTTP 200 holds the answer of `check`, `{ connection, models }`.
 - The route declares an open body, and the handler validates `{ credential }`, so that invalid input answers `llm.provider.invalid_input` and not a Gateway code.
 - HTTP 400 `llm.provider.invalid_input` reports invalid input. HTTP 404 `llm.provider.credential_not_found` reports an unknown credential or a credential of another component.
-- The check reads the copy of the holder `server`. A name with no such copy answers 409 `credential.credential.held_by_instance`, because custody releases no instance copy.
+- The check reads the copy of the holder `server`. A name with no such copy answers 409 `credential.credential.held_by_instance`, because custody releases no copy of a machine or an instance.
 - The answer holds no key and pre-fills model ids, not limits or reasoning levels.
 - No raw key reaches `llm.provider.check`. The [pre-save check](architecture.impl.md#the-pre-save-check) is the only credential operation that takes a typed secret, and the LLM component runs it through `LlmProvider.check`.
 - A human approves models through a [credential metadata revision](#platform-validators).
@@ -126,46 +126,52 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## Instance copies
 
 - `llm.credential.create` and `llm.credential.rotate` declare the access policy `human_or_worker` of [the Gateway](gateway-service.impl.md#access-policy). Every other credential operation keeps `human`, except where this section names another policy.
-- Under a human identity, `create` takes `{ name, platform, metadata, secret, holders }`. `holders` is a list of `server` and names of live instances at the `worker` placement, and it defaults to `["server"]`. [Custody seals](custody.impl.md#the-seal-of-a-human-entry) each instance copy and writes one row for each holder in one transaction.
-- Under a human identity, `rotate` takes `{ expected_revision, secret }` and the query `holder`, which defaults to `server`.
+- Under a human identity, `create` takes `{ name, platform, metadata, secret, holders }`. `holders` is a list of `server`, names of live [worker machines](worker-service.impl.md#worker-machines) and names of live instances at the `worker` placement. It defaults to `["server"]`. [Custody seals](custody.impl.md#the-seal-of-a-human-entry) each copy of a machine or an instance to its current key and writes one row for each holder in one transaction.
+- Under a human identity, `rotate` takes `{ expected_revision, secret }` and the query `holder`, which defaults to `server`. `holder` takes a machine name too.
 - Under a [worker token](gateway-service.vocabulary.md#worker-token), `create` takes `{ name, platform, metadata, holder, sealed, sealed_to }`, and `rotate` takes `{ expected_revision, holder, sealed, sealed_to }`. `holder` equals the instance of the token.
 - A body holds exactly one of `secret` and `sealed` with `sealed_to`. A human body with `sealed`, a worker body with `secret`, or a body with both answers 400 `credential.input.invalid`.
-- A `holder` that names no live instance at the `worker` placement answers 400 `llm.credential.instance_unknown`. An instance at the `server` or the `container` placement is no holder: it holds no key, and its executions use the copy of the holder `server` through the slot channel.
-- A worker caller acts only on the copies of its own instance. Another holder answers 403 `llm.credential.instance_forbidden`.
+- A `holder` other than `server` that names no live machine and no live instance at the `worker` placement answers 400 `llm.credential.holder_unknown`. An instance at the `server` or the `container` placement is no holder: it holds no key, and its executions use the copy of the holder `server` through the slot channel.
+- `create` and `rotate` under a worker token act only on the copy of its own instance. Another holder, also the machine of the instance, answers 403 `llm.credential.instance_forbidden`.
 - A metadata edit, a revoke, an archive and a login declare `human`. The Gateway answers a worker token on them with 401 `gateway.authentication.unauthorized`.
-- A human create or rotate that seals for an instance reads the keys in one transaction, seals outside it, and commits in a second transaction. The commit checks `sealed_to` against the current fingerprint again, and a key rotation in between answers 400 `credential.sealed.invalid`.
+- A human create or rotate that seals for a machine or an instance reads the keys in one transaction, seals outside it, and commits in a second transaction. The commit checks `sealed_to` against the current fingerprint again, and a key rotation in between answers 400 `credential.sealed.invalid`.
 - A human create with several holders answers the copy of the first holder.
-- `list` and `get` declare `human_or_worker`. A worker caller reads only the copies of its own instance. A human `list` takes the optional query `holder`.
-- `get`, `metadata`, `revoke`, `archive` and `login` take the query or body field `holder`, which defaults to `server`.
+- `list` and `get` declare `human_or_worker`. A worker token reads only the copies of its own instance and of its own machine. A human `list` takes the optional query `holder`.
+- A worker-token `list` answers the copies that the instance uses: each own copy, and each machine copy of a name with no own copy. Each item holds `holder`.
+- A worker-token `get`, `llm.credential.sealed` and `llm.credential.report` act on the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance for the name.
+- `get`, `metadata`, `revoke`, `archive` and `login` take the query or body field `holder`, which defaults to `server`. A human names a machine name there too.
 - `login_code` and `login_status` take no `holder`. The session identity names the holder of the session.
 - Each record answer adds `holder`, `sealed_to` and `sealed_current`.
-- An instance copy skips the [pre-save check](architecture.impl.md#the-pre-save-check) and the [provider check](#the-provider-check).
-- The CLI on the host of an instance seals locally. With `--holder <name>` and an instance file `$XDG_CONFIG_HOME/kanthord/workers/<name>.yaml`, it derives the public key from the private key of that file. It authenticates with a worker token, and it trusts no key that the server supplies. The token call creates no connection.
-- Without that file, the CLI sends the plaintext and the holder under the human token, and the server seals.
-- The credential sheet of an instance page sends the plaintext and the holders. Its `Also seal to` field lists every live instance at the `worker` placement, grouped by worker.
+- A copy of a machine or an instance skips the [pre-save check](architecture.impl.md#the-pre-save-check) and the [provider check](#the-provider-check).
+- The CLI on the computer of an instance seals locally only for an instance holder. With `--holder <name>` and an instance file `$XDG_CONFIG_HOME/kanthord/workers/<name>.yaml`, it derives the public key from the private key of that file. It authenticates with a worker token, and it trusts no key that the server supplies. The token call creates no connection.
+- Without that file, the CLI sends the plaintext and the holder under the human token, and the server seals. A machine name has no instance file, so a machine holder always takes this path.
+- The credential sheet of an instance page or a machine page sends the plaintext and the holders. Its `Also seal to` field lists every live machine first, then every live instance at the `worker` placement, grouped by worker.
 - The `Rotate` sheet offers `Also rotate on` with every other holder of the name. It sends one request for each holder, each with its own `expected_revision`.
-- `/llm` lists the copies of the holder `server` only and states "Instance credentials live on the worker pages."
+- `/llm` lists the copies of the holder `server` only and states "Machine and instance credentials live on the machine and worker pages."
 
 ### The health of an instance copy
 
-- `credential_version` is an in-memory counter of the component for each instance. A server start sets every counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
-- Each committed write of a copy of that instance raises the counter by one. These writes are a create, a rotation, a metadata edit, a revoke, an archive, the completion of a login, and a refresh report.
-- Custody calls `instanceCopyRefreshed(holder)` after it writes the refresh report of an instance copy.
-- `credential_version` stays in the heartbeat answer of the instance, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
-- A worker instance checks each of its own copies after its first heartbeat answer and when the `credential_version` of a heartbeat answer changes. The process sends its first heartbeat at its start. A change during a check run starts one more run after it.
-- The instance lists its copies with `llm.credential.list`. It reads each live copy whose `sealed_current` is true through `llm.credential.sealed`.
-- `llm.credential.sealed` is `GET /api/llm/credential/:credential_name/sealed`, policy `worker`, read, secret. The answer is `{ name, platform, revision, metadata, sealed }` of the newest live revision of the copy of the instance of the token. A copy that is absent or sealed to an ended key answers 404 `credential.credential.not_found`. Custody reads the sealed object with `storedSealed` and never opens it.
-- The instance opens the copy with its own key and runs the `check` of [the LLM provider](#the-llm-provider) of the platform with a deadline of 10 s. The check has no refresh store, so it never refreshes the copy. An OAuth access token that expires within 5 minutes reports `unhealthy` with `failure_reason: unauthorized` without a remote call. It maps the result as [the resource healthcheck](#the-resource-healthcheck) does. A platform without a check or an open failure reports `unknown` with `failure_reason: unclassified`. A check that exceeds the deadline reports `unknown` with `failure_reason: deadline_exceeded`.
+- `CopyHealthBook` keeps one in-memory counter for each holder: each instance and each machine. A server start sets every counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
+- Each committed write of a copy raises the counter of its holder by one, also for a machine holder. These writes are a create, a rotation, a metadata edit, a revoke, an archive, the completion of a login, and a refresh report.
+- Custody calls `instanceCopyRefreshed(holder)` after it writes the refresh report of a copy of a machine or an instance.
+- `versionOf(instance)` answers the counter of the instance plus the counter of its machine, through `machineOf`. The heartbeat answers it as `credential_version`, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
+- A write of a machine copy thus changes the `credential_version` of each live instance of the machine.
+- A worker instance checks each copy that it uses after its first heartbeat answer and when the `credential_version` of a heartbeat answer changes. The process sends its first heartbeat at its start. A change during a check run starts one more run after it.
+- The instance lists the copies that it uses with `llm.credential.list`. It reads each live copy whose `sealed_current` is true through `llm.credential.sealed`.
+- Each live instance of a machine checks each machine copy that it uses, by the rules of this section.
+- `llm.credential.sealed` is `GET /api/llm/credential/:credential_name/sealed`, policy `worker`, read, secret. The answer is `{ name, platform, holder, revision, metadata, sealed }` of the newest live revision of the copy of the copy holder of the instance of the token. A copy that is absent or sealed to an ended key answers 404 `credential.credential.not_found`. Custody reads the sealed object with `storedSealed` and never opens it.
+- The instance opens the copy with the key of its `holder` and runs the `check` of [the LLM provider](#the-llm-provider) of the platform with a deadline of 10 s. The check has no refresh store, so it never refreshes the copy. An OAuth access token that expires within 5 minutes reports `unhealthy` with `failure_reason: unauthorized` without a remote call. It maps the result as [the resource healthcheck](#the-resource-healthcheck) does. A platform without a check or an open failure reports `unknown` with `failure_reason: unclassified`. A check that exceeds the deadline reports `unknown` with `failure_reason: deadline_exceeded`.
 - A run that ends on an indeterminate answer or a server failure runs again at the next heartbeat. A refusal waits for the next change of the counter.
 - It reports each result through `llm.credential.report`: `POST /api/llm/credential/:credential_name/report`, policy `worker`, mutation, body `{ revision, status, capability, failure_reason, models }`, answer 204.
-- `revision` must be the newest live revision of a copy of the instance of the token that is sealed to the current key. An absent or ended-key copy answers 404 `credential.credential.not_found`. Another revision answers 409 `credential.revision.conflict` with `details.revision`. These bodies answer 400 `credential.input.invalid`:
+- `revision` must be the newest live revision of the copy of the copy holder of the instance of the token, sealed to the current key of that holder. An absent or ended-key copy answers 404 `credential.credential.not_found`. Another revision answers 409 `credential.revision.conflict` with `details.revision`. These bodies answer 400 `credential.input.invalid`:
   - a `failure_reason` that is null for a status other than `healthy`, or not null for `healthy`;
   - the `failure_reason` `held_by_instance`, because only the server answers it;
   - a `capability` other than the capability of the platform.
-- `models` holds the model list of a check that reads one, else null. It holds at most 512 items, and each `id` and `owned_by` holds at most 256 characters. The instance drops a longer item. The dashboard offers it as the model ids of the next metadata edit of an `openai-compatible` instance copy.
-- The component keeps the last report of each copy in memory, with the instance name and the time. A server restart shows `unknown` until the next report.
-- `worker.instance.get` answers the report of each copy in `credentials[].health`: `{ status, capability, failure_reason, models, reported_at }`. A copy with no report, a report of another revision, or a copy sealed to an ended key answers `unknown`, `failure_reason: held_by_instance`, `models: null` and `reported_at: null`.
+- `models` holds the model list of a check that reads one, else null. It holds at most 512 items, and each `id` and `owned_by` holds at most 256 characters. The instance drops a longer item. The dashboard offers it as the model ids of the next metadata edit of an `openai-compatible` copy of a machine or an instance.
+- The component keeps the last report of each copy in memory, keyed by `(holder, name)`, with the reporter instance and the time. A server restart shows `unknown` until the next report.
+- `worker.instance.get` answers in `credentials` each copy that the instance uses, each with `holder`. `worker.machine.get` answers in `credentials` each live copy of the machine, with the same item shape.
+- Each item holds the report in `health`: `{ status, capability, failure_reason, models, reported_at, reported_by }`. `reported_by` is the instance name of the report, or null. A copy with no report, a report of another revision, or a copy sealed to an ended key answers `unknown`, `failure_reason: held_by_instance`, `models: null` and `reported_at: null`.
 - `CopyHealthBook` of `src/llm/copy-health.ts` holds the counters and the reports. `CopyChecks` of `src/apps/worker/copy-checks.ts` runs the checks on the instance.
+- An instance with no machine configuration skips the check of each machine copy. It logs `Worker instance credential check skipped` with `credential_name`, `holder` and `code: worker.machine.config_absent`, and it sends no report.
 
 ## The OAuth login
 
@@ -206,16 +212,19 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ### The login of an instance
 
 - `llm.credential.login` takes the optional `holder`. A login of an instance holder runs on that instance, and the server holds only the session record. Only an instance at the `worker` placement takes a login. A login for a server instance runs on the server under the holder `server`.
-- An instance with no current connection answers 409 `credential.login.instance_unavailable`. A connection whose last heartbeat is older than `INSTANCE_CONNECTED_WINDOW` (60 s) counts as no current connection.
-- A holder that names no live instance at the `worker` placement answers 400 `llm.credential.instance_unknown`.
-- A login of an instance holder refuses with 409 `credential.name.conflict` only when the `(name, holder)` group holds a live revision sealed to the current fingerprint. `details.id` holds the identity of that revision.
+- `llm.credential.login` also takes a machine name as `holder`. A connected instance of the machine runs the session, and it seals the result to the machine key.
+- The server picks the runner when the login starts. For an instance holder, the runner is the instance. For a machine holder, the runner is the connected instance of the machine with the newest last heartbeat, then the first name in alphabetical order.
+- An instance with no current connection answers 409 `credential.login.instance_unavailable`. A connection whose last heartbeat is older than `INSTANCE_CONNECTED_WINDOW` (60 s) counts as no current connection. A machine with no connected instance answers the same code.
+- A holder that names no live machine and no live instance at the `worker` placement answers 400 `llm.credential.holder_unknown`.
+- The session record holds `holder` and `runner`. The rules below that name the instance mean the runner.
+- A login of an instance holder or a machine holder refuses with 409 `credential.name.conflict` only when the `(name, holder)` group holds a live revision sealed to the current fingerprint. `details.id` holds the identity of that revision.
 - A login of an archived copy answers 409 `credential.credential.archived`. The archive stays final.
-- A copy whose newest live revision is sealed to an ended key takes a new login. A key rotation or a Reset key of the instance makes a copy stale in this way.
+- A copy whose newest live revision is sealed to an ended key takes a new login. A key rotation or a Reset key of the instance or the machine makes a copy stale in this way.
 - `llm.credential.login` waits for the first report of the instance with an address, inside the operation timeout of 30 s. The instance receives the session in its next work read.
 - An instance session never uses browser mode. `anthropic-subscription` uses `copy_code` mode. `openai-codex` and `github-copilot` use device mode. A request for browser mode answers 400 `credential.login.browser_unavailable`.
-- The work read of the instance lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 15 s.
-- The LLM Service raises the work version of the instance when a login starts, when a human submits its code and when it ends. It calls its dependency `workChanged(holder)`. A login ends by completion, failure or expiry.
-- `login_sessions` is `[{ session_id, name, platform, mode, code }]`. `name` is the credential name, because the instance seals with it in the AAD. `mode` is `copy_code` or `device`. `code` is the copy code that the human submitted, or null.
+- The work read of the runner lists its pending sessions in `login_sessions`, under [the instance exchange](worker-service.impl.md#the-instance-exchange). The instance sends its heartbeat every 15 s.
+- The LLM Service raises the work version of the runner when a login starts, when a human submits its code and when it ends. It calls its dependency `workChanged(runner)`. A login ends by completion, failure or expiry.
+- `login_sessions` is `[{ session_id, name, holder, platform, mode, code }]`. `name` and `holder` enter the AAD of the seal. `holder` is the instance or its machine. `mode` is `copy_code` or `device`. `code` is the copy code that the human submitted, or null.
 - The instance runs the pi-ai login with the interaction adapter of the component and registers the OAuth flows of pi-ai as the component does. It reports `{ state, address, code, message, failure_reason }` through `llm.credential.login_report`: `POST /api/llm/credential/login/:session_id/report`, policy `worker`, mutation, answer 204.
 - `state` is `pending`, `completed` or `failed`. A `pending` report sets the address, the code and the last message. A `failed` report fails the session with `failure_reason`.
 - In device mode, the instance reports only the user code and the verification address. The PKCE verifier and the polling secret stay in the instance process.
@@ -223,15 +232,15 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - An instance session accepts one value, in `copy_code` mode only, after the instance reported the address. Another value answers 409 `credential.login.value_not_awaited`.
 - The instance runs each listed session once. A session that leaves `login_sessions` ends on the instance.
 - The instance expires its own run 15 minutes after it receives the session. The expiry of the server decides.
-- At completion, the instance seals the credential to its own key and sends `sealed` and `sealed_to` in the final report. The component writes the revision through custody, under the rules of this section. A group with no revision gets revision 1. A group with a stale live revision n gets revision n+1, sealed to the current key, with the metadata of revision n. The older live revisions then drain as after a rotation.
+- At completion, the instance seals the credential to the key of the session `holder` and sends `sealed` and `sealed_to` in the final report. For a machine holder, it reads the machine key from the machine configuration. An absent machine configuration fails the session with `failure_reason: worker.machine.config_absent`. The component writes the revision through custody, under the rules of this section. A group with no revision gets revision 1. A group with a stale live revision n gets revision n+1, sealed to the current key, with the metadata of revision n. The older live revisions then drain as after a rotation.
 - The write checks in one transaction that the session is pending and not expired, and that `sealed_to` is the current fingerprint of the holder. It checks the name rules of the start again. An expired session stores nothing.
 - A refused write fails the session with the error code and stores nothing. A `completed` report without `sealed`, or another report with `sealed`, answers 400 `credential.input.invalid`.
-- A report to an unknown, ended or expired session, or to a session of another instance, answers 404 `credential.login.not_found`.
+- Only the runner reports the session. A report to an unknown, ended or expired session, or a report of another instance, answers 404 `credential.login.not_found`.
 - `address` is an `https:` URL of at most 2048 characters. `code`, `message` and `failure_reason` hold at most 1024 characters. The first address of a session stays; a report with another address answers 400 `credential.input.invalid`.
 - The component applies a `pending` or `failed` report to the session after the commit of the operation.
 - The instance sends a lost `pending` report again at each heartbeat while its session runs. It sends a lost `completed` report again every 2 s with one idempotency key, until the session ends or expires. A stopped instance starts no session.
 - `InstanceLogin` of `src/llm/instance-login.ts` holds the session of an instance holder on the server. `InstanceLogins` of `src/apps/worker/instance-login.ts` runs the sessions on the instance.
-- The instance refreshes its OAuth copy and reports the refreshed copy sealed, under [the credential handover](custody.impl.md#the-credential-handover). One instance runs one execution at a time, so one copy has one refresh holder.
+- The instance refreshes the OAuth copy of its copy holder and reports the refreshed copy sealed, under [the credential handover](custody.impl.md#the-credential-handover). The instances of one machine share one copy, so each refresh takes the [refresh lease](custody.impl.md#the-refresh-lease) of custody first.
 
 ## The model connector
 
@@ -263,7 +272,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## The resource healthcheck
 
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
-- The healthcheck reads `holder` first. An instance copy reports `unknown` with `failure_reason: held_by_instance` and releases nothing. [The health of an instance copy](#the-health-of-an-instance-copy) states the report of the instance.
+- The healthcheck reads `holder` first. A copy of a machine or an instance reports `unknown` with `failure_reason: held_by_instance` and releases nothing. [The health of an instance copy](#the-health-of-an-instance-copy) states the report of the instance.
 - The [LLM providers](#the-llm-provider) supply the checks.
 - The healthcheck refreshes an OAuth record by [the OAuth refresh of a check](#the-oauth-refresh-of-a-check). An access token that the check cannot refresh and that expires within 5 minutes answers `unauthorized` without a remote call. The healthcheck reports `unhealthy` with `failure_reason: unauthorized`.
 - The `github-copilot` check sends the stored GitHub token and ignores the stored expiry. The remote decides the result of an expired record.
@@ -291,7 +300,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A check without a refresh store gives pi-ai a frozen store. Its `modify` answers the stored value and never calls the refresh, so the check never refreshes, also when the token enters the window between two model calls.
 - The redaction list of a check holds every credential that the refresh returns, also when the write fails.
 - A failed refresh, for example a revoked refresh token, answers `unauthorized`. The stored value does not change. The log of the healthcheck, the verify and the provider check names the reason `access token refresh failed`. The log of the model check names the reason `The access token refresh failed.`
-- The check of an instance copy runs on the instance with no refresh store, by [the health of an instance copy](#the-health-of-an-instance-copy). The instance refreshes its own copy only in an execution.
+- The check of a copy of a machine or an instance runs on an instance with no refresh store, by [the health of an instance copy](#the-health-of-an-instance-copy). The instance refreshes such a copy only in an execution, under the [refresh lease](custody.impl.md#the-refresh-lease).
 - The `github-copilot` check sends the stored GitHub token and refreshes nothing.
 - The rule adds no error code.
 
@@ -308,8 +317,8 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests cover the metadata map of the model connector for each platform with metadata, and each refusal reason of `worker.runtime.setup_refused`.
-- Tests cover a human create for several holders, a sealed create of an instance and each refusal of an instance caller. They also cover `llm.credential.instance_unknown` and an `openai-compatible` instance copy with typed model ids.
-- Tests cover an instance login in each allowed mode with a fake pi-ai flow, a refused browser mode, `credential.login.instance_unavailable` and an expiry that stores nothing.
+- Tests cover a human create for several holders with a machine holder, a sealed create of an instance and each refusal of an instance caller. They also cover `llm.credential.holder_unknown` and an `openai-compatible` copy of a machine or an instance with typed model ids.
+- Tests cover an instance login and a machine login in each allowed mode with a fake pi-ai flow, a refused browser mode, `credential.login.instance_unavailable` and an expiry that stores nothing.
 - Tests cover a login after a key rotation (revision 2 live), a login after a revoked revision (the next revision), a live current copy (409 `credential.name.conflict`), an archived copy (409 `credential.credential.archived`) and a copy that turns current during the session.
 - Tests cover `llm.credential.report` and each refusal, `llm.credential.sealed`, the counter of each write, the healthcheck of an instance copy with no release, and `unknown` after a server restart.
 - A test runs a live instance against the server with a fake provider check: a bad key shows `unhealthy` with the report time on `worker.instance.get`, and a rotation shows `healthy` after the next check.

@@ -42,6 +42,9 @@
           <li><a href="#expected-response">Expected response</a></li>
           <li><a href="#api-shape">API shape</a></li>
           <li><a href="#cli-shape">CLI shape</a></li>
+          <li>
+            <a href="#workercredentiallease">The refresh lease</a>
+          </li>
         </ul>
       </details>
       <main>
@@ -84,22 +87,42 @@
           <p>
             When the instance of the caller is at the
             <code>worker</code> placement, the server releases only the copy of
-            that instance, sealed to the current key of that instance. Each item
+            the copy holder of that instance, sealed to the current key of that
+            holder. The copy holder is the instance when the instance holds a
+            live own copy of the name. Else it is the
+            <a href="machine.html">worker machine</a> of the instance. Each item
             of the envelope is
-            <code>{ credential_id, provider_id, name, platform, sealed }</code>.
-            The server never opens <code>sealed</code>. The worker opens it with
-            the private key of its instance. A copy that the key does not open
-            fails the handover on the worker with
+            <code
+              >{ credential_id, provider_id, name, platform, holder, sealed
+              }</code
+            >. <code>holder</code> is the holder of the copy. The server never
+            opens <code>sealed</code>. The worker opens it with the private key
+            of that holder: the key of its instance, or the machine key of the
+            <a href="machine.html#machine-configuration"
+              >machine configuration</a
+            >. The worker reads the machine key at each use. A copy that the key
+            does not open, or a machine with no machine configuration, fails the
+            handover on the worker with
             <code>worker.handover.sealed_unopened</code>. At this placement,
             <code>ssh_identities</code> is <code>[]</code>.
+          </p>
+          <p>
+            At the first use of a name in an execution, the handover pins the
+            newest live revision of the copy holder. A later handover of that
+            execution reads the pinned revision, whatever the copy holder is
+            then. An own copy that is sealed to an ended key of the instance
+            does not fall back to the machine copy. The handover refuses it.
           </p>
           <p>
             The worker sends a refresh report of a pinned credential to
             <code>POST /api/worker/credential</code>, sealed in the same way.
             The report is <code>{ credential_id, digest, credential }</code>.
-            For an instance copy, the report is
+            For a machine or an instance copy, the report is
             <code>{ credential_id, digest, sealed }</code>, and
-            <code>digest</code> is the digest of the stored sealed object.
+            <code>digest</code> is the digest of the stored sealed object. The
+            worker seals the report with the key of the holder of the item.
+            Before an OAuth refresh, the worker takes the
+            <a href="#workercredentiallease">refresh lease</a> of the revision.
           </p>
           <p>
             The envelope also carries the
@@ -322,10 +345,12 @@
                 <tr>
                   <td><code>403 custody.handover.holder_refused</code></td>
                   <td>
-                    <code>worker</code> placement only: the instance holds no
-                    live copy sealed to its current key.
-                    <code>details.reason</code> is <code>server_held</code> when
-                    only the <code>server</code> copy exists, else
+                    <code>worker</code> placement only: the copy holder of the
+                    instance holds no live copy sealed to its current key, for
+                    example a stale own copy or a machine copy after a Reset key
+                    of the machine. <code>details.reason</code> is
+                    <code>server_held</code> when only the
+                    <code>server</code> copy exists, else
                     <code>held_elsewhere</code>.
                   </td>
                 </tr>
@@ -335,8 +360,8 @@
                   </td>
                   <td>
                     <code>server</code> and <code>container</code> placements
-                    only: the credential has live instance copies and no live
-                    <code>server</code> copy.
+                    only: the credential has live machine or instance copies and
+                    no live <code>server</code> copy.
                   </td>
                 </tr>
                 <tr>
@@ -557,6 +582,133 @@
             for the token and endpoint precedence. The HTTP client deadline is
             31 seconds.
           </p>
+          <h2 id="workercredentiallease">The refresh lease</h2>
+          <p>
+            One execution at a time refreshes one OAuth credential revision, at
+            every placement. Before an OAuth refresh, the execution store of the
+            worker calls <code>worker.credential.lease</code>. pi-ai asks for a
+            refresh only for a token that expires within 5 minutes, so a model
+            call takes no lease.
+          </p>
+          <ul>
+            <li>
+              The server keeps one lease for each credential revision in memory:
+              <code>{ execution_id, expires_at }</code>. A server restart ends
+              every lease. A lease lasts 30000 ms. That covers the OAuth refresh
+              timeout of pi-ai, 15 seconds, and the report.
+            </li>
+            <li>
+              The answer is an envelope, sealed with the handover key of the
+              execution. Its payload is <code>{ item, expires_at }</code>.
+              <code>item</code> is the handover item of the stored value of the
+              revision: plain for the holder <code>server</code>, sealed with
+              <code>holder</code> for another holder.
+            </li>
+            <li>
+              The worker adopts the stored value of the answer and refreshes
+              that value. It then sends one
+              <code>POST /api/worker/credential</code> report, also for an
+              unchanged value.
+            </li>
+            <li>
+              A lease of the same execution renews the lease. A lease past
+              <code>expires_at</code> lets another execution take a new lease.
+            </li>
+            <li>
+              A report of the lease holder ends the lease after its write. A
+              report of another execution keeps the lease. The digest rule of
+              the report does not change.
+            </li>
+            <li>
+              Before each retry of its report, the lease holder renews its
+              lease. The lease ends at the report or at its expiry.
+            </li>
+            <li>
+              The worker keeps the handover key of an execution until the
+              execution ends, and zeroes it then. Each lease answer opens with
+              that key.
+            </li>
+            <li>
+              The worker retries <code>worker.credential.lease_held</code> with
+              a new key and the backoff of an indeterminate result. The retry
+              ends when the claim expires or the refresh call aborts.
+            </li>
+            <li>
+              The handover does not wait for a lease. A check of a revision
+              under a lease does not refresh, because the lease holder pins the
+              revision.
+            </li>
+          </ul>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>POST /api/worker/credential/lease</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>worker.credential.lease</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td>
+                    <code>client</code> (machine bearer JWT) with a live
+                    registration and an execution proof of a live execution
+                  </td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>Yes; secret, so no answer is replayed</td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>
+                    <code
+                      >{ &quot;execution_id&quot;, &quot;credential_id&quot;
+                      }</code
+                    >. <code>credential_id</code> is a revision that the
+                    execution pins.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>No CLI command calls this operation.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>400 custody.handover.lease_invalid</code></td>
+                  <td>The execution does not pin the revision.</td>
+                </tr>
+                <tr>
+                  <td><code>409 credential.revision.revoked</code></td>
+                  <td>The revision ended.</td>
+                </tr>
+                <tr>
+                  <td><code>503 worker.credential.lease_held</code></td>
+                  <td>
+                    Another live execution holds an unexpired lease of the
+                    revision, or a check refresh of the revision is in flight.
+                    Retry with a new key.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </article>
       </main>
     </div>

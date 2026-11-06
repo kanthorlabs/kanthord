@@ -63,10 +63,11 @@
             This view holds the tables that set up an environment and write a
             plan. After this group, a human creates a project, stores
             credentials and pins SSH host keys. The human also adds worker
-            instances, binds repositories, a storage bucket and workers, enables
-            agents and imports the mission plan. No execution runs yet. The
-            Footprint group holds the cleanups that a human confirms and the
-            alert episodes of the stores that grow with time.
+            machines and worker instances, binds repositories, a storage bucket
+            and workers, enables agents and imports the mission plan. No
+            execution runs yet. The Footprint group holds the cleanups that a
+            human confirms and the alert episodes of the stores that grow with
+            time.
           </p>
           <p>
             The <a href="index.html">README</a> holds the conventions, the
@@ -143,8 +144,8 @@ erDiagram
         integer ended_at "Unix ms, null while live"
         integer available_at "Unix ms, end of the cooldown of the name, revision 1 only, else null"
         integer strikes "failures of the name in a row, revision 1 only, default 0"
-        text holder "server or a worker instance name, group key with name"
-        text sealed_to "fingerprint of the instance key, null for server"
+        text holder "server, a worker machine name or a worker instance name, group key with name"
+        text sealed_to "fingerprint of the machine or instance key, null for server"
     }
 
     worker_instance {
@@ -152,9 +153,20 @@ erDiagram
         text name "binding-name form, group key, never changes"
         text worker "catalog worker that kanthord hosts, never changes"
         text placement "server, container or worker, never changes"
+        text machine "worker machine name at worker, null at server and container, never changes"
         integer revision "unique with name, starts at 1"
         text public_key "base64url, 32-byte X25519 public key, null at server and container"
         text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key, null at server and container"
+        integer created_at "Unix ms"
+        integer ended_at "Unix ms, null while live"
+    }
+
+    worker_machine {
+        text id PK "worker_machine_ + ULID, one revision"
+        text name "instance-name form, group key, never changes"
+        integer revision "unique with name, starts at 1"
+        text public_key "base64url, 32-byte X25519 public key"
+        text fingerprint UK "SHA256: + unpadded base64 of SHA-256 of the key"
         integer created_at "Unix ms"
         integer ended_at "Unix ms, null while live"
     }
@@ -284,6 +296,8 @@ erDiagram
     agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
     project_binding }o..o{ worker_instance : "ref by name in config.worker_instances JSON, no FK"
     credential }o..o| worker_instance : "ref holder by name, no FK"
+    worker_instance }o..o| worker_machine : "ref machine by name, no FK"
+    credential }o..o| worker_machine : "ref holder by name, no FK"
 
     project_project ||..|| mission_mission : "ref, no FK, createMission"
     mission_mission ||..o{ mission_node : "FK mission_id"
@@ -314,7 +328,7 @@ erDiagram
     class repository_host_key repository
     class project_project,project_binding project
     class agent_enablement agent
-    class worker_instance worker
+    class worker_instance,worker_machine worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job,scheduler_queue_place scheduler
     class footprint_cleanup,footprint_alert footprint
@@ -391,6 +405,17 @@ erDiagram
                     <a
                       href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/worker-service.impl.md#worker-instances"
                       >worker instances</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_machine</code></td>
+                  <td>Worker Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/worker-service.impl.md#worker-machines"
+                      >worker machines</a
                     >.
                   </td>
                 </tr>
@@ -533,6 +558,11 @@ erDiagram
               revision states the instance.
             </li>
             <li>
+              <code>worker_machine</code> holds one row for each revision. The
+              group <code>name</code> is one worker machine, and its live
+              revision states the machine.
+            </li>
+            <li>
               <code>mission_node_revision</code> holds one row for each content
               revision of a node. The current revision of a node is its row with
               the greatest <code>revision</code>, and the primary key
@@ -564,11 +594,13 @@ erDiagram
               <code>credential.name.conflict</code>.
             </li>
             <li>
-              <code>holder</code> is never null. It holds <code>server</code> or
-              the name of a live worker instance. <code>sealed_to</code> is null
-              for <code>server</code> and holds the fingerprint of the instance
-              key that sealed the secret otherwise. Custody validates the
-              fingerprint form, and the LLM component validates the instance.
+              <code>holder</code> is never null. It holds <code>server</code>,
+              the name of a live worker machine, or the name of a live worker
+              instance. <code>sealed_to</code> is null for
+              <code>server</code> and holds the fingerprint of the machine or
+              the instance key that sealed the secret otherwise. Custody
+              validates the fingerprint form, and the LLM component validates
+              the live machine or the live instance.
             </li>
             <li>
               Only an LLM platform takes a holder other than
@@ -584,11 +616,11 @@ erDiagram
               <code>(name, holder)</code> with a null <code>ended_at</code>.
             </li>
             <li>
-              The plaintext under the envelope of an instance row is the sealed
-              object <code>{ alg, enc, ciphertext }</code>: HPKE base mode to
-              the instance key. The server cannot open it. A row sealed to a
-              fingerprint that is no live revision of its instance has no
-              holder.
+              The plaintext under the envelope of a machine or an instance row
+              is the sealed object <code>{ alg, enc, ciphertext }</code>: HPKE
+              base mode to the key of the holder. The server cannot open it. A
+              row sealed to a fingerprint that is no live revision of its holder
+              has no holder.
             </li>
             <li>
               A rotation inserts the next revision and, in the same transaction,
@@ -652,15 +684,25 @@ erDiagram
               are atomic. An archive sets <code>ended_at</code> on every live
               revision of the group and keeps the rows. A group with no live
               revision is archived, and an archive is final. The archive of a
-              worker instance archives every live group of that holder in its
-              transaction.
+              worker instance or a worker machine archives every live group of
+              that holder in its transaction.
             </li>
             <li>
               The dependents above apply to a group of the holder
               <code>server</code>. The dependents of a group of an instance
               holder are the worker bindings that list the instance and whose
               agent configuration names the credential. The Project Service
-              answers them through <code>bindingsListingInstance</code>.
+              answers them through <code>bindingsListingInstance</code>. An
+              instance group has no dependent while the machine of the instance
+              holds a live group of the name that is sealed to the current
+              machine key.
+            </li>
+            <li>
+              The dependents of a group of a machine holder are the worker
+              bindings that list an instance whose copy holder for the name is
+              the machine, and whose agent configuration names the credential.
+              The copy holder of an instance is the instance while its own group
+              of the name holds a live revision, else its machine.
             </li>
             <li>
               A login session is a runtime record of the LLM component, and no
@@ -819,6 +861,14 @@ erDiagram
               <code>server</code> and the <code>container</code> placements.
             </li>
             <li>
+              <code>machine</code> holds the name of a live worker machine at
+              the <code>worker</code> placement. It is null at the
+              <code>server</code> and the <code>container</code> placements. The
+              machine is a human choice at the create, and no other data
+              computes it. It never changes. A wrong value answers 400
+              <code>worker.instance.machine_invalid</code>.
+            </li>
+            <li>
               <code>name</code> takes the binding-name form. A taken name
               answers 409 <code>worker.instance.name_conflict</code>, an
               archived name included. The names <code>server</code>,
@@ -852,6 +902,31 @@ erDiagram
               also refused while a registration of the instance holds a live
               execution. With <code>force: true</code>, it revokes that
               execution in its transaction.
+            </li>
+            <li>
+              <code>worker_machine</code> holds one row for each revision. A
+              machine holds a key revision chain and no worker, placement,
+              connection or binding, so <code>worker_instance</code> cannot hold
+              it. <code>id</code> is the primary key,
+              <code>(name, revision)</code> has a unique index, and
+              <code>fingerprint</code> has a unique index. The table holds no
+              other index and no <code>CHECK</code>. <code>public_key</code> and
+              <code>fingerprint</code> are never null.
+            </li>
+            <li>
+              A machine name takes the instance name form and its reserved
+              names. Machines and instances share one name space: a machine
+              create refuses a name of a live or an archived machine or
+              instance. No two revisions of any machine or any instance share
+              one fingerprint.
+            </li>
+            <li>
+              A Reset key of a machine inserts the next revision with a new
+              public key and ends the old revision in one transaction. An
+              archive ends the live revision and archives every credential group
+              of the machine in its transaction. It is refused with 409
+              <code>worker.machine.in_use</code> while a live instance names the
+              machine.
             </li>
           </ul>
           <h3 id="agent-component">Agent component</h3>
@@ -949,9 +1024,13 @@ erDiagram
               The Agent component owns no cooldown table. The cooldown of a
               credential copy is the hold on revision 1 of its
               <code>(name, holder)</code> group, and the hold covers every model
-              of that copy. A claim reads and writes the copy of its claimant
-              holder: the instance of the registration at the
-              <code>worker</code> placement, else <code>server</code>.
+              of that copy. A claim reads the copy of the copy holder of its
+              claimant: at the <code>worker</code> placement, the own group of
+              the instance of the registration, else the group of its machine.
+              At the other placements, it reads <code>server</code>. A stop
+              writes the hold of the group of the row that the execution pins. A
+              machine group thus holds one cooldown for every instance of the
+              machine.
             </li>
             <li>
               <code>available_at</code> of a hold is the clock plus
@@ -1386,6 +1465,21 @@ erDiagram
                     Reference by name, no FK. <code>server</code> names no row.
                     A holder names only an instance at the
                     <code>worker</code> placement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credential.holder</code></td>
+                  <td><code>worker_machine.name</code></td>
+                  <td>
+                    Reference by name, no FK. A holder names a live machine.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker_instance.machine</code></td>
+                  <td><code>worker_machine.name</code></td>
+                  <td>
+                    Reference by name, no FK. Set at the
+                    <code>worker</code> placement only.
                   </td>
                 </tr>
                 <tr>

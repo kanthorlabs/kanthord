@@ -40,7 +40,7 @@ The closed `connection` set is:
 
 ## login session
 
-One human attempt to obtain an OAuth credential for one holder. A session of the holder `server` runs on the server, and a session of a worker instance runs on that instance.
+One human attempt to obtain an OAuth credential for one holder. A session of the holder `server` runs on the server, and a session of a worker instance runs on that instance. A session of a worker machine runs on one connected instance of that machine.
 Its closed state set is:
 
 - `pending`

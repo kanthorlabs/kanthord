@@ -872,7 +872,10 @@
                       >Hand over execution credentials</a
                     >
                   </td>
-                  <td><code>POST /api/worker/handover</code></td>
+                  <td>
+                    <code>POST /api/worker/handover</code>,
+                    <code>POST /api/worker/credential/lease</code>
+                  </td>
                   <td><code>worker handover</code></td>
                 </tr>
                 <tr>
@@ -936,6 +939,28 @@
                     <code>worker instance rotate</code>,
                     <code>worker instance archive</code>,
                     <code>worker join</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Worker</td>
+                  <td>
+                    <a href="worker/machine.html">Manage worker machines</a>
+                  </td>
+                  <td>
+                    <code>POST /api/worker/machine</code>,
+                    <code>GET /api/worker/machine</code>,
+                    <code>GET /api/worker/machine/:machine_name</code>,
+                    <code>POST /api/worker/machine/:machine_name/revision</code
+                    >,
+                    <code>POST /api/worker/machine/:machine_name/archive</code>
+                  </td>
+                  <td>
+                    <code>worker machine create</code>,
+                    <code>worker machine list</code>,
+                    <code>worker machine get</code>,
+                    <code>worker machine rotate</code>,
+                    <code>worker machine archive</code>,
+                    <code>worker machine join</code>
                   </td>
                 </tr>
                 <tr>
