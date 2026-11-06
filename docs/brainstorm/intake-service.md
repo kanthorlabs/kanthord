@@ -160,7 +160,7 @@ A link read of Check now reads the items of one external link.
 It stores each item as an inbound event of the newest inbound of the link resource.
 A link with no such inbound refuses the whole check before any read.
 A reply operation posts one reply to a link with the credential of the conversation binding, and it has no read-back.
-The [implementation](intake-service.impl.md#the-credential-platforms) defines the credential platforms, the receipts, the link read and the reply operations.
+The [implementation](intake-service.impl.md#the-credential-platforms) defines the credential platforms, the receipts, the [decoders](intake-service.impl.md#the-jira-and-slack-decoders), the link read and the reply operations.
 
 ## Outbound requests
 

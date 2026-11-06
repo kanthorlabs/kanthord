@@ -325,6 +325,28 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A platform implementation prefers the HTTP API when the platform offers the operation.
 - These measures reduce exposure, and they prove no containment.
 
+## The Jira and Slack decoders
+
+- A `jira` inbound and a `slack` inbound are webhook inbounds. A poll create of platform `jira` or `slack` answers the validation failure of an unknown pair of kind and platform.
+- `resource` of a `jira` inbound is `<site>/<project_key>`, and its inbound resource identity is `conversation:jira:<resource>`.
+- `resource` of a `slack` inbound is the `team_id` of the workspace, and its inbound resource identity is `conversation:slack:<resource>`.
+- `decodeLinkUpdate` of the Jira and the Slack platform implementation is a pure decoder. It answers `{ external_link, update_key, actor_id, actor_automated, occurred_at, mentions }`, or null. It makes no platform call.
+
+| `metadata.event`  | Source          | `update_key`                             | `actor_id`                        | `actor_automated` is true when                                                                 |
+| ----------------- | --------------- | ---------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `comment_created` | Jira webhook    | `jira_comment:<site>:<comment id>`       | `author.accountId` of the comment | `author.accountType` of the comment is `app`                                                   |
+| `comment_listed`  | Jira link read  | `jira_comment:<site>:<comment id>`       | `author.accountId` of the comment | The same rule                                                                                  |
+| `message`         | Slack webhook   | `slack_message:<team_id>:<channel>:<ts>` | `user` of the message             | `bot_id` or `app_id` is present, or `subtype` is other than `thread_broadcast` or `file_share` |
+| `reply_listed`    | Slack link read | `slack_message:<team_id>:<channel>:<ts>` | `user` of the message             | The same rule                                                                                  |
+
+- `occurred_at` is `created` of a Jira comment and the time of `ts` of a Slack message.
+- `mentions` is an empty list, because a `jira` and a `slack` binding refuse `inbox` until the layers I3 and I4 of the Inbox.
+- An item of a link read decodes to the same `update_key` as its webhook event, so the unique index of `mission_link_update` keeps one row.
+- The Jira decoder answers a link update only for a comment. An issue of another project decodes to null.
+- The Slack decoder answers a link update only for a message whose `thread_ts` differs from its `ts`. `message_changed`, `message_deleted` and a body of another team decode to null.
+- The Jira description answers `comment.author.displayName`, the body as plain text, `https://<site>/browse/<key>` and `comment.created`. A text body stays. An ADF body becomes the text of its text nodes, with a newline between blocks.
+- The Slack description answers `event.user`, `event.text`, `https://slack.com/archives/<channel>/p<ts without the dot>?thread_ts=<thread_ts>&cid=<channel>` and the time of `event.ts`.
+
 ## The credential platforms
 
 - The Intake Service owns the credential platforms `jira`, `slack` and `slack_signing_secret`. It declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) `/api/intake/credential`. The ten commands `kanthord intake credential` use it.
