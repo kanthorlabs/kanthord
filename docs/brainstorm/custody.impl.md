@@ -137,11 +137,12 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 ## The protected facility
 
 - The facility consumes the authorization result of the service that owns the entity of the release.
-- Its authorization function accepts requester identity, entity and requested operation, and returns a grant or refusal. The requested operation names the kind of release, for example `poll`, `workbench` or `ssh_identity`.
+- Its authorization function accepts requester identity, entity and requested operation, and returns a grant or refusal. The requested operation names the kind of release, for example `poll`, `receipt`, `workbench` or `ssh_identity`.
 - A module-private `WeakSet` records each frozen grant, so a caller cannot fabricate one.
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
-- A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `poll`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
+- A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `poll` or `receipt`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
+- A `receipt` release serves a `slack` webhook inbound. It releases the newest live revision of its `slack_signing_secret` credential for one receipt.
 - A release for a workbench session names the human identity of the message that started the run as the requester, the workbench session as the entity and `workbench` as the operation.
 - The Workbench Service grants that release while the workbench session exists, the enablement of its agent is enabled and the configuration of the session is valid.
 - A release for an [`env@1` session](project-service.impl.md#the-agent-env1) names the service identity of the Project Service as the requester, the session as the entity and `environment_agent` as the operation. The Project Service grants it while the session runs and the enablement of `env@1` is enabled. A human or a machine requester is refused.

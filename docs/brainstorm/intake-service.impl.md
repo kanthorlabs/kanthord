@@ -17,8 +17,9 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 ## The credential release of an inbound
 
 - Each remote call of an inbound takes one single-use operation grant from the [protected facility](custody.impl.md#the-protected-facility) under the service identity of the Intake Service.
-- The one inbound operation is `poll`.
-- The facility checks that the requester is the Intake service identity and that the operation is `poll`. It needs no Project decision, because the human configuration of the inbound authorizes the release.
+- The inbound operations are `poll` and `receipt`.
+- `receipt` releases the signing secret of a `slack` webhook inbound for one receipt. The receipt drops the material in `finally`.
+- The facility checks that the requester is the Intake service identity and that the operation is `poll` or `receipt`. It needs no Project decision, because the human configuration of the inbound authorizes the release.
 - The Intake Service supplies the inbound facts from its own row: the inbound identity, the credential name, the platform and the resource. At a create, the facts come from the validated input before the insert.
 - Custody resolves the newest live revision of the credential name, checks the platform suitability and releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret).
 - The handler builds its platform client for one call, caches no client and no token, and drops the material in `finally`.
@@ -54,10 +55,19 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - For a GitHub event, the verification requires exactly one `X-Hub-Signature-256` header. It rejects a missing header, a duplicate header, a value without the `sha256=` prefix, a value that is not hexadecimal and a value of another length, before any comparison.
 - It computes the HMAC with `crypto.createHmac` and SHA-256 over the exact bytes, and it compares two 32-byte digests with `timingSafeEqual`.
 - A failed verification answers 401 and stores nothing.
-- After the verification, the platform implementation classifies the request. A GitHub request with `X-GitHub-Event: ping` is a handshake and answers 204. A Slack `url_verification` follows the same rule with the answer `{ "challenge": <challenge> }` when the Slack platform lands.
+- After the verification, the platform implementation classifies the request. A GitHub request with `X-GitHub-Event: ping` is a handshake and answers 204. A Slack `url_verification` follows the same rule with the answer `{ "challenge": <challenge> }`.
 - A handshake stores no event, skips the capacity bound, reaches no consumer and writes one span of the Tracking Service. A repeat gets the same answer, so no record enforces a single handshake.
 - A valid HMAC proves the possession of the secret alone. It authenticates no other header, it establishes no repository, and it detects no replay.
-- The insert stores `event_id` from `X-GitHub-Delivery`, the exact body in `event` and `{ "event": <X-GitHub-Event> }` in `metadata`. A repeated `event_id` inside the inbound inserts nothing and answers 2xx.
+- For a GitHub event, the insert stores `event_id` from `X-GitHub-Delivery`, the exact body in `event` and `{ "event": <X-GitHub-Event> }` in `metadata`.
+- A repeated `event_id` inside the inbound inserts nothing and answers 2xx.
+- For a `jira` event, the verification requires exactly one `X-Hub-Signature` header of the form `sha256=<64 hex>`. It computes the HMAC with SHA-256 over the exact bytes with the derived secret and compares two 32-byte digests with `timingSafeEqual`. Every other form answers 401 `intake.inbound.event.signature_invalid`.
+- For a `jira` event, the insert stores `event_id` from `X-Atlassian-Webhook-Identifier`, the exact body in `event` and `{ "event": <webhookEvent> }` in `metadata`. A missing header answers 400 `gateway.request.validation_failed`.
+- A Jira administrator registers an admin webhook with the address and the secret of the inbound, the JQL `project = <project_key>` and the one event `comment_created`.
+- A `slack` webhook inbound names one credential of platform `slack_signing_secret`. A missing or unsuitable credential answers 422 `intake.inbound.credential_invalid`. `inboundsNaming` sees the inbound with no change.
+- For a `slack` event, the receipt takes one single-use release of the signing secret under the service identity of the Intake Service.
+- The `slack` verification requires exactly one `X-Slack-Signature` header of the form `v0=<64 hex>` and exactly one `X-Slack-Request-Timestamp` header. A timestamp more than 300 seconds from the server time answers 401. The HMAC with SHA-256 covers `v0:<timestamp>:<exact bytes>`.
+- A verified `slack` body of the type `url_verification` answers `{ "challenge": <challenge> }` and stores nothing. A verified body of the type `event_callback` stores one event under `event_id`, with `{ "event": <event.type> }` in `metadata`. A body of another team is stored, and the decoder answers null.
+- The Slack app holds the user scopes `channels:history`, `groups:history` and `chat:write`. It subscribes to the events `message.channels` and `message.groups` on behalf of the developer. The app has no bot user.
 - The handler answers 2xx after the commit. Beyond the capacity bound, it answers 503 and stores nothing.
 
 ## The poll acquisition
@@ -65,8 +75,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - The poll loops run inside the Intake Service of the `server` application, at the `server` and at the `worker` placement. No worker process and no thread of a server instance runs a poll.
 - The poll runs on an interval of 60 seconds per inbound with a release per request. Each request carries a deadline.
 - One poll cycle per inbound runs at a time, and its requests run one after the other. The next interval starts after the previous cycle ends, so no older answer commits its checkpoint field after a newer one.
-- A cycle of a GitHub poll makes the events read, then the [closed pull request read](repository.impl.md#the-closed-pull-request-read). Each request takes its own release for `poll`.
-- After the capacity bound check and before the first release, the cycle calls `mission.delivery.unresolved_request.count` with the project and the resource identity of the inbound. A count of zero skips both requests and keeps `checkpoint`. A failed call skips both requests and writes a span with its reason.
+- A cycle of a repository poll makes the events read, then the [closed pull request read](repository.impl.md#the-closed-pull-request-read). Each request takes its own release for `poll`.
+- After the capacity bound check and before the first release, the cycle calls `mission.delivery.unresolved_request.count` with the project and the resource identity of the inbound. A repository poll reads `count` and ignores `link_count` and `inbox`. A `count` of zero skips both requests and keeps `checkpoint`. A failed call skips both requests and writes a span with its reason.
 - The release transaction ends the loop when the inbound no longer exists. Each request takes its own release transaction, so an inbound deleted between the two requests ends the loop with no second request.
 - A rate limit refusal of the events read ends the cycle, and the cycle makes no closed pull request read. Another failure of the events read writes its span, and the closed pull request read still runs.
 - The wait before the next cycle is the longest of the interval and the waits that the [GitHub implementation](repository.impl.md#platform-connector-and-platform-implementations) answers for the requests of the cycle from `X-Poll-Interval`, `Retry-After` or `x-ratelimit-reset`.
@@ -77,8 +87,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `POLL_WAIT_MAX_MS`, 3600 seconds, caps every wait.
 - The loop holds its wait and its count in memory. A start opens every loop at its spread offset with the interval.
 - The `intake` section of the configuration file holds no poll key.
-- The GitHub poll reads the events of the resource with `If-None-Match` set to `etag` of `checkpoint`. It reads the closed pull requests of the resource with `If-None-Match` set to `pulls_etag`. A 304 answer stores nothing.
-- `checkpoint` of a GitHub poll holds `{ "etag": <ETag or null>, "pulls_etag": <ETag or null> }`. A stored `checkpoint` that holds `newest_event_id` loads, and the next write drops that field. A stored `checkpoint` without `pulls_etag` loads with a null `pulls_etag`.
+- The repository poll reads the events of the resource with `If-None-Match` set to `etag` of `checkpoint`. It reads the closed pull requests of the resource with `If-None-Match` set to `pulls_etag`. A 304 answer stores nothing.
+- `checkpoint` of a repository poll holds `{ "etag": <ETag or null>, "pulls_etag": <ETag or null> }`. A stored `checkpoint` that holds `newest_event_id` loads, and the next write drops that field. A stored `checkpoint` without `pulls_etag` loads with a null `pulls_etag`.
 - A 200 answer of either read costs one request of the primary rate limit of the credential, and a 304 answer costs none. A cycle costs at most 2 requests, so one inbound with demand costs at most 120 requests per hour at the interval of 60 seconds.
 - GitHub event ids carry no order across event types. A newer event can hold a lower id than an older event.
 - The `(inbound_id, event_id)` dedupe is the only filter of a 200 page. Every event of the page that has no stored row inserts.
@@ -110,9 +120,18 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - A closed pull request that is not merged folds to `other`. The node goes to `External.Failed`, then to `Blocked`.
 - A pull request that cannot merge folds to `conflict` at the recheck of a push of its base branch. The node goes to `Available`, and the request stays unresolved.
 - A merge reaches admission up to three times: as a `pull_request_closed` item, as a `PullRequestEvent` and as a `PushEvent`. The Mission Service writes the end state once. Every later admission answers `duplicate` or skips the resolved request. The same rule covers a webhook event, a human check and the deferred check.
-- After a reviewer release to `External.Requested`, the Mission Service schedules one deferred check. The deferred check calls `intake.action.check` for each unresolved `pull_request` and `branch_push` evidence of the attempt. A pull request merged during execution resolves through the deferred check after release. A branch push landed during execution resolves through the deferred check after release. A later admission or check finds the end state set and writes nothing.
+- After a reviewer release to `External.Requested`, the Mission Service schedules one deferred check. The deferred check calls `intake.action.check` for each unresolved `pull_request`, `branch_push` and `comment` evidence of the attempt. A pull request merged during execution resolves through the deferred check after release. A branch push landed during execution resolves through the deferred check after release. A later admission or check finds the end state set and writes nothing.
 - A failed admission leaves its event `failed`. A human retries the event or checks the node.
 - A GitHub webhook inbound of the same repository is a complement where a public ingress exists. It needs no code of the poll.
+
+### The conversation poll
+
+- `configuration` of a GitHub inbound requires `resource_kind`: `repository` or `conversation`. It has no default. The inbound resource identity is `<resource_kind>:github:<resource>`.
+- A cycle of a conversation poll calls `mission.delivery.unresolved_request.count` and reads `link_count` and `inbox`. The cycle reads while `link_count` is above zero or `inbox` is true. Otherwise it skips the read and keeps `checkpoint`. A failed call skips the read and writes a span with its reason.
+- The cycle makes one request, the [issue comment read](repository.impl.md#the-issue-comment-read-and-the-reply), with its own release for `poll`. It sends `If-None-Match` with `comments_etag` of `checkpoint`. A 304 answer stores nothing.
+- `checkpoint` of a conversation poll holds `{ "comments_etag": <ETag or null> }`.
+- Each item of a 200 answer that has no stored row inserts one event: `event_id` `issue_comment:<id>`, the item JSON in `event` and `{ "event": "issue_comment_listed" }` in `metadata`. An edit of a comment keeps its event id, so the dedupe drops it.
+- The create and the healthcheck of a conversation poll make the issue comment read. The create and the healthcheck of a repository poll keep the two existing reads.
 
 ## The handoff
 
@@ -133,6 +152,14 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - An exact list that names a pending event answers 409 `intake.inbound.event.state_conflict` and deletes nothing.
 - The delete removes the matching events in one transaction and answers their count.
 
+## The event reads
+
+- `intake.inbound.event.describe` is a `service` operation for the Worker Service and the Mission Service. It reads the stored event, calls the description of the platform implementation of its inbound and answers `{ author, body, url, occurred_at }`. It takes no credential and calls no platform.
+- `intake.inbound.event.describe` applies the sensitive text rule set of `src/agent/sensitive-text.ts` to `body` before it answers. The session hook `sensitiveTextRedaction` redacts again in the session.
+- `intake.inbound.event.get` is a `human` operation. It includes the stored event content with the same rule set applied.
+- No event read cuts the text. The only size bound is the 32 MiB [body limit](gateway-service.impl.md#delivery-bytes-and-body-limits) of every operation.
+- The rule set has two consumers: the Agent component and the Intake Service.
+
 ## Error codes
 
 | HTTP | Code                                      | Condition                                                                                  |
@@ -148,6 +175,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 | 409  | `intake.inbound.events_pending`           | A delete names an inbound that holds a pending event.                                      |
 | 409  | `intake.inbound.event.in_flight`          | A discard names a pending event whose handoff runs.                                        |
 | 409  | `intake.inbound.event.state_conflict`     | The state of the event permits no such transition, or a delete list names a pending event. |
+| 409  | `intake.link.inbound_missing`             | A link read names a link with no inbound of its resource. `details: { external_link }`.    |
 | 409  | `intake.outbound.request.discarded`       | A repeat names a discarded request.                                                        |
 | 409  | `intake.outbound.request.in_flight`       | A repeat or a discard names a request whose call runs.                                     |
 | 409  | `intake.outbound.request.state_conflict`  | A discard names a request that is not `pending`, or a delete list names a pending request. |
@@ -155,29 +183,59 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 | 422  | `intake.inbound.credential_invalid`       | The credential name does not exist, or its platform does not suit the inbound.             |
 | 422  | `intake.inbound.platform_refused`         | The platform refuses a validation request of a poll create.                                |
 | 422  | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table.                                        |
+| 502  | `intake.platform.<platform>.<class>`      | A Jira or Slack call of a link read or a reply fails. `details: { status }`.               |
 | 503  | `intake.inbound.event.capacity_exceeded`  | The count of pending events is at its bound.                                               |
 | 503  | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version.                     |
 
 ## Outbound operations and checks
 
-- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component or the [Storage component](storage.md) and drops the material in `finally`.
+- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component, the [Storage component](storage.md) or its own Jira and Slack platform code and drops the material in `finally`.
 - The handler builds its platform client for one call and caches no client and no token.
 - `intake.action.perform` is a `client` operation under the forwarded execution identity. It takes the configured action and its request key, maps the action to its outbound operation, and answers the `PlatformAddress` or the result class of the Repository component.
-- The action table maps `pull_request` on a `github` binding to `github.pull_request` and `merge_push` on a git binding to `git.merge_push`. A merge call from the action performer with `merge_evidence_id` maps to `github.pull_request_merge`. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
+- The action table maps `pull_request` on a `github` binding to `github.pull_request` and `merge_push` on a git binding to `git.merge_push`. A merge call from the action performer with `merge_evidence_id` maps to `github.pull_request_merge`. The action `reply` on a `conversation` binding maps to `github.issue_comment`, `jira.issue_comment` or `slack.thread_reply` by the platform of the binding. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
 - For `git.merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector. The clone uses the SSH identity of the binding. It performs the network git write and removes the clone after the call. A `git.merge_push` answers the pushed commit in its `PlatformAddress`.
 - A create of `github.pull_request` whose `ActionFacts` hold a nonempty `gate_files` sends a body. The body holds three parts, separated by a blank line: the text "KanthorD does not merge this pull request. The change set of the node changes these gate files of the affected test declaration:", one line `` - `<path>` `` for each gate file, and the text "A human reviews and merges this pull request." A create with an empty `gate_files` sends no body. A reused pull request keeps its text.
 - `github.pull_request_merge` reads the allowed merge methods of the repository. It sends `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` with the tested commit as the head guard `sha`. It reads back the pull request. A 405 sets `failed`. A 409 or 422 sets `failed`.
 - `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ end_state, landed_commits }` that the platform implementation folds.
+- For a reply evidence, `intake.action.check` answers `posted` when its outbound request is `succeeded`. It makes no platform call.
 - The read-back of `intake.action.check` for a `git.merge_push` request takes an `ssh_identity` release under the service identity of the Mission Service, through the pinned `FrozenAction`. That release pins no revision.
 - `intake.action.read` is a `client` operation under the forwarded execution identity. It serves the MCP read tools `github-pull-request-get` and `github-pull-request-review-comment-list`, and it returns the platform body unchanged.
 - `intake.action.read` also serves the method `github-pull-request-change-request-get` to the [unblock reads](worker-service.impl.md#the-unblock-reads) of the Worker Service. It answers `{ head_commit, change_requests }`.
 - A change request of that method follows the rule of the pull request check: the latest decisive review of its reviewer is `CHANGES_REQUESTED` on the head commit.
+- The check and the method pass `link_trust` of the pinned repository binding to the fold. The fold drops each review whose author fails the trust rule.
 - Each change request holds `review_id`, `reviewer`, `body`, `submitted_at`, `commit_id` and the `comments` of its review. Each comment holds `path`, `line` and `body`.
 - `intake.storage.put` and `intake.storage.check` are `client` operations. The Mission Service calls them in `mission.evidence.submit` and `mission.evidence.asset.complete` with the identity of the execution.
 - `intake.storage.get` is a `human` operation and `intake.execution.storage.get` is a `client` operation. Each signs a presigned GET at the recorded object version.
 - `intake.storage.delete` is a `human` operation. The Mission Service calls it in `mission.evidence.asset.delete` and `mission.evidence.delete` with the identity of the human and the evidence asset identity as the request key. Its outbound operation is `s3.delete_object`.
 - The operations make no Mission record and decide no end state beyond the fold of the platform implementation.
 - `intake.action.perform`, `intake.action.read`, `intake.storage.put`, `intake.storage.check`, `intake.storage.get`, `intake.execution.storage.get` and `intake.storage.delete` declare `direct: true`. The action performer, the MCP server and the Mission Service call them through the direct adapter, and no HTTP route reaches them.
+- `intake.link.read`, `intake.outbound.reply.match` and `intake.inbound.event.describe` also declare `direct: true`. The Mission Service calls the first two. The Worker Service and the Mission Service call the third.
+- `intake.outbound.reply.match` is a `service` read under the service identity of the Mission Service. Its input is `{ update_key, external_link }`. It answers `{ succeeded, pending_actor_ids }`: whether a succeeded reply request of any project holds that `update_key`, and the reply account of each pending reply request of that link in any project. Two projects can link one thread, so the reply of one project is no update in the other. It finds the requests of a link by the suffix `:<canonical link>` of the request key.
+
+### The link read
+
+- `intake.link.read` is a `service` operation under the service identity of the Mission Service. `mission.node.check` calls it for each external link of the current revision of a node.
+- It takes one custody release of `credential` of the binding revision that the node pins for the link resource. A link read records no outbound request.
+- GitHub: `GET /repos/{owner}/{repo}/issues/{number}/comments` with `per_page=100`. When the `Link` header names a last page, the read also reads that page, so it answers the newest comments. Each item stores the event id `issue_comment:<id>` and the metadata `{ "event": "issue_comment_listed" }`.
+- Jira: `GET /rest/api/3/issue/{key}/comment` with `orderBy=-created` and `maxResults=100`. Each item stores the event id `jira_comment:<site>:<id>` and the metadata `{ "event": "comment_listed" }`.
+- Slack: `GET https://slack.com/api/conversations.replies` with `channel`, `ts` and `limit=200`. Each item stores the event id `slack_message:<team_id>:<channel>:<ts>` and the metadata `{ "event": "reply_listed" }`.
+- The link read stores each item under the newest inbound of the link resource in the project of the node. An item with an existing event id keeps its stored row.
+- A link with no such inbound refuses the whole check with 409 `intake.link.inbound_missing` and `details: { external_link }`, before any read.
+- A failed GitHub call answers 502 `repository.platform.github.<class>`. A failed Jira or Slack call answers 502 `intake.platform.<platform>.<class>` with `details: { status }`.
+
+### The reply operations
+
+| Operation              | Call                                                                              | Result                                                             |
+| ---------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `github.issue_comment` | `POST /repos/{owner}/{repo}/issues/{number}/comments`                             | `{ update_key: issue_comment:<id>, actor_id }`                     |
+| `jira.issue_comment`   | `POST /rest/api/3/issue/{key}/comment` with an ADF body                           | `{ update_key: jira_comment:<site>:<id>, actor_id }`               |
+| `slack.thread_reply`   | `POST https://slack.com/api/chat.postMessage` with `channel`, `thread_ts`, `text` | `{ update_key: slack_message:<team_id>:<channel>:<ts>, actor_id }` |
+
+- The request key is `<node_id>:<attempt>:<link>`, where `<link>` is the canonical JSON of the external link.
+- A reply posts with the credential of the conversation binding, the one account of the developer. On Slack this is the user token of the developer. No bot and no app identity post.
+- No reply operation has a read-back, and no body holds a hidden marker. A call that ends with no answer sets the request `failed`, and a repeat posts again.
+- A crash during the call leaves the request `pending`. A repeat of a pending request with no running call posts again. A duplicate reply after a lost answer is accepted.
+- The reply account is `id` of `GET /user` for GitHub, `accountId` of `GET /rest/api/3/myself` for Jira and `user_id` of `auth.test` for Slack. The handler reads it once at the first reply call of a link with no succeeded reply, and records `{ actor_id }` in the result of the pending request.
 
 ### The authorization of each operation
 
@@ -189,6 +247,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - Custody pins each released revision to the execution at its first use.
 - `credential` of the outbound request of `git.merge_push` holds the `ssh_credential` name.
 - `s3.delete_object`: the Mission Service authorizes the forwarded human identity through the evidence asset and its storage binding revision, and custody releases the storage binding credential.
+- `github.issue_comment`, `jira.issue_comment` and `slack.thread_reply`: the Mission Service applies the grant of the `FrozenAction` of the reply. Custody releases `credential` of the conversation binding revision that the node pins for the link resource.
+- `intake.link.read`: the Mission Service authorizes the human through the node, as for `intake.action.check`.
 - `intake.action.check`, `intake.action.read`, the presigned PUT and GET and the object check: the Mission Service authorizes the caller through the request evidence or the evidence asset. These operations record no outbound request.
 - A native push send and a CLI write declare their authorization with their designs.
 
@@ -218,6 +278,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - `project_id` names the project of the binding that the caller resolved. `operation` holds a value of the closed set of outbound operations in code. `request_key` holds the key that the caller derives. `credential` holds the name of the credential that custody released for the write, and `git.merge_push` holds null. A credential removal is not refused by an outbound request that names it.
 - A unique index covers `(operation, request_key)`.
 - `result` is JSON text that holds the bounded body of the 2xx answer, for example the `PlatformAddress`, or null. `error` holds the shape and the byte bound of `error` of an inbound event. Every property name is snake_case.
+- The `result` of a succeeded reply holds `{ update_key, actor_id }`. The `result` of a pending reply holds `{ actor_id }` of the reply account.
 - In one invocation, the handler authorizes, obtains the release, inserts the request as `pending`, commits, and only then performs the call.
 - An insert that meets the unique index reads the existing request and answers the repeat rule of [intake-service.md](intake-service.md#outbound-requests).
 - A module-private `Set` holds the identity of every request whose call runs. The handler adds the identity in the synchronous step of its insert, and it removes the identity after the write of the answer. A repeat and a discard read the set and write their conditional update in one synchronous step.
@@ -237,6 +298,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - The check of that request folds the address to the expected end state `pull_request_merged`, with that commit as the landed commit.
 - The read-back of `github.pull_request_merge` calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`. A response where `merged` is true and `head.sha` equals the tested commit is a match and sets `succeeded`. A pending merge whose pull request merged at the tested head sets `succeeded` with no second `PUT`.
 - `s3.delete_object` reads the recorded object version, and a not-found answer is a match.
+- `github.issue_comment`, `jira.issue_comment` and `slack.thread_reply` have no read-back. A repeat of a `pending` request with no running call, or of a `failed` request, posts again.
 - A pull request that a human merges before the repeat of its create leaves the request `failed`. The merge reaches the Mission Service through its inbound event.
 
 ### The human operations
@@ -263,12 +325,42 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A platform implementation prefers the HTTP API when the platform offers the operation.
 - These measures reduce exposure, and they prove no containment.
 
+## The Jira and Slack decoders
+
+- A `jira` inbound and a `slack` inbound are webhook inbounds. A poll create of platform `jira` or `slack` answers the validation failure of an unknown pair of kind and platform.
+- `resource` of a `jira` inbound is `<site>/<project_key>`, and its inbound resource identity is `conversation:jira:<resource>`.
+- `resource` of a `slack` inbound is the `team_id` of the workspace, and its inbound resource identity is `conversation:slack:<resource>`.
+- `decodeLinkUpdate` of the Jira and the Slack platform implementation is a pure decoder. It answers `{ external_link, update_key, actor_id, actor_automated, occurred_at, mentions }`, or null. It makes no platform call.
+
+| `metadata.event`  | Source          | `update_key`                             | `actor_id`                        | `actor_automated` is true when                                                                 |
+| ----------------- | --------------- | ---------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `comment_created` | Jira webhook    | `jira_comment:<site>:<comment id>`       | `author.accountId` of the comment | `author.accountType` of the comment is `app`                                                   |
+| `comment_listed`  | Jira link read  | `jira_comment:<site>:<comment id>`       | `author.accountId` of the comment | The same rule                                                                                  |
+| `message`         | Slack webhook   | `slack_message:<team_id>:<channel>:<ts>` | `user` of the message             | `bot_id` or `app_id` is present, or `subtype` is other than `thread_broadcast` or `file_share` |
+| `reply_listed`    | Slack link read | `slack_message:<team_id>:<channel>:<ts>` | `user` of the message             | The same rule                                                                                  |
+
+- `occurred_at` is `created` of a Jira comment and the time of `ts` of a Slack message.
+- `mentions` is an empty list, because a `jira` and a `slack` binding refuse `inbox` until the layers I3 and I4 of the Inbox.
+- An item of a link read decodes to the same `update_key` as its webhook event, so the unique index of `mission_link_update` keeps one row.
+- The Jira decoder answers a link update only for a comment. An issue of another project decodes to null.
+- The Slack decoder answers a link update only for a message whose `thread_ts` differs from its `ts`. `message_changed`, `message_deleted` and a body of another team decode to null.
+- The Jira description answers `comment.author.displayName`, the body as plain text, `https://<site>/browse/<key>` and `comment.created`. A text body stays. An ADF body becomes the text of its text nodes, with a newline between blocks.
+- The Slack description answers `event.user`, `event.text`, `https://slack.com/archives/<channel>/p<ts without the dot>?thread_ts=<thread_ts>&cid=<channel>` and the time of `event.ts`.
+
+## The credential platforms
+
+- The Intake Service owns the credential platforms `jira`, `slack` and `slack_signing_secret`. It declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) `/api/intake/credential`. The ten commands `kanthord intake credential` use it.
+- A `jira` record holds a scoped Jira API token with the scopes `read:jira-work`, `write:jira-work` and `read:jira-user`. Its metadata holds `{ site, cloud_id, email }`. Calls go through `https://api.atlassian.com/ex/jira/<cloud_id>`.
+- A `slack` record holds the user token of the developer.
+- A `slack_signing_secret` record holds the signing secret of the Slack app. A `slack` webhook inbound names it, and only the `receipt` release uses it.
+- A conversation binding names a `jira` or a `slack` record. The link read and the reply operations use it.
+
 ## The resource healthcheck
 
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The inbound check follows them like every other check.
 - The check runs only inside a health report that a human calls.
 - The inventory answers one entry per inbound with its `project_id` in place of a project name. The composition root resolves the name under the [health report](gateway-service.impl.md#the-resource-healthcheck-report). The Intake Service reads no Project table and calls no Project collaboration.
-- A GitHub poll performs the events read and the closed pull request read. Each request takes its own release for `poll` and sends its ETag field of `checkpoint`. A 200 or a 304 answer of both requests reports `healthy`, and any other result reports `unhealthy`. The check stops at the first request that fails and reports the code of that failure. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
+- A repository poll performs the events read and the closed pull request read. A conversation poll performs the issue comment read. Each request takes its own release for `poll` and sends its ETag field of `checkpoint`. A 200 or a 304 answer of every request reports `healthy`, and any other result reports `unhealthy`. The check stops at the first request that fails and reports the code of that failure. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
 - A webhook inbound reports `unknown` with the capability `webhook`.
 - No store holds a check result.
 

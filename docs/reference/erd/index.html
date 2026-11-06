@@ -107,7 +107,7 @@
                   <td><a href="02-execution.html">ERD 2: Execution</a></td>
                   <td>
                     Registrations, executions, attempts, evidence and its
-                    assets, assessments, outcomes and proposals.
+                    assets, assessments, outcomes, proposals and link updates.
                   </td>
                   <td>Worker, Scheduler, Mission</td>
                 </tr>
@@ -149,14 +149,14 @@ flowchart TB
             p1["Project: project, binding, binding revision"]
             a1["Agent: agent enablement"]
             w1["Worker: instance, machine"]
-            m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
+            m1["Mission: mission, node, node revision with intent, tags, external links and tasks, dependency"]
             s1["Scheduler: job, queue place"]
             f1["Footprint: cleanup, alert"]
         end
         subgraph v2["ERD 2: Execution"]
             w2["Worker: registration"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt with prompt commits, evidence, evidence asset, assessment, outcome, proposal"]
+            m2["Mission: attempt with prompt commits, evidence, evidence asset, assessment, outcome, proposal, link update"]
         end
         subgraph v3["ERD 3: External integration"]
             i3["Intake: inbound, inbound event, outbound request"]
@@ -174,11 +174,11 @@ flowchart TB
     s2 -.-&gt;|claim of binding| p1
     s2 -.-&gt;|execution pins credential revision| c1
     m2 -.-&gt;|records of node| m1
-    m2 -.-&gt;|evidence assets name binding| p1
+    m2 -.-&gt;|evidence assets and link updates name binding| p1
 
     i3 -.-&gt;|inbound and outbound request of project| p1
     i3 -.-&gt;|inbound and outbound request name credential| c1
-    m2 -.-&gt;|evidence names inbound event| i3
+    m2 -.-&gt;|evidence and link update name inbound event| i3
 
     t4 -.-&gt;|trace of execution| s2
     s2 -.-&gt;|trace and root span| t4
@@ -250,8 +250,9 @@ flowchart TB
                     The inbounds, their inbound events and the outbound
                     requests. Delivery admission writes the end state of a
                     request evidence, so a node in
-                    <code>External.Requested</code> reaches its end state. Only
-                    GitHub and the storage delete are ruled.
+                    <code>External.Requested</code> reaches its end state. The
+                    platforms GitHub, Jira and Slack and the storage delete are
+                    ruled.
                   </td>
                 </tr>
                 <tr>

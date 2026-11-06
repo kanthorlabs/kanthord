@@ -153,7 +153,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
-- The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record). The LLM, Repository and Storage components each own the rows of their platforms.
+- The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record). The LLM, Repository and Storage components, the Project Service and the Intake Service each own the rows of their platforms.
 - [The credential table](#the-credential-table) defines its envelope.
 - The table `migration(service, version, applied_at)` records each migration that ran. Before the first tag, it holds one row of version 1 for each service that owns tables.
 - The start applies the migrations only to a database that records no migration. [The upgrade](#the-upgrade) applies them to every other database.
@@ -1149,11 +1149,11 @@ The import boundaries follow the public files.
 
 ## The credential route group of a component
 
-- The LLM, Repository, Storage and Project components each declare one credential route group in their own `contract.ts`.
+- The LLM, Repository, Storage and Project components and the Intake Service each declare one credential route group in their own `contract.ts`.
 - The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credential_name`, `POST /api/<component>/credential/:credential_name/revision`, `PUT /api/<component>/credential/:credential_name/metadata`, `POST /api/<component>/credential/:credential_name/revision/:revision/revoke`, `POST /api/<component>/credential/:credential_name/archive`, `POST /api/<component>/credential/:credential_name/verify` and `POST /api/<component>/credential/check`.
 - The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`.
 - Every route uses the `human` access policy. The LLM routes that a worker instance calls are the exception, and [llm.impl.md](llm.impl.md) declares them with the `human_or_worker` or the `worker` policy.
-- An LLM credential row has a holder: `server`, a worker machine name or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule. It also owns the copy holder of an instance. A row of the Repository, the Storage or the Project component holds `server` only.
+- An LLM credential row has a holder: `server`, a worker machine name or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule. It also owns the copy holder of an instance. A row of the Repository, the Storage or the Project component or of the Intake Service holds `server` only.
 - Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
 - A create of a platform of another component answers 400 `credential.platform.unsupported`.
 - A read or a write of a name whose platform belongs to another component answers 404 `credential.credential.not_found`.
@@ -1745,20 +1745,22 @@ The page shows six steps in this order. In the Action column, the first rule tha
 
 The Overview is an Action Board. It lists each act that waits for the human, with the most costly wait first. `apps/src/lib/board-*.ts` holds the board model, and `apps/src/features/overview/` holds the screen.
 
-The board holds six tabs in a fixed order. The cost of the wait sets the order, so the keys 1 to 6 stay stable.
+The board holds seven tabs in a fixed order. The cost of the wait sets the order of the first six tabs, so the keys 1 to 6 stay stable. The tab Inbox comes last, with the key 7.
 
-| `kind`     | Name            | Short   | Verb                     | Key | Items                                                                                                                                |
-| ---------- | --------------- | ------- | ------------------------ | --- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `tool`     | Approve tool    | Tool    | Approve or reject.       | 1   | `tool_approval`                                                                                                                      |
-| `setup`    | Fix setup       | Setup   | Change the setup.        | 2   | `credential_refused`, `request_rejected`, `environment_failed`, `environment_pending`, `no_taker`, `agent_invalid`, `project_paused` |
-| `paused`   | Resume          | Resume  | Resume or discard.       | 3   | `paused`                                                                                                                             |
-| `proposal` | Decide proposal | Decide  | Decide the proposals.    | 4   | `blocked` of an examine node with an open proposal, or with a proposals read that is not ready                                       |
-| `blocked`  | Rule            | Rule    | Act on the stopped node. | 5   | every other `blocked`, and `dependency_discarded`                                                                                    |
-| `outside`  | Act outside     | Outside | Act on the platform.     | 6   | `merge_wait`, `delivery_unconfirmed`                                                                                                 |
+| `kind`     | Name            | Short   | Verb                     | Key | Items                                                                                                                                           |
+| ---------- | --------------- | ------- | ------------------------ | --- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tool`     | Approve tool    | Tool    | Approve or reject.       | 1   | `tool_approval`                                                                                                                                 |
+| `setup`    | Fix setup       | Setup   | Change the setup.        | 2   | `credential_refused`, `request_rejected`, `environment_failed`, `environment_pending`, `no_taker`, `agent_invalid`, `project_paused`            |
+| `paused`   | Resume          | Resume  | Resume or discard.       | 3   | `paused`                                                                                                                                        |
+| `proposal` | Decide proposal | Decide  | Decide the proposals.    | 4   | `blocked` of an examine node with an open proposal, or with a proposals read that is not ready; a terminal node with an open follow-up proposal |
+| `blocked`  | Rule            | Rule    | Act on the stopped node. | 5   | every other `blocked`, and `dependency_discarded`                                                                                               |
+| `outside`  | Act outside     | Outside | Act on the platform.     | 6   | `merge_wait`, `delivery_unconfirmed`                                                                                                            |
+| `inbox`    | Inbox           | Inbox   | Reply, act or mark done. | 7   | an inbox item with state `open`                                                                                                                 |
 
 The rules of the board model follow.
 
 - A blocked examine node stays in Decide proposal until its proposals read answers no open proposal. It then moves to Rule.
+- The board reads `mission.followup.list` once for each project at each poll. A terminal node, `Completed` or `Discarded`, with an open follow-up proposal stays in Decide proposal until no open proposal remains.
 - A node item holds its node. A fix item holds its own `nodeIds` and `projects`. A tool approval holds no node and names no project.
 - An environment item holds each node that is not terminal and whose `content.bindings` holds its binding revision id.
 - The held nodes of an item are its nodes plus their transitive dependents that are not terminal. `Completed` and `Discarded` are terminal.
@@ -1767,11 +1769,15 @@ The rules of the board model follow.
 - The need of a gated item reads "Rotate <credential> in Fix setup". The short need reads "Rotate <credential>".
 - `rankBoardItems` orders the items: gated last, then more held nodes first, then the oldest `at` first with null last, then the subject, then the id.
 - The same rank sets the list, Start here, the initial tab and the initial selection.
+- An inbox item takes Start here, the initial tab and the initial selection only when tabs 1 to 6 hold no card.
 - Card line 1 holds the subject and the age. Line 2 holds the cause label, then " · " and one fact.
+- A card of an inbox item holds the subject and the age of `occurred_at` in line 1. Line 2 holds the group label, then " · " and "<author>: <first line of the body>". A card of an untrusted actor adds the label "not trusted".
+- The card and the detail of an inbox item render the author and the body as plain text. They never render Markdown or HTML, because an untrusted actor can write the text.
 - Card line 3 holds the project chips, the held text, and the label of the next act. A gated card shows "Needs: <short need>" in place of the label.
 - The held text reads "No node waits", "1 node waits" or "<n> nodes wait".
-- The long summary reads "<n> acts wait for you[ in <project>]. <m> nodes wait on them. Start here: <subject> in <tab name>."
-- The short summary reads "<n> acts · <m> nodes wait · Start: <subject>". Compact width shows it.
+- The long summary reads "<n> acts wait for you[ in <project>]. <m> nodes wait on them.[ <k> threads wait in Inbox.] Start here: <subject> in <tab name>."
+- <n> counts the tabs 1 to 6 only, so a large inbox hides no node stop.
+- The short summary reads "<n> acts · <m> nodes wait[ · <k> inbox] · Start: <subject>". Compact width shows it.
 - In both summaries, the subject is a link that selects the Start here card.
 - With no card, the summary reads "Nothing waits for you in <project>." under a filter. Else it reads "No act found. Some records could not be read." with a read fault.
 - With no card, no filter and no read fault, the summary reads "No decision waits for you."
@@ -1795,7 +1801,7 @@ The rules of the screen follow.
 - The filter is the stock `ToggleGroup`, single value, `variant="outline" size="sm"`, with "All · <n>" first. A press on the pressed item returns to All.
 - A polite status message follows each filter change. On compact width, the filter scrolls sideways inside itself.
 - The tab strip is the stock `Tabs` with `TabsList variant="line"` and a `Badge` count. A tab with no act stays, with the count "0" and the line "clear".
-- From 760 px of board width, the strip is one row with the `tabSubOf` line under each name. Below 760 px, it is a grid of six cells, the count over the short name.
+- From 760 px of board width, the strip is one row with the `tabSubOf` line under each name. Below 760 px, it is a grid of seven cells, the count over the short name.
 - On compact and medium width, the wrapper of the strip sticks at `top: var(--app-header-height)`.
 - The panel holds a visually hidden `h3` with the tab name, the verb line, the card list and Done this session.
 - The verb line adds the `what` text of the tab on medium width. Under a filter, the verb line of Approve tool adds "Counts all projects."
@@ -1819,13 +1825,14 @@ The rules of the screen follow.
 - After an act, the next card is the card at the same index in the new list of the tab, or the last card.
 - After an act on expanded width, the board selects the next card and focuses the detail title. On medium and compact width, it closes the detail and focuses the next card.
 
-The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The crumbs hold the project chips, the tab name, the node state badge and the age. The sections follow in this order: What, Change asked, Proposal, Impact, Why, Root cause, Evidence and Suggestion. Each text column is at most 80 characters wide.
+The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The crumbs hold the project chips, the tab name, the node state badge and the age. The sections follow in this order: What, Change asked, Proposal, Message, Impact, Why, Root cause, Evidence and Suggestion. An inbox item shows What, Message and Impact only. Each text column is at most 80 characters wide.
 
 | Section      | Content                                                                                                                                                                     |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | What         | The cause sentence. A pause at the failure limit adds "failures <count> of <limit>" from the `scheduler.transition` span of the newest execution.                           |
 | Change asked | A tool approval only: the operation and one "<field> becomes" row for each input field of the call that waits, from the session read.                                       |
 | Proposal     | Each open proposal of a node in Decide proposal: the name, the requirement and the verifications.                                                                           |
+| Message      | An inbox item only: the author, the time of `occurred_at`, the redacted body and the platform link. A null content reads "The text is no longer stored."                    |
 | Impact       | The spread text of a fix item, the held text, and each held node with its project and state.                                                                                |
 | Why          | The assessment rationale of a blocked node with the reviewer quote (`figure`, `blockquote`, `cite`), the discard reason of each discarded dependency, and a failed command. |
 | Root cause   | The cause line of the newest trace and "assigned by <assigner>". A discarded dependency reads "No fault. A human act ended the dependency."                                 |
@@ -1835,22 +1842,24 @@ The detail holds the head, the sections and the act bar, top to bottom. The head
 - On compact width, Evidence shows three lines and "Show <n> more".
 - The suggestion of a gated pause reads "<gate need> first. A resume before that fix spends the extra try."
 
-Each act with an effect opens its KanthorD dialog as it is: `NodeResumeDialog`, `NodeUnblockDialog`, `NodeOverrideDialog`, `NodeDiscardDialog`, `ProposalDecisionDialog` or `DependencyRemoveDialog`. The board holds no client undo window. The act labels follow the KanthorD labels.
+Each act with an effect opens its KanthorD dialog as it is: `NodeResumeDialog`, `NodeUnblockDialog`, `NodeOverrideDialog`, `NodeDiscardDialog`, `ProposalDecisionDialog`, `FollowupDecisionDialog`, `NodeCreateDialog`, `NodeLinkDialog` or `DependencyRemoveDialog`. `FollowupDecisionDialog` decides the follow-up proposal of a terminal node. `NodeCreateDialog` and `NodeLinkDialog` serve Create node and Link to node of an inbox item. The board holds no client undo window. The act labels follow the KanthorD labels.
 
 Each kind follows one order: the primary act, the other acts, Last trace, then Discard. An act shows only when the act state of the item offers it.
 
-| Kind                                 | Acts in order                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| `tool_approval`                      | Approve, Reject, Open chat                                                      |
-| `credential_refused`                 | Rotate, Verify credential, Open credential                                      |
-| `environment_failed`                 | Open project, Run onboarding again                                              |
-| `project_paused`                     | Resume project                                                                  |
-| other fix kinds                      | the link act of `fixTargetOf`                                                   |
-| `paused`                             | Resume, Go to <credential> when gated, Override, Check now, Last trace, Discard |
-| `blocked` in Decide proposal         | Decide, Unblock, Override, Check now, Last trace, Discard                       |
-| `blocked` in Rule                    | Unblock, Override, Check now, Last trace, Discard                               |
-| `dependency_discarded`               | Remove dependency (one for each dependency), Check now, Last trace, Discard     |
-| `merge_wait`, `delivery_unconfirmed` | Open pull request, Check now                                                    |
+| Kind                                 | Acts in order                                                                                                           |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `tool_approval`                      | Approve, Reject, Open chat                                                                                              |
+| `credential_refused`                 | Rotate, Verify credential, Open credential                                                                              |
+| `environment_failed`                 | Open project, Run onboarding again                                                                                      |
+| `project_paused`                     | Resume project                                                                                                          |
+| other fix kinds                      | the link act of `fixTargetOf`                                                                                           |
+| `paused`                             | Resume, Go to <credential> when gated, Override, Check now, Last trace, Discard                                         |
+| `blocked` in Decide proposal         | Decide, Unblock, Override, Check now, Last trace, Discard                                                               |
+| a terminal node in Decide proposal   | Decide, Last trace                                                                                                      |
+| `blocked` in Rule                    | Unblock, Override, Check now, Last trace, Discard                                                                       |
+| `dependency_discarded`               | Remove dependency (one for each dependency), Check now, Last trace, Discard                                             |
+| `merge_wait`, `delivery_unconfirmed` | Open pull request, Check now                                                                                            |
+| an inbox item                        | Mark done, Snooze, Reply (I2), Open on <platform>, Create node, Link to node, Pause <node>, Check now, Decide follow-up |
 
 - The board keeps each KanthorD act of today, also an act outside the mockup set.
 - Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens the rotate sheet.
@@ -1873,7 +1882,7 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 
 The keys follow.
 
-- With the shortcuts on, 1 to 6 select a tab. An open detail sheet closes first.
+- With the shortcuts on, 1 to 7 select a tab. An open detail sheet closes first.
 - With the shortcuts on and the focus in the list, j and k move the selection. In an open detail sheet on compact and medium width, j and k step the sheet.
 - With the shortcuts on, `p` cycles the project filter, and `?` opens the shortcuts dialog.
 - With the focus in the list, the arrow keys, Home and End move the selection. Enter opens the detail of the selected card and focuses its title.

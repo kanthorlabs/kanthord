@@ -167,11 +167,12 @@ A second binding with that name in `atlas` is refused.
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
-The set holds three kinds.
+The set holds four kinds.
 
 - **repository**
 - **worker**
 - **storage**
+- **conversation**
 
 The mission of a project is intrinsic to that project, so no binding allocates it.
 A repository binding of the node "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
@@ -190,11 +191,12 @@ The repository binding `app` holds `prompts` with `instruction_file: AGENTS.md`,
 ## cardinality
 
 The number of bindings of one kind that a project holds for one resource.
-The set is closed for each kind and it holds three values.
+The set is closed for each kind and it holds four values.
 
 - **repository**: one binding for each repository that the project uses.
 - **worker**: any number of bindings of one worker, each with its own configuration.
 - **storage**: one binding for each S3-compatible bucket at its endpoint, and any number per project.
+- **conversation**: one binding for each resource of a conversation platform, and any number per project.
 
 The project of "Account recovery" binds two repositories and one `tdd@1` worker as `tdd-main`.
 A second binding for repository `kanthorlabs/kanthord` is refused.
@@ -211,6 +213,20 @@ The credential reference names an `s3` [credential store record](custody.vocabul
 The storage credential stays in server custody.
 A presigned grant reaches the kanthord component for one operation on one object, never the context of an agent.
 A node without a storage binding accepts only inline evidence content.
+
+## conversation binding
+
+The binding of one resource of a conversation platform that a node follows through its external links.
+The platform is `github`, `jira` or `slack`, and the binding is no delivery source.
+Project `atlas` names its binding `acme-issues` and its resource `acme/app` on `github`.
+Its configuration holds `platform`, `repository`, `credential`, `reply_policy`, `link_trust` and the optional `inbox` beside `available`.
+
+## link trust
+
+The list of immutable account ids, `actor_ids`, that a binding trusts as the authors of link updates.
+The binding `acme-issues` lists the GitHub user id `"583231"`, so a comment of that account is a trusted link update.
+A comment of any other account is not.
+An absent list or an empty list trusts no actor, and a bot or an app is never trusted.
 
 ## binding set
 
@@ -313,6 +329,7 @@ The term names no closed set.
 The repository strategy of `kanthorlabs/kanthord` requires a pull request for every change.
 Its configured repository action opens a pull request that follows the passing assessment of "Add password reset".
 "Add password reset" names the binding of `kanthorlabs/kanthord`, so it requires that action.
+The reply policy of the conversation binding `acme-issues` posts a reply to each linked issue after the node passes its assessment.
 
 ## base branch
 

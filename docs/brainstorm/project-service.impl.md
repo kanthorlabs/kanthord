@@ -15,15 +15,16 @@ The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync
 It also provides `zod` at 4.4.3 and `ulid`.
 The repository action catalog supports GitHub.
 A repository binding names the platform `github`, `gitlab` or `bitbucket`. The [git-only platforms](repository.impl.md#git-only-platforms) `gitlab` and `bitbucket` support `merge_push` only.
-The [Repository component](repository.impl.md#platform-validators) owns the repository credential platforms.
-The GitHub action catalog holds exactly two actions.
+The [Repository component](repository.impl.md#platform-validators) owns the repository credential platforms. The [Intake Service](intake-service.impl.md#the-credential-platforms) owns the credential platforms `jira`, `slack` and `slack_signing_secret`.
+The action catalog holds exactly three actions: `pull_request` and `merge_push` of a repository binding, and `reply` of a conversation binding.
 
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
 - `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
+- `reply` posts one reply to an external link of a conversation binding. Its expected end state is `posted`. It follows the passing assessment of the node.
 - Each action implies its expected end state. Only `pull_request` takes a parameter: the optional `landing`, `human` or `kanthord`, default `human`. With `kanthord`, the action performer requests the merge as a separate outbound write after the request evidence of the attempt exists. With `human`, a human merges. The frozen action copies `landing` with `base_branch`.
 - A change set that changes a gate file of the base declaration lands with `human` for that attempt, whatever `landing` the binding declares. The current assessment of the attempt records the changed gate files under [the affected test run](worker-service.impl.md#the-affected-test-run). The Mission Service refuses a `merge_push` action of that binding for that attempt with `gate_file_changed`.
 - A repository strategy holds at most one action, because a policy configures one external action.
-- The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
+- The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request` or `acme-issues.reply`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push|reply)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
 
 ## The binding store
 
@@ -103,6 +104,9 @@ The values of the first version are below.
 - `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`, and for the address `git@ssh.github.com:kanthorlabs/kanthord.git`.
 - `worker:kanthord:coder-main` for the worker binding with the binding name `coder-main`.
 - `storage:s3:s3.eu-central-1.amazonaws.com/atlas-evidence` for the storage binding of the bucket `atlas-evidence` at that endpoint.
+- `conversation:github:acme/app` for the conversation binding of the repository `acme/app`.
+- `conversation:jira:acme.atlassian.net/KD` for the conversation binding of the Jira project `KD` at the site `acme.atlassian.net`.
+- `conversation:slack:T0123ABCD` for the conversation binding of the Slack workspace `T0123ABCD`.
 
 A submission carries `kind`, and the write uses it to select the configuration schema and the derivation. A read derives `kind` from the first part, and the validation refuses a first part outside the closed set of binding kinds.
 Normalization decides whether a change stays in its group or starts a replacement.
@@ -110,6 +114,7 @@ Normalization decides whether a change stays in its group or starts a replacemen
 - A repository identity derives from the binding platform and from the owner and the repository of its SSH address. The SSH host of the address takes no part in it.
 - A worker identity derives from its binding name alone.
 - A storage identity derives from the host of its endpoint and its bucket alone.
+- A conversation identity derives from its platform and its resource. `github` uses `<owner>/<repo>`. `jira` uses the lower-case `site` and the upper-case `project_key`. `slack` uses `team_id`.
 
 ## The write of a binding set
 
@@ -262,6 +267,46 @@ Tests accept an `s3` credential and refuse a credential of another platform.
 Tests assert that suitability compares no endpoint, bucket or region metadata.
 Tests assert that binding writes make no capability probe and that stores without versions remain valid.
 Tests preserve the pinned storage binding identity in each object evidence record.
+
+## Conversation configuration
+
+The `conversation` binding names one resource of a conversation platform. `ConversationPlatform` is a closed set in code: `github`, `jira` and `slack`.
+A conversation binding is no delivery source. It holds the credential, the reply policy, the link trust and the inbox opt-in of one resource.
+The configuration holds these fields:
+
+| Field          | `github`                         | `jira`                                           | `slack`                               |
+| -------------- | -------------------------------- | ------------------------------------------------ | ------------------------------------- |
+| `available`    | required                         | required                                         | required                              |
+| `platform`     | `github`                         | `jira`                                           | `slack`                               |
+| `repository`   | required, `<owner>/<repo>`       | absent                                           | absent                                |
+| `site`         | absent                           | required, a host that ends with `.atlassian.net` | absent                                |
+| `project_key`  | absent                           | required, `^[A-Z][A-Z0-9_]{1,9}$`                | absent                                |
+| `team_id`      | absent                           | absent                                           | required, `^T[A-Z0-9]{2,31}$`         |
+| `credential`   | required, platform `github`      | required, platform `jira`                        | required, platform `slack`            |
+| `reply_policy` | optional                         | optional                                         | optional                              |
+| `link_trust`   | optional                         | optional                                         | optional                              |
+| `inbox`        | optional, `{ actor_id, handle }` | refused until I3, then `{ actor_id }`            | refused until I4, then `{ actor_id }` |
+
+- `credential` is a credential name, never a revision. The binding sends `{ credential, platform }` to [custody suitability](custody.impl.md#suitability), with the platform of the binding.
+- `reply_policy` is `{ follows: { type: "assessment_passed" } }`. An absent value configures no reply action. Its catalog action is `reply`.
+- `link_trust` is `{ actor_ids }`: at most 32 distinct immutable account ids of the platform of the binding. An absent key or an empty list trusts no actor. A bot or an app is never trusted.
+- A repository binding also takes `link_trust`, for the reviewers of a pull request change request. Its `actor_ids` hold GitHub user ids.
+- A violation of `link_trust` refuses the write with 400 `project.bindings.link_trust_invalid` and `details: { binding, field, reason, actor_id }`. `field` is `actor_ids`. `reason` is `type_invalid`, `too_many`, `duplicate`, `id_invalid` or `platform_unsupported`. A key outside `actor_ids` refuses the write as a validation failure.
+- `inbox` is `{ actor_id, handle }` and is valid on a conversation binding only. A repository binding refuses it. `actor_id` takes the id form of `link_trust` for the platform of the binding.
+- `handle` is required for `github`, and it matches `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`. A `jira` binding and a `slack` binding refuse `handle`.
+- A `jira` binding refuses `inbox` until layer I3 of the inbox design, and a `slack` binding refuses it until layer I4. The refusal reason is `platform_unsupported`.
+- A violation of `inbox` refuses the write with 400 `project.bindings.inbox_invalid` and `details: { binding, field, reason }`. `reason` is `type_invalid`, `id_invalid`, `handle_invalid` or `platform_unsupported`.
+- A write that gives `inbox` to a resource that another project binds with `inbox` refuses with 409 `project.bindings.inbox_taken` and `details: { resource_identity, project_id }`.
+- A change of `inbox` creates the next binding revision. It changes no pinned thread of the Inbox. The key grants no authority.
+- The binding write makes no platform call.
+
+| Platform | Id form of `actor_ids`                  | Example                                         |
+| -------- | --------------------------------------- | ----------------------------------------------- |
+| `github` | decimal `user.id`, `^[1-9][0-9]{0,15}$` | `"583231"`                                      |
+| `jira`   | `accountId`, `^[A-Za-z0-9:_-]{1,128}$`  | `"557058:f58131cb-b67d-43c7-b30d-6b58d40bd077"` |
+| `slack`  | user id, `^[UW][A-Z0-9]{2,31}$`         | `"U0123ABCD"`                                   |
+
+- Delivery admission records the update of a thread without the trust rule. A node reads `link_trust` of the binding revision that it pins for the link resource. A node that pins no binding of that resource trusts no actor.
 
 ## Worker binding configuration
 
@@ -807,6 +852,7 @@ At every placement, the server derives the client identity of an instance for a 
 - The help of the `re@1` Binding prompt row states "Put each rule that the reviewer judges into the Repository prompt, so the coder reads it too. Use this text only to relax the judgement of a rule."
 - The help states "A prompt holds no secret." The sensitive text redaction still replaces a finding in the system prompt.
 - The binding draft carries `environment` and `environment_secrets` unchanged from the read to the write. The draft of a worker binding carries `environment`.
+- The binding draft carries `link_trust` of a repository binding unchanged from the read to the write. A binding of a kind that the draft does not edit, `conversation` included, stays unchanged and read-only.
 - The row of a repository binding shows only the connection: the address, the platform, the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows each record as `<name> (v<revision>)` with its fingerprint.
 - The SSH credential field holds `New SSH credential`. It opens the `Create SSH key` sheet and selects the new record.

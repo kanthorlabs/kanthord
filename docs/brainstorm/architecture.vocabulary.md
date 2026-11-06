@@ -32,7 +32,7 @@ The set is closed and it holds three values.
 
 - **model connector**: the [LLM component](llm.md#model-connector) owns it; it builds the model runtime of an agent provider and performs its model inference calls.
 - **repository connector**: the Repository component owns it; it performs a network git read and a network git write.
-- **platform connector**: the Repository component owns it; it performs every operation on the API of an external platform through the platform implementation of that platform.
+- **platform connector**: the Repository component owns it; it performs every operation on the API of an external git platform through the platform implementation of that platform.
 
 Execution 1 of "Add password reset" asks the repository connector to push the node branch.
 The connector resolves the repository binding of the node through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
@@ -171,12 +171,14 @@ The type of a credential is a separate matter, and no approved page closes that 
 ## platform
 
 The external system at which a credential authenticates.
-The set is closed. Each platform belongs to exactly one shared component, and that component holds its platform table:
+The set is closed. Each platform belongs to exactly one owner, and that owner holds its platform table:
 
 - the [LLM platforms](llm.vocabulary.md#llm-platform) of the LLM component, for example `anthropic`, `github-copilot` and `openai-compatible`
 - `github` and `ssh` of the [Repository component](repository.impl.md#platform-validators); `ssh` holds the SSH identity of git
 - the git-only platforms `gitlab` and `bitbucket` of the [Repository component](repository.impl.md#git-only-platforms), which a repository binding names and at which no credential authenticates
 - `s3` of the [Storage component](storage.impl.md#platform-validators)
+- `environment_secret` of the [Project Service](project-service.impl.md#environment-secrets)
+- `jira`, `slack` and `slack_signing_secret` of the [Intake Service](intake-service.impl.md#the-credential-platforms)
 
 A repository binding names its platform explicitly; an address proves no platform.
 The name `github-copilot` is an LLM platform, so a shared prefix decides no owner.

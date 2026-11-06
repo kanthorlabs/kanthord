@@ -167,6 +167,9 @@ erDiagram
     mission_node {
         text id PK "node_ + ULID, ERD 1"
     }
+    mission_mission {
+        text id PK "mission_ + ULID, ERD 1"
+    }
     worker_instance {
         text id PK "worker_instance_ + ULID, ERD 1"
     }
@@ -263,14 +266,28 @@ erDiagram
 
     mission_proposal {
         text id PK "proposal_ + ULID"
-        text node_id FK "examine node"
-        integer attempt "attempt of the assessment"
-        text assessment_id FK "undetermined execution assessment"
-        text content "canonical JSON: dependency_id, name, requirement, criterion, task"
+        text node_id FK "examine node, or terminal node for a follow-up"
+        integer attempt "attempt of the assessment, or last attempt of the terminal node"
+        text assessment_id FK "undetermined execution assessment, nullable, null for a follow-up"
+        text content "canonical JSON: dependency_id, name, requirement, criterion, task, or node_revision for a follow-up"
         text created_node_id FK "implement node that the approval creates, nullable"
         integer approved_at "Unix ms, nullable"
         integer rejected_at "Unix ms, nullable"
         integer created_at "Unix ms"
+    }
+
+    mission_link_update {
+        text id PK "link_update_ + ULID, the ULID time is the insert time"
+        text mission_id FK "mission"
+        text external_link "canonical JSON of the thread address"
+        text update_key "dedupe key, unique with mission_id and external_link"
+        text inbound_event_id "intake_inbound_event id, ERD 3, no FK"
+        text actor_id "platform account id of the author"
+        integer occurred_at "Unix ms, platform time of the update"
+        text reason "InboxReason enum in code"
+        text binding_id "conversation binding revision that the thread pins, null outside the inbox, no FK"
+        integer done_at "Unix ms, nullable"
+        integer snoozed_until "Unix ms, nullable"
     }
 
     mission_finding {
@@ -318,7 +335,9 @@ erDiagram
     mission_assessment ||..o{ mission_outcome : "FK assessment_id"
 
     mission_node ||..o{ mission_proposal : "FK node_id, FK created_node_id"
-    mission_assessment ||..o{ mission_proposal : "FK assessment_id"
+    mission_assessment |o..o{ mission_proposal : "FK assessment_id, null for a follow-up"
+    mission_mission ||..o{ mission_link_update : "FK mission_id"
+    project_binding |o..o{ mission_link_update : "ref binding_id, no FK"
 
     mission_node ||..o{ mission_finding : "FK node_id"
     mission_assessment ||..o{ mission_finding : "FK assessment_id"
@@ -331,12 +350,12 @@ erDiagram
     classDef stub stroke-dasharray:4 3
 
     class project_binding project
-    class mission_node mission
+    class mission_node,mission_mission mission
     class worker_instance worker
-    class project_binding,mission_node,worker_instance stub
+    class project_binding,mission_node,mission_mission,worker_instance stub
     class worker_registration worker
     class scheduler_execution scheduler
-    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal,mission_finding mission
+    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome,mission_proposal,mission_link_update,mission_finding mission
 </pre>
           <h2 id="tables">Tables</h2>
           <div class="table-wrap">
@@ -476,6 +495,17 @@ erDiagram
                     <a
                       href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-fix-node-proposal"
                       >the fix-node proposal</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>mission_link_update</code></td>
+                  <td>Mission Service</td>
+                  <td>
+                    Derived from
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.md#delivery-admission-and-check"
+                      >delivery admission</a
                     >.
                   </td>
                 </tr>
@@ -1181,7 +1211,7 @@ erDiagram
           <ul>
             <li>
               Only an <code>undetermined</code> execution assessment of an
-              <code>examine</code> node holds proposals, at most 10.
+              <code>examine</code> node holds fix-node proposals, at most 10.
               <code>dependency_id</code> in <code>content</code> names a current
               direct dependency of that node with
               <code>intent: implement</code>.
@@ -1201,6 +1231,57 @@ erDiagram
               of the <code>Blocked</code> proposer sets
               <code>rejected_at</code> of every open proposal of the assessment
               that blocked it. No other write changes a proposal row.
+            </li>
+            <li>
+              A follow-up proposal belongs to a terminal node,
+              <code>Completed</code> or <code>Discarded</code>. Its
+              <code>assessment_id</code> is null, its <code>attempt</code> is
+              the last attempt of the node, and its <code>content</code> is
+              <code>{ node_revision }</code>. Delivery admission writes it when
+              a trusted link update arrives and the node holds no open proposal
+              and no live follow-up node. A live follow-up node is the node that
+              an approved follow-up proposal created, when that node is not
+              retired.
+            </li>
+            <li>
+              A human decides a follow-up proposal with
+              <code>mission.followup.decide</code> in one decision. An approval
+              creates one node that copies the current revision of the terminal
+              node, and it adds the dependency on the terminal node only when
+              that node is <code>Completed</code>. It copies no
+              <code>mission_link_update</code> row, because the new node reads
+              the rows of its links. It sets <code>created_node_id</code> and
+              <code>approved_at</code> once. A rejection sets
+              <code>rejected_at</code> and creates nothing.
+            </li>
+          </ul>
+          <h3 id="mission-service-link-updates">
+            Mission Service: link updates
+          </h3>
+          <ul>
+            <li>
+              <code>mission_link_update</code> has one unique index on
+              <code>(mission_id, external_link, update_key)</code>, so a mission
+              holds one row for each update of one thread. The table holds no
+              other index and no <code>CHECK</code>.
+            </li>
+            <li>
+              Delivery admission inserts one row for each update that it
+              accepts. <code>external_link</code> holds the canonical address of
+              the thread. <code>inbound_event_id</code> names an event of
+              <a href="03-integration.html">ERD 3</a>, with no FK.
+              <code>binding_id</code> names the conversation binding revision
+              that the thread pins, with no FK.
+            </li>
+            <li>
+              No column holds the node, the attempt, the state or the
+              <code>new</code> mark. A node reads the rows of its links, and the
+              <code>new</code> mark derives from the ULID time of
+              <code>id</code> and <code>mission_attempt.opened_at</code>.
+            </li>
+            <li>
+              A row stays until a human deletes the mission data. It counts
+              toward <code>operational_database</code> of the Footprint Service.
             </li>
           </ul>
           <h3 id="mission-service-requests">Mission Service: requests</h3>

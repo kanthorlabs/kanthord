@@ -115,5 +115,5 @@ Custody grants no authority through possession of a credential reference.
 - No credential reaches an external harness, agent context, tool result, log record or workspace file.
 - An execution holds no credential itself.
 - The [execution store view](custody.impl.md#the-credential-store-of-an-execution) supplies the native runtime.
-- The [Intake Service](intake-service.impl.md#the-credential-release-of-an-inbound) takes one release for each remote call of an inbound.
+- The [Intake Service](intake-service.impl.md#the-credential-release-of-an-inbound) takes one release for each remote call of an inbound, and one release for each receipt of a `slack` webhook inbound.
 - The Mission Service authorizes a presigned storage grant, and the [Intake Service](intake-service.impl.md#presigned-storage-grants) signs it.

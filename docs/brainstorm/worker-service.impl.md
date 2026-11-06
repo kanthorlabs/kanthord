@@ -1658,7 +1658,7 @@ The second source is kanthord's own tools, which the server serves through its M
 An external harness reaches the same MCP server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
 The fourth source is the host-supplied tools that the `worker` application serves in its own process.
-An agent declaration names its host tools: `swe@1` holds `evidence-upload`, and `re@1` holds none.
+An agent declaration names its host tools: `swe@1` holds `evidence-upload` and `link_update_list`, and `re@1` holds none.
 The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
@@ -1680,7 +1680,7 @@ The steps method of `coder@1` on an `implement` node runs only coding turns of t
 
 The flow of one execution:
 
-1. Read the pinned revision. Read the verdict or the cleared assessment under [The unblock reads](#the-unblock-reads).
+1. Read the pinned revision. Read the verdict or the cleared assessment under [The unblock reads](#the-unblock-reads). Read the link updates under [The link update read](#the-link-update-read).
 2. Prepare each checkout under [Workspace](#workspace), then run the restore sequence of [Gate G](#gate-g) to the head that the checkout step read.
 3. Open the `swe@1` session.
 4. Run merge step M under [The base merge](#the-base-merge).
@@ -1821,6 +1821,8 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - The verdict rule holds when at least one kept checkout gives a nonempty `git rev-list --first-parent --ancestry-path --no-merges --max-count=1 <judged commit>..HEAD`. A merge commit never satisfies the rule. `verdictRuleHolds` of `src/worker/unit/verdict-rule.ts` checks it.
 - At planning, a verdict whose rule holds plans no verdict unit. Any other verdict plans the node unit with the `criterion-revision` text of the verdict, after the pending units. The planning logs `verdict planned`.
 - With no kept judged commit, the verdict unit has no rule, and the release gate decides.
+- `readPrior` also writes one link-updates text. The text holds the newest 20 updates, their `new` marks and the count of older updates. 20 is a constant in code.
+- The text joins the verdict after a blank line, or it is the verdict when no other verdict exists. With no other verdict, no judged commit exists, and the release gate decides.
 - While the rule fails after a verdict turn, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
 - When the coder answers a finding OPEN and makes no commit, each verdict turn counts as unchanged. The no-progress limit then pauses the node, as for a `criterion-not-met` verdict.
 - When the rule holds, the flow goes to the release gate, which runs the node verifications. The live checkout runs no node command.
@@ -1843,6 +1845,21 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - When the read finds no current change request, an execution of attempt 2 or later reads `mission.execution.cleared_assessment.get`. A cleared assessment that is not `success` gives its rationale as plain instruction text.
 - A change request routes no task. The verdict unit sends the whole text to the agent, and the verdict rule keeps an unchanged head from the next review.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
+
+## The link update read
+
+- Every attempt, attempt 1 included, reads the trusted link updates of its node through `worker.execution.link_update.get`.
+- `worker.execution.link_update.get` is an API-only `client` read of the Worker Service at `GET /api/worker/execution/:execution_id/link-update`. It takes `cursor` and `limit`, at most 100, and answers `{ items, next_cursor, total }`, newest first by `(occurred_at, id)`.
+- A claim that is not live answers 403 `mission.authorization.refused` with `details: { reason: claim_not_live }`.
+- Each item holds `id`, `external_link`, `update_key`, `occurred_at`, `new` and `content`.
+- The read takes the rows through the Mission collaboration `linkUpdatesOf(tx, nodeId, attempt, page)`, as `worker.execution.change_request.get` takes the cleared actions through `actionContextOf`. The collaboration applies the trust rule at the read, with `link_trust` of the binding revision that the pinned node revision names for each link resource.
+- `new` is true for a row inserted at or after the opening of the previous attempt. The insert time is the ULID time of `id`. At attempt 1, every row is `new`.
+- `content` is `{ author, body, url, occurred_at }` from `intake.inbound.event.describe`, or null when the event no longer exists.
+- `intake.inbound.event.describe` is a `service` operation with `direct: true`. The Worker Service and the Mission Service call it. It reads the stored event, calls the description of the platform implementation of its inbound and takes no credential. It calls no platform.
+- `intake.inbound.event.describe` applies the sensitive text rule set of `engine/src/agent/sensitive-text.ts` to `body` before it answers. The session hook `sensitiveTextRedaction` redacts again in the session.
+- No read cuts the text. The only size bound is the 32 MiB body limit of every operation.
+- The host tool `link_update_list` of `swe@1` calls `worker.execution.link_update.get` with `cursor` and `limit`, and it answers the page with `next_cursor`. It follows the pattern of the host tool `evidence-upload`. `sessionTools` maps each host tool of `engine/src/agent/catalog.ts` by its name.
+- The update text is context. The requirement stays in the node revision.
 
 ## The verifications
 
@@ -2218,8 +2235,10 @@ Inside one server process, the mutex and the reservation prevent a redispatch wi
 The outbound request of the [Intake Service](intake-service.md#outbound-requests) is the durable dispatch record.
 B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, across attempts included.
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
+For a `reply` action, the call names the outbound operation of the platform of the conversation binding: `github.issue_comment`, `jira.issue_comment` or `slack.thread_reply`.
 The operands take the node branch from `node_branch` of the claim.
 It passes the request key `<node id>/<attempt>/<FrozenAction.key>`, and it appends the snapshot commit for `merge_push`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6`. For the reuse of a pull request, it appends the number of the reused pull request and the snapshot commit, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9`.
+For a `reply` action, the request key is `<node_id>:<attempt>:<link>`, where `<link>` is the canonical JSON of the external link.
 A `kanthord` landing pull request action submits its request evidence. When `gate_files` of its action context entry is empty, the action performer then calls `intake.action.perform` once more with `merge_evidence_id` set to the evidence identity. The merge request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request/merge/b4c5d6`. A failed merge changes no return item.
 
 After the dispatch loop, the action performer calls `intake.action.perform` once per required `kanthord` landing pull request action whose request evidence has no end state. It skips an action whose `gate_files` is not empty.
@@ -2237,7 +2256,7 @@ The operation and the tool answer `{ tool_name: "repository-action-request", ite
 - `failed-before-effect` holds `action: { key, binding_id }` and `refusal: { class, code, message }`, where `class` is `confirmed_failure`, `retryable_refusal` or `final_refusal`. A final refusal declines the request before any write. `code` and `message` come from the [Repository component](repository.impl.md): the platform implementation for a platform action, the repository connector for a network git write.
 - `uncertain` holds `action: { key, binding_id }`, `uncertainty: "effect" | "recording" | "both"` and an optional `address`, present when the remote returned the address and the Mission submission stayed uncertain. An `unknown_outcome` result class produces `effect`.
 
-`key` is the `FrozenAction.key` of the attempt, and `binding_id` is the repository binding of the action, under [the attempt](mission-service.impl.md#the-attempt).
+`key` is the `FrozenAction.key` of the attempt, and `binding_id` is the binding of the action, under [the attempt](mission-service.impl.md#the-attempt).
 The first version produces no `awaiting-prerequisite` item, because a repository strategy holds at most one action and its `follows` is null.
 The answer holds no release instruction, because [B9 items A3, W1, W4 and PR2](HANDOFF.md#worker-and-project-services) own what follows a failure or an uncertainty.
 The action performer answers 409 `worker.action_performer.claim_not_evaluation` under a steps claim, 409 `worker.action_performer.assessment_not_current` without a current passing assessment of the attempt, and 409 `worker.action_performer.snapshot_absent` when that assessment names no repository snapshot of the binding of the action.
