@@ -60,24 +60,29 @@
           </p>
           <p>
             The key of a cooldown is the credential name and its holder. The
-            holder is <code>server</code> or a worker instance; see
-            <a href="../llm/credential.html#instance-copies">instance copies</a
-            >. A claim writes and reads the copy of its claimant: the instance
-            of the registration at the <code>worker</code> placement, else
-            <code>server</code>. <code>swe@1</code>, <code>re@1</code> and every
-            project share a key. An advance is such a release: it moves the
-            agent to the next chain entry. A repeated advance on the same copy
-            adds one strike. The duration is the base of the code, doubled for
-            each strike after the first, up to the maximum. An expired cooldown
-            keeps its strikes until a release with no
-            <code>provider_failed</code> stop releases the copy. Any release
-            without a <code>provider_failed</code> stop on any model of the copy
-            releases every model of the copy, a <code>budget_end</code> stop or
-            another failure stop included. A <code>provider_failed</code> stop
-            with <code>unauthorized</code> or <code>bad_request</code> neither
-            adds a strike nor releases the copy. A human can also clear a copy.
-            The server log records three events at level <code>info</code>, each
-            after its write commits.
+            holder is <code>server</code>, a worker machine or a worker
+            instance; see
+            <a href="../llm/credential.html#instance-copies"
+              >instance and machine copies</a
+            >. A claim reads the copy of the copy holder of its claimant. At the
+            <code>worker</code> placement, that is the own copy of the instance
+            of the registration, else the copy of its machine. At the other
+            placements, it is <code>server</code>. A release writes the copy of
+            the revision that the execution pins. A machine copy holds one
+            cooldown, so every instance that uses the copy shares it.
+            <code>swe@1</code>, <code>re@1</code> and every project share a key.
+            An advance is such a release: it moves the agent to the next chain
+            entry. A repeated advance on the same copy adds one strike. The
+            duration is the base of the code, doubled for each strike after the
+            first, up to the maximum. An expired cooldown keeps its strikes
+            until a release with no <code>provider_failed</code> stop releases
+            the copy. Any release without a <code>provider_failed</code> stop on
+            any model of the copy releases every model of the copy, a
+            <code>budget_end</code> stop or another failure stop included. A
+            <code>provider_failed</code> stop with <code>unauthorized</code> or
+            <code>bad_request</code> neither adds a strike nor releases the
+            copy. A human can also clear a copy. The server log records three
+            events at level <code>info</code>, each after its write commits.
             <code>agent.fallback.cooldown_started</code> carries
             <code>execution_id</code>, <code>credential_name</code>,
             <code>holder</code>, <code>code</code>, <code>strikes</code> and
@@ -136,9 +141,10 @@
             <a href="../project/agent.html#expected-response"
               >the worker binding agent view</a
             >. That code is a view code and has no HTTP status. At the
-            <code>worker</code> placement, each instance holds its own copy. The
-            worker binding agent view shows the cooldown with the latest
-            <code>available_at</code> over the instances of the binding.
+            <code>worker</code> placement, each instance uses the copy of its
+            copy holder. The worker binding agent view shows the cooldown with
+            the latest <code>available_at</code> over the instances of the
+            binding.
           </p>
           <p>
             The <strong>Cooldown</strong> section of the LLM credential page
@@ -221,8 +227,8 @@
                   <td><code>items[].holder</code></td>
                   <td>string</td>
                   <td>
-                    Holder of the copy: <code>server</code> or a worker instance
-                    name.
+                    Holder of the copy: <code>server</code>, a worker machine
+                    name or a worker instance name.
                   </td>
                 </tr>
                 <tr>
@@ -454,8 +460,8 @@ kanthord agent cooldown clear &lt;credential-name&gt; --holder builder-1</code><
                   <td>clear</td>
                   <td><code>server</code></td>
                   <td>
-                    Holder of the copy: <code>server</code> or a worker instance
-                    name; maps to <code>holder</code>.
+                    Holder of the copy: <code>server</code>, a worker machine
+                    name or a worker instance name; maps to <code>holder</code>.
                   </td>
                 </tr>
                 <tr>

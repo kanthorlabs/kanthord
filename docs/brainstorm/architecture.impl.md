@@ -134,6 +134,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `<file>.bak-<timestamp>` beside `kanthord.yaml`, `kanthord.db` and `tracking.db`, the backups that `kanthord upgrade` writes, a path template that [the upgrade](#the-upgrade) of this sibling declares. [footprint-service.impl.md](footprint-service.impl.md#the-kinds-and-their-measures) measures them, and a human deletes them through `footprint.backup.delete`.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
 - `workers/<instance name>.yaml` of the configuration directory, the instance configuration file of a worker instance, a path template that [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares. `kanthord worker join` and `kanthord worker instance create --output` write it, and the server reads it never.
+- `machines/<machine name>.yaml` of the configuration directory, the machine configuration file of a worker machine, a path template that [worker-service.impl.md](worker-service.impl.md#the-machine-configuration) declares. `kanthord worker machine join`, `kanthord worker machine create --output` and `kanthord worker machine rotate --output` write it, and the server reads it never.
 - `workers/<instance name>/` of the data directory and of the state directory: the data and log directories of a worker instance. [worker-service.impl.md](worker-service.impl.md#the-worker-application) declares both path templates. On the server host, `workers/<instance name>/` of the state directory of the server is the slot root of a server instance, which [worker-service.impl.md](worker-service.impl.md#the-server-instances) declares.
 - `workbench/<agent name>/` of the state directory, the workbench directory of an agent, a path template that [workbench-service.impl.md](workbench-service.impl.md#workbench-session) declares.
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
@@ -649,12 +650,14 @@ A fatal error runs as below.
 - A secret of the server configuration, for example `master_key`, is a field of the configuration file and no row of a database. A credential secret is an encrypted row of [the credential table](#the-credential-table).
 - Every secret field carries `sensitive: true`, so `convict.toString()` masks it.
 - The instance configuration of a worker instance holds `private_key`. The same masking, diagnostic and display rules apply to the instance configuration file and to `KANTHORD_WORKER_CONFIG`.
+- The machine configuration of a worker machine holds `private_key`. The same rules apply to the machine file and to `KANTHORD_MACHINE_CONFIG`.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
 - A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
 - The `auth jwt generate` command of [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) holds that exception. It prints a token only to terminal standard output and reads no terminal input.
 - `kanthord worker instance create` without `--output` holds the second exception. It prints the instance configuration once, only to terminal standard output.
-- The exceptions cover those two displays alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
+- `kanthord worker machine create` and `rotate` without `--output` hold the third exception. They print the answer with `machine_configuration` once, only to terminal standard output.
+- The exceptions cover those displays alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
 - A changed `master_key` against an existing database refuses the start with `system.config.master_key_mismatch`, as [the master_key record](custody.impl.md#the-master_key-record) of custody rules. A new `master_key` starts with a new data directory, and a human obtains a newly generated token.
@@ -699,13 +702,23 @@ A fatal error runs as below.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
 - `kanthord worker join` and `kanthord worker instance create --output` are the only commands that write an instance configuration file. Each creates an absent file, and `--force` is the only overwrite. `kanthord worker join` reads the instance configuration from standard input, so no secret reaches the command line.
 - The `worker instance` group holds five commands, each with the remote flags of the engine CLI:
-  - `kanthord worker instance create <name> --worker <worker> --placement <placement> [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.create`.
+  - `kanthord worker instance create <name> --worker <worker> --placement <placement> [--machine <machine>] [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.create`. `--machine` sends `machine`.
   - `kanthord worker instance list [--worker <worker>] [--include-archived] [--limit <count>] [--cursor <opaque>]` calls `worker.instance.list`.
   - `kanthord worker instance get <name>` calls `worker.instance.get`.
   - `kanthord worker instance rotate <name> --expected-revision <revision> [--worker-endpoint <url>] [--output [--force]]` calls `worker.instance.rotate`.
   - `kanthord worker instance archive <name> --expected-revision <revision> [--force]` calls `worker.instance.archive`. `--force` sends `force: true`, which also stops the live execution of the instance.
 - `--placement` is `server`, `container` or `worker`. An absent or other value, or `--output` or `--worker-endpoint` with the `server` or the `container` placement, fails locally with `cli.worker.instance.placement_invalid`.
 - At the `worker` placement, `create` and `rotate` generate the key pair on the host of the CLI and send only `public_key`. Without `--output`, they print the instance configuration once to terminal standard output. A create at the `server` or the `container` placement sends no key and prints the instance record.
+- Only three commands write a machine configuration file: `kanthord worker machine join [--force]`, `create --output` and `rotate --output`. Each creates an absent file, and `--force` is the only overwrite. `join` reads the machine configuration from standard input.
+- The `worker machine` group holds six commands. Each command except `join` holds the remote flags of the engine CLI:
+  - `kanthord worker machine create <name> [--output [--force]]` calls `worker.machine.create`.
+  - `kanthord worker machine list [--limit <count>] [--cursor <opaque>]` calls `worker.machine.list`.
+  - `kanthord worker machine get <name>` calls `worker.machine.get`.
+  - `kanthord worker machine rotate <name> --expected-revision <revision> [--output [--force]]` calls `worker.machine.rotate`.
+  - `kanthord worker machine archive <name> --expected-revision <revision>` calls `worker.machine.archive`.
+  - `kanthord worker machine join [--force]` writes the machine file and calls no operation.
+- `create` and `rotate` of a machine generate the key pair on the computer of the CLI and send only `public_key`. With `--output`, they write the machine file. Without it, they print the answer with `machine_configuration` once, and they refuse a standard output that is no terminal.
+- The CLI checks a machine name against the instance name form before the request, and it answers `worker.machine.name_invalid`.
 - `--worker-endpoint` sets `endpoint` of the instance configuration, the server address that the instance calls. It defaults to the resolved `--endpoint` of the CLI.
 - The `auth` group holds every authentication command, and a bare `kanthord auth` prints the help of the group. Its `jwt` group holds `generate` and `inspect`, and a bare `kanthord auth jwt` prints the help of the group.
 - The CLI provides `kanthord auth jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates the machine JWT of an external harness for one new client identity of that worker binding. It then rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). It is the only issuance entry point of a human token and of the token of an external harness. The [instance exchange](worker-service.impl.md#the-instance-exchange) mints the machine JWTs of the `worker` placement. The Gateway Service sibling owns the claim validation and the token contract.
@@ -1140,11 +1153,11 @@ The import boundaries follow the public files.
 - The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credential_name`, `POST /api/<component>/credential/:credential_name/revision`, `PUT /api/<component>/credential/:credential_name/metadata`, `POST /api/<component>/credential/:credential_name/revision/:revision/revoke`, `POST /api/<component>/credential/:credential_name/archive`, `POST /api/<component>/credential/:credential_name/verify` and `POST /api/<component>/credential/check`.
 - The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`.
 - Every route uses the `human` access policy. The LLM routes that a worker instance calls are the exception, and [llm.impl.md](llm.impl.md) declares them with the `human_or_worker` or the `worker` policy.
-- An LLM credential row has a holder: `server` or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule. A row of the Repository, the Storage or the Project component holds `server` only.
+- An LLM credential row has a holder: `server`, a worker machine name or a worker instance name. [custody.impl.md](custody.impl.md) owns the holder rule. It also owns the copy holder of an instance. A row of the Repository, the Storage or the Project component holds `server` only.
 - Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
 - A create of a platform of another component answers 400 `credential.platform.unsupported`.
 - A read or a write of a name whose platform belongs to another component answers 404 `credential.credential.not_found`.
-- A credential name names one platform on the server, because the `credential` table is one table. One name holds one copy for each holder, under [custody.impl.md](custody.impl.md).
+- A credential name names one platform on the server, because the `credential` table is one table. One name holds one copy for each holder: `server`, a machine or an instance, under [custody.impl.md](custody.impl.md).
 - The record lifecycle codes stay `credential.*`, because custody raises them. A platform rule of a component takes the prefix of that component, for example `llm.metadata.base_url_fixed`.
 - The request and answer bodies keep the fields of the custody record answer. A get adds the dependents list of its component.
 - The Repository component also declares the SSH key and host key operations of [repository.impl.md](repository.impl.md#operations). The static segment `ssh` takes precedence over `/:credential_name`, so custody refuses the name `ssh`.
@@ -1195,6 +1208,7 @@ These sections hold the dashboard rules of this page:
 - [The credential sections of the dashboard](#the-credential-sections-of-the-dashboard)
 - [The dashboard navigation](#the-dashboard-navigation)
 - [The worker pages](#the-worker-pages)
+- [The machine pages](#the-machine-pages)
 - [The dashboard onboarding](#the-dashboard-onboarding)
 - [The onboarding steps](#the-onboarding-steps)
 - [The return after a save](#the-return-after-a-save)
@@ -1229,8 +1243,8 @@ The rules of the credential sections follow.
 - An archived row shows its archive time, the latest `ended_at` of its revisions.
 - A credential row shows the newest live revision as `(v<revision>)` next to the credential name. An archived row shows no revision.
 - The detail of a Git credential lists the bindings that name it. Each binding links to the Bindings tab of its project.
-- `/llm` lists the rows of the holder `server` only. Its description line also states "Instance credentials live on the worker pages."
-- The check icon of the create form and Verify act on a row of the holder `server` only. A copy of a worker instance skips the pre-save check and the provider check, under [llm.impl.md](llm.impl.md).
+- `/llm` lists the rows of the holder `server` only. Its description line also states "Machine and instance credentials live on the machine and worker pages."
+- The check icon of the create form and Verify act on a row of the holder `server` only. A copy of a worker machine or a worker instance skips the pre-save check and the provider check, under [llm.impl.md](llm.impl.md).
 
 ## The dashboard navigation
 
@@ -1242,6 +1256,7 @@ The rules of the credential sections follow.
 - On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
 - The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
 - The sidebar item `Workers` of the group `Workforce` opens `/workers`. The worker page `/workers/:workerName` and the instance page `/workers/:workerName/instances/:instanceName` sit under it. Each name in the path is URL-encoded, as on `/agents/:agentName`. [The worker pages](#the-worker-pages) hold the rules.
+- The sidebar item `Machines` of the group `Workforce` opens `/machines`, after `Workers`. The form `/machines/new` and the machine page `/machines/:machineName` sit under it. The machine name in the path is URL-encoded. [The machine pages](#the-machine-pages) hold the rules.
 - The sidebar item `Traces` of the group `Work` opens `/traces`, after `Scheduler`. The trace page `/traces/:traceId` sits under it. [The trace pages](#the-trace-pages) hold the rules.
 - The sidebar item `Timeline` of the group `Work` opens `/timeline`, after `Traces`.
 - The sidebar item `Analytics` of the group `Work` opens `/analytics`, after `Timeline`.
@@ -1259,39 +1274,65 @@ The rules of the credential sections follow.
   - A binding of an external harness: "has no live registration. Start its worker program."
 - The worker page shows these sections, top to bottom:
   1. The header: the worker name, the host badge, the declared node states, the declared intents and the resource budget.
-  2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, the placement badge `server`, `container` or `worker`, `Executing <project> · <node>` or `Idle`, and the binding count. A `worker` row also shows the short fingerprint and `Connected · <connection_name>` or `Not connected`, and a holder-mismatch badge when a listing binding lacks a copy for that instance. A server instance that no binding lists shows "Runs with no binding. Archive it to stop it." The section holds `Add instance`. The empty state reads "No instances. Add one to give this worker capacity."
+  2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, the placement badge `server`, `container` or `worker`, `Executing <project> · <node>` or `Idle`, and the binding count. A `worker` row also shows the short fingerprint and `Connected · <connection_name>` or `Not connected`, and a holder-mismatch badge. The badge shows when a listing binding lacks a live current copy of the copy holder of that instance. A server instance that no binding lists shows "Runs with no binding. Archive it to stop it." The section holds `Add instance`. The empty state reads "No instances. Add one to give this worker capacity."
   3. Bindings: the worker bindings of this worker in the current project, with the listed instance names.
   4. Live registrations of this worker in the current project.
 - A worker of an external harness shows sections 1, 3 and 4.
 - The binding form of a hosted worker holds the multi-select `Instances` with the options `<name> · <placement>`. It holds no placement select and no count field. It shows `Environment` when the selection holds a `container` instance. [project-service.impl.md](project-service.impl.md) rules the form.
 - The instance page shows these sections, top to bottom:
-  1. The header: the name, `(v<revision>)`, the worker and the placement badge. At the `worker` placement, it also shows the fingerprint and the connection line. At the `container` placement, when `container` is not available, the header shows a Connection line with the `instancePlacementText` of the reason and the detail. For `runtime_failed`, the text is the detail, then "The server retries the launch with a backoff." A server instance that no binding lists shows "Runs with no binding. Archive it to stop it."
+  1. The header: the name, `(v<revision>)`, the worker and the placement badge. At the `worker` placement, it also shows `Machine <name>` with a link to the machine page, the fingerprint and the connection line. At the `container` placement, when `container` is not available, the header shows a Connection line with the `instancePlacementText` of the reason and the detail. For `runtime_failed`, the text is the detail, then "The server retries the launch with a backoff." A server instance that no binding lists shows "Runs with no binding. Archive it to stop it."
   2. The bindings that list the instance, in every project, from `worker.instance.get`. A row shows the project, the binding, the state `serving` or `draining` and a link to the binding.
   3. The registrations of the instance: the activity, the badge `Draining` for a registration of a binding that no longer lists the instance, and a link to the execution.
-  4. Credentials, at the `worker` placement only: a row shows `<name> · <platform> (v<revision>)` and its health line from `credentials[].health` of `worker.instance.get`. The health line shows the status badge and, with a report, "<failure reason hint> Reported by <instance> at <time>." Without a report it reads "No report from <instance> for this revision since the server start." A copy sealed to an ended fingerprint shows `Re-enter: sealed to an ended key` in place of the health line.
+  4. Credentials, at the `worker` placement only: each copy that the instance uses, from `credentials` of `worker.instance.get`. A row shows `<name> · <platform> (v<revision>)`, the holder line and the health line.
+     The holder line reads "Own copy" when `holder` is the instance, else "Shared from machine <machine>". The health line shows the status badge and, with a report, "<failure reason hint> Reported by <reported_by> at <time>." Without a report it reads "No report from <instance> for this revision since the server start." A copy sealed to an ended fingerprint shows `Re-enter: sealed to an ended key` in place of the health line.
+     A row of a machine copy holds no action of its own. It links to the machine page, which holds its actions.
   5. The danger zone: `Reset key` at the `worker` placement only, and `Archive`.
 - The instance page and the binding sheet show a notice when the instance serves bindings of two or more projects. The notice reads "<instance> serves <project A> and <project B>. A tool of either project can read its key and its workspaces." [worker-service.vocabulary.md](worker-service.vocabulary.md#trust-boundary) states the trust boundary.
-- `Add credential` opens a sheet with the name, the platform, the metadata, the secret and `Also seal to`. `Also seal to` lists every live instance at the `worker` placement of every worker, grouped by worker. A server instance uses the copy of the holder `server`. The save sends the secret and the list of holders, and the server seals one copy for each holder, under [llm.impl.md](llm.impl.md).
+- `Add credential` opens a sheet with the name, the platform, the metadata, the secret and `Also seal to`. On the instance page, the sheet adds an own copy of the instance. When the machine holds a copy of the name, the sheet states "The instance uses this copy in place of the copy of machine <machine>."
+- `Also seal to` lists every live machine first, in the group `Machines`. Then it lists every live instance at the `worker` placement of every worker, grouped by worker. A server instance uses the copy of the holder `server`. The save sends the secret and the list of holders, and the server seals one copy for each holder, under [llm.impl.md](llm.impl.md).
 - The rotate action opens a sheet with the new secret and `Also rotate on`, which lists every other holder of the name. The save sends one rotate request for each selected holder, each with the `expected_revision` of that holder.
 - `Sign in again` on an OAuth copy that is not live opens the sign-in panel for that copy and holder, in copy-code or device-code mode only. The completion adds the next revision of the copy, under [llm.impl.md](llm.impl.md#the-login-of-an-instance). On a live copy sealed to the current key, the page disables `Sign in again` and shows the reason "The copy is live. The server refuses a new sign-in while the copy is sealed to the current key of the instance."
 - The `openai-compatible` copy of an instance gets no model prefill at its creation. The human types its model ids.
 - A live `openai-compatible` copy sealed to the current key offers `Edit models`. It opens the metadata sheet for that holder and offers each model id of the last report that the draft does not hold as `Add <id>`.
-- `Add instance` opens a sheet with the name and **Placement**. [The placement list](worker-service.impl.md#the-placement-list) rules its radio cards `Server`, `Container` and `Worker`, the preselected `Server` and the text of each reason that turns `Container` off.
+- `Add instance` opens a sheet with the name and **Placement**. At the `worker` placement, the field **Machine** follows **Placement**. It is a required select of the live machines. With no live machine, it shows `Add machine`, a link to `/machines/new`. [The placement list](worker-service.impl.md#the-placement-list) rules its radio cards `Server`, `Container` and `Worker`, the preselected `Server` and the text of each reason that turns `Container` off.
 - With `Server` or `Container`, the sheet sends the name, the worker and the placement to `worker.instance.create`, and it closes on success. A 409 `worker.instance.server_limit` shows "This server runs <limit> server instances, the limit. Archive one, or raise worker.server_instance_limit." under **Placement**. A 409 `worker.instance.placement_unavailable` shows the text of `details.reason` from the placement list under **Placement**.
 - With `Worker`, the sheet adds the host kind and the address. The host kind field reads "Where does it run?" and offers `Linux (systemd)`, `macOS (foreground)`, `Container` and `Container on this host`. A container host kind adds the field "Container runtime" with `Podman` and `Docker`. `Podman` is the default.
 - The address default follows the host kind. `Container on this host` fills `http://kanthord:31415` when `worker.placement.list` reports `server_in_container`. Every other host kind fills the address of the dashboard. A loopback dashboard address leaves the field empty with a hint. The human can edit the address.
-- At the `worker` placement, the sheet sends the name, the placement and the address as `endpoint` to `worker.instance.create`. The server generates the key pair, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).
+- At the `worker` placement, the sheet sends the name, the placement, the `machine` and the address as `endpoint` to `worker.instance.create`. The other placements send no `machine`. The server generates the key pair, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).
 - The sheet then shows `instance_configuration` once, in monospace with `break-all` and `Copy`, with a warning that it shows only once. The sheet keeps no copy after it closes.
 - `apps` holds no key generation and no fallback for a page outside a secure context.
 - Below the instance configuration, the sheet shows the one copy block of the selected host kind. [The copy blocks](worker-service.impl.md#the-copy-blocks) hold the content of each block. The server stores no host kind.
 - The `Reset key` confirmation also asks for the host kind and the address, with the same defaults, and shows the one copy block of the selected host kind.
-- `Reset key` shows the blast radius from `worker.instance.get`: the bindings that list the instance, the connection, the live registrations and executions, and the credential copies. It states "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials." After the confirmation, it calls `worker.instance.rotate` with `endpoint`, and it shows the new `instance_configuration` once.
+- `Reset key` shows the blast radius from `worker.instance.get`. It lists the bindings that list the instance, the connection, and the live registrations and executions. It also lists the credential copies whose `holder` is the instance. A machine copy of the instance shows in no Reset key dialog of the instance. It states "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials." After the confirmation, it calls `worker.instance.rotate` with `endpoint`, and it shows the new `instance_configuration` once.
 - `Archive` shows the bindings that list the instance and the live executions of its registrations, from `worker.instance.get`.
 - While a binding lists the instance, the dialog lists each binding with a link to its binding sheet, states "Remove the instance from these bindings first." and keeps `Archive` disabled.
 - With no listing binding and a live execution, the dialog holds the checkbox `Stop the live execution`. `Archive` stays disabled until the human checks it. The save sends `force: true`, and the node returns to `Available` or `Waiting` with no failure count.
 - When the archive answers 409 `worker.instance.in_use`, the confirmation shows `details.bindings` and `details.executions`.
 - Each row action is a row button. A row wraps its buttons with `flex-wrap`.
 - At a width of 390 px, each page shows one column. Names and fingerprints use `break-all`. A sheet opens full screen, and the instance configuration block scrolls inside itself. No page scrolls horizontally.
+
+## The machine pages
+
+- `/machines` lists each machine. A row shows `<name> (v<revision>)`, the short fingerprint and the instance count from `instance_count` of `worker.machine.list`. The row links to its machine page. The list offers `Add machine`, a link to `/machines/new`.
+- `/machines/new` holds the field **Name**. It checks the instance name form and the reserved names before it sends. It sends `{ name }` to `worker.machine.create`, and the server generates the key pair, under [the operations of a machine](worker-service.impl.md#the-operations-of-a-machine).
+- The form then shows `machine_configuration` once, in monospace with `break-all` and `Copy`, with a notice that it shows only once. The form keeps no copy after it closes.
+- Below the machine configuration, the form shows the [machine copy block](worker-service.impl.md#the-machine-copy-block) of each host kind of `Add instance`.
+- The machine page shows these sections, top to bottom:
+  1. The header: `<name> (v<revision>)`, the short fingerprint and the created time.
+  2. Instances: each live instance of the machine from `instances` of `worker.machine.get`. A row shows the name, the worker and the connection line, with a link to `/workers/<worker>/instances/<instance>`.
+  3. Credentials: each live copy of the machine from `credentials` of `worker.machine.get`. A row shows `<name> · <platform> (v<revision>)` and the health line "<failure reason hint> Reported by <reported_by> at <time>."
+  4. The danger zone: `Reset key` and `Archive`.
+- The Credentials section offers `Add credential`, the rotate action, `Sign in again` and `Edit models`, with the machine as holder. Each action reuses the sheet of the instance page.
+- `Sign in again` on a machine copy that is not live opens the sign-in panel for that copy, with the machine as holder. A connected instance of the machine runs the session, under [llm.impl.md](llm.impl.md#the-login-of-an-instance).
+- A 409 `credential.login.instance_unavailable` of a machine sign-in shows "No instance of <machine> is connected. Start one instance of the machine, then sign in again."
+- The machine page shows a notice when the instances of the machine serve bindings of two or more projects. The page reads `bindings` of `worker.instance.get` for each instance of the machine.
+- The notice reads "<machine> serves <project A> and <project B> through its instances. A tool of either project can read the machine key and its credentials."
+- `Reset key` lists the instances of the machine. It states "Each instance of this machine then fails to open the machine credentials. Deliver the new configuration with the machine copy block of the host kind. Then sign in again for each machine credential, and rotate each API key at its provider."
+- The `Reset key` confirmation asks for the host kind and shows its machine copy block. After the confirmation, it calls `worker.machine.rotate` with `expected_revision`. It shows the new `machine_configuration` once with `Copy`, the notice that it shows only once, and the machine copy block.
+- `Archive` lists each live instance of the machine with a link. It states "Archive these instances first." It stays disabled while a live instance names the machine.
+- When the archive answers 409 `worker.machine.in_use`, the confirmation shows `details.instances`.
+- Each row action is a row button. A row wraps its buttons with `flex-wrap`.
+- At a width of 390 px, each machine page shows one column. Names and fingerprints use `break-all`. A sheet opens full screen, and the machine configuration block scrolls inside itself. No page scrolls horizontally.
 
 ## The trace pages
 
@@ -1819,8 +1860,8 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 - For a shape other than `oauth`, the sheet offers "Also rotate on" with each other holder that has a live revision. Its description adds "The server seals it to the current key of each holder."
 - For the shape `oauth`, the sheet rotates the server copy only. It shows no "Also rotate on" and no seal sentence.
 - An OAuth provider can issue a new refresh token on each refresh. Two copies of one refresh token can thus make each other invalid.
-- For the shape `oauth`, the sheet names each other holder that has a live revision: "<holder> keeps its own secret. Sign in again on its worker instance page."
-- The holder lines end with "Open workers", which opens `/workers`. The board read holds no worker name of a holder, so the link opens the worker list. With no such holder, the sheet shows no holder line and no "Open workers".
+- For the shape `oauth`, the sheet names each other holder that has a live revision: "<holder> keeps its own secret. Sign in again on its machine page or its worker instance page."
+- The holder lines end with "Open machines", which opens `/machines`, and "Open workers", which opens `/workers`. The board read holds no holder kind and no worker name of a holder, so the links open the two lists. With no such holder, the sheet shows no holder line and no link.
 - An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait. Rotate waits for the credential read, a server copy and the platform read. Its need reads "Rotate needs: the credential read.", "Rotate needs: a server copy of <credential>." or "Rotate needs: the platform read." A credential with no live revision on the holder `server` keeps the need "a server copy of <credential>". The board does not rotate it.
 - A gated Resume stays in the row through `DisabledAction` with its need. Go to <credential> selects the `credential_refused` card in Fix setup.
 - On compact width, the act bar shows the lead act and `More`. `More` opens a bottom sheet with the other acts and Discard last.

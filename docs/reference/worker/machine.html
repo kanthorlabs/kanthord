@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage worker machines · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/base.css" />
+    <link rel="stylesheet" href="../../assets/reference.css" />
+  </head>
+  <body class="reference">
+    <header class="site-header">
+      <a class="brand" href="../../index.html"
+        ><img
+          src="../../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../../tutorials/index.html">Tutorials</a>
+        <a href="../../how-to-guides/index.html">How-to guides</a>
+        <a href="../../reference/index.html" aria-current="true">Reference</a>
+        <a href="../../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../../index.html">Home</a> /
+        <a href="../../reference/index.html">Reference</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#function-description">Function description</a></li>
+          <li><a href="#expected-response">Expected response</a></li>
+          <li><a href="#api-shape">API shape</a></li>
+          <li><a href="#cli-shape">CLI shape</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="manage-worker-machines">Manage worker machines</h1>
+          <h2 id="function-description">Function description</h2>
+          <p>
+            A worker machine is one computer that runs
+            <a href="instance.html">worker instances</a> at the
+            <code>worker</code> placement. It is a credential holder with its
+            own X25519 key pair. The instances of one machine share one copy of
+            each credential that the machine holds; see
+            <a href="../llm/credential.html#instance-copies"
+              >instance and machine copies</a
+            >. A machine holds no token, no connection, no binding and no
+            execution. A worker machine is no host: the host of a worker stays
+            <code>kanthord</code> or an external harness.
+          </p>
+          <p>
+            Each instance at the <code>worker</code> placement names one live
+            machine at its create. The machine of an instance never changes. The
+            <code>server</code> and the <code>container</code> placements name
+            no machine. The server stores only the public key of a machine. The
+            private key stays in the machine configuration on the machine.
+          </p>
+          <p>
+            Each machine has revisions. Each revision has its own
+            <code>worker_machine_&lt;ulid&gt;</code> identity, key and
+            fingerprint. The live revision of a name is its newest revision with
+            <code>ended_at</code> <code>null</code>. A name with no live
+            revision is archived.
+          </p>
+          <ul>
+            <li>
+              <code>worker machine create</code> stores revision
+              <code>1</code> of a new name. The name follows the instance name
+              form: 1 to 63 characters, <code>^[a-z][a-z0-9-]*$</code>. The
+              names <code>server</code>, <code>token</code>,
+              <code>connect</code>, <code>heartbeat</code> and
+              <code>work</code> are reserved. Machines and instances share one
+              name space. A live or an archived machine or instance name stays
+              taken.
+            </li>
+            <li>
+              <code>worker machine list</code> pages the newest revision of each
+              name in ascending name order, with the count of its live
+              instances.
+            </li>
+            <li>
+              <code>worker machine get</code> reads the live or the latest
+              revision of one name, with its instances and its credential
+              copies.
+            </li>
+            <li>
+              <code>worker machine rotate</code> is the Reset key of the
+              machine. It ends the live revision and stores the next revision
+              with a new key.
+            </li>
+            <li>
+              <code>worker machine archive</code> ends the live revision for
+              good. It refuses while a live instance names the machine. In one
+              transaction, it archives every
+              <a href="../llm/credential.html#instance-copies"
+                >credential copy</a
+              >
+              that the machine holds.
+            </li>
+          </ul>
+          <p>
+            No two revisions of any machine or any instance share one
+            fingerprint. Create and rotate take an optional
+            <code>public_key</code>:
+          </p>
+          <ul>
+            <li>
+              With <code>public_key</code>, the server stores that key. The CLI
+              generates the key pair on the computer that runs it and sends only
+              <code>public_key</code>.
+            </li>
+            <li>
+              Without <code>public_key</code>, the server generates the key pair
+              and stores only the public key. The answer adds
+              <code>machine_configuration</code> once, with the header
+              <code>Cache-Control: no-store</code>. The server keeps no copy of
+              the private key.
+            </li>
+          </ul>
+          <p>
+            A Reset key of the machine gives a new machine configuration. Each
+            machine copy then has <code>sealed_current</code>
+            <code>false</code>, and the handover refuses it with
+            <code>403 custody.handover.holder_refused</code> and the reason
+            <code>held_elsewhere</code>. The instances that use such a copy show
+            <code>holder_mismatch</code> <code>true</code>. To recover:
+          </p>
+          <ol>
+            <li>
+              Replace the machine file with
+              <code>kanthord worker machine join --force</code>, or replace the
+              env value.
+            </li>
+            <li>Sign in again on the machine for each OAuth copy.</li>
+            <li>
+              Rotate each API key copy with a new secret, and rotate the key at
+              its provider.
+            </li>
+          </ol>
+          <p>
+            An instance that reads the machine file needs no restart after a
+            Reset key of the machine. An instance that reads
+            <code>KANTHORD_MACHINE_CONFIG</code> takes the new value only in a
+            new container. An instance configuration sits on the machine, so a
+            leaked instance configuration also exposes the machine key. Then
+            reset the key of the instance and of the machine.
+          </p>
+          <h3 id="machine-configuration">Machine configuration</h3>
+          <ul>
+            <li>
+              The machine configuration holds <code>name</code> and
+              <code>private_key</code>. Its value is the unpadded base64url form
+              of its canonical JSON, with no prefix.
+            </li>
+            <li>
+              The machine file
+              <code>$XDG_CONFIG_HOME/kanthord/machines/&lt;name&gt;.yaml</code>
+              holds the same two keys, with mode <code>0600</code>, in a
+              directory with mode <code>0700</code>. Without
+              <code>XDG_CONFIG_HOME</code>, the directory is
+              <code>~/.config/kanthord/machines/</code>.
+            </li>
+            <li>
+              On a computer without a writable configuration, the env value
+              <code>KANTHORD_MACHINE_CONFIG</code> holds the machine
+              configuration. A container host kind sets this value.
+            </li>
+          </ul>
+          <p>
+            <code>kanthord serve worker</code> reads the machine configuration
+            of the <code>machine</code> of each
+            <a href="instance.html#workerinstanceheartbeat">heartbeat answer</a
+            >:
+          </p>
+          <ul>
+            <li>
+              The instance claims no work before the first heartbeat answer. An
+              answer with <code>machine</code> <code>null</code> opens the
+              claim.
+            </li>
+            <li>
+              A machine configuration of that name opens the claim. An absent
+              configuration stops the claim and logs
+              <code>worker.machine.config_absent</code> with the machine name
+              once. A later heartbeat that reads the configuration opens the
+              claim again.
+            </li>
+            <li>
+              A <code>worker.machine.config_conflict</code> or
+              <code>worker.machine.config_invalid</code> read at a heartbeat
+              closes the gate and logs its code with the machine name once, as
+              <code>config_absent</code> does.
+            </li>
+            <li>
+              The instance reads the machine key at each use, by the holder of
+              the copy. An instance that reads the machine file needs no restart
+              after a Reset key of the machine. An instance that reads
+              <code>KANTHORD_MACHINE_CONFIG</code> takes the new value only in a
+              new container.
+            </li>
+            <li>
+              The instance checks the name with the instance name form before it
+              builds the file path. <code>join</code>,
+              <code>create --output</code> and <code>rotate --output</code> do
+              the same check, and answer
+              <code>worker.machine.config_invalid</code>.
+            </li>
+            <li>
+              Without <code>--force</code>, <code>join</code>,
+              <code>create --output</code> and <code>rotate --output</code>
+              refuse an existing machine file with the local code
+              <code>cli.worker.machine.config_exists</code>.
+            </li>
+            <li>
+              The agent processes of the instance do not receive
+              <code>KANTHORD_MACHINE_CONFIG</code>.
+            </li>
+          </ul>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>worker.machine.config_absent</code></td>
+                  <td>
+                    No env value and no machine file for the name. The
+                    diagnostic names the variable and the file path.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.machine.config_conflict</code></td>
+                  <td>
+                    The env value and the machine file both hold a value for one
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>worker.machine.config_invalid</code></td>
+                  <td>
+                    The name breaks the instance name form, the value fails the
+                    schema, the file <code>name</code> differs from its file
+                    name, or the env value names another machine.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>cli.worker.machine.config_exists</code></td>
+                  <td>
+                    <code>join</code>, <code>create --output</code> or
+                    <code>rotate --output</code> meets an existing machine file
+                    without <code>--force</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="expected-response">Expected response</h2>
+          <h3 id="machine-record">Machine record</h3>
+          <p>
+            <code>create</code>, <code>rotate</code> and
+            <code>archive</code> answer HTTP <code>200</code> with a machine
+            record. <code>list</code> and <code>get</code> add fields to the
+            same record.
+          </p>
+          <pre><code class="language-json">{
+  "id": "worker_machine_01M34JC4BJ66JHP41M4MYY6PSM",
+  "name": "build-box",
+  "revision": 1,
+  "public_key": "&lt;43-base64url-characters&gt;",
+  "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+  "created_at": 1791467996322,
+  "ended_at": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td>string</td>
+                  <td>
+                    Identity of the revision,
+                    <code>worker_machine_&lt;ulid&gt;</code>. Each revision has
+                    its own identity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>Machine name. It never changes.</td>
+                </tr>
+                <tr>
+                  <td><code>revision</code></td>
+                  <td>positive integer</td>
+                  <td>
+                    Revision number of the name, from <code>1</code>. Each Reset
+                    key adds <code>1</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>public_key</code></td>
+                  <td>string</td>
+                  <td>
+                    Base64url form of the 32-byte X25519 public key of the
+                    revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>fingerprint</code></td>
+                  <td>string</td>
+                  <td>
+                    <code
+                      >SHA256:&lt;unpadded base64 of the SHA-256 of the
+                      key&gt;</code
+                    >. No two revisions of any machine or any instance share
+                    one.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created_at</code></td>
+                  <td>integer</td>
+                  <td>Creation time of the revision in Unix milliseconds.</td>
+                </tr>
+                <tr>
+                  <td><code>ended_at</code></td>
+                  <td>integer or null</td>
+                  <td>
+                    End time of the revision in Unix milliseconds.
+                    <code>null</code> while the revision is live.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>archive</code> answer is the archived revision, with
+            <code>ended_at</code> set. The <code>rotate</code> answer is the new
+            revision.
+          </p>
+          <h3 id="worker-machine-create-and-worker-machine-rotate">
+            <code>worker machine create</code> and
+            <code>worker machine rotate</code>
+          </h3>
+          <p>
+            Without <code>public_key</code> in the request, the API answer adds
+            one field and the header <code>Cache-Control: no-store</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>machine_configuration</code></td>
+                  <td>string</td>
+                  <td>
+                    The machine configuration with the generated private key.
+                    The server answers it only once.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The CLI generates the key pair on the computer that runs it and
+            sends only <code>public_key</code>. It writes one JSON line to
+            stdout and exits <code>0</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Machine record</td>
+                  <td>The answer of the server.</td>
+                </tr>
+                <tr>
+                  <td><code>machine_configuration</code></td>
+                  <td>
+                    Without <code>--output</code>: the machine configuration.
+                    Give it to <code>kanthord worker machine join</code> or to
+                    <code>KANTHORD_MACHINE_CONFIG</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>created</code></td>
+                  <td>
+                    With <code>--output</code>: the path of the machine file
+                    that the CLI wrote. The line then holds no private key.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="worker-machine-list"><code>worker machine list</code></h3>
+          <p>
+            The API returns HTTP <code>200</code>. The CLI writes the same
+            object as one JSON line to stdout and exits <code>0</code> (shown
+            formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "id": "worker_machine_01M34JC4BJ66JHP41M4MYY6PSM",
+      "name": "build-box",
+      "revision": 1,
+      "public_key": "&lt;43-base64url-characters&gt;",
+      "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+      "created_at": 1791467996322,
+      "ended_at": null,
+      "instance_count": 2
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>items</code></td>
+                  <td>array</td>
+                  <td>
+                    The newest revision of each name, in ascending name order,
+                    with the fields of the
+                    <a href="#machine-record">machine record</a> and the field
+                    below.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>instance_count</code></td>
+                  <td>integer</td>
+                  <td>Number of live instances that name the machine.</td>
+                </tr>
+                <tr>
+                  <td><code>next_cursor</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Opaque cursor for the next page; <code>null</code> on the
+                    last page.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 id="worker-machine-get"><code>worker machine get</code></h3>
+          <p>
+            The API returns HTTP <code>200</code> with the live or the latest
+            revision of the name. The CLI writes the same object as one JSON
+            line to stdout and exits <code>0</code> (shown formatted here).
+          </p>
+          <pre><code class="language-json">{
+  "id": "worker_machine_01M34JC4BJ66JHP41M4MYY6PSM",
+  "name": "build-box",
+  "revision": 1,
+  "public_key": "&lt;43-base64url-characters&gt;",
+  "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+  "created_at": 1791467996322,
+  "ended_at": null,
+  "instances": [
+    {
+      "id": "worker_instance_01M34JC4BJ66JHP41M4MYY6PST",
+      "name": "builder-1",
+      "worker": "coder@1",
+      "placement": "worker",
+      "machine": "build-box",
+      "revision": 1,
+      "public_key": "&lt;43-base64url-characters&gt;",
+      "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
+      "created_at": 1791467996322,
+      "ended_at": null,
+      "connection": null
+    }
+  ],
+  "credentials": [
+    {
+      "name": "claude",
+      "holder": "build-box",
+      "revision": 1,
+      "platform": "anthropic-subscription",
+      "sealed_current": true,
+      "health": {
+        "status": "healthy",
+        "capability": "model call",
+        "failure_reason": null,
+        "models": null,
+        "reported_at": 1791468011422,
+        "reported_by": "builder-1"
+      }
+    }
+  ]
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>instances</code></td>
+                  <td>array</td>
+                  <td>
+                    Live instances that name the machine. Each item is an
+                    <a href="instance.html#instance-record">instance record</a>
+                    plus <code>connection</code>, as in
+                    <a href="instance.html#worker-instance-list"
+                      ><code>worker instance list</code></a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>credentials</code></td>
+                  <td>array</td>
+                  <td>
+                    Live credential copies that the machine holds, in ascending
+                    name order. Each item has the shape of
+                    <code>credentials[]</code> of
+                    <a href="instance.html#worker-instance-get"
+                      ><code>worker instance get</code></a
+                    >, with <code>holder</code> the machine name. Its
+                    <code>health.reported_by</code> names the instance that sent
+                    the last report.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The record fields are the fields of the
+            <a href="#machine-record">machine record</a>.
+          </p>
+          <h3 id="failures">Failures</h3>
+          <p>
+            API failures use the shared
+            <a href="../errors.html#api-failures">error envelope</a>. The
+            gateway failures of
+            <a href="instance.html#failures">worker instances</a> also apply:
+            authentication, request validation, idempotency, the body limit, the
+            media type and the timeout. Every operation requires a human token.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP status / code</th>
+                  <th>Commands</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>400 worker.machine.name_invalid</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    The name breaks the instance name form or is reserved. The
+                    CLI also checks it before the request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>400 worker.machine.key_invalid</code></td>
+                  <td><code>create</code>, <code>rotate</code></td>
+                  <td>
+                    <code>public_key</code> is no base64url 32-byte X25519 key.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>404 worker.machine.not_found</code></td>
+                  <td>
+                    <code>get</code>, <code>rotate</code>, <code>archive</code>
+                  </td>
+                  <td>
+                    The machine name or the machine revision is unknown, or the
+                    revision ended.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.machine.name_conflict</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    A live or an archived machine or instance holds the name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.machine.key_conflict</code></td>
+                  <td><code>create</code>, <code>rotate</code></td>
+                  <td>A machine or an instance revision holds the same key.</td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.machine.revision_conflict</code></td>
+                  <td><code>rotate</code>, <code>archive</code></td>
+                  <td>
+                    <code>expected_revision</code> is not the live revision.
+                    <code>details.revision</code> names the live revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.machine.archived</code></td>
+                  <td><code>rotate</code>, <code>archive</code></td>
+                  <td>The machine is archived.</td>
+                </tr>
+                <tr>
+                  <td><code>409 worker.machine.in_use</code></td>
+                  <td><code>archive</code></td>
+                  <td>
+                    A live instance names the machine.
+                    <code>details.instances</code> lists the instance names.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A declared failure makes the CLI exit <code>1</code> and print
+            <code>&lt;code&gt;: request failed</code> and the row
+            <code>status</code> to stderr. A repeated key for
+            <code>create</code> or <code>rotate</code> answers
+            <code>409 gateway.idempotency.conflict</code>, because the server
+            never replays an answer that holds a secret.
+          </p>
+          <h2 id="api-shape">API shape</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Method and path</th>
+                  <th>Operation ID</th>
+                  <th>Access</th>
+                  <th>Mutation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>create</code></td>
+                  <td><code>POST /api/worker/machine</code></td>
+                  <td><code>worker.machine.create</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>Yes; secret</td>
+                </tr>
+                <tr>
+                  <td><code>list</code></td>
+                  <td><code>GET /api/worker/machine</code></td>
+                  <td><code>worker.machine.list</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>get</code></td>
+                  <td><code>GET /api/worker/machine/:machine_name</code></td>
+                  <td><code>worker.machine.get</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td><code>rotate</code></td>
+                  <td>
+                    <code>POST /api/worker/machine/:machine_name/revision</code>
+                  </td>
+                  <td><code>worker.machine.rotate</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>Yes; secret</td>
+                </tr>
+                <tr>
+                  <td><code>archive</code></td>
+                  <td>
+                    <code>POST /api/worker/machine/:machine_name/archive</code>
+                  </td>
+                  <td><code>worker.machine.archive</code></td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                  <td>Yes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>In</th>
+                  <th>Operations</th>
+                  <th>Default</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>machine_name</code></td>
+                  <td>path</td>
+                  <td>
+                    <code>get</code>, <code>rotate</code>, <code>archive</code>
+                  </td>
+                  <td>None</td>
+                  <td>Machine name. An unknown name answers not found.</td>
+                </tr>
+                <tr>
+                  <td><code>limit</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td><code>100</code></td>
+                  <td>Integer from <code>1</code> to <code>1000</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>cursor</code></td>
+                  <td>query</td>
+                  <td><code>list</code></td>
+                  <td>None</td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Request body</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>create</code></td>
+                  <td>
+                    <code>{ &quot;name&quot;, &quot;public_key&quot;? }</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>rotate</code></td>
+                  <td>
+                    <code
+                      >{ &quot;expected_revision&quot;, &quot;public_key&quot;?
+                      }</code
+                    >. <code>expected_revision</code> is the live revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>archive</code></td>
+                  <td><code>{ &quot;expected_revision&quot; }</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>list</code>, <code>get</code></td>
+                  <td>None.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every operation has a timeout of 30 seconds. <code>create</code>,
+            <code>rotate</code> and <code>archive</code> take the header
+            <code>Idempotency-Key</code>.
+          </p>
+          <pre><code class="language-sh">curl -i -X POST http://127.0.0.1:31415/api/worker/machine \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"build-box"}'
+
+curl -i http://127.0.0.1:31415/api/worker/machine/build-box \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'
+
+curl -i -X POST http://127.0.0.1:31415/api/worker/machine/build-box/archive \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;' \
+  -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PSD' \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision":1}'</code></pre>
+          <h2 id="cli-shape">CLI shape</h2>
+          <pre><code class="language-text">kanthord worker machine create &lt;name&gt; [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker machine list [--limit &lt;count&gt;] [--cursor &lt;opaque&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker machine get &lt;name&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker machine rotate &lt;name&gt; --expected-revision &lt;revision&gt; [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker machine archive &lt;name&gt; --expected-revision &lt;revision&gt; [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+kanthord worker machine join [--force]</code></pre>
+          <pre><code class="language-sh">kanthord worker machine create build-box --output
+kanthord worker machine list
+kanthord worker machine get build-box
+kanthord worker machine rotate build-box --expected-revision 1 --output --force
+kanthord worker machine archive build-box --expected-revision 2
+kanthord worker machine join --force &lt; build-box.configuration</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Commands</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--expected-revision &lt;revision&gt;</code></td>
+                  <td><code>rotate</code>, <code>archive</code></td>
+                  <td>Required. Live revision of the machine.</td>
+                </tr>
+                <tr>
+                  <td><code>--output</code></td>
+                  <td><code>create</code>, <code>rotate</code></td>
+                  <td>
+                    Writes the machine file
+                    <code>machines/&lt;name&gt;.yaml</code> on this computer in
+                    place of the configuration on stdout.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--force</code></td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>, <code>join</code>
+                  </td>
+                  <td>Overwrites an existing machine file.</td>
+                </tr>
+                <tr>
+                  <td><code>--limit &lt;count&gt;</code></td>
+                  <td><code>list</code></td>
+                  <td>
+                    Page size; a positive integer up to <code>1000</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--cursor &lt;opaque&gt;</code></td>
+                  <td><code>list</code></td>
+                  <td><code>next_cursor</code> of the previous page.</td>
+                </tr>
+                <tr>
+                  <td><code>--idempotency-key &lt;key&gt;</code></td>
+                  <td>
+                    <code>create</code>, <code>rotate</code>,
+                    <code>archive</code>
+                  </td>
+                  <td>Sets the <code>Idempotency-Key</code> header.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Run <code>create</code> and <code>rotate</code> with
+            <code>--output</code> on the machine. Without <code>--output</code>,
+            stdout must be a terminal, because the line holds the private key.
+            The CLI refuses a malformed or reserved name with
+            <code>worker.machine.name_invalid</code> before it sends a request.
+          </p>
+          <h3 id="worker-machine-join">
+            <code>worker machine join</code>
+          </h3>
+          <p>
+            <code>kanthord worker machine join</code> reads one machine
+            configuration from stdin and writes the machine file
+            <code>machines/&lt;name&gt;.yaml</code>, with mode
+            <code>0600</code>. It sends no request. Run it once on each machine.
+            A container host kind sets <code>KANTHORD_MACHINE_CONFIG</code>
+            instead. A value that fails the schema answers
+            <code>worker.machine.config_invalid</code>. Without
+            <code>--force</code>, an existing file refuses.
+          </p>
+          <p>
+            See <a href="instance.html#shared-options">shared options</a> for
+            <code>--token</code> and <code>--endpoint</code>.
+          </p>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../../assets/page.mjs"></script>
+  </body>
+</html>

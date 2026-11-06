@@ -115,6 +115,23 @@
             </li>
           </ul>
           <p>
+            Each instance at the <code>worker</code> placement names one live
+            <a href="machine.html">worker machine</a> at its create. The machine
+            is the computer that runs the instance. It never changes. To move an
+            instance to another machine, create a new instance. The instance
+            keeps its own key pair. That key stays the only credential of its
+            identity: the worker token, the connection and the client secrets.
+          </p>
+          <p>
+            For each credential name, the instance uses one copy, the copy of
+            its copy holder. The copy holder is the instance when the instance
+            holds a live own copy of the name. Else it is the machine of the
+            instance. See
+            <a href="../llm/credential.html#instance-copies"
+              >instance and machine copies</a
+            >.
+          </p>
+          <p>
             Each instance has revisions. Each revision has its own
             <code>worker_instance_&lt;ulid&gt;</code> identity, key and
             fingerprint. The live revision of a name is its newest revision with
@@ -129,7 +146,8 @@
               <code>^[a-z][a-z0-9-]*$</code>. The names <code>server</code>,
               <code>token</code>, <code>connect</code>,
               <code>heartbeat</code> and <code>work</code> are reserved. An
-              archived name stays taken.
+              archived name stays taken. Instances and machines share one name
+              space, so a live or an archived machine name is also taken.
             </li>
             <li>
               <code>worker instance list</code> pages the newest revision of
@@ -194,6 +212,14 @@
             credential with a new secret, and rotate the key at the provider.
             The old configuration still opens these credentials.
           </p>
+          <p>
+            The Reset key of an instance applies only to the own copies of the
+            instance. A machine copy keeps its seal to the machine key. The
+            instance file sits on the machine, so a leaked instance
+            configuration also exposes the machine key. Then reset the key of
+            the instance and of the
+            <a href="machine.html#function-description">machine</a>.
+          </p>
           <h3 id="the-instance-exchange">The instance exchange</h3>
           <p>
             <code>kanthord serve worker</code> calls these operations. A human
@@ -214,14 +240,14 @@
             </li>
             <li>
               <code>worker.instance.heartbeat</code> renews the connection once
-              at the start, then every 15 seconds. When its answer holds another
+              at the start, then every 15 seconds. Its answer names the machine
+              of the instance. When its answer holds another
               <code>work_version</code>, the instance calls
               <code>worker.instance.work</code>. The work read answers the
               pending
-              <a href="../llm/login.html#login-on-a-worker-instance"
-                >logins on the instance</a
-              >
-              and the pending session reads of the instance.
+              <a href="../llm/login.html#login-on-a-worker-instance">logins</a>
+              that the instance runs, and the pending session reads of the
+              instance.
             </li>
             <li>
               <code>worker.session_read.report</code> sends the outcome of each
@@ -263,6 +289,7 @@
   "name": "builder-1",
   "worker": "coder@1",
   "placement": "worker",
+  "machine": "build-box",
   "revision": 1,
   "public_key": "&lt;43-base64url-characters&gt;",
   "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
@@ -307,6 +334,16 @@
                   <td>
                     <code>server</code>, <code>container</code> or
                     <code>worker</code>. It never changes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>machine</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Name of the <a href="machine.html">worker machine</a> of the
+                    instance at the <code>worker</code> placement. It never
+                    changes. <code>null</code> at the <code>server</code> and
+                    the <code>container</code> placements.
                   </td>
                 </tr>
                 <tr>
@@ -443,6 +480,7 @@
       "name": "builder-1",
       "worker": "coder@1",
       "placement": "worker",
+      "machine": "build-box",
       "revision": 2,
       "public_key": "&lt;43-base64url-characters&gt;",
       "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
@@ -530,9 +568,12 @@
                     instance gives the issue
                     <code>agent.configuration.credential_holder_mismatch</code>
                     for this instance. A chain credential then has no live copy
-                    sealed to the current key. It is <code>false</code> for a
-                    <code>server</code> or a <code>container</code> instance,
-                    which uses the copy of the holder <code>server</code>.
+                    of the copy holder that is sealed to the current key of that
+                    holder. A machine copy after a Reset key of the machine, and
+                    a stale own copy, both give <code>true</code>. It is
+                    <code>false</code> for a <code>server</code> or a
+                    <code>container</code> instance, which uses the copy of the
+                    holder <code>server</code>.
                   </td>
                 </tr>
                 <tr>
@@ -561,6 +602,7 @@
   "name": "builder-1",
   "worker": "coder@1",
   "placement": "worker",
+  "machine": "build-box",
   "revision": 2,
   "public_key": "&lt;43-base64url-characters&gt;",
   "fingerprint": "SHA256:&lt;43-base64-characters&gt;",
@@ -574,6 +616,7 @@
   "credentials": [
     {
       "name": "claude",
+      "holder": "build-box",
       "revision": 1,
       "platform": "anthropic-subscription",
       "sealed_current": true,
@@ -582,7 +625,8 @@
         "capability": "model call",
         "failure_reason": "unauthorized",
         "models": null,
-        "reported_at": 1791468011422
+        "reported_at": 1791468011422,
+        "reported_by": "builder-2"
       }
     }
   ]
@@ -628,15 +672,24 @@
                   <td><code>credentials</code></td>
                   <td>array</td>
                   <td>
-                    Live credential copies that the instance holds, in ascending
-                    name order. Each item describes the newest live revision of
-                    one name.
+                    Live credential copies that the instance uses, in ascending
+                    name order: each own copy, and each machine copy of a name
+                    with no own copy. Each item describes the newest live
+                    revision of one name.
                   </td>
                 </tr>
                 <tr>
                   <td><code>credentials[].name</code></td>
                   <td>string</td>
                   <td>Credential name.</td>
+                </tr>
+                <tr>
+                  <td><code>credentials[].holder</code></td>
+                  <td>string</td>
+                  <td>
+                    Holder of the copy: the instance name for an own copy, or
+                    the machine name for a machine copy.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>credentials[].revision</code></td>
@@ -653,16 +706,18 @@
                   <td>boolean</td>
                   <td>
                     <code>true</code> when the copy is sealed to the current key
-                    of the instance. <code>false</code> after a Reset key;
-                    rotate the copy with a new secret.
+                    of its holder. <code>false</code> after a Reset key of that
+                    holder; rotate the copy with a new secret, or sign in again
+                    for an OAuth copy.
                   </td>
                 </tr>
                 <tr>
                   <td><code>credentials[].health</code></td>
                   <td>object</td>
                   <td>
-                    The last check that the instance reported for this revision.
-                    See
+                    The last check that an instance reported for this revision.
+                    For a machine copy, the reporter can be another instance of
+                    the machine. See
                     <a href="../llm/credential.html#health-of-an-instance-copy"
                       >health of an instance copy</a
                     >.
@@ -707,6 +762,15 @@
                   <td>integer or null</td>
                   <td>
                     Time of the report in Unix milliseconds.
+                    <code>null</code> when the server holds no report of this
+                    revision.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>health.reported_by</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Name of the instance that sent the report.
                     <code>null</code> when the server holds no report of this
                     revision.
                   </td>
@@ -904,6 +968,7 @@
           <pre><code class="language-json">{
   "server_version": "0.1.0",
   "binding_version": 3,
+  "machine": "build-box",
   "credential_version": 0,
   "work_version": 1791468015002
 }</code></pre>
@@ -934,12 +999,26 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><code>machine</code></td>
+                  <td>string or null</td>
+                  <td>
+                    Machine of the instance, as in the
+                    <a href="#instance-record">instance record</a>. The instance
+                    reads the
+                    <a href="machine.html#machine-configuration"
+                      >machine configuration</a
+                    >
+                    of this name.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>credential_version</code></td>
                   <td>integer</td>
                   <td>
-                    Version of the credential copies of the instance. Each
-                    server start and each copy write give a new value. A changed
-                    value starts a
+                    Version of the credential copies that the instance uses: the
+                    counter of the instance plus the counter of its machine.
+                    Each server start and each copy write of either holder give
+                    a new value. A changed value starts a
                     <a href="../llm/credential.html#health-of-an-instance-copy"
                       >check of the copies</a
                     >.
@@ -952,9 +1031,10 @@
                     Version of the pending work of the instance. A server start
                     sets it to the start time in Unix milliseconds. It rises by
                     <code>1</code> when the server queues a session read of the
-                    instance, and when a login of the instance starts, takes its
-                    code or ends. When the value differs from the value of the
-                    last work read, the instance calls the work read.
+                    instance. It also rises by <code>1</code> when a login that
+                    the instance runs starts, takes its code or ends. When the
+                    value differs from the value of the last work read, the
+                    instance calls the work read.
                   </td>
                 </tr>
               </tbody>
@@ -978,6 +1058,7 @@
     {
       "session_id": "&lt;session-id&gt;",
       "name": "claude",
+      "holder": "build-box",
       "platform": "anthropic-subscription",
       "mode": "copy_code",
       "code": null
@@ -1009,8 +1090,9 @@
                   <td>
                     Pending
                     <a href="../llm/login.html#login-on-a-worker-instance"
-                      >logins on the instance</a
-                    >. An empty list when none is pending.
+                      >logins</a
+                    >
+                    that the instance runs. An empty list when none is pending.
                   </td>
                 </tr>
                 <tr>
@@ -1022,6 +1104,15 @@
                   <td><code>login_sessions[].name</code></td>
                   <td>string</td>
                   <td>Name of the credential that the login creates.</td>
+                </tr>
+                <tr>
+                  <td><code>login_sessions[].holder</code></td>
+                  <td>string</td>
+                  <td>
+                    Holder of the copy that the login creates: the instance
+                    name, or the name of its machine. The instance seals the
+                    result to the key of this holder.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>login_sessions[].platform</code></td>
@@ -1205,6 +1296,15 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><code>400 worker.instance.machine_invalid</code></td>
+                  <td><code>create</code></td>
+                  <td>
+                    At the <code>worker</code> placement,
+                    <code>machine</code> is absent or names no live machine. At
+                    another placement, <code>machine</code> is present.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>400 worker.instance.key_forbidden</code></td>
                   <td><code>create</code></td>
                   <td>
@@ -1273,13 +1373,16 @@
                 <tr>
                   <td><code>409 worker.instance.name_conflict</code></td>
                   <td><code>create</code></td>
-                  <td>A live or an archived instance holds the name.</td>
+                  <td>
+                    A live or an archived instance or machine holds the name.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>409 worker.instance.key_conflict</code></td>
                   <td><code>create</code>, <code>rotate</code></td>
                   <td>
-                    A revision of any instance holds the fingerprint of the key.
+                    A revision of any instance or any machine holds the
+                    fingerprint of the key.
                   </td>
                 </tr>
                 <tr>
@@ -1642,14 +1745,15 @@
                   <td>
                     <code
                       >{ &quot;name&quot;, &quot;worker&quot;,
-                      &quot;placement&quot;, &quot;public_key&quot;?,
-                      &quot;endpoint&quot;? }</code
+                      &quot;placement&quot;, &quot;machine&quot;?,
+                      &quot;public_key&quot;?, &quot;endpoint&quot;? }</code
                     >. <code>placement</code> is <code>server</code>,
                     <code>container</code> or <code>worker</code>. At the
-                    <code>worker</code> placement, send exactly one of
+                    <code>worker</code> placement, send <code>machine</code>,
+                    the name of a live machine. Also send exactly one of
                     <code>public_key</code> and <code>endpoint</code>;
                     <code>endpoint</code> is an absolute URL. At another
-                    placement, send neither.
+                    placement, send none of the three.
                   </td>
                 </tr>
                 <tr>
@@ -1763,7 +1867,7 @@
   -H 'Authorization: Bearer &lt;human-jwt&gt;' \
   -H 'Idempotency-Key: idempotency_key_01M34JC4BJ66JHP41M4MYY6PST' \
   -H 'Content-Type: application/json' \
-  -d '{"name":"builder-1","worker":"coder@1","endpoint":"https://kanthord.example.com"}'
+  -d '{"name":"builder-1","worker":"coder@1","placement":"worker","machine":"build-box","endpoint":"https://kanthord.example.com"}'
 
 curl -i 'http://127.0.0.1:31415/api/worker/instance?worker=coder@1&amp;include_archived=true' \
   -H 'Authorization: Bearer &lt;human-jwt&gt;'
@@ -1781,13 +1885,13 @@ curl -i -X POST http://127.0.0.1:31415/api/worker/instance/token \
   -H 'Content-Type: application/json' \
   -d '{"instance_id":"worker_instance_01M34JC4BJ66JHP41M4MYY6PST"}'</code></pre>
           <h2 id="cli-shape">CLI shape</h2>
-          <pre><code class="language-text">kanthord worker instance create &lt;name&gt; --worker &lt;worker&gt; --placement &lt;placement&gt; [--worker-endpoint &lt;url&gt;] [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
+          <pre><code class="language-text">kanthord worker instance create &lt;name&gt; --worker &lt;worker&gt; --placement &lt;placement&gt; [--machine &lt;name&gt;] [--worker-endpoint &lt;url&gt;] [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
 kanthord worker instance list [--worker &lt;worker&gt;] [--include-archived] [--limit &lt;count&gt;] [--cursor &lt;opaque&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
 kanthord worker instance get &lt;name&gt; [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
 kanthord worker instance rotate &lt;name&gt; --expected-revision &lt;revision&gt; [--worker-endpoint &lt;url&gt;] [--output [--force]] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
 kanthord worker instance archive &lt;name&gt; --expected-revision &lt;revision&gt; [--force] [--idempotency-key &lt;key&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]
 kanthord worker join [--force]</code></pre>
-          <pre><code class="language-sh">kanthord worker instance create builder-1 --worker coder@1 --placement worker --output
+          <pre><code class="language-sh">kanthord worker instance create builder-1 --worker coder@1 --placement worker --machine build-box --output
 kanthord worker instance create coder-1 --worker coder@1 --placement server
 kanthord worker instance list --worker coder@1
 kanthord worker instance get builder-1
@@ -1851,6 +1955,16 @@ kanthord worker instance archive coder-1 --expected-revision 1 --force</code></p
                     <code>server</code>, <code>container</code> or
                     <code>worker</code>. <code>--worker-endpoint</code> and
                     <code>--output</code> apply only at <code>worker</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>--machine &lt;name&gt;</code></td>
+                  <td>
+                    Required for <code>create</code> at <code>worker</code>
+                  </td>
+                  <td>
+                    Live machine of the instance. The CLI sends it as
+                    <code>machine</code>.
                   </td>
                 </tr>
                 <tr>

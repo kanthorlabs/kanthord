@@ -212,10 +212,38 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 - [architecture.impl.md](architecture.impl.md#the-command-surface) states the commands `kanthord worker join` and `kanthord worker instance`.
 - Tests cover each source, the conflict, the absence with its paths and an invalid value. They also cover a file name mismatch, another `--instance`, the file modes and the environment of a child process.
 
+### The machine configuration
+
+The machine configuration holds `name` and `private_key` of one [worker machine](#worker-machines).
+`private_key` is the base64url form of the 32-byte X25519 private key of the live machine revision.
+
+- The configuration value is the unpadded base64url form of the canonical JSON of the configuration. It has no prefix.
+- The machine file is `$XDG_CONFIG_HOME/kanthord/machines/<name>.yaml`, with mode `0600` in a directory with mode `0700`. It holds the same two keys.
+- The env value `KANTHORD_MACHINE_CONFIG` holds the value on a computer without a writable configuration.
+- `kanthord worker machine join [--force]` reads one value from standard input, validates it and writes the machine file.
+- `join`, `create --output` and `rotate --output` check `name` against the instance name form before they build the file path, and answer `worker.machine.config_invalid`.
+- Without `--force`, `join`, `create --output` and `rotate --output` refuse an existing machine file with the local code `cli.worker.machine.config_exists`.
+- The `worker` application reads the machine configuration by a name. It checks the name against the instance name form before it builds a path. A name that breaks the form answers `worker.machine.config_invalid`.
+- Neither source for the name answers `worker.machine.config_absent`. The diagnostic names the variable and each path that it read.
+- Both sources for one name answer `worker.machine.config_conflict`.
+- These cases answer `worker.machine.config_invalid`: a value that fails the schema, a file whose `name` differs from its file name, and an env value that names another machine.
+- The `worker` application reads the machine key at each use, by the holder name of the sealed item or the copy. It caches no machine key. An instance that reads the machine file needs no restart after a Reset key of the machine. An instance that reads `KANTHORD_MACHINE_CONFIG` takes the new value only in a new container.
+- The claim gate of `kanthord serve worker` is closed at the start. The instance claims no work before the first heartbeat answer.
+- Each heartbeat answer names `machine`. A null `machine` opens the gate.
+- For a `machine` value, the application reads the machine configuration. A key opens the gate. An absent configuration closes the gate.
+- When the gate closes, the application logs `worker.machine.config_absent` with the machine name once. It logs again only after the gate opened in between.
+- A `worker.machine.config_conflict` or `worker.machine.config_invalid` read at a heartbeat closes the gate and logs its code with the machine name once, as `config_absent` does.
+- The pull loop reads the gate before each claim. A closed gate sends no claim and waits for the next read.
+- An absent machine key also refuses the handover item of the machine with `worker.handover.sealed_unopened`, under [The credential handover](#the-credential-handover).
+- `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_MACHINE_CONFIG` from each child process.
+- A Reset key of the machine gives a new machine configuration. The operator replaces the file with `kanthord worker machine join --force` or replaces the env value.
+- Tests cover each source, the conflict, the absence with its paths and an invalid value. They cover a file name mismatch and a name that breaks the form. They also cover the file modes, the claim gate and the environment of a child process.
+
 ### The copy blocks
 
 The Add instance sheet and the Reset key result show the one copy block of the host kind that the human selects, under [The worker pages](architecture.impl.md#the-worker-pages).
-No block puts the instance configuration on a command line. `<name>` is the instance name, and `<version>` is the server version.
+No block puts the instance configuration on a command line. `<name>` is the instance name, `<machine>` is the machine name of the instance, and `<version>` is the server version.
+The machine form and the machine Reset key result show the [machine copy block](#the-machine-copy-block) of the host kind, under [The machine pages](architecture.impl.md#the-machine-pages).
 
 `Linux (systemd)` runs the instance as a systemd user unit:
 
@@ -311,6 +339,7 @@ A container host kind adds the field **Container runtime** with the values `Podm
 `Container` runs the instance on a container platform with no writable configuration:
 
 - Store the instance configuration as a secret of the platform, and expose it to the container as the env value `KANTHORD_WORKER_CONFIG`.
+- Expose the machine secret of the [machine copy block](#the-machine-copy-block) to the container as the env value `KANTHORD_MACHINE_CONFIG`.
 - Use the image `docker.io/kanthorlabs/kanthord:<version>` with the command `serve worker`.
 - Run the container with no health check, for example with `podman run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
 - Set a memory limit on the container, for example with `podman run --memory=4g`. Give the host 1 GiB for the server plus the limit of each instance. An out-of-memory kill then stops a process of this container only.
@@ -335,12 +364,13 @@ A container host kind adds the field **Container runtime** with the values `Podm
 3. Start the instance. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
 
    ```sh
-   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   podman run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --secret kanthord-worker-<name>,type=env,target=KANTHORD_WORKER_CONFIG --secret kanthord-machine-<machine>,type=env,target=KANTHORD_MACHINE_CONFIG -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
 The Docker form of `Container` replaces the first bullet, the health check bullet and the memory bullet:
 
 - Write the line `KANTHORD_WORKER_CONFIG=<value>` to an env file of mode 0600. Give the file to `docker run` with `--env-file`, then delete the file. `docker inspect` shows the value to every user that can run `docker`.
+- Give the machine env file `kanthord-machine-<machine>.env` of the machine copy block to `docker run` with a second `--env-file`.
 - Run the container with no health check, for example with `docker run --no-healthcheck`. The health check of the image reads a server, and a worker container serves no server.
 - Set a memory limit on the container, for example with `docker run --memory=4g`. Give the host 1 GiB for the server plus the limit of each instance. An out-of-memory kill then stops a process of this container only.
 
@@ -359,28 +389,62 @@ The Docker form of `Container on this host`:
    (umask 077 && cat > <name>.env)
    ```
 
-3. Start the instance. `docker run` reads the env file once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
+3. Start the instance. `docker run` reads both env files once. `docker inspect` shows the value to every user that can run `docker`. `<git name>` and `<git email>` set the identity of the commits that the agents make. `--memory=4g` keeps an out-of-memory kill inside this container when the host holds 1 GiB for the server plus the limit of each instance:
 
    ```sh
-   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
+   docker run -d --name kanthord-worker-<name> --network kanthord-net --cap-drop=ALL --security-opt=no-new-privileges --ulimit core=0 --memory=4g --no-healthcheck --env-file <name>.env --env-file kanthord-machine-<machine>.env -e GIT_AUTHOR_NAME="<git name>" -e GIT_AUTHOR_EMAIL="<git email>" -e GIT_COMMITTER_NAME="<git name>" -e GIT_COMMITTER_EMAIL="<git email>" docker.io/kanthorlabs/kanthord:<version> serve worker
    ```
 
-4. Delete the env file. The container keeps the value:
+4. Delete the env file of the instance. The container keeps the value. Keep the machine env file for the next instance of the machine:
 
    ```sh
    rm <name>.env
    ```
+
+### The machine copy block
+
+The machine copy block writes the machine configuration once for each machine, before the first instance of the machine starts. `<machine>` is the machine name.
+No block puts the machine configuration on a command line.
+
+`Linux (systemd)` and `macOS (foreground)` write the machine file. Install kanthord first, by steps 1 and 2 of the instance copy block of the host kind. `kanthord worker machine join` reads the machine configuration from standard input. Paste the value, press `Enter`, then press `Ctrl-D`:
+
+```sh
+kanthord worker machine join
+```
+
+After a Reset key of the machine, the same step runs with `--force`, and it replaces the machine file.
+
+A container host kind sets `KANTHORD_MACHINE_CONFIG` in place of the machine file:
+
+- `Container` stores the machine configuration as a second secret of the platform. Each instance container of the machine receives it as the env value `KANTHORD_MACHINE_CONFIG`.
+- The Podman form of `Container on this host` stores it once as a Podman secret. Each instance container adds `--secret kanthord-machine-<machine>,type=env,target=KANTHORD_MACHINE_CONFIG` to its `podman run`. Paste the value, press `Enter`, then press `Ctrl-D`:
+
+  ```sh
+  podman secret create kanthord-machine-<machine> -
+  ```
+
+- The Docker forms write one env file of mode 0600 once. Each instance container of the machine gives it to `docker run` with a second `--env-file`. Type `KANTHORD_MACHINE_CONFIG=`, paste the value, press `Enter`, then press `Ctrl-D`:
+
+  ```sh
+  (umask 077 && cat > kanthord-machine-<machine>.env)
+  ```
+
+- After a Reset key of the machine, the Podman forms replace the secret with `podman secret create --replace kanthord-machine-<machine> -`. Then remove and run each instance container again with its copy block.
+- After a Reset key of the machine, the Docker forms rewrite `kanthord-machine-<machine>.env`. Then recreate each instance container through the instance copy block of an instance Reset key, because the instance env file is gone.
 
 ## The worker unit and its wrappers
 
 [worker-service.md](worker-service.md#instances-and-hosting) requires one worker unit inside one worker boundary at every placement.
 
 - `src/apps/worker/unit.ts` holds `WorkerUnit`, the worker unit.
-- It takes `{ bindings, directories, env, log, instance_key?, model_runtime_factory?, repository_transport?, resume_pull_wait_ms?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
+- It takes `{ bindings, directories, env, log, copy_keys?, gate?, model_runtime_factory?, repository_transport?, resume_pull_wait_ms?, watchdog?: () => () => void }`. It takes no endpoint, no token and no configuration path.
 - `bindings` is a list of `{ transport, client_secret }`, one entry for each binding that lists the instance. A server instance that no binding lists passes an empty list.
 - `directories` is `{ data, log }`. The data directory holds `workspaces/` and `pi/`.
-- `instance_key` is `{ holder, sealed_to, public_key, private_key() }` of the instance. `private_key()` answers a new buffer that the caller clears after each open. The `worker` wrapper passes it, and the `server` wrapper passes none.
-- The handover of the worker unit opens a sealed item with `openSealedCopy` of [the custody client](custody.impl.md#the-credential-handover), and it seals each refreshed credential to its own key. Without `instance_key`, or with a key that does not open it, a sealed item fails the handover with `worker.handover.sealed_unopened`.
+- `copy_keys` holds `own`, the copy key of the instance, and `of(holder)`. A copy key is `{ holder, sealed_to, public_key, private_key() }`. `private_key()` answers a new buffer that the caller clears after each open. The `worker` wrapper passes it, and the `server` wrapper passes none.
+- `of(holder)` answers the instance key for the instance name. For another name, it reads the [machine configuration](#the-machine-configuration) at each call and answers the machine copy key. An absent machine configuration answers null, and each other diagnostic of the read propagates.
+- The machine copy key holds the machine name as `holder` and the machine fingerprint as `sealed_to`.
+- `gate` is the machine claim gate of [The machine configuration](#the-machine-configuration). The `worker` wrapper passes it closed. An absent gate is open.
+- The handover of the worker unit opens a sealed item with `openSealedCopy` of [the custody client](custody.impl.md#the-credential-handover) and the key `copy_keys.of(item.holder)`. It seals each refreshed credential of the item to the same key. Without `copy_keys`, with a null key, or with a key that does not open it, a sealed item fails the handover with `worker.handover.sealed_unopened`.
 - The `server` wrapper passes `state/kanthord/` of the slot root of the instance for both. The `worker` wrapper passes the data directory and the log directory of [The worker application](#the-worker-application).
 - The worker unit registers each entry. Every request of a registration renews its heartbeat, and an idle registration sends a heartbeat inside the heartbeat window.
 - While idle, the worker unit keeps one outstanding work pull on each registration. When one pull answers a claim, it aborts the other pulls and starts no pull until the execution ends.
@@ -482,16 +546,21 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `revision`    | The revision value of [architecture.impl.md](architecture.impl.md#the-revision-value). Unique with `name`.                               |
 | `public_key`  | The base64url form of the 32-byte X25519 public key at the `worker` placement. Null at the `server` and the `container` placements.      |
 | `fingerprint` | `SHA256:<unpadded base64 of the SHA-256 of the 32 key bytes>`. Unique over every non-null row. Null when `public_key` is null.           |
+| `machine`     | The name of the [worker machine](#worker-machines) at the `worker` placement. Null at the `server` and the `container` placements.       |
 | `created_at`  | Unix ms.                                                                                                                                 |
 | `ended_at`    | Unix ms, null while the revision is live.                                                                                                |
 
 - The table holds three unique indexes: the primary key `id`, `(name, revision)` and `fingerprint`. SQLite admits many null values in the unique index of `fingerprint`. It holds no other index and no `CHECK`.
 - The Worker Service validates the name form, the worker against the catalogue, the placement against `InstancePlacement` and the key form before each write.
 - A create at the `server` or the `container` placement takes no key. A create at the `worker` placement takes a key, as below.
+- Justification of the column `machine`: a human picks the machine at the create, and no other data computes it.
+- A create at the `worker` placement takes `machine`, the name of a live machine. An absent value or a name of no live machine answers 400 `worker.instance.machine_invalid`.
+- A create at the `server` or the `container` placement takes no `machine`. A `machine` value answers 400 `worker.instance.machine_invalid`.
+- The machine of an instance never changes. A Reset key keeps it.
 - A create at the `container` placement reads `placementStatus("container")` before the transaction. The reasons `server_in_container`, `runtime_absent` and `runtime_rootful` refuse it with 409 `worker.instance.placement_unavailable` and `details: { placement, reason }`. `runtime_failed` passes, because a stopped runtime recovers.
 - A create at the `server` or the `container` placement counts the live server instances in its transaction. At `worker.server_instance_limit`, it refuses with 409 `worker.instance.server_limit` and `details: { limit }`.
 - After the commit of a create or an archive of a server instance, the Worker Service calls `instancesChanged()`, and the pool host starts or stops that instance.
-- An archived name stays taken. A create of a taken name answers 409 `worker.instance.name_conflict`.
+- An archived name stays taken. A create of a taken name answers 409 `worker.instance.name_conflict`. A name of a live or an archived machine is taken too.
 - The names `server`, `token`, `connect`, `heartbeat` and `work` are reserved and answer 400 `worker.instance.name_invalid`. `server` is the holder value of a server-held credential. The other four are static route segments.
 - The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived.
 - Only a Reset key creates a revision. A Reset key applies only at the `worker` placement. On a server instance, it refuses with 409 `worker.instance.placement_unsupported` and `details: { placement }`.
@@ -499,7 +568,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - In the same transaction, the Reset key ends every live registration whose client identity derives from the old revision. Registrations of other instances of the same binding stay live.
 - Every worker token, connection and client token of the old revision fails its next request, because each carries the old `instance_id`.
 - The client identities of the instance change, because their derivation label holds the revision id.
-- Every credential copy sealed to the old fingerprint has no holder until a human enters its secret again, under [custody.impl.md](custody.impl.md).
+- Every own copy of the instance sealed to the old fingerprint has no holder until a human enters its secret again, under [custody.impl.md](custody.impl.md). A Reset key of an instance changes no copy of its machine.
 - An archive ends the live revision for good. It names `expected_revision` and the optional `force`, which defaults to `false`.
 - The archive refuses while a binding that is no tombstone lists the instance, with 409 `worker.instance.in_use` and `details.bindings`. `force` changes no part of this refusal.
 - Without `force`, the archive refuses while a registration of the instance is the claimant of an execution with a null `ended_at`, with 409 `worker.instance.in_use` and `details.executions`. A draining execution therefore ends before the archive.
@@ -509,9 +578,9 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - In that transaction, the Scheduler revokes the claim with its [revocation](scheduler-service.md#claims-and-counts): `ended_at` set, no loss and no failure count. The revoke cause is `human`.
 - A `worker` process learns of the end at its next call and aborts the execution. The pool host stops a server instance after the commit.
 - In the same transaction, the archive ends every live registration whose `instance_id` names a revision of the instance.
-- In the same transaction, the archive of a `worker` instance calls the custody collaboration `archiveHeld(tx, holder)`, which archives every live credential row of the instance. A server instance holds no credential row.
+- In the same transaction, the archive of a `worker` instance calls the custody collaboration `archiveHeld(tx, holder)`, which archives every live credential row of the instance. It archives no copy of the machine. A server instance holds no credential row.
 - After the archive of a server instance, the pool host stops the instance, then removes its slot root and its slot volume.
-- The confirmations of Reset key and Archive read `worker.instance.get`. They list the bindings that list the instance, the connection, the live registrations and executions, and the credential copies.
+- The confirmations of Reset key and Archive read `worker.instance.get`. They list the bindings that list the instance, the connection, the live registrations and executions, and the credential copies whose `holder` is the instance.
 - The Reset key confirmation states: "Rotate each listed credential with a new secret, and rotate the key at the provider. The old configuration still opens these credentials."
 - The dashboard offers Reset key only at the `worker` placement.
 - The Archive confirmation lists each binding that lists the instance, with a link, and states "Remove the instance from these bindings first." Its action stays disabled while a binding lists the instance.
@@ -523,21 +592,21 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 
 ### The operations of an instance
 
-| Operation                    | Route                                               | Policy                                    | Input                                                 | Answer                                                                                                                                                       |
-| ---------------------------- | --------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `worker.instance.create`     | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, placement, public_key?, endpoint? }` | 200 instance record                                                                                                                                          |
-| `worker.instance.list`       | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived`      | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                                     |
-| `worker.instance.get`        | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                                  | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, revision, platform, sealed_current, health }]` |
-| `worker.instance.rotate`     | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`       | 200 instance record                                                                                                                                          |
-| `worker.instance.archive`    | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision, force? }`                       | 200 instance record                                                                                                                                          |
-| `worker.instance.token`      | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                     | 200 `{ server_version, sealed }`                                                                                                                             |
-| `worker.instance.connect`    | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`                 | 200 `{ connection_id, binding_version, sealed }`                                                                                                             |
-| `worker.instance.heartbeat`  | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`                  | 200 `{ server_version, binding_version, credential_version, work_version }`                                                                                  |
-| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                   | 200 `{ work_version, login_sessions, session_reads, footprint_orders }`                                                                                      |
-| `worker.session_read.report` | `POST /api/worker/session-read/:read_id/report`     | `worker`, mutation                        | `SessionReadResult`                                   | 204                                                                                                                                                          |
-| `worker.ssh.sign`            | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                 | 200 `{ nonce, ciphertext }`                                                                                                                                  |
+| Operation                    | Route                                               | Policy                                    | Input                                                           | Answer                                                                                                                                                               |
+| ---------------------------- | --------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `worker.instance.create`     | `POST /api/worker/instance`                         | `human`, mutation                         | `{ name, worker, placement, machine?, public_key?, endpoint? }` | 200 instance record                                                                                                                                                  |
+| `worker.instance.list`       | `GET /api/worker/instance`                          | `human`, read                             | `worker?`, `limit`, `cursor`, `include_archived`                | items: instance record, `connection`, `binding_count`, `holder_mismatch`                                                                                             |
+| `worker.instance.get`        | `GET /api/worker/instance/:instance_name`           | `human`, read                             | none                                                            | instance record, `connection`, `bindings: [{ project_id, binding }]`, `registrations`, `credentials: [{ name, holder, revision, platform, sealed_current, health }]` |
+| `worker.instance.rotate`     | `POST /api/worker/instance/:instance_name/revision` | `human`, mutation                         | `{ public_key?, endpoint?, expected_revision }`                 | 200 instance record                                                                                                                                                  |
+| `worker.instance.archive`    | `POST /api/worker/instance/:instance_name/archive`  | `human`, mutation                         | `{ expected_revision, force? }`                                 | 200 instance record                                                                                                                                                  |
+| `worker.instance.token`      | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                               | 200 `{ server_version, sealed }`                                                                                                                                     |
+| `worker.instance.connect`    | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`                           | 200 `{ connection_id, binding_version, sealed }`                                                                                                                     |
+| `worker.instance.heartbeat`  | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`                            | 200 `{ server_version, binding_version, credential_version, work_version, machine }`                                                                                 |
+| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                             | 200 `{ work_version, login_sessions, session_reads, footprint_orders }`                                                                                              |
+| `worker.session_read.report` | `POST /api/worker/session-read/:read_id/report`     | `worker`, mutation                        | `SessionReadResult`                                             | 204                                                                                                                                                                  |
+| `worker.ssh.sign`            | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                           | 200 `{ nonce, ciphertext }`                                                                                                                                          |
 
-- An instance record is `{ id, name, worker, placement, revision, public_key, fingerprint, created_at, ended_at }`. `public_key` and `fingerprint` are null for a server instance.
+- An instance record is `{ id, name, worker, placement, revision, public_key, fingerprint, machine, created_at, ended_at }`. `public_key`, `fingerprint` and `machine` are null for a server instance.
 - An absent `placement` or a value outside the set answers 400 `worker.instance.placement_invalid`.
 - At the `worker` placement, `worker.instance.create` and `worker.instance.rotate` take `public_key` or `endpoint`, never both and never neither. Another input answers 400 `worker.instance.key_invalid`.
 - At the `server` and the `container` placements, `worker.instance.create` takes neither. A `public_key` or an `endpoint` answers 400 `worker.instance.key_forbidden`.
@@ -546,7 +615,8 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 - The answer then adds `instance_configuration`, the configuration value of [The instance configuration](#the-instance-configuration), once. The answer carries `Cache-Control: no-store`.
 - The server keeps no copy of the private key. It clears the key buffer in a `finally` block after the answer, also after a failure.
 - `connection` is `{ connection_name, connected_at, last_heartbeat_at }`, or null when the instance holds no current connection. It is null for a server instance.
-- `holder_mismatch` is true when a binding that lists a `worker` instance names a credential with no live copy sealed to the current fingerprint of the instance. It is false for a server instance. The worker page shows its badge from it.
+- `credentials` lists each copy that the instance uses: each own copy, and each machine copy of a name with no own copy. `holder` names the instance or its machine. `health` adds `reported_by`, under [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy).
+- `holder_mismatch` is true when a binding that lists a `worker` instance names a credential with no live current copy. The copy is the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance. A current copy is sealed to the current fingerprint of its holder. It is false for a server instance. The worker page shows its badge from it.
 - `bindings` lists the bindings of every project that list the instance. The dashboard reads the cross-project bindings of an instance from it.
 - No answer holds a secret except the sealed objects and `instance_configuration`.
 - [gateway-service.impl.md](gateway-service.impl.md#access-policy) rules the access policies `worker` and `public`.
@@ -556,7 +626,8 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 
 | HTTP | Code                                    | Condition                                                                                                                                                                                            |
 | ---- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 409  | `worker.instance.name_conflict`         | The name is taken, by a live or an archived instance.                                                                                                                                                |
+| 409  | `worker.instance.name_conflict`         | The name is taken, by a live or an archived instance or machine.                                                                                                                                     |
+| 400  | `worker.instance.machine_invalid`       | At the `worker` placement, `machine` is absent or names no live machine. At another placement, `machine` is present.                                                                                 |
 | 400  | `worker.instance.name_invalid`          | The name breaks the form or is reserved.                                                                                                                                                             |
 | 400  | `worker.instance.worker_invalid`        | The worker is unknown or is a worker of an external harness.                                                                                                                                         |
 | 400  | `worker.instance.placement_invalid`     | `placement` is absent or is no value of the set.                                                                                                                                                     |
@@ -565,7 +636,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 409  | `worker.instance.server_limit`          | A create of a server instance meets `worker.server_instance_limit`. `details: { limit }`.                                                                                                            |
 | 409  | `worker.instance.placement_unsupported` | A Reset key names a server instance. `details: { placement }`.                                                                                                                                       |
 | 400  | `worker.instance.key_invalid`           | The key is no base64url 32-byte value, all its bytes are zero, or the input holds both `public_key` and `endpoint` or neither.                                                                       |
-| 409  | `worker.instance.key_conflict`          | A row of any instance holds the fingerprint.                                                                                                                                                         |
+| 409  | `worker.instance.key_conflict`          | A row of any instance or any machine holds the fingerprint.                                                                                                                                          |
 | 404  | `worker.instance.not_found`             | The name is unknown, or the `instance_id` is unknown or ended.                                                                                                                                       |
 | 409  | `worker.instance.revision_conflict`     | `expected_revision` is not the live revision.                                                                                                                                                        |
 | 409  | `worker.instance.archived`              | A write names an archived instance.                                                                                                                                                                  |
@@ -577,11 +648,78 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 400  | `worker.ssh.sign_invalid`               | The sealed sign request does not open, or its plaintext does not match the schema.                                                                                                                   |
 | 403  | `worker.ssh.placement_refused`          | The instance of the execution is not at the `worker` placement. `details.placement` names its placement.                                                                                             |
 
-The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`.
+The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`. The `serve worker` diagnostics of a machine are `worker.machine.config_absent`, `worker.machine.config_conflict` and `worker.machine.config_invalid`, under [The machine configuration](#the-machine-configuration).
+
+## Worker machines
+
+[worker-service.md](worker-service.md#worker-instances) states the rules of a [worker machine](worker-service.vocabulary.md#worker-machine).
+
+### The machine record
+
+The table `worker_machine` holds one row for each revision of a machine, after the pattern of `worker_instance`. [01-setup.md](../reference/erd/01-setup.html) holds the schema.
+
+| Column        | Rule                                                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| `id`          | `worker_machine_<ulid>`, one revision. Primary key.                                                        |
+| `name`        | The instance name form and its reserved names. Never changes.                                              |
+| `revision`    | The revision value of [architecture.impl.md](architecture.impl.md#the-revision-value). Unique with `name`. |
+| `public_key`  | The base64url form of the 32-byte X25519 public key. Never null.                                           |
+| `fingerprint` | `SHA256:<unpadded base64 of the SHA-256 of the 32 key bytes>`. Unique. Never null.                         |
+| `created_at`  | Unix ms.                                                                                                   |
+| `ended_at`    | Unix ms, null while the revision is live.                                                                  |
+
+- Justification of the table: a machine holds a key revision chain. It holds no worker, no placement, no connection and no binding, so `worker_instance` cannot hold it.
+- The table holds three unique indexes: the primary key `id`, `(name, revision)` and `fingerprint`. It holds no other index and no `CHECK`.
+- A machine holds no token, no connection, no binding, no registration and no execution.
+- A machine name and an instance name never match. A machine create refuses a name of a live or an archived instance or machine with 409 `worker.machine.name_conflict`.
+- No two revisions of any instance or any machine share one fingerprint. A taken fingerprint answers 409 `worker.machine.key_conflict`.
+- The live revision of a name is its row with the greatest `revision` and a null `ended_at`. A name with no live revision is archived. An archived name stays taken.
+- `worker.machine.rotate` is the Reset key of a machine. It names `expected_revision`. In one transaction it ends the live revision and inserts the next revision with the new key.
+- A Reset key of a machine ends no token, connection or registration of an instance. Every machine copy sealed to the old fingerprint has no holder until a human signs in again or enters its secret again, under [custody.impl.md](custody.impl.md).
+- `worker.machine.archive` names `expected_revision`. It refuses with 409 `worker.machine.in_use` and `details.instances` while a live instance names the machine.
+- In its transaction, the archive calls the custody collaboration `archiveHeld(tx, machine)`, which archives every live credential row of the machine.
+- The Worker Service answers three reads for the other components:
+  - `machineKeyOf(tx, name)` answers the current key of a live machine, or null.
+  - `machineOf(tx, instanceName)` answers the machine name of a live `worker` instance, or null.
+  - `connectedInstancesOf(name)` answers the live instances of a machine with a last heartbeat inside `INSTANCE_CONNECTED_WINDOW`. The newest heartbeat comes first, then the first name in alphabetical order.
+
+### The operations of a machine
+
+| Operation                | Route                                             | Policy                   | Input                                | Answer                                     |
+| ------------------------ | ------------------------------------------------- | ------------------------ | ------------------------------------ | ------------------------------------------ |
+| `worker.machine.create`  | `POST /api/worker/machine`                        | `human`, secret mutation | `{ name, public_key? }`              | 200 machine record                         |
+| `worker.machine.list`    | `GET /api/worker/machine`                         | `human`, read            | `limit`, `cursor`                    | items: machine record, `instance_count`    |
+| `worker.machine.get`     | `GET /api/worker/machine/:machine_name`           | `human`, read            | none                                 | machine record, `instances`, `credentials` |
+| `worker.machine.rotate`  | `POST /api/worker/machine/:machine_name/revision` | `human`, secret mutation | `{ expected_revision, public_key? }` | 200 machine record                         |
+| `worker.machine.archive` | `POST /api/worker/machine/:machine_name/archive`  | `human`, mutation        | `{ expected_revision }`              | 200 machine record                         |
+
+- A machine record is `{ id, name, revision, public_key, fingerprint, created_at, ended_at }`.
+- With `public_key`, the server stores that key. The CLI commands `kanthord worker machine create` and `rotate` generate the key pair on the computer that runs them and send only `public_key`.
+- Without `public_key`, the server generates the X25519 key pair and stores only the public key. The dashboard path sends no `public_key`.
+- The answer then adds `machine_configuration`, the value of [The machine configuration](#the-machine-configuration), once. The answer carries `Cache-Control: no-store`.
+- The server keeps no copy of the private key. It clears the key buffer in a `finally` block after the answer, also after a failure.
+- The list answers the machines in name order. `instance_count` counts the live instances that name the machine.
+- `get` answers the live or the latest revision. `instances` lists each live instance of the machine: the instance record plus `connection`.
+- `credentials` of `get` lists each live copy of the machine, in the item shape of `worker.instance.get`.
+- No answer holds a secret except `machine_configuration`.
+- Tests cover each operation, each refusal of the error table and the absence of a secret in each other answer. A test checks `Cache-Control: no-store` on an answer with `machine_configuration`.
+
+### Error codes of a machine
+
+| HTTP | Code                               | Condition                                                                                         |
+| ---- | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 400  | `worker.machine.name_invalid`      | The name breaks the instance name form or is reserved. The CLI also checks it before the request. |
+| 400  | `worker.machine.key_invalid`       | `public_key` is no base64url 32-byte X25519 key.                                                  |
+| 409  | `worker.machine.name_conflict`     | A live or an archived machine or instance holds the name.                                         |
+| 409  | `worker.machine.key_conflict`      | A row of any machine or any instance holds the fingerprint.                                       |
+| 404  | `worker.machine.not_found`         | The machine name or the machine revision is unknown, or the revision ended.                       |
+| 409  | `worker.machine.archived`          | A write names an archived machine.                                                                |
+| 409  | `worker.machine.revision_conflict` | `expected_revision` is not the live revision. `details.revision` names the live revision.         |
+| 409  | `worker.machine.in_use`            | An archive names a machine that a live instance names. `details.instances` lists them.            |
 
 ## The instance exchange
 
-The instance key is the only machine credential of an instance at the `worker` placement. A server instance holds no key and takes no part in this exchange.
+An instance at the `worker` placement keeps its own key pair. That key stays the only credential of its identity: the worker token, the connection and the client secrets. A server instance holds no key and takes no part in this exchange.
 HPKE base mode with the suite `DhkemX25519HkdfSha256`, HKDF-SHA256 and AES-128-GCM seals each answer to the public key of the live revision.
 HPKE base mode gives confidentiality to the key holder only, and it does not authenticate the server. TLS or the same host authenticates the server to an instance.
 [The HPKE dependency](architecture.impl.md#the-hpke-dependency) names the library.
@@ -625,7 +763,7 @@ The current connection:
 The heartbeat and the renewal:
 
 - The process calls `worker.instance.heartbeat` once at its start, then every `INSTANCE_HEARTBEAT_INTERVAL`, 15 s. One interval serves every case.
-- The heartbeat is a liveness signal. The answer is `{ server_version, binding_version, credential_version, work_version }`. Each value comes from memory, and the handler reads no store. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) defines `credential_version`.
+- The heartbeat is a liveness signal. The answer is `{ server_version, binding_version, credential_version, work_version, machine }`. `machine` is the machine name of the instance. Each value comes from memory, and the handler reads no store. [The health of an instance copy](llm.impl.md#the-health-of-an-instance-copy) defines `credential_version`.
 - `work_version` is an in-memory counter of the Worker Service for each instance. A server start sets each counter to the start time in Unix milliseconds, so the instance sees a new value after each restart.
 - The counter rises by one when the Worker Service queues a [session read](#the-session-read) or a [footprint order](#the-footprint-operations) of the instance. It also rises by one at each call of `workChanged(holder)` of the LLM Service, under [The login of an instance](llm.impl.md#the-login-of-an-instance). The composition root connects `workChanged` to `raiseWorkVersion(holder)` of the Worker Service.
 - The process keeps the `work_version` of its last successful work read. It holds none at its start.
@@ -1406,11 +1544,11 @@ It proves that a reviewer execution takes no file of the workspace.
 - Tests cover a null pin at the attempt open, the write when null, the read back after a lost write, two concurrent first handovers, a later execution that reads no head, a new attempt and a slow remote with a refresh in flight.
 - It decrypts the envelope with the handover key that it derives from its own `client_secret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - The payload also carries `ssh_identities`, the SSH key of each repository binding of the execution, under [custody.impl.md](custody.impl.md#the-credential-handover). The worker takes the handover before the execution setup.
-- A handover item is `{ credential_id, provider_id, credential }` for a server-held credential, at the `server` and the `container` placements only. It is `{ credential_id, provider_id, sealed }` for a copy that an instance holds.
-- At the `worker` placement, custody refuses each server-held item and each item of another holder with 403 `custody.handover.holder_refused`. `ssh_identities` is `[]`. [custody.impl.md](custody.impl.md#the-credential-handover) rules the refusal.
-- The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it, and it opens the item with the instance private key. An item that does not open ends the execution with `worker.handover.credential_open_failed`.
+- A handover item is `{ credential_id, provider_id, credential }` for a server-held credential, at the `server` and the `container` placements only. It is `{ credential_id, provider_id, holder, sealed }` for a copy of an instance or a machine. `holder` names the holder of the row.
+- At the `worker` placement, custody carries only the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance. It refuses each server-held item and each stale copy with 403 `custody.handover.holder_refused`. `ssh_identities` is `[]`. [custody.impl.md](custody.impl.md#the-credential-handover) rules the refusal.
+- The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it. It opens the item with the key of the item `holder`: the instance key, or the key of the [machine configuration](#the-machine-configuration). An item that does not open ends the execution with `worker.handover.credential_open_failed`.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204.
-- The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential, or `{ credential_id, digest, sealed }` for an instance copy. For an instance copy, the worker unit seals the refreshed credential to the instance key through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
+- The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential. It is `{ credential_id, digest, sealed }` for a copy of an instance or a machine. For such a copy, the worker unit seals the refreshed credential to the key of the item `holder` through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
 - The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `execution_id` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
@@ -1425,6 +1563,30 @@ It proves that a reviewer execution takes no file of the workspace.
 - The handler then waits until the refresh ends and runs the handover again. The wait ends 5 s before the 30 s route timeout of `worker.handover`, so the handler answers before the route timer.
 - When the refresh does not end in the wait, the handler answers 503 `worker.handover.refresh_in_flight`. The refusal is retryable, and nothing commits after the answer.
 - The worker application retries a `worker.handover.refresh_in_flight` answer with a new key, with the backoff of an indeterminate result, until the claim expires. It does not retry another 503 or a 504.
+
+### The refresh lease
+
+One execution at a time refreshes one OAuth revision, at every placement. Custody keeps the lease, under [custody.impl.md](custody.impl.md#the-refresh-lease).
+
+| Operation                 | Route                               | Policy                                    | Input                             | Answer                                                        |
+| ------------------------- | ----------------------------------- | ----------------------------------------- | --------------------------------- | ------------------------------------------------------------- |
+| `worker.credential.lease` | `POST /api/worker/credential/lease` | `client`, secret mutation, live execution | `{ execution_id, credential_id }` | 200 handover envelope with the payload `{ item, expires_at }` |
+
+- `item` is the handover item of the stored value of the revision: plain for the holder `server`, sealed for another holder. A sealed item holds `holder`.
+- The envelope is sealed with the handover key of the execution, as the handover answer.
+- `modify` of the execution store takes the lease at every placement. It adopts the stored value of the answer, calls the pi-ai refresh function with that value, then sends one report. It sends the report also for an unchanged value.
+- pi-ai calls `modify` only for a token that expires within 5 minutes, so a model call takes no lease.
+- The worker application retries 503 `worker.credential.lease_held` with a new key and the backoff of an indeterminate result. The retry ends when the claim expires or the signal of `modify` aborts.
+- The lease holder renews its lease before each retry of its report. The retry keeps the value of the report.
+- The worker application keeps the handover key of an execution until `discard()`. It zeroes the key there and in the error path. Each lease answer opens with that key.
+- A sealed lease item opens with the key of its `holder`, as a handover item.
+- The handover does not wait for a lease. A check of a revision under a lease does not refresh, because the lease holder pins the revision.
+
+| HTTP | Code                             | Condition                                                                                |
+| ---- | -------------------------------- | ---------------------------------------------------------------------------------------- |
+| 503  | `worker.credential.lease_held`   | Another live execution holds the lease, or a check refresh of the revision is in flight. |
+| 400  | `custody.handover.lease_invalid` | The execution does not pin the revision.                                                 |
+| 409  | `credential.revision.revoked`    | The revision ended.                                                                      |
 
 ## The SSH signature relay
 
@@ -2342,6 +2504,19 @@ These declarations match the error table of `engine/docs/cli/worker.md`.
 | ----- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | local | `cli.worker.join.config_exists`  | The instance file of the name exists, and `--force` is absent. `--force` is the only overwrite.                                                                   |
 | local | `worker.instance.config_invalid` | The instance configuration fails the configuration schema, the file name differs from `name`, or the `--instance` of `kanthord serve worker` differs from `name`. |
+
+## Machine CLI validation
+
+`kanthord worker machine join`, `kanthord worker machine create --output` and `kanthord worker machine rotate --output` write the machine file. Without `--force`, they refuse an existing machine file with `cli.worker.machine.config_exists`.
+They check `name` against the instance name form before they build the file path, and answer `worker.machine.config_invalid`.
+`kanthord serve worker` answers the same codes when it reads the machine configuration, under [The machine configuration](#the-machine-configuration).
+
+| HTTP  | Code                               | Condition                                                                                                                                               |
+| ----- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| local | `cli.worker.machine.config_exists` | The machine file of the name exists, and `--force` is absent. `--force` is the only overwrite.                                                          |
+| local | `worker.machine.config_absent`     | No env value and no machine file holds the name. The diagnostic names the variable and the path.                                                        |
+| local | `worker.machine.config_conflict`   | The env value and the machine file both hold a value for one name.                                                                                      |
+| local | `worker.machine.config_invalid`    | The value fails the schema, the file `name` differs from its file name, the name breaks the instance name form, or the env value names another machine. |
 
 ## Handover CLI validation
 

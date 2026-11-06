@@ -20,14 +20,18 @@ Custody grants no authority through possession of a credential reference.
 
 - A [credential store](custody.vocabulary.md#credential-store) holds a credential as one [credential store record](custody.vocabulary.md#credential-store-record) for each [credential revision](custody.vocabulary.md#credential-revision) of its secret.
 - A human chooses its [credential name](custody.vocabulary.md#credential-name), and every revision of the credential holds that name.
-- Each record has one [holder](custody.vocabulary.md#holder): `server`, or the name of one [worker instance](overview.vocabulary.md#worker-instance) of the [`worker` placement](worker-service.md#worker-instances). Only an instance at the `worker` placement holds an X25519 key and is its own holder. An instance at the `server` or the `container` placement is no holder.
+- Each record has one [holder](custody.vocabulary.md#holder). The holder is `server`, a live [worker machine](worker-service.vocabulary.md#worker-machine) or a live [worker instance](overview.vocabulary.md#worker-instance) of the [`worker` placement](worker-service.md#worker-instances). A machine and an instance at the `worker` placement each hold an X25519 key. An instance at the `server` or the `container` placement is no holder.
 - A credential name holds one copy for each holder. Each copy keeps its own revisions, its own cooldown and its own archive.
+- The [copy holder](custody.vocabulary.md#copy-holder) of an instance for one name is `server` at the `server` and the `container` placements.
+- At the `worker` placement, it is the instance when the instance holds a live copy of the name. Else it is the machine of the instance.
+- The own copy of an instance thus overrides the copy of its machine. A stale own copy does not fall back to the machine copy.
+- An archive of the own copy returns the instance to the machine copy. The archive stays final, so the instance takes no new own copy of that name.
 - One credential name holds one platform over every holder.
-- Only a record of an [LLM platform](llm.vocabulary.md#llm-platform) takes an instance holder. Every SSH key and every storage key has the holder `server`.
-- The server stores an instance copy only as a [sealed object](custody.vocabulary.md#sealed-object) to the public key of its instance. The server holds no private key of an instance and never opens an instance copy.
-- A human enters a secret once and names its holders. The server seals the secret to the current public key of each instance holder and drops the plaintext.
+- Only a record of an [LLM platform](llm.vocabulary.md#llm-platform) takes a machine or an instance holder. Every SSH key and every storage key has the holder `server`.
+- The server stores a copy of a machine or an instance only as a [sealed object](custody.vocabulary.md#sealed-object) to the public key of its holder. The server holds no private key of a machine or an instance and never opens such a copy.
+- A human enters a secret once and names its holders. The server seals the secret to the current public key of each machine holder and each instance holder, and drops the plaintext.
 - A worker instance enters a copy of its own holder only, already sealed to its own key.
-- A copy sealed to a key that is not the current key of its instance has no holder. No check accepts it until a human enters its secret again.
+- A copy sealed to a key that is not the current key of its holder has no holder. No check accepts it until a human enters its secret again.
 - A record belongs to no project and can serve more than one project.
 - A credential reaches an operation through the entity that performs it, never through a direct relationship with a project.
 - That entity holds a [credential reference](custody.vocabulary.md#credential-reference).
@@ -36,7 +40,7 @@ Custody grants no authority through possession of a credential reference.
 - The component that owns the platform defines its secret shape, its metadata and its validation. Each platform holds exactly one secret shape, and a second shape for the same remote is another platform.
 - The component refuses a platform that it does not own.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
-- An OAuth credential enters only through a [login session](llm.vocabulary.md#login-session) of the LLM component. A login session of the holder `server` runs on the server. A login session of an instance holder runs on that instance.
+- An OAuth credential enters only through a [login session](llm.vocabulary.md#login-session) of the LLM component. A login session of the holder `server` runs on the server. A login session of an instance holder runs on that instance. A login session of a machine holder runs on one connected instance of that machine.
 - An SSH key enters only through `Create SSH key` of the [Repository component](repository.md#credential-records). The server generates the key, and no human enters a private key.
 - Creation and rotation make no remote call.
 - A rotation adds the next revision under the same name and, in the same transaction, drains every older live revision that no live execution pins. A pinned older revision stays live until custody drains it or a human revokes it.
@@ -52,8 +56,10 @@ Custody grants no authority through possession of a credential reference.
 - Dependents include every agent provider that names the record.
 - Dependents include every inbound that names the record.
 - Dependents include every binding revision that names the record and that no tombstone follows, while it is the latest revision of its binding or a node that is not terminal and not retired pins it. A binding edit that names another credential leaves a pinned older revision a dependent.
-- These dependents apply to the copy of the holder `server`. The dependents of an instance copy are the worker bindings that list its instance and whose agent configuration names the credential.
-- The archive of a worker instance archives every copy of that instance in the same transaction.
+- These dependents apply to the copy of the holder `server`.
+- The dependents of a machine copy are worker bindings. Each one lists an instance whose copy holder for the name is the machine. Its agent configuration names the credential.
+- An instance copy has no dependent while its machine holds a live copy of the name. That machine copy is sealed to the current machine key. Else its dependents are the worker bindings that list its instance and whose agent configuration names the credential.
+- The archive of a worker instance archives every copy of that instance in the same transaction. The archive of a worker machine archives every copy of that machine in the same transaction.
 - The dependency check and the archive are atomic.
 - Every record answer contains metadata and no secret.
 
@@ -90,19 +96,20 @@ Custody grants no authority through possession of a credential reference.
 - An instance at every [placement](worker-service.vocabulary.md#placement) receives its credentials only through the credential handover, and it reads no record of the credential store.
 - An instance at the `server` or the `container` placement uses the copy of the holder `server`. Its handover crosses only the slot channel on the server host.
 - Custody never releases a server-held credential, LLM or SSH, to an identity of the `worker` placement, on any network.
-- At the `worker` placement, the handover carries only the copies of the instance of the identity, sealed to the key of that instance. It carries no SSH key.
+- At the `worker` placement, the handover carries only the copy of the copy holder of the instance of the identity. That copy is sealed to the key of its holder. It carries no SSH key.
 - The git operations of the `worker` placement sign through the [SSH signature relay](repository.md#repository-connector), so no SSH key leaves the server.
 - kanthord has no server-side LLM proxy. A worker instance calls its provider directly.
-- Custody refuses a release on the server of an instance copy, because the server cannot open it.
+- Custody refuses a release on the server of a copy of a machine or an instance, because the server cannot open it.
 - The worker unit holds no `master_key` and no machine credential of the server. An instance at the `server` or the `container` placement holds only the `client_secret` that the pool host derives for each binding that lists it.
-- A worker instance holds its own private key. It receives the `client_secret` of each of its registrations sealed to that key, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
+- A worker instance holds its own private key. It reads the private key of its machine from the machine configuration on the computer. It receives the `client_secret` of each of its registrations sealed to that key, under [the instance exchange](worker-service.impl.md#the-instance-exchange).
 - `master_key` never leaves the server. The server derives each `client_secret` and sends only the derived value.
 - A tool process at the `server` placement runs as the server OS user. It can read every credential, `master_key`, the JWT signing key and the database. kanthord accepts this reach in v1. See [Trust boundary](worker-service.impl.md#trust-boundary).
 - `container` is the contained placement. A tool process at the `container` placement reads no file of the server.
-- A tool process of any binding that a worker instance serves can read the key of that instance and open every copy of that instance. See [Trust boundary](worker-service.impl.md#trust-boundary).
+- A tool process of any binding that a worker instance serves can read the key of that instance and the key of its machine. It can open every copy of that instance and of that machine. See [Trust boundary](worker-service.impl.md#trust-boundary).
 - At the `server` and the `container` placements, the handover also carries the SSH identity of each repository binding of the execution. An instance at those placements therefore holds no SSH key of its own.
 - The handover lasts for the execution.
-- The worker application reports a refreshed credential to custody. A worker instance reports a refreshed copy sealed to its own key.
+- The worker application reports a refreshed credential to custody. A worker instance reports a refreshed copy sealed to the key of the copy holder.
+- One execution at a time refreshes one OAuth revision, at every placement. The execution takes a [refresh lease](custody.impl.md#the-refresh-lease) from custody before the refresh.
 - Custody refreshes no revision while a handover of that revision remains outstanding.
 - Disablement takes effect at the next resolution and recalls no handover in flight.
 - No credential reaches an external harness, agent context, tool result, log record or workspace file.

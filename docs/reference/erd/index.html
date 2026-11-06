@@ -94,9 +94,9 @@
                     <a href="01-setup.html">ERD 1: Environment and planning</a>
                   </td>
                   <td>
-                    Projects, credentials, worker instances, bindings, agent
-                    enablement, the mission plan, the work queue, and the
-                    footprint cleanups and alerts.
+                    Projects, credentials, worker instances, worker machines,
+                    bindings, agent enablement, the mission plan, the work
+                    queue, and the footprint cleanups and alerts.
                   </td>
                   <td>
                     Custody, Repository, Worker, Project, Agent, Mission,
@@ -148,7 +148,7 @@ flowchart TB
             r1["Repository: host key"]
             p1["Project: project, binding, binding revision"]
             a1["Agent: agent enablement"]
-            w1["Worker: instance"]
+            w1["Worker: instance, machine"]
             m1["Mission: mission, node, node revision with intent, tags and tasks, dependency"]
             s1["Scheduler: job, queue place"]
             f1["Footprint: cleanup, alert"]

@@ -58,13 +58,26 @@ A second creation with name `atlas-github` for the same holder returns the ident
 
 ## holder
 
-The party that can open a copy of a credential: `server`, or the name of one worker instance at the `worker` placement. An instance at the `server` or the `container` placement is no holder, and it uses the copy of `server`.
-The term names no closed set, because an instance name is a value.
+The party that can open a copy of a credential. It is `server`, one [worker machine](worker-service.vocabulary.md#worker-machine) or one worker instance at the `worker` placement. An instance at the `server` or the `container` placement is no holder, and it uses the copy of `server`.
+The term names no closed set, because a machine name and an instance name are values.
 `anthropic` holds a copy for `server` and a copy for `box-coder`. Only `box-coder` opens its copy, and a binding of `box-coder` resolves that copy.
+`anthropic-subscription` holds a copy for the machine `homelab`. Each instance of `homelab` opens that copy with the machine key.
+
+## copy holder
+
+The holder whose copy an instance uses for one credential name.
+
+- At the `server` and the `container` placements, the copy holder is `server`.
+- At the `worker` placement, the copy holder is the instance when the `(name, instance)` group holds a live revision.
+- Else the copy holder is the machine of the instance.
+
+The term names no closed set.
+`box-coder` runs on the machine `homelab` and holds no own copy of `anthropic-subscription`, so its copy holder is `homelab`.
+A human signs in `anthropic-subscription` for `box-coder` alone. The copy holder of `box-coder` is then `box-coder`.
 
 ## sealed object
 
-The form of an instance copy: `{ alg, enc, ciphertext }`, sealed with HPKE to the public key of the holder.
+The form of a copy of an instance or a machine: `{ alg, enc, ciphertext }`. HPKE seals it to the public key of the holder.
 The closed `alg` set is:
 
 - `hpke-x25519-sha256-aes128gcm`

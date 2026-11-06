@@ -223,8 +223,8 @@ A server instance that no binding lists holds no registration.
 ## instance record
 
 The instance record is the durable server record of one worker instance.
-It holds a name, one worker, one placement and a revision. At the `worker` placement, it also holds one X25519 public key.
-The name, the worker and the placement never change.
+It holds a name, one worker, one placement and a revision. At the `worker` placement, it also holds one X25519 public key and the name of its [worker machine](#worker-machine).
+The name, the worker, the placement and the machine never change.
 The term names no closed set.
 A human adds `box-coder` of `coder@1` at the `worker` placement once on the details page of `coder@1`.
 A Reset key gives `box-coder` revision 2 with a new public key, and every token of revision 1 fails.
@@ -236,6 +236,23 @@ The instance configuration is the name, the endpoint, the instance id and the pr
 It lives in the instance file `workers/<name>.yaml` of the configuration directory, or in the env value `KANTHORD_WORKER_CONFIG`.
 The term names no closed set.
 The Add instance sheet shows the instance configuration of `box-coder` once. `kanthord worker join` on the host writes it to `workers/box-coder.yaml`.
+
+## worker machine
+
+A worker machine is one computer that runs `worker` instances.
+It is a credential holder with its own X25519 key pair. It holds no token, no connection, no binding and no execution.
+Each instance at the `worker` placement names one live machine at its create, and the machine never changes.
+The term names no closed set.
+A worker machine is no [host](#host). The host of a worker stays kanthord or an external harness.
+The word machine in machine identity, machine JWT and machine credential keeps its Gateway meaning.
+The machine `homelab` runs the instances `box-coder` and `box-reviewer`. Both use the one `anthropic-subscription` copy of `homelab`, so a human signs in once.
+
+## machine configuration
+
+The machine configuration is the name and the private key of one worker machine.
+It lives in the machine file `machines/<name>.yaml` of the configuration directory, or in the env value `KANTHORD_MACHINE_CONFIG`.
+The term names no closed set.
+The Add machine form shows the machine configuration of `homelab` once. `kanthord worker machine join` on the computer writes it to `machines/homelab.yaml`.
 
 ## connection
 
@@ -370,7 +387,8 @@ The trust boundary is the containment that the operator provides.
 The Worker Service runs the tool of an agent and the verifications of a node inside it.
 The term names no closed set.
 The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
-At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance. They therefore reach every project that the same instance serves.
+At the `worker` placement, they reach the instance key, the credential copies and the workspaces of their instance. They also reach the machine key and the machine copies.
+They therefore reach every project that the same instance serves, and every project that the instances of the same machine serve.
 At the `server` placement, they reach every resource of the server.
 At the `container` placement, they reach the slot volume, the network and their own instance, and no file of the server.
 

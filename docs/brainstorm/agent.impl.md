@@ -104,10 +104,12 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ### The holder rule
 
 - The holders of a worker binding are the names in `worker_instances` of its instances at the `worker` placement, which the Project Service answers through `workerBindingOf`. The holder `server` joins them when the binding lists an instance at the `server` or the `container` placement. The holder is `server` for a workbench session.
-- For each holder and each agent provider of the chain, head and every fallback, custody holds a live copy of the `(credential, holder)` group. Its `sealed_current` is true.
+- The chain holds the head and every fallback. For each holder and each agent provider of the chain, custody checks the copy of the [copy holder](custody.vocabulary.md#copy-holder) of that holder. The copy holder of an instance is its own copy when it holds one, else its machine.
+- That copy is a live `(credential, copy holder)` group, and its `sealed_current` is true.
 - A failure answers 400 `agent.configuration.credential_holder_mismatch` with `details: { agent, agent_provider, credential, holder }`.
 - The rule runs at enablement write for every dependent worker binding, at worker binding write and at resolution. It refuses, and it never filters a chain entry.
-- A new instance in `worker_instances` needs its copies first. A Reset key of an instance makes every binding that lists it fail at resolution until a human enters each copy again.
+- A new instance in `worker_instances` needs its own copies or the copies of its machine first. A Reset key of an instance makes every binding that lists it fail at resolution until a human enters each own copy again.
+- A Reset key of a machine makes every binding fail at resolution that lists an instance whose copy holder is the machine. A human then signs in again or enters each machine copy again.
 - The enablement validation reads the platform of the name and the metadata of every copy. Each copy passes the approved-model membership of its own metadata.
 
 ## Model list
@@ -167,7 +169,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ## The chain view
 
 - `chain` is a list of `{ position, level, agent_provider, provider, credential, model_identifier, reasoning_effort, cooldown }`. Position 0 is the head.
-- `cooldown` is `null` or `{ strikes, available_at }`. In `agent.get`, it reads the hold of the copy of the `server` holder. In a project view, it reads the hold of the copy of each holder of the binding. It shows the hold with the latest `available_at`. Every chain entry of one credential shows the same `cooldown`.
+- `cooldown` is `null` or `{ strikes, available_at }`. In `agent.get`, it reads the hold of the copy of the `server` holder. In a project view, it reads the hold of the copy of the copy holder of each holder of the binding. It shows the hold with the latest `available_at`. Every chain entry of one credential shows the same `cooldown`.
   - A hold that expired still shows in `cooldown` with its `strikes` and a past `available_at` until a success or a clear. Selection treats it as free.
 - `active_position` is the position of the first chain entry whose `cooldown` is `null` or whose `available_at` is not later than the clock reading. It is `null` when every chain entry has a live cooldown.
 - `cooling` is `null`, or `{ code: "agent.configuration.chain_cooling", available_at }` when `active_position` is `null`. `available_at` is the earliest `available_at` of the chain.
@@ -198,7 +200,7 @@ The Agent component owns these keys of the section `agent`.
 ### The release write
 
 - The Scheduler Service calls the Agent component in the release transaction of an execution. The call carries the pinned selection of each agent of the execution and the `stop`.
-- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` holds the credential copy of each pinned selection. That copy is the `(name, holder)` group of the row that the execution pins. A copy that two selections share is held once.
+- A `stop` with the reason `provider_failed` and the code `rate_limited`, `quota_exhausted` or `unavailable` holds the credential copy of each pinned selection. That copy is the `(name, holder)` group of the row that the execution pins, so `hold` takes the holder of that row. A copy that two selections share is held once.
 - The hold adds 1 to `strikes`, so the first failure sets `strikes` to 1, and it sets `available_at`.
 - A `stop` with the reason `provider_failed` and the code `bad_request` or `unauthorized` holds no credential and releases no credential.
 - A release with no `stop`, or with a `stop` whose reason is not `provider_failed`, releases the credential of each pinned selection. A success on any model therefore releases the whole credential.
@@ -213,7 +215,9 @@ The Agent component owns these keys of the section `agent`.
 
 - The claim transaction calls the Agent component with the pinned worker binding row and the native agents of the worker.
 - The component builds the chain of each agent and reads the hold of the credential copy of the claimant holder for each chain entry.
-- The claimant holder is the instance of the registration when that instance is at the `worker` placement, and `server` at the `server` and the `container` placements. Custody pins the row of that `(name, holder)` group at first use.
+- At the `worker` placement, the claimant holder is the instance of the registration. At the `server` and the `container` placements, it is `server`.
+- `holdOf` at the claim resolves the claimant holder through the copy holder of custody. The hold of a claimant is thus the hold of its copy holder. Every instance that uses one machine copy shares its hold.
+- Custody pins the row of the `(name, copy holder)` group at first use.
 - It returns the first chain entry whose credential is not cooling.
 - A credential is cooling when its `available_at` is later than the clock reading. Every model of a cooling credential is skipped.
 - When the credential of every chain entry of one agent is cooling, the claim answers `{ kind: "no-work" }`. It writes no block, no pause and no execution. The internal answer `AgentChoice.Cooling.available_at` holds the earliest end of the hold. No reader uses it today. A parked work pull waits for its wake or for the earliest job `available_at`, and not for the end of a hold.
@@ -231,7 +235,8 @@ The Agent component owns these keys of the section `agent`.
 
 - `agent.cooldown.list` is `GET /api/agent/cooldown`, `human`, `unary`, `mutation: false`.
 - It answers `{ items: [{ credential, holder, strikes, available_at }] }`. It lists each credential copy with `strikes` above 0, live and expired, ordered by credential name and holder.
-- `agent.cooldown.clear` is `DELETE /api/agent/cooldown/:credential`, `human`, `unary`, `mutation: true`. It takes the query `holder`, which defaults to `server`. It releases the copy and answers 204.
+- `holder` is the group holder: `server`, a machine name for a machine copy, or an instance name for an own copy.
+- `agent.cooldown.clear` is `DELETE /api/agent/cooldown/:credential`, `human`, `unary`, `mutation: true`. It takes the query `holder`, which defaults to `server`. `holder` takes `server`, a machine name or an instance name. It releases the copy and answers 204.
 - A copy with no hold, that is `strikes` 0 or an unknown name or holder, answers 404 `agent.cooldown.not_found` with `details: { credential, holder }`.
 - The CLI commands are `kanthord agent cooldown list` and `kanthord agent cooldown clear <credential> [--holder <name>]`.
 - The static path `/api/agent/cooldown` does not match `GET /api/agent/:agent_name`.
@@ -253,7 +258,7 @@ The Agent component owns these keys of the section `agent`.
 - The check calls the [check of the LLM provider](llm.impl.md#the-llm-provider) of its credential and reports provider readiness.
 - It groups calls by credential and attributes the result to each agent provider.
 - A credential whose platform has no LLM provider reports `unknown`.
-- The check reads the copy of the holder `server`. A credential with only instance copies reports `unknown` with `failure_reason: held_by_instance`, and the check releases nothing.
+- The check reads the copy of the holder `server`. A credential with only machine or instance copies reports `unknown` with `failure_reason: held_by_instance`, and the check releases nothing.
 - Its `capability` is the [capability of the LLM provider](llm.impl.md#the-llm-provider) of its credential, which the LLM component answers.
 - The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
 - [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden calls, unavailable calls and OAuth expiry without refresh.
