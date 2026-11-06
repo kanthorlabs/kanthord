@@ -244,7 +244,7 @@ It is a credential holder with its own X25519 key pair. It holds no token, no co
 Each instance at the `worker` placement names one live machine at its create, and the machine never changes.
 The term names no closed set.
 A worker machine is no [host](#host). The host of a worker stays kanthord or an external harness.
-The word machine in machine identity and machine JWT keeps its Gateway meaning.
+The word machine in machine identity, machine JWT and machine credential keeps its Gateway meaning.
 The machine `homelab` runs the instances `box-coder` and `box-reviewer`. Both use the one `anthropic-subscription` copy of `homelab`, so a human signs in once.
 
 ## machine configuration

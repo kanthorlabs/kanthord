@@ -1327,7 +1327,7 @@ The rules of the credential sections follow.
 - A 409 `credential.login.instance_unavailable` of a machine sign-in shows "No instance of <machine> is connected. Start one instance of the machine, then sign in again."
 - The machine page shows a notice when the instances of the machine serve bindings of two or more projects. The page reads `bindings` of `worker.instance.get` for each instance of the machine.
 - The notice reads "<machine> serves <project A> and <project B> through its instances. A tool of either project can read the machine key and its credentials."
-- `Reset key` lists the instances of the machine. It states "Each instance of this machine then fails to open the machine credentials. Run kanthord worker machine join --force on the computer with the new configuration. Then sign in again for each machine credential, and rotate each API key at its provider."
+- `Reset key` lists the instances of the machine. It states "Each instance of this machine then fails to open the machine credentials. Deliver the new configuration with the machine copy block of the host kind. Then sign in again for each machine credential, and rotate each API key at its provider."
 - The `Reset key` confirmation asks for the host kind and shows its machine copy block. After the confirmation, it calls `worker.machine.rotate` with `expected_revision`. It shows the new `machine_configuration` once with `Copy`, the notice that it shows only once, and the machine copy block.
 - `Archive` lists each live instance of the machine with a link. It states "Archive these instances first." It stays disabled while a live instance names the machine.
 - When the archive answers 409 `worker.machine.in_use`, the confirmation shows `details.instances`.

@@ -350,7 +350,7 @@ It holds no token, no connection, no binding and no execution. A human adds it o
 - A machine name follows the instance name rules. A machine name and an instance name never match, and an archived name stays taken.
 - No two revisions of any instance or any machine share one fingerprint.
 - The machine keeps its name and its private key in its machine configuration on the computer. The server stores only the public key.
-- Each instance of the machine reads the machine key at each use. A Reset key of the machine thus needs no restart of an instance.
+- Each instance of the machine reads the machine key at each use. An instance that reads the machine file needs no restart after a Reset key of the machine. An instance that reads `KANTHORD_MACHINE_CONFIG` takes the new value only in a new container.
 - An archive of a machine ends it for good. The server refuses it while a live instance names the machine. The archive ends every credential copy of the machine.
 
 [worker-service.impl.md](worker-service.impl.md#worker-instances) states the record, the operations and the exchange.

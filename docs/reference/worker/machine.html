@@ -150,10 +150,12 @@
             </li>
           </ol>
           <p>
-            The instances need no restart after a Reset key of the machine. An
-            instance configuration sits on the machine, so a leaked instance
-            configuration also exposes the machine key. Then reset the key of
-            the instance and of the machine.
+            An instance that reads the machine file needs no restart after a
+            Reset key of the machine. An instance that reads
+            <code>KANTHORD_MACHINE_CONFIG</code> takes the new value only in a
+            new container. An instance configuration sits on the machine, so a
+            leaked instance configuration also exposes the machine key. Then
+            reset the key of the instance and of the machine.
           </p>
           <h3 id="machine-configuration">Machine configuration</h3>
           <ul>
@@ -203,7 +205,10 @@
             </li>
             <li>
               The instance reads the machine key at each use, by the holder of
-              the copy. A Reset key of the machine thus needs no restart.
+              the copy. An instance that reads the machine file needs no restart
+              after a Reset key of the machine. An instance that reads
+              <code>KANTHORD_MACHINE_CONFIG</code> takes the new value only in a
+              new container.
             </li>
             <li>
               The instance checks the name with the instance name form before it
@@ -249,10 +254,9 @@
                 <tr>
                   <td><code>worker.machine.config_invalid</code></td>
                   <td>
-                    The name breaks the instance name form, or the value fails
-                    the schema. The file
-                    <code>name</code> differs from its file name, or the env
-                    value names another machine.
+                    The name breaks the instance name form, the value fails the
+                    schema, the file <code>name</code> differs from its file
+                    name, or the env value names another machine.
                   </td>
                 </tr>
                 <tr>

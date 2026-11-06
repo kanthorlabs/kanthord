@@ -227,7 +227,7 @@ The machine configuration holds `name` and `private_key` of one [worker machine]
 - Neither source for the name answers `worker.machine.config_absent`. The diagnostic names the variable and each path that it read.
 - Both sources for one name answer `worker.machine.config_conflict`.
 - These cases answer `worker.machine.config_invalid`: a value that fails the schema, a file whose `name` differs from its file name, and an env value that names another machine.
-- The `worker` application reads the machine key at each use, by the holder name of the sealed item or the copy. It caches no machine key. A Reset key of the machine thus needs no restart of an instance.
+- The `worker` application reads the machine key at each use, by the holder name of the sealed item or the copy. It caches no machine key. An instance that reads the machine file needs no restart after a Reset key of the machine. An instance that reads `KANTHORD_MACHINE_CONFIG` takes the new value only in a new container.
 - The claim gate of `kanthord serve worker` is closed at the start. The instance claims no work before the first heartbeat answer.
 - Each heartbeat answer names `machine`. A null `machine` opens the gate.
 - For a `machine` value, the application reads the machine configuration. A key opens the gate. An absent configuration closes the gate.
@@ -429,7 +429,8 @@ A container host kind sets `KANTHORD_MACHINE_CONFIG` in place of the machine fil
   (umask 077 && cat > kanthord-machine-<machine>.env)
   ```
 
-- After a Reset key of the machine, replace the secret or the env file, then start each instance container of the machine again.
+- After a Reset key of the machine, the Podman forms replace the secret with `podman secret create --replace kanthord-machine-<machine> -`. Then remove and run each instance container again with its copy block.
+- After a Reset key of the machine, the Docker forms rewrite `kanthord-machine-<machine>.env`. Then recreate each instance container through the instance copy block of an instance Reset key, because the instance env file is gone.
 
 ## The worker unit and its wrappers
 
