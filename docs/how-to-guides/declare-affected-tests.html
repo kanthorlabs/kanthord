@@ -607,10 +607,9 @@ echo "exit $?"</code></pre>
                     the code <code>affected_timeout</code>.
                   </td>
                   <td>
-                    The command reaches <code>time_limit_s</code> on the node
-                    head. Or the command gives no valid report on the node head,
-                    and reaches <code>time_limit_s</code> on the base head.
-                    Raise <code>time_limit_s</code>, or select fewer tests.
+                    The command gives no valid report on the node head, and
+                    reaches <code>time_limit_s</code> on the base head. Raise
+                    <code>time_limit_s</code>, or select fewer tests.
                   </td>
                 </tr>
                 <tr>
@@ -622,6 +621,17 @@ echo "exit $?"</code></pre>
                     The command gives no valid report on the node head, and
                     exits with code 127 on the base head. Add the tool to the
                     environment of the repository binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The node fails, and the failure text states that the
+                    affected tests reached their time limit.
+                  </td>
+                  <td>
+                    The command reaches <code>time_limit_s</code> on the node
+                    head. KanthorD runs no base check. Raise
+                    <code>time_limit_s</code>, or select fewer tests.
                   </td>
                 </tr>
                 <tr>
