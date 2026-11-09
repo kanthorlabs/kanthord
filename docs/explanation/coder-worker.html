@@ -1448,9 +1448,9 @@ flowchart TB
               branches of the live checkout, and scrubs the tree to the head,
               detached. The scrub keeps the setup output of the environment and
               removes every other untracked and ignored file. With no free tree,
-              it runs <code>git clone --local --no-checkout</code> instead. The
-              tree holds no ignored file and no untracked file of the live
-              checkout.
+              it runs <code>git clone --no-local --no-checkout</code> instead,
+              so the tree shares no object file with the live checkout. The tree
+              holds no ignored file and no untracked file of the live checkout.
             </li>
             <li>
               It runs the verifications of the node, then the verifications of
@@ -1704,8 +1704,8 @@ flowchart TB
             </table>
           </div>
           <p>
-            The base check uses the setup of the base-head clone. When that
-            setup fails, the execution stops with
+            The base check uses the setup of the base-head tree. When that setup
+            fails, the execution stops with
             <code>environment_failed</code> and the code
             <code>setup_failed</code>.
           </p>
