@@ -824,8 +824,9 @@ sequenceDiagram
             revision turn of the node. After a
             <code>criterion-not-met</code> assessment, it sends the node to
             review again only when the head holds new work after the judged
-            commit. After a <code>success</code>
-            assessment, the release gate decides.
+            commit, when the checkout still holds that commit. After a
+            <code>success</code> assessment with no failed check, the release
+            gate decides.
             <a href="coder-worker.html#the-verdict-unit">The verdict unit</a>
             explains the rule.
             <a href="../reference/mission/finding.html#review-rounds"
