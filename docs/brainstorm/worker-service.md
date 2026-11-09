@@ -387,7 +387,10 @@ With two or more, the agent root holds only one directory for each binding, name
 The agent works from the agent root, and the execution code runs every verification from the agent root.
 The same layout rule holds for the steps method on an `examine` node and for the evaluation method.
 The Worker Service keys the workspace of an `implement` node by the node, and it keys each checkout by its repository binding.
-An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
+The node checkout is a cache of the repository on the instance.
+At the end of each execution, the Worker Service gives each checkout back to the tree pool of the instance, unless a push of the checkout is not confirmed.
+An execution reuses a checkout that the node key holds. Else it takes a tree of the repository from the pool, and else it creates one through a network git read.
+A push record of the node keeps the commits of a failed push on the node branch at the next execution.
 Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch of its attempt at the repository through the Repository component.
 When the checkout holds another branch, the execution also removes the ignored files of that branch, except the output of the setup.
 The workspace stays until a human cleanup.
