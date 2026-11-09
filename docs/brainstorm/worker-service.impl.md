@@ -857,6 +857,7 @@ The unit measurement:
 
 - The worker unit measures its data directory every `FOOTPRINT_MEASURE_INTERVAL_MS` with asynchronous directory reads, outside the turn of an execution.
 - A unit at the `server` or `container` placement measures `workspace`, `tool_output`, `log` and `slot_residue`. A unit at the `worker` placement also measures `session` and the `disk` of its data directory.
+- `workspace` lists each directory `node_<ulid>` and `execution_<ulid>` of `workspaces/`. It adds the tree pool `workspaces/pool/` as one item `pool` when the pool holds a free tree. The `modified_at` of `pool` is the newest return time of its trees.
 - `tool_output` lists the temporary directory of the instance with no recursion. It keeps only the regular files whose name matches `pi-*-<16 hex>.*`, checked with `lstat`.
 - `slot_residue` walks the slot root less the session root, `workspaces/`, the unit log and the `tool_output` files. At the `container` placement, it also skips `.cache`. At the `worker` placement, it walks only `tmp/` of the data directory, less the `tool_output` files.
 - The unit sends `worker.footprint.report` after each measurement and after each order, through the transport of its first registration.
@@ -889,6 +890,7 @@ The instance delete operations:
 - At the `server` and `container` placements, the Worker Service measures `session` on the server side at the measure interval, under the same rule. The unit of these placements reports no `session` kind.
 - `session` at the `worker` placement: the unit refuses the session of its live execution with the reason `live`.
 - `workspace`: the unit refuses a held key with the reason `live`.
+- `workspace`: the item `pool` is never a candidate. The Footprint Service lists it with the refusal `live`, and `cleanup create` refuses the key `pool`.
 - `tool_output`: the unit refuses a file whose `mtime` is at or after the start of its oldest running execution, with the reason `live`. With no running execution, no file is live.
 - `worker.slot_image.delete` refuses the configured `worker.container_image` of the running version and an image that a live container uses, with the reason `live`.
 

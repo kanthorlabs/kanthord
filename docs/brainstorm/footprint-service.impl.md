@@ -208,16 +208,16 @@ export const footprintCandidateSchema = z.strictObject({
 
 `footprintKeySchema(kind)` validates the key form of each kind.
 
-| Kind              | Key                                                                     | `at`                        | Rules                               |
-| ----------------- | ----------------------------------------------------------------------- | --------------------------- | ----------------------------------- |
-| `trace`           | `trace_id`                                                              | `created_at` of the trace   | `older_than`                        |
-| `database_backup` | the file name, for example `tracking.db.bak-20261003T101500`            | the `mtime`                 | `older_than`                        |
-| `environment`     | `<identity path>@<digest>`; the image id for a `dangling` item          | the image creation time     | `unbound`, `superseded`, `dangling` |
-| `cache_volume`    | the volume name                                                         | the volume creation time    | `unbound`                           |
-| `slot_image`      | the image reference                                                     | the image creation time     | `superseded`                        |
-| `session`         | `execution_id`                                                          | `ended_at` of the execution | `older_than`                        |
-| `workspace`       | the workspace directory name, a `node_id` or an `execution_id`          | the directory `mtime`       | `node_closed`                       |
-| `tool_output`     | the file name, matching `^pi-[a-z0-9-]+-[0-9a-f]{16}(\.[A-Za-z0-9]+)?$` | the file `mtime`            | `older_than`                        |
+| Kind              | Key                                                                     | `at`                                                                   | Rules                                   |
+| ----------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------- |
+| `trace`           | `trace_id`                                                              | `created_at` of the trace                                              | `older_than`                            |
+| `database_backup` | the file name, for example `tracking.db.bak-20261003T101500`            | the `mtime`                                                            | `older_than`                            |
+| `environment`     | `<identity path>@<digest>`; the image id for a `dangling` item          | the image creation time                                                | `unbound`, `superseded`, `dangling`     |
+| `cache_volume`    | the volume name                                                         | the volume creation time                                               | `unbound`                               |
+| `slot_image`      | the image reference                                                     | the image creation time                                                | `superseded`                            |
+| `session`         | `execution_id`                                                          | `ended_at` of the execution                                            | `older_than`                            |
+| `workspace`       | the workspace directory name, a `node_id` or an `execution_id`; `pool`  | the directory `mtime`; for `pool`, the newest return time of its trees | `node_closed`; `pool` is never selected |
+| `tool_output`     | the file name, matching `^pi-[a-z0-9-]+-[0-9a-f]{16}(\.[A-Za-z0-9]+)?$` | the file `mtime`                                                       | `older_than`                            |
 
 - `footprint.candidate.list` answers the keys of a rule, page by page, with the totals of the whole set.
 - `older_than` selects the items with `at` older than `older_than_days`. The default is `DEFAULT_AGE_DAYS` for every kind.
