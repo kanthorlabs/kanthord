@@ -389,7 +389,7 @@ The same layout rule holds for the steps method on an `examine` node and for the
 The Worker Service keys the workspace of an `implement` node by the node, and it keys each checkout by its repository binding.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
 Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch of its attempt at the repository through the Repository component.
-When the checkout holds another branch, the execution also removes the ignored files of that branch.
+When the checkout holds another branch, the execution also removes the ignored files of that branch, except the output of the setup.
 The workspace stays until a human cleanup.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
 The workspace of the steps method on an `examine` node holds one base-branch checkout for each repository binding of the pinned revision, and no checkout when the node names none.
