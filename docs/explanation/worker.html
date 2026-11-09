@@ -115,7 +115,8 @@
               verification commands of each task itself.
             </li>
             <li>
-              When every verification of the node passes in a clean clone, the
+              When every verification of the node passes in a scrubbed release
+              tree, the
               worker pushes a branch, records the head commit as
               <strong>evidence</strong> and <strong>releases</strong> the claim.
               The node now waits for review.
@@ -438,7 +439,7 @@
             not trust that claim and asks the agent no question. The worker
             commits the work after every turn of the agent, runs the
             verification commands itself, and releases only after every
-            verification of the node passes in a clean clone. Only
+            verification of the node passes in a scrubbed release tree. Only
             <code>re@1</code>, in the separate execution of
             <code>reviewer@1</code>, judges a criterion.
           </p>
@@ -1487,10 +1488,19 @@ sequenceDiagram
                   <td>
                     The workspace of one <code>implement</code> node:
                     <code>checkouts/&lt;binding name&gt;/</code> for each
-                    repository binding, and <code>release/</code> for the clean
-                    clones of the release gate during a run. The next execution
+                    repository binding, and <code>release/</code> for the
+                    release trees of the release gate during a run. The next execution
                     of the node on this host reuses it. The instance removes it
                     7 days after its last use.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workspaces/pool/</code></td>
+                  <td>
+                    The tree pool: the free trees of each repository. A release
+                    gate takes a tree, scrubs it and gives the tree back to the
+                    pool. The instance keeps at most two release trees for each
+                    repository.
                   </td>
                 </tr>
                 <tr>

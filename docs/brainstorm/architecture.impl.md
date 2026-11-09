@@ -922,7 +922,7 @@ Cross-service references tolerate a deleted target.
 - An owner that exposes no delete operation keeps its records, and no sweep deletes one.
 - A referencing service tolerates a disabled target.
 - A human deletes a trace through `tracking.trace.delete`. A peer holds a trace identity as a correlation value, which then answers `404 tracking.trace.not_found`.
-- A run deletes only the scratch that it created, before it ends. No start, no timer and no later run deletes data that an earlier run left. Key material, secret files and a ruled checkout reset are the exceptions. Rule G9 of [gate G](worker-service.impl.md#gate-g) is a ruled checkout reset.
+- A run deletes only the scratch that it created, before it ends. No start, no timer and no later run deletes data that an earlier run left. Key material, secret files, a ruled checkout reset, the take guards and the scrub of a pool tree, and the eviction above the pool limit are the exceptions. Rule G9 of [gate G](worker-service.impl.md#gate-g) is a ruled checkout reset.
 - A human deletes the data that an earlier run left through a [cleanup](footprint-service.md#cleanup) of the Footprint Service.
 - No existence operation exists.
 
