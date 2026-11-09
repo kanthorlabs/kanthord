@@ -595,13 +595,15 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
           <p>
             A verdict also holds one <strong>judged commit</strong> for each
             repository binding that the review saw. For failed checks, it is the
-            head commit of each pull request with a failed check. For a
-            <code>criterion-not-met</code> assessment, it is the commit of each
-            <code>repository</code> address in <code>tested_input</code>. With
-            no failed check, a rework after a <code>success</code> assessment
-            gives no judged commit. Its verdict unit runs with no rule, and the
-            release gate decides. For change requests, it is the
-            <code>commit_id</code> of the latest change request of each binding.
+            head commit of each pull request with a failed check. With a failed
+            check, the failed checks give the judged commits, also for a rework.
+            For a <code>criterion-not-met</code> assessment, it is the commit of
+            each <code>repository</code> address in <code>tested_input</code>.
+            With no failed check, a rework after a
+            <code>success</code> assessment gives no judged commit. Its verdict
+            unit runs with no rule, and the release gate decides. For change
+            requests, it is the <code>commit_id</code> of the latest change
+            request of each binding.
           </p>
           <p>
             When no verdict exists, the worker reads the
@@ -895,8 +897,9 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
           <p>
             Only a binding with a judged commit takes part in the rule. Change
             requests give a judged commit only to a binding that holds a change
-            request. A <code>criterion-not-met</code> assessment gives one only
-            to a binding with a <code>repository</code> address in
+            request. With no failed check, a
+            <code>criterion-not-met</code> assessment gives one only to a
+            binding with a <code>repository</code> address in
             <code>tested_input</code>. With no failed check, a
             <code>success</code> assessment gives none, so its verdict unit
             takes row 3. A binding with no judged commit is ignored by the rule,
@@ -1927,14 +1930,13 @@ flowchart LR
               in progress with the message of the current unit, for example
               <code>feat: document the route</code>. It writes no done record.
               The next execution finds the unit pending at step 6 and continues
-              it. Two exceptions apply. A checkpoint commit of the verdict unit
-              is new work after the judged commit, so the verdict rule holds at
-              the next step 6, and the verdict unit does not run again. A
-              verdict unit with no rule runs again at the next execution. A
-              checkpoint commit of a routed unit that already holds a matching
-              done record leaves that unit done. In both cases, the release gate
-              of the next execution decides. Today a checkpoint commit therefore
-              can satisfy the verdict rule.
+              it. Two exceptions apply. A checkpoint commit of a verdict unit
+              with the verdict rule is new work after the judged commit, so the
+              verdict rule holds at the next step 6, and the verdict unit does
+              not run again. A checkpoint commit of a routed unit that already
+              holds a matching done record leaves that unit done. In both cases,
+              the release gate of the next execution decides. Today a checkpoint
+              commit therefore can satisfy the verdict rule.
             </li>
             <li>
               <strong
