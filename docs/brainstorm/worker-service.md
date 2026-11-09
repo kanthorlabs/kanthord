@@ -452,6 +452,7 @@ The verdict names the commit that the review judged in each binding.
 When no checkout holds new work after the judged commit, the execution sends the whole verdict to the agent in a revision turn of the node unit, and repeats it until new work exists.
 A merge commit is no new work.
 A turn of the verdict that brings no new work counts as no progress.
+With no failed check, a rework after a `success` assessment names no judged commit, so the release gate decides.
 No part of the verdict routes work to a task by name.
 After a human unblock with no verdict, a cleared assessment that does not pass gives its rationale to the node unit as one instruction.
 The verdict of an attempt also holds the trusted link updates of its node.
