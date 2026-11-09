@@ -1411,8 +1411,10 @@ flowchart TB
               With the verdict rule, the worker checks the rule after each turn.
               While the rule fails, the turn counts as unchanged, also when it
               changed a file of a checkout that holds no judged commit, and the
-              worker sends the verdict instruction again. It runs no
-              verification until the rule holds.
+              worker sends the verdict instruction again. At the last turn of
+              the progress limit, the worker logs
+              <code>verdict rule waived for review</code> and runs the own
+              commands of the unit, an empty list or a pending setup.
             </li>
             <li>
               It runs no command in the live checkout. The release gate runs the
@@ -1422,10 +1424,14 @@ flowchart TB
           <p>
             A pass of the verdict unit always counts as
             <a href="#the-done-record">completed</a>, also when it writes no new
-            done record. With the verdict rule, two verdict turns in a row with
-            no new work in a judged checkout stop the execution with
-            <code>no_progress</code>, so the same head never goes back to review
-            unchanged. With no rule, the progress rule of any unit applies.
+            done record. With the verdict rule, the second verdict turn in a row
+            with no new work in a judged checkout ends the unit. A pass of its
+            own commands completes the unit, and the release gate checks the
+            node verifications. The same head then goes back to review with the
+            new report, and <code>rework_limit</code> bounds these reviews. A
+            failure of its own commands stops the execution with
+            <code>no_progress</code> <code>verdict_rule_unmet</code>. With no
+            rule, the progress rule of any unit applies.
           </p>
           <h3 id="steps-8-and-9-the-release-gate">
             Steps 8 and 9: the release gate
@@ -2119,8 +2125,8 @@ flowchart LR
                   <td>A rework whose review changes nothing</td>
                   <td>
                     With the verdict rule, two verdict turns with no new work
-                    stop with <code>no_progress</code>. The same head never
-                    returns to review.
+                    end the unit. The release gate checks the same head, and it
+                    returns to review with the new report.
                   </td>
                 </tr>
                 <tr>
@@ -2412,8 +2418,9 @@ Unmet:
             command and writes the done record of the node unit. The release
             gate then runs the four commands, as at step 9. When
             <code>swe@1</code> brings no new work in two verdict turns in a row,
-            the worker stops with <code>no_progress</code> instead, and the
-            unchanged head never goes back to review.
+            the worker ends the node unit with no commit. The release gate runs
+            the same four commands, and the unchanged head goes back to review
+            with the new report.
           </p>
           <p>
             The rationale holds up to three blocks after its text, in this
@@ -2776,10 +2783,12 @@ else
             <code>task started</code>, <code>task committed</code>,
             <code>task verified</code>, <code>done recorded</code>,
             <code>done record skipped</code>, <code>verdict planned</code>,
-            <code>verdict rule checked</code>, <code>release verified</code>,
-            <code>release failure routed</code>, <code>base merged</code>,
-            <code>turn violation</code> and <code>root entries removed</code>. A
-            line holds identities and results, and no agent content.
+            <code>verdict rule checked</code>,
+            <code>verdict rule waived for review</code>,
+            <code>release verified</code>, <code>release failure routed</code>,
+            <code>base merged</code>, <code>turn violation</code> and
+            <code>root entries removed</code>. A line holds identities and
+            results, and no agent content.
           </p>
           <h2 id="limits">Limits</h2>
           <ul>
