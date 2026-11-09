@@ -1489,7 +1489,8 @@ sequenceDiagram
                     <code>implement</code> node,
                     <code>checkouts/&lt;binding name&gt;/</code> for each
                     repository binding during a run, <code>release/</code> for
-                    the release trees of the release gate during a run, and
+                    the release trees of the release gate during a run,
+                    <code>base/</code> for the base-head trees of a run, and
                     <code>review/</code> for the review trees of one evaluation
                     or <code>examine</code> execution. Between executions, it
                     holds <code>scratch/</code> and <code>pushed/</code>. At the
@@ -1502,9 +1503,9 @@ sequenceDiagram
                   <td><code>workspaces/pool/</code></td>
                   <td>
                     The tree pool: the free trees of each repository. A release
-                    gate or a review takes a tree, scrubs it and gives the tree
-                    back to the pool. The instance keeps at most two release
-                    trees and one agent tree for each repository.
+                    gate, a base head or a review takes a tree, scrubs it and
+                    gives the tree back to the pool. The instance keeps at most
+                    two command trees and one agent tree for each repository.
                   </td>
                 </tr>
                 <tr>
