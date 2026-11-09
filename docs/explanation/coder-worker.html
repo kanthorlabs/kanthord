@@ -179,8 +179,8 @@
             </li>
             <li>
               After the last unit, the <strong>release gate</strong> merges the
-              base branch and runs every verification of the node in a
-              scrubbed release tree. Each node command runs once there. It then runs the
+              base branch and runs every verification of the node in a scrubbed
+              release tree. Each node command runs once there. It then runs the
               <strong>affected test command</strong> of each repository that
               declares one. Only a pass of the release gate releases the node
               with <code>further_work: false</code>.
@@ -497,14 +497,14 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
               <p>
                 Step 9 takes a release tree of the pool into
                 <code>workspaces/node_01JZ8Q0K…/release/api/</code>, scrubs it
-                and checks out the head, detached. It runs <code>npm run build</code>,
-                <code>npm test -- healthz</code>, <code>npm run build</code> and
+                and checks out the head, detached. It runs
+                <code>npm run build</code>, <code>npm test -- healthz</code>,
+                <code>npm run build</code> and
                 <code>grep -q &#39;/healthz&#39; docs/api.md</code> there, in
                 this order: the node verification first, then the verifications
                 of each task. Every command exits with code 0. The second
                 <code>npm run build</code> copies the result of the first one
-                and writes no span. The worker gives the tree back to the
-                pool.
+                and writes no span. The worker gives the tree back to the pool.
               </p>
             </li>
             <li>

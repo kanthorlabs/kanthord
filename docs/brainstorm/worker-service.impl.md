@@ -2220,6 +2220,7 @@ The spans of the affected run follow [tracking-service.impl.md](tracking-service
 - The rule `node_closed` proposes the workspace of a node that is `Completed`, `Discarded` or retired, with no idle wait. It also proposes each execution workspace that a crash left.
 - `removeWorkspace` refuses a held key with the reason `live`.
 - The workspace stays on the disk of the instance because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
+
 ### The tree pool
 
 - The tree pool of an instance is `workspaces/pool/`. A free tree is `pool/<repo key>/<class>/<tree id>/`. `<repo key>` is the first 32 hex characters of the SHA-256 of the repository address. `<tree id>` is a random UUID.
