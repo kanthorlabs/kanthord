@@ -1713,7 +1713,7 @@ The progress rule:
 ## The further-work release
 
 - A budget end always releases with `further_work: true`. Only the release gate releases with `further_work: false`.
-- At a budget end, the execution aborts the agent, removes the release clones, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases.
+- At a budget end, the execution aborts the agent, gives the release trees back to the pool, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases.
 - The budget-end release sends the stop `{ reason: "budget_end", code, cause }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
 - A unit completed when the execution wrote a new done record for it and step 5 found no record for it. A pass of the verdict unit, or of the node unit with the cleared text, always counts as completed.
 - A violation that the checkpoint gate of a budget end finds stops the execution with that violation, not with the budget end.
@@ -1782,7 +1782,7 @@ The target is `before` in the violation path, the head of the checkout step in p
 - Format: the trailer `Kanthord-Done: <unit id> <digest>`.
 - Digest: `digest` of `src/kernel/json.ts`, the SHA-256 hex of the canonical JSON with sorted keys, of the content of the unit. For a task, the content is the task content. For the node unit, the content is the node content.
 - An own command of a unit is a verification of the unit that the node does not list. Each command of the node unit is a node command, so the node unit has no own command.
-- The live checkout skips each node command. The release gate runs each node command once, in its clean clone. A unit with no own command passes its live verification with an empty list. The steps execution runs the verifications of a node with no task only in the release gate.
+- The live checkout skips each node command. The release gate runs each node command once, in its scrubbed release tree. A unit with no own command passes its live verification with an empty list. The steps execution runs the verifications of a node with no task only in the release gate.
 - A done record certifies the own commands of its unit only.
 - Write: after a unit passes its live verification, `writeDoneRecord` takes each checkout whose head is in the commit set of the gated agent of that unit run. It runs `git commit --amend --no-edit --trailer "Kanthord-Done: <id> <digest>"` on it and reads `HEAD` again. It logs `done recorded`.
 - A unit run whose gate made no commit writes no record and logs `done record skipped`.
@@ -1800,15 +1800,16 @@ The target is `before` in the violation path, the head of the checkout step in p
 
 1. `refreshAtRelease` fetches the base of each checkout and runs merge step M. A budget end ends the gate.
 2. `verificationCommands(revision)` gives the node commands, then the commands of each task in plan order. `commandOwners` gives one owner for each index: the node unit for a node command, the task for a task command.
-3. The gate removes `workspaces/<node identity>/release/`, then builds one clone for each checkout in the layout of the agent root under it. For each checkout it runs `git clone --local --no-checkout -- <live checkout> <dir>`, fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, and runs `git checkout --detach <checkout.head>`.
+3. The gate removes each entry of `workspaces/<node identity>/release/` that is not a current checkout. For each checkout, it takes a `command` tree of [the tree pool](#the-tree-pool) into `release/`, in the layout of the agent root, and runs the take guards. On a take, it fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, fetches the branches and the tags of the live checkout with `--prune`, and scrubs the tree to `<checkout.head>`. The tags of the tree then equal the tags of the live checkout, as in a fresh clone. The scrub keeps each valid root of the setup record and removes every other untracked and ignored path. With no free tree, it runs `git clone --local --no-checkout -- <live checkout> <dir>`, the same fetch and URL steps, and `git checkout --detach <checkout.head>`. A take guard that answers rebuild, or a git failure of the reuse, deletes the tree and clones once. The gate logs `tree prepared` with `purpose: "release"` and `source` `pool` or `clone`.
 4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline, with no rerun of a code failure. A repeated command copies the result of its first run under [the result copy](#the-result-copy).
-5. It removes the release directory after the run, in a `finally` block, so a budget end and a stop also remove it.
+5. The gate gives each tree back to the pool after the run, in a `finally` block, so a budget end and a stop also give it back. It deletes a tree whose `.git` is not a directory, and then the release directory.
 6. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
 7. When a command fails, the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
-8. When every command passes, the gate runs [the affected test run](#the-affected-test-run) of each checkout in its release clone. The release clone holds `refs/remotes/origin/*` of the live checkout, and the base check uses `state.base`.
+8. When every command passes, the gate runs [the affected test run](#the-affected-test-run) of each checkout in its release tree. The release tree holds `refs/remotes/origin/*` of the live checkout, and the base check uses `state.base`.
 9. The verdict `failed` gives the node unit one revision turn with the `task-revision` text of the affected failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
 10. When each verdict is `passed`, `base_red` or `absent`, the gate logs `release verified` with the affected verdict, and the flow goes to the push.
 
+- A pass of the release gate proves the tracked files of the tested commit, plus the setup roots as left, plus the package store as left, plus this setup run. CI before the landing is the only from-scratch proof.
 - The release gate compares no trees. The verdict rule applies at the unit level.
 - A failure of the release gate never resets the head.
 - The live checkout stays the place of the unit loop, so installed dependencies persist between turns.
@@ -1940,7 +1941,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - In the contexts `task` and `node`, the memo reuses only a `pass`. Installed dependencies of the live checkout can change while the tree stays the same.
 - In the context `release`, the memo reuses a `pass`, and a `code_failure` with `timed_out` false and no cancellation. The coder runs no rerun of a code failure.
 - The memo replays a whole run list or nothing. A replay takes the stored results of each command in list order, up to the first stored `code_failure`. A command with no stored result runs the whole list again.
-- In the context `release`, a replay needs a stored `code_failure` at its end. A release clone is fresh, so a later command and the affected test run need the output of each listed command.
+- In the context `release`, a replay needs a stored `code_failure` at its end. A release tree is scrubbed, so a later command and the affected test run need the output of each listed command.
 - The memo never reuses a `budget_end`, an `infrastructure` result or an exit 127 that [the environment classification](#the-environment-classification) decides.
 - A result never crosses a context. A live result never counts at the release gate, because the live checkout holds ignored files.
 - A memo hit writes no `worker.verification` span and counts in `ran` of the `no_progress` detail.
@@ -1952,7 +1953,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected" | "universal", document, digest }` at the `image` target, or null.
 - `digest` is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
 - `worker/unit/environment-setup.ts` runs the setup of each checkout: each script of `updateContentCommand`, then each script of `postCreateCommand`. The object form runs its values one after another in key order.
-- The setup runs at the prepare, in each release clone, in the reviewer checkouts and in the examine checkouts.
+- The setup runs at the prepare, in each release tree, in the reviewer checkouts and in the examine checkouts.
 - Each command has the command limit of a verification, and the setup uses the wall deadline of the execution. Its time counts toward the budget of the execution.
 - At the `server` and the `worker` placements, only the setup commands of a stored environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
 - After a setup passes in a checkout, the worker appends each untracked path to `.git/info/exclude`, so no task commit takes the setup output.
@@ -2215,10 +2216,28 @@ The spans of the affected run follow [tracking-service.impl.md](tracking-service
 - When the workspace holds the remote-tracking ref, `fetchAndCheckout` checks the remote node branch with `git ls-remote` before `git fetch --prune`. A refusal therefore keeps the ref, and the next execution refuses again.
 - A first execution of a node branch has neither record and starts from the base branch. An attempt with the start point `base_branch` has a new node branch name, so a missing earlier node branch does not refuse it.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
-- No start and no timer removes a workspace of a node. The workspace stays until a human [cleanup](footprint-service.md#cleanup) of the kind `workspace`.
+- No start and no timer removes a workspace of a node. The workspace stays until a human [cleanup](footprint-service.md#cleanup) of the kind `workspace`. The take guards and the scrub of a pool tree, and the eviction above the pool limit, are the exceptions.
 - The rule `node_closed` proposes the workspace of a node that is `Completed`, `Discarded` or retired, with no idle wait. It also proposes each execution workspace that a crash left.
 - `removeWorkspace` refuses a held key with the reason `live`.
 - The workspace stays on the disk of the instance because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
+
+### The tree pool
+
+- The tree pool of an instance is `workspaces/pool/`. A free tree is `pool/<repo key>/<class>/<tree id>/`. `<repo key>` is the first 32 hex characters of the SHA-256 of the repository address. `<tree id>` is a random UUID.
+- The class `agent` holds a coder or a review tree. The class `command` holds a release tree or a base head. A tree never serves another repository, and it never moves to the other class.
+- The `.git` of each tree is a directory inside the tree, so one rename moves a tree. The worker writes no `gitdir:` file.
+- The release tree of a node is `workspaces/<node identity>/release/<binding name>/` during one release gate round.
+- A take renames a free tree of the class into its target. The tree that the same node gave back goes first, then the newest return. A rename that meets `ENOENT` tries the next tree. A rename that meets `EXDEV`, or no free tree, gives a fresh clone.
+- After each take, the take guards run before any fetch. A `.git` that is not a directory, a symbolic link under `.git`, `.git/shallow`, `.git/commondir`, a linked worktree, a partial clone, a repository format other than `0`, or an unresolved `HEAD` answers rebuild. A rebuild deletes the tree and clones fresh.
+- Otherwise the guards remove each lock file under `.git`, rewrite `.git/config` from a template with `gc.autoDetach` and `maintenance.autoDetach` false, empty `.git/hooks/`, and remove `info/attributes`, `info/grafts`, `info/sparse-checkout`, `objects/info/alternates` and the state of an operation in progress. They detach `HEAD`, delete each ref except `refs/remotes/origin/*`, `refs/tags/*` and the kept refs of the user, and rebuild the index.
+- A give writes `.git/kanthord-pool.json` `{ "node_id", "returned_at" }` and renames the tree into the pool. The give runs no scrub. A give that meets `EXDEV` deletes the tree.
+- When the tree or its `.git` is not a directory, for example a symbolic link, the give removes the path and does not follow a link. When the give fails, for example on a `.git` mode other than `0700`, it deletes the tree. A give therefore never ends the release gate or the preparation.
+- Above the free limit of the class, a give deletes the tree with the oldest return. The limit is 1 for `agent` and 2 for `command`, for each repository. The pool deletes an eviction leftover when it opens.
+- The next preparation of a node gives each tree under `release/` back to the `command` class, with the address of its binding. It deletes a tree of no current binding and the rest of `release/`.
+- The preparation reads `remote.origin.url` of a leftover tree from `.git/config`, with no network call. It gives the tree back only when the URL equals the current address of the binding. When the URL differs, or when the read fails, it deletes the tree.
+- One slot runs for each instance, and each instance has its own data directory, so the pool of an instance is private to it. The pool sits under `workspaces/`, so a rename stays on one file system and is atomic.
+- A footprint cleanup never takes a tree and never deletes a held tree. The `workspace` item `pool` is not selectable.
+
 - The engine repository sets `enableGlobalVirtualStore: true` in `pnpm-workspace.yaml`. `node_modules/` of each checkout then holds links into the pnpm store under `XDG_DATA_HOME` of the instance. Each instance store holds the store links once, and a second checkout adds no store link entry.
 - The trees of one instance share the package files of that store. A write of an agent into a package file reaches every other tree of the instance.
 

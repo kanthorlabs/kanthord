@@ -514,7 +514,7 @@ sequenceDiagram
         end
     end
     rect rgb(248, 215, 218)
-        E->>E: release gate: merge the base, run every verification in a clean clone
+        E->>E: release gate: merge the base, run every verification in a scrubbed release tree
         E->>RG: push the node branch
     end
     rect rgb(212, 237, 218)

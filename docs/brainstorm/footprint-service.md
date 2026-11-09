@@ -15,7 +15,7 @@ It describes no mechanism of another service.
 KanthorD deletes no user data automatically.
 A run deletes only the scratch that it created, before it ends.
 No start, no timer and no later run deletes data that an earlier run left.
-Key material, secret files and a ruled checkout reset are the exceptions, under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters).
+Key material, secret files, a ruled checkout reset, the take guards and the scrub of a pool tree, and the eviction above the pool limit are the exceptions, under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters).
 No alert deletes anything.
 A human picks each cleanup, and the owner of the data deletes it.
 

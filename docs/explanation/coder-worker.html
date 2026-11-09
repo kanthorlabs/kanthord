@@ -85,7 +85,7 @@
             <code>swe@1</code>, in a git checkout. The agent only writes code.
             The worker commits after every agent turn, runs every verification
             itself, and releases the node to <code>reviewer@1</code> only after
-            every verification of the node passes in a clean clone.
+            every verification of the node passes in a scrubbed release tree.
           </p>
           <p>
             Read <a href="worker.html">How a worker works</a> first. That page
@@ -179,8 +179,8 @@
             </li>
             <li>
               After the last unit, the <strong>release gate</strong> merges the
-              base branch and runs every verification of the node in a clean
-              clone. Each node command runs once there. It then runs the
+              base branch and runs every verification of the node in a scrubbed
+              release tree. Each node command runs once there. It then runs the
               <strong>affected test command</strong> of each repository that
               declares one. Only a pass of the release gate releases the node
               with <code>further_work: false</code>.
@@ -294,7 +294,7 @@
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 24, "rankSpacing": 40}}}%%
 flowchart TB
     accTitle: The coder@1 execution in 12 steps
-    accDescr: Four phases. Prepare reads the revision and the verdict, prepares the workspace and opens swe@1. Start merges the base branch and plans the units from the done records. Tasks runs each pending unit, then the release gate merges the base again and runs every verification in a clean clone. A failure of the release gate routes a revision turn to the unit that owns the failed command and goes back to the unit loop. Finish pushes, submits the head commit and releases the node to Waiting.
+    accDescr: Four phases. Prepare reads the revision and the verdict, prepares the workspace and opens swe@1. Start merges the base branch and plans the units from the done records. Tasks runs each pending unit, then the release gate merges the base again and runs every verification in a scrubbed release tree. A failure of the release gate routes a revision turn to the unit that owns the failed command and goes back to the unit loop. Finish pushes, submits the head commit and releases the node to Waiting.
     claim(["Claim: node Available → Executing"]) --&gt; s1
     subgraph prepare ["Prepare"]
         s1["&lt;b&gt;1&lt;/b&gt; Read the pinned revision"] --&gt; kind{"Intent of the node?"}
@@ -311,7 +311,7 @@ flowchart TB
     subgraph tasks ["Tasks"]
         s7["&lt;b&gt;7&lt;/b&gt; Run each pending unit&lt;br/&gt;turn, gate G, verify, done record"]
         s7 --&gt; s8["&lt;b&gt;8&lt;/b&gt; Release gate:&lt;br/&gt;merge step M again"]
-        s8 --&gt; s9{"&lt;b&gt;9&lt;/b&gt; Release gate:&lt;br/&gt;every verification passes&lt;br/&gt;in a clean clone?"}
+        s8 --&gt; s9{"&lt;b&gt;9&lt;/b&gt; Release gate:&lt;br/&gt;every verification passes&lt;br/&gt;in a scrubbed release tree?"}
         s9 -- "no: route to the owner" --&gt; s7
     end
     s6 --&gt; s7
@@ -356,8 +356,8 @@ flowchart TB
                   <td>Tasks</td>
                   <td>7 to 9</td>
                   <td>
-                    Does each unit pass, and does the whole node pass in a clean
-                    clone?
+                    Does each unit pass, and does the whole node pass in a
+                    scrubbed release tree?
                   </td>
                 </tr>
                 <tr>
@@ -495,15 +495,16 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
             </li>
             <li>
               <p>
-                Step 9 clones the checkout into
-                <code>workspaces/node_01JZ8Q0K…/release/api/</code> and checks
-                out the head, detached. It runs <code>npm run build</code>,
-                <code>npm test -- healthz</code>, <code>npm run build</code> and
+                Step 9 takes a release tree of the pool into
+                <code>workspaces/node_01JZ8Q0K…/release/api/</code>, scrubs it
+                and checks out the head, detached. It runs
+                <code>npm run build</code>, <code>npm test -- healthz</code>,
+                <code>npm run build</code> and
                 <code>grep -q &#39;/healthz&#39; docs/api.md</code> there, in
                 this order: the node verification first, then the verifications
                 of each task. Every command exits with code 0. The second
                 <code>npm run build</code> copies the result of the first one
-                and writes no span. The worker removes the clone.
+                and writes no span. The worker gives the tree back to the pool.
               </p>
             </li>
             <li>
@@ -680,9 +681,9 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
               commit takes them.
             </li>
             <li>
-              The worker also removes
-              <code>workspaces/&lt;node_id&gt;/release/</code>, the clones of an
-              earlier release gate.
+              The worker also gives each tree under
+              <code>workspaces/&lt;node_id&gt;/release/</code>, which a crash
+              left, back to the pool.
             </li>
             <li>
               The worker reads the
@@ -1012,7 +1013,7 @@ flowchart TB
             result or an exit code 127. The memo replays a whole run list or
             nothing. A command with no stored result runs the whole list again.
             At the release gate, a replay needs a stored code failure at its
-            end. A release clone is fresh, so a later command and the affected
+            end. A release tree is scrubbed, so a later command and the affected
             test run need the output of each listed command. A result never
             crosses from the live checkout to the release gate. A memo hit
             writes no span.
@@ -1434,19 +1435,22 @@ flowchart TB
             G in conflict mode, as at step 5.
           </p>
           <p>
-            <strong>Step 9</strong> runs every verification of the node in clean
-            local clones:
+            <strong>Step 9</strong> runs every verification of the node in
+            scrubbed release trees:
           </p>
           <ol>
             <li>
-              For each checkout, the worker clones the live checkout into
-              <code>workspaces/&lt;node_id&gt;/release/</code>, in the layout of
-              the agent root. It runs
-              <code>git clone --local --no-checkout</code>, copies the
-              <code>origin</code> remote-tracking refs of the live checkout,
-              sets the <code>origin</code> URL to the repository address, and
-              checks out the head, detached. The clone holds no ignored file and
-              no untracked file of the live checkout.
+              For each checkout, the worker takes a release tree of the tree
+              pool into <code>workspaces/&lt;node_id&gt;/release/</code>, in the
+              layout of the agent root. It copies the <code>origin</code>
+              remote-tracking refs of the live checkout, sets the
+              <code>origin</code> URL to the repository address, fetches the
+              branches of the live checkout, and scrubs the tree to the head,
+              detached. The scrub keeps the setup output of the environment and
+              removes every other untracked and ignored file. With no free tree,
+              it runs <code>git clone --local --no-checkout</code> instead. The
+              tree holds no ignored file and no untracked file of the live
+              checkout.
             </li>
             <li>
               It runs the verifications of the node, then the verifications of
@@ -1458,8 +1462,8 @@ flowchart TB
               runs no rerun of a code failure.
             </li>
             <li>
-              It removes the clones after the run, also at a budget end or a
-              stop.
+              It gives the trees back to the pool after the run, also at a
+              budget end or a stop.
             </li>
             <li>
               When a command fails, the worker finds the
@@ -1795,7 +1799,7 @@ flowchart TB
                     <a href="#the-done-record">completed</a>
                   </td>
                   <td>
-                    Abort the agent, remove the release clones, run gate G in
+                    Abort the agent, give the release trees back, run gate G in
                     checkpoint mode, push
                   </td>
                   <td>
@@ -2057,7 +2061,7 @@ flowchart LR
                     A verification needs an ignored file of the live checkout
                   </td>
                   <td>
-                    The release gate fails in the clean clone. The owner gets a
+                    The release gate fails in the release tree. The owner gets a
                     revision turn. Two unchanged turns stop with
                     <code>no_progress</code>.
                   </td>
@@ -2243,7 +2247,7 @@ FAIL test/healthz.test.ts
           <p>
             The second task changes the route, and
             <code>npm test -- healthz</code> now fails. Each task passed its own
-            verification in the live checkout. At step 9, the clean clone runs
+            verification in the live checkout. At step 9, the release tree runs
             <code>npm run build</code>, which passes, then
             <code>npm test -- healthz</code>, which fails. The first failed
             command belongs to the first task. The worker logs
