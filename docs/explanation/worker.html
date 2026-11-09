@@ -821,9 +821,11 @@ sequenceDiagram
             The next <code>coder@1</code> execution reads the rationale of that
             assessment and the open findings of the attempt as its
             <strong>verdict</strong>. It sends both to <code>swe@1</code> in one
-            revision turn of the node, and it sends the node to review again
-            only when the head holds new work after the judged commit, when the
-            checkout still holds that commit.
+            revision turn of the node. After a
+            <code>criterion-not-met</code> assessment, it sends the node to
+            review again only when the head holds new work after the judged
+            commit. After a <code>success</code>
+            assessment, the release gate decides.
             <a href="coder-worker.html#the-verdict-unit">The verdict unit</a>
             explains the rule.
             <a href="../reference/mission/finding.html#review-rounds"
