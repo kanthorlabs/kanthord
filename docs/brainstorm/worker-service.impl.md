@@ -2232,6 +2232,7 @@ The spans of the affected run follow [tracking-service.impl.md](tracking-service
 - A give writes `.git/kanthord-pool.json` `{ "node_id", "returned_at" }` and renames the tree into the pool. The give runs no scrub. A give that meets `EXDEV` deletes the tree. The user deletes a tree whose `.git` is not a directory.
 - Above the free limit of the class, a give deletes the tree with the oldest return. The limit is 1 for `agent` and 2 for `command`, for each repository. The pool deletes an eviction leftover when it opens.
 - The next preparation of a node gives each tree under `release/` back to the `command` class, with the address of its binding. It deletes a tree of no current binding and the rest of `release/`.
+- The preparation reads `remote.origin.url` of a leftover tree from `.git/config`, with no network call. It gives the tree back only when the URL equals the current address of the binding. When the URL differs, or when the read fails, it deletes the tree.
 - One slot runs for each instance, and each instance has its own data directory, so the pool of an instance is private to it. The pool sits under `workspaces/`, so a rename stays on one file system and is atomic.
 - A footprint cleanup never takes a tree and never deletes a held tree. The `workspace` item `pool` is not selectable.
 
