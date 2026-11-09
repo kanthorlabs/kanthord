@@ -1485,31 +1485,32 @@ sequenceDiagram
                 <tr>
                   <td><code>workspaces/&lt;node_id&gt;/</code></td>
                   <td>
-                    The workspace of one <code>implement</code> node:
+                    The workspace of one node: for an
+                    <code>implement</code> node,
                     <code>checkouts/&lt;binding name&gt;/</code> for each
-                    repository binding, and <code>release/</code> for the
-                    release trees of the release gate during a run. The next
-                    execution of the node on this host reuses it. The instance
-                    removes it 7 days after its last use.
+                    repository binding, <code>release/</code> for the release
+                    trees of the release gate during a run, and
+                    <code>review/</code> for the review trees of one evaluation
+                    or <code>examine</code> execution. The next execution of the
+                    node on this host reuses it. The instance removes it 7 days
+                    after its last use.
                   </td>
                 </tr>
                 <tr>
                   <td><code>workspaces/pool/</code></td>
                   <td>
                     The tree pool: the free trees of each repository. A release
-                    gate takes a tree, scrubs it and gives the tree back to the
-                    pool. The instance keeps at most two release trees for each
-                    repository.
+                    gate or a review takes a tree, scrubs it and gives the tree
+                    back to the pool. The instance keeps at most two release
+                    trees and one agent tree for each repository.
                   </td>
                 </tr>
                 <tr>
                   <td><code>workspaces/&lt;execution_id&gt;/</code></td>
                   <td>
                     The fresh directory of one evaluation execution or one
-                    <code>examine</code> execution. It holds
-                    <code>checkouts/&lt;binding name&gt;/</code> for each
-                    checkout and <code>evidence/</code> for the placed evidence.
-                    The instance removes it at the end.
+                    <code>examine</code> execution that checks out no
+                    repository. The instance removes it at the end.
                   </td>
                 </tr>
                 <tr>

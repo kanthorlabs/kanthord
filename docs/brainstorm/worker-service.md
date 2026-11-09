@@ -648,10 +648,13 @@ The reviewer execution reads the criterion of the pinned revision, the evidence 
 A reviewer judges the assets that the evidence still holds.
 The dependency outcomes of an `examine` node are the current outcomes of its direct dependencies, and an `implement` node holds no dependency outcome.
 The reviewer of an `implement` node runs the verifications of the node and of each current task of the pinned revision, and it judges each task criterion.
-For an `implement` node, the reviewer makes a clean isolated checkout of each repository snapshot that the evidence snapshot names, under the layout rule.
+For an `implement` node, the reviewer takes a review tree from the tree pool for each repository snapshot that the evidence snapshot names, under the layout rule.
+It scrubs the tree to the tested commit and fetches the binding address to prove that the remote serves the commit.
 It uses the [Repository component](repository.md#repository-connector).
 An evidence snapshot that misses a repository binding of the pinned revision stops the reviewer execution with `operation_failed`.
-For an `examine` node, the reviewer checks out the head of the base branch of each repository binding that the node names, under the layout rule.
+For an `examine` node, the reviewer takes a review tree for each repository binding that the node names and checks out the head of its base branch, under the layout rule.
+The review trees sit under the workspace of the node, and the release gives them back to the pool.
+An evaluation that checks out no repository uses a fresh execution workspace, and the release removes it.
 An end-to-end suite lives in a repository of one of those bindings.
 The tested input names every commit, one per binding.
 An `examine` node that names no repository binding keeps the evidence-placement rule.
@@ -754,7 +757,7 @@ sequenceDiagram
     end
     rect rgb(248, 215, 218)
         R->>M: read the criterion of the pinned revision, its tasks and the evidence set
-        R->>RG: clean isolated checkout of the repository snapshot in a fresh workspace
+        R->>RG: review tree of the tree pool, scrubbed to the repository snapshot and proven against the binding address
         R->>R: run the verifications of the node and of each current task of the pinned revision
     end
     rect rgb(212, 237, 218)
