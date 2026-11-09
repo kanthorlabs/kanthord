@@ -626,6 +626,19 @@ echo "exit $?"</code></pre>
                 </tr>
                 <tr>
                   <td>
+                    The node fails, and the failure text states that the command
+                    wrote no valid report.
+                  </td>
+                  <td>
+                    The command gives no valid report on the node head, and a
+                    valid report on the base head. KanthorD then runs the
+                    command on the node head once more. The second run also
+                    gives no valid report. Change the code of the node so that
+                    the command writes a valid report in time.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
                     The work prompt holds no
                     <code>## Affected tests</code> section.
                   </td>

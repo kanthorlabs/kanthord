@@ -1674,7 +1674,12 @@ flowchart TB
                 <tr>
                   <td>No valid report</td>
                   <td>A valid report</td>
-                  <td>Verdict <code>failed</code></td>
+                  <td>
+                    Runs the command at the node head once more, and decides
+                    from the second run. No failed test gives the verdict
+                    <code>passed</code>. Failed tests follow the two rows above.
+                    Any other result gives the verdict <code>failed</code>.
+                  </td>
                 </tr>
                 <tr>
                   <td>No valid report</td>
