@@ -1702,7 +1702,7 @@ The progress rule:
 - The unchanged-turn counter `unchangedTurns` lives in the state of the execution.
 - A revision turn with `changed` false adds one. A verdict turn that leaves the verdict rule false adds one.
 - A turn with `changed` true sets the counter to zero. No other event sets it to zero.
-- At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification.
+- At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification. One exception applies: a verdict turn at the limit that leaves the verdict rule false is waived, as [The verdict unit](#the-verdict-unit) states.
 - The stop `detail` names the rule that fired and its counts, as a JSON object:
   - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_unmet` for a verdict turn that leaves the verdict rule false.
   - `count` is the counter at the stop, and `limit` is `NO_PROGRESS_LIMIT`.
@@ -1828,8 +1828,9 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - With no kept judged commit, the verdict unit has no rule, and the release gate decides.
 - `readPrior` also writes one link-updates text. The text holds the newest 20 updates, their `new` marks and the count of older updates. 20 is a constant in code.
 - The text joins the verdict after a blank line, or it is the verdict when no other verdict exists. With no other verdict, no judged commit exists, and the release gate decides.
-- While the rule fails after a verdict turn, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
-- When the coder answers a finding OPEN and makes no commit, each verdict turn counts as unchanged. The no-progress limit then pauses the node, as for a `criterion-not-met` verdict.
+- While the rule fails after a verdict turn before the last turn of the limit, the turn counts as unchanged, and the same instruction goes again. The flow logs `verdict rule checked` after each turn.
+- At the last turn of the limit, the flow logs `verdict rule waived for review` and runs the own commands of the node unit once. A pass completes the unit, sets the counter to zero and goes to the release gate. A failure stops with `no_progress` `verdict_rule_unmet`. A budget end stays `budget_end`.
+- When the coder answers a finding OPEN and makes no commit, each verdict turn counts as unchanged. At the limit, the unit goes to the release gate and the next review, bounded by `rework_limit`.
 - When the rule holds, the flow goes to the release gate, which runs the node verifications. The live checkout runs no node command.
 - A cleared assessment that is not `success` plans the node unit with its rationale as plain instruction text, with no rule. A pass completes the unit.
 - No substring of a verdict routes work to a task.
@@ -1848,7 +1849,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - The requested-changes text stops at 4 KiB.
 - The requested-changes text is the verdict text. It enters [The verdict unit](#the-verdict-unit).
 - When the read finds no current change request, an execution of attempt 2 or later reads `mission.execution.cleared_assessment.get`. A cleared assessment that is not `success` gives its rationale as plain instruction text.
-- A change request routes no task. The verdict unit sends the whole text to the agent, and the verdict rule keeps an unchanged head from the next review.
+- A change request routes no task. The verdict unit sends the whole text to the agent. The verdict rule asks for a commit until the last turn of the limit.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
 
 ## The link update read
@@ -1923,7 +1924,7 @@ Restart tests check out `origin/<base branch>` for an attempt whose claim names 
 Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
 Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`. One test for each rule of the push record asserts the start and the written record. A test asserts that a failed push writes `pending` and that the next execution starts from the unpushed head.
 Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
-Rework tests assert that a verdict with no task id still runs a verdict turn, that an unchanged verdict ends with `no_progress`, and that a base move gives no new work under the verdict rule.
+Rework tests assert that a verdict with no task id still runs a verdict turn, that an unchanged verdict with passing own commands goes to the release gate, that a failure of its own commands ends with `no_progress`, and that a base move gives no new work under the verdict rule.
 Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
 
 ### The result copy

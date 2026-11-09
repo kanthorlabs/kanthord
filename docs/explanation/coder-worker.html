@@ -1413,8 +1413,8 @@ flowchart TB
               changed a file of a checkout that holds no judged commit, and the
               worker sends the verdict instruction again. At the last turn of
               the progress limit, the worker logs
-              <code>verdict rule waived for review</code> and runs the own
-              commands of the unit, an empty list or a pending setup.
+              <code>verdict rule waived for review</code>. It then runs the own
+              commands of the unit: an empty list or a pending setup.
             </li>
             <li>
               It runs no command in the live checkout. The release gate runs the
@@ -1424,14 +1424,16 @@ flowchart TB
           <p>
             A pass of the verdict unit always counts as
             <a href="#the-done-record">completed</a>, also when it writes no new
-            done record. With the verdict rule, the second verdict turn in a row
-            with no new work in a judged checkout ends the unit. A pass of its
-            own commands completes the unit, and the release gate checks the
-            node verifications. The same head then goes back to review with the
-            new report, and <code>rework_limit</code> bounds these reviews. A
-            failure of its own commands stops the execution with
-            <code>no_progress</code> <code>verdict_rule_unmet</code>. With no
-            rule, the progress rule of any unit applies.
+            done record. With the verdict rule, a verdict turn at the last turn
+            of the progress limit with no new work in a judged checkout ends the
+            unit. The counter also holds the unchanged turns of earlier units. A
+            pass of its own commands completes the unit and sets the counter to
+            zero. The release gate then checks the node verifications. The head
+            goes back to review with the new report, and
+            <code>rework_limit</code> bounds these reviews. A failure of its own
+            commands stops the execution with <code>no_progress</code>
+            <code>verdict_rule_unmet</code>. With no rule, the progress rule of
+            any unit applies.
           </p>
           <h3 id="steps-8-and-9-the-release-gate">
             Steps 8 and 9: the release gate
@@ -2124,9 +2126,11 @@ flowchart LR
                 <tr>
                   <td>A rework whose review changes nothing</td>
                   <td>
-                    With the verdict rule, two verdict turns with no new work
-                    end the unit. The release gate checks the same head, and it
-                    returns to review with the new report.
+                    With the verdict rule, the verdict turn at the last turn of
+                    the progress limit ends the unit. The release gate checks
+                    the head, and it returns to review with the new report. A
+                    failure of its own commands stops with
+                    <code>no_progress</code>.
                   </td>
                 </tr>
                 <tr>
@@ -2417,10 +2421,10 @@ Unmet:
             holds. The node unit has no own command, so the worker runs no
             command and writes the done record of the node unit. The release
             gate then runs the four commands, as at step 9. When
-            <code>swe@1</code> brings no new work in two verdict turns in a row,
-            the worker ends the node unit with no commit. The release gate runs
-            the same four commands, and the unchanged head goes back to review
-            with the new report.
+            <code>swe@1</code> brings no new work up to the progress limit, the
+            worker ends the node unit with no commit. The release gate runs the
+            same four commands, and the unchanged head goes back to review with
+            the new report.
           </p>
           <p>
             The rationale holds up to three blocks after its text, in this
