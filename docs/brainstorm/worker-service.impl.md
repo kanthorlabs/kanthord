@@ -1663,6 +1663,8 @@ The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the 
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
+No worker agent process outlives its bash call. At the end of the call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill.
+The Workbench keeps the background processes of a bash call.
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
 
@@ -1878,6 +1880,8 @@ The runner classifies each command result. The first matching rule decides: a sp
 At the release gate and at the evaluation of an `implement` node, [the affected test run](#the-affected-test-run) follows only after every listed verification passes.
 An infrastructure failure runs once more, unless the deadline passed or the context ended. The rerun result takes the same rules, and a pass on it is a pass.
 A second infrastructure failure stops the execution with `operation_failed`, the code `worker.verification.infrastructure_failed` and a detail with the JSON of the exit code, the signal, `timed_out` and the command. `infrastructureStop` builds it. The coder and the reviewer apply these rules.
+No verification or setup process outlives its run list. After each command, the worker keeps the process group of each command that still has a member. At the end of the run list, it kills each kept group, except a group whose id is the pid of a live process.
+The setup is its own run list, so a setup cannot start a service for the verifications.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
 The reviewer reruns a code failure up to 2 times on the same commit, unless the item timed out. The item still fails. The coder runs no rerun of a code failure.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
