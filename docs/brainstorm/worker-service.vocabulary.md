@@ -398,9 +398,9 @@ A workspace is the host-local working directory of one execution.
 The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the server, keyed by the node and its repository binding.
 Execution 3 of the same node under the same repository binding reuses it.
 The Worker Service keeps it until a human cleanup.
-The reviewer execution of the node uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
-The steps execution of the `examine` node "Account recovery" uses a fresh workspace with the directories `api-repo` and `web-repo`, one base-branch checkout for each binding.
-An `examine` node that names no repository binding uses a workspace with no checkout, and its agent writes the report there.
+The reviewer execution of the node takes a review tree from the tree pool, under the workspace of the node. It scrubs the tree to the repository snapshot and fetches the binding address to prove the commit. At the release, the Worker Service gives the tree back to the pool.
+The steps execution of the `examine` node "Account recovery" takes one review tree for each binding, in the directories `api-repo` and `web-repo`, each at the head of its base branch.
+An `examine` node that names no repository binding uses a fresh execution workspace with no checkout, and its agent writes the report there. The Worker Service removes it at the release.
 
 ## node branch
 
