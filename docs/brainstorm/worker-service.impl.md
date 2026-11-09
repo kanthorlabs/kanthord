@@ -2210,6 +2210,8 @@ The spans of the affected run follow [tracking-service.impl.md](tracking-service
 - The rule `node_closed` proposes the workspace of a node that is `Completed`, `Discarded` or retired, with no idle wait. It also proposes each execution workspace that a crash left.
 - `removeWorkspace` refuses a held key with the reason `live`.
 - The workspace stays on the disk of the instance because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
+- The engine repository sets `enableGlobalVirtualStore: true` in `pnpm-workspace.yaml`. `node_modules/` of each checkout then holds links into the pnpm store under `XDG_DATA_HOME` of the instance. Each instance store holds the store links once, and a second checkout adds no store link entry.
+- The trees of one instance share the package files of that store. A write of an agent into a package file reaches every other tree of the instance.
 
 ## Action performer
 
