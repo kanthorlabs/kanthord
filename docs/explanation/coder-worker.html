@@ -1599,8 +1599,8 @@ flowchart TB
                   <td><code>time_limit_s</code> ended the command</td>
                   <td>Timeout</td>
                   <td>
-                    Stops with <code>environment_failed</code> and the code
-                    <code>affected_timeout</code>, with no base check
+                    Verdict <code>failed</code> with the time limit, the commit
+                    and the output tail, with no base check
                   </td>
                 </tr>
                 <tr>
@@ -1674,7 +1674,13 @@ flowchart TB
                 <tr>
                   <td>No valid report</td>
                   <td>A valid report</td>
-                  <td>Verdict <code>failed</code></td>
+                  <td>
+                    Runs the command at the node head once more, and decides
+                    from the second run. A valid report with no failed test
+                    gives the verdict
+                    <code>passed</code>. Failed tests follow the two rows above.
+                    Any other result gives the verdict <code>failed</code>.
+                  </td>
                 </tr>
                 <tr>
                   <td>No valid report</td>

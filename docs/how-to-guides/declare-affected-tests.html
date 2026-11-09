@@ -182,11 +182,13 @@
             run.
           </p>
           <p>
-            After a failure at the node head, KanthorD runs the command of the
+            After failed tests or no valid report at the node head, KanthorD
+            runs a base check. The base check runs the command of the
             base-branch declaration on the base head, with the same changes
-            file. A path of the changes file can thus be absent from that
-            checkout, for example an added file. The command must accept such a
-            path.
+            file. A time limit at the first node head run gives the verdict
+            <code>failed</code> with no base check. A path of the changes file
+            can thus be absent from that checkout, for example an added file.
+            The command must accept such a path.
           </p>
           <h3 id="the-changes-file">The changes file</h3>
           <p>
@@ -607,10 +609,9 @@ echo "exit $?"</code></pre>
                     the code <code>affected_timeout</code>.
                   </td>
                   <td>
-                    The command reaches <code>time_limit_s</code> on the node
-                    head. Or the command gives no valid report on the node head,
-                    and reaches <code>time_limit_s</code> on the base head.
-                    Raise <code>time_limit_s</code>, or select fewer tests.
+                    The command gives no valid report on the node head, and
+                    reaches <code>time_limit_s</code> on the base head. Raise
+                    <code>time_limit_s</code>, or select fewer tests.
                   </td>
                 </tr>
                 <tr>
@@ -622,6 +623,34 @@ echo "exit $?"</code></pre>
                     The command gives no valid report on the node head, and
                     exits with code 127 on the base head. Add the tool to the
                     environment of the repository binding.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The node fails, and the failure text states that the
+                    affected tests reached their time limit.
+                  </td>
+                  <td>
+                    The command reaches <code>time_limit_s</code> on the node
+                    head. After a first run with no valid report, the time limit
+                    can also end the second run. Raise
+                    <code>time_limit_s</code>, or select fewer tests.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    The node fails, and the failure text states that the command
+                    wrote no valid report, or that the command was not found.
+                  </td>
+                  <td>
+                    The command gives no valid report on the node head, and a
+                    valid report on the base head. KanthorD then runs the
+                    command on the node head once more. The second run also
+                    gives no valid report. Change the code of the node so that
+                    the command writes a valid report in time. When the command
+                    exits with code 127 on the node head, the tool is absent at
+                    the node head. Add the tool to the environment of the
+                    repository binding, or restore it in the node.
                   </td>
                 </tr>
                 <tr>
