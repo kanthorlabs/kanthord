@@ -595,10 +595,13 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
           <p>
             A verdict also holds one <strong>judged commit</strong> for each
             repository binding that the review saw. For failed checks, it is the
-            head commit of each pull request with a failed check. For an
-            assessment, it is the commit of each <code>repository</code> address
-            in <code>tested_input</code>. For change requests, it is the
-            <code>commit_id</code> of the latest change request of each binding.
+            head commit of each pull request with a failed check. For a
+            <code>criterion-not-met</code> assessment, it is the commit of each
+            <code>repository</code> address in <code>tested_input</code>. A
+            rework of a <code>success</code> assessment gives no judged commit.
+            Its verdict unit runs with no rule, and the release gate decides.
+            For change requests, it is the <code>commit_id</code> of the latest
+            change request of each binding.
           </p>
           <p>
             When no verdict exists, the worker reads the
@@ -892,10 +895,12 @@ Kanthord-Done: task_01JZ8Q1A… 5f0c9a3e…</code></pre>
           <p>
             Only a binding with a judged commit takes part in the rule. Change
             requests give a judged commit only to a binding that holds a change
-            request. An assessment gives one only to a binding with a
-            <code>repository</code> address in <code>tested_input</code>. A
-            binding with no judged commit is ignored by the rule, so a verdict
-            turn that changes only that binding counts as unchanged.
+            request. A <code>criterion-not-met</code> assessment gives one only
+            to a binding with a <code>repository</code> address in
+            <code>tested_input</code>. A <code>success</code> assessment gives
+            none, so its verdict unit takes row 3. A binding with no judged
+            commit is ignored by the rule, so a verdict turn that changes only
+            that binding counts as unchanged.
           </p>
           <p>
             The <strong>verdict rule</strong> holds when at least one checkout
