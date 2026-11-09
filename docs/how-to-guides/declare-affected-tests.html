@@ -183,10 +183,12 @@
           </p>
           <p>
             After failed tests or no valid report at the node head, KanthorD
-            runs the command of the base-branch declaration on the base head,
-            with the same changes file. A path of the changes file can thus be
-            absent from that checkout, for example an added file. The command
-            must accept such a path.
+            runs a base check. The base check runs the command of the
+            base-branch declaration on the base head, with the same changes
+            file. A time limit at the first node head run gives the verdict
+            <code>failed</code> with no base check. A path of the changes file
+            can thus be absent from that checkout, for example an added file.
+            The command must accept such a path.
           </p>
           <h3 id="the-changes-file">The changes file</h3>
           <p>
