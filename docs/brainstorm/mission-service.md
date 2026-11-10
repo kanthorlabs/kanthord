@@ -1090,6 +1090,10 @@ An `other` result moves the node to `Blocked`.
 A `conflict` result moves the node to `Available` and leaves the request unresolved.
 A `none` result makes no change.
 A failed deferred check makes no change.
+While the project is paused, the deferred check makes no call and spends no round.
+A refusal of the service merge authorization counts as a failed call, and the next round tries again.
+A node attempt runs one deferred check at a time.
+A human check of a node starts the deferred check again for its open attempt and replaces the earlier one.
 
 A human requests the check of a node.
 The check calls the Intake check for each request evidence of the open attempt that holds no end state.
