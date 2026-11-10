@@ -528,11 +528,12 @@ flowchart LR
                 ><code>kanthord mission node check</code></a
               >. An Intake inbound of the repository, when one is configured,
               starts it on an event of the git host. The Mission Service also
-              checks the pull request at the reviewer release. While a required
-              check is pending or a check call fails, it checks again every 60
-              seconds, at most 60 rounds. With the landing
-              <code>kanthord</code>, it merges the pull request when the
-              required checks pass; see
+              checks the pull request at the reviewer release and after each
+              <code>node check</code>. While a required check is pending or a
+              check call fails, it checks again every 60 seconds, at most 60
+              rounds. A round of a paused project waits and spends no round.
+              With the landing <code>kanthord</code>, it merges the pull request
+              when the required checks pass; see
               <a href="../reference/project/binding.html#the-deferred-check"
                 >the deferred check</a
               >. A merge moves the node to <code>External.Success</code>, and

@@ -1012,9 +1012,17 @@
               A service merge that answers <code>confirmed_failure</code>,
               <code>retryable_refusal</code> or
               <code>unknown_outcome</code> counts as a failed call. The next
-              round then runs after 60 seconds. A
-              <code>final_refusal</code> answer or a merge call that throws
-              counts as no failed call and no merge.
+              round then runs after 60 seconds. GitHub answers 405 while it
+              computes the mergeability after another landing, and the Intake
+              Service then answers <code>retryable_refusal</code>. A refusal of
+              the service merge authorization also counts as a failed call. A
+              <code>final_refusal</code> answer or another merge call that
+              throws counts as no failed call and no merge.
+            </li>
+            <li>
+              While the project is paused, a round makes no check call and no
+              merge call. The same round runs again after 60 seconds, so the
+              pause spends none of the 60 rounds.
             </li>
             <li>
               The loop stops after a round with no
@@ -1023,10 +1031,18 @@
               <code>External.Requested</code>, and when the server stops.
             </li>
             <li>
-              After the loop stops, a human merges the pull request. Then run
+              After the loop stops, run
               <a href="../mission/node-control.html#check"
                 ><code>mission node check</code></a
-              >, or rely on an Intake inbound of the repository.
+              >. It checks the requests, then starts the deferred check again
+              for the open attempt of the node. A human can also merge the pull
+              request, then run <code>mission node check</code> or rely on an
+              Intake inbound of the repository.
+            </li>
+            <li>
+              A node attempt runs one deferred check at a time. A new start
+              replaces the earlier one, and the earlier one sends no further
+              merge.
             </li>
           </ul>
           <p>
@@ -1060,7 +1076,9 @@
             with <code>service_merge/</code> fails with
             <code>400 gateway.request.validation_failed</code>. Each round sends
             a new request key. A failed service merge logs the warning
-            <code>Deferred merge failed.</code>.
+            <code>Deferred merge failed.</code> with the result class, the code
+            and the message. For a GitHub refusal, the message starts with the
+            HTTP status.
           </p>
           <p>
             At each server start, the Mission Service starts the deferred check

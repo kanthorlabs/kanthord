@@ -353,12 +353,14 @@
               request <code>unresolved</code>.
             </li>
             <li>
-              <code>node check</code> requests no merge. The
+              <code>node check</code> requests no merge itself. After the check,
+              it starts the
               <a href="../project/binding.html#the-deferred-check"
                 >deferred check</a
               >
-              of the Mission Service merges a <code>kanthord</code> landing pull
-              request.
+              again for the open attempt. The deferred check merges a
+              <code>kanthord</code> landing pull request. It replaces a deferred
+              check that still runs for the attempt.
             </li>
             <li>
               A <code>branch_push</code> request of a human landing answers
