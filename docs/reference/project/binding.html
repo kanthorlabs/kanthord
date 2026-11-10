@@ -1012,8 +1012,9 @@
               A service merge that answers <code>confirmed_failure</code>,
               <code>retryable_refusal</code> or
               <code>unknown_outcome</code> counts as a failed call. The next
-              round then runs after 60 seconds. GitHub answers 405 while it
-              computes the mergeability after another landing, and the Intake
+              round then runs after 60 seconds. GitHub answers 405 when it
+              cannot merge the pull request at that time, for example while it
+              computes the mergeability after another landing. The Intake
               Service then answers <code>retryable_refusal</code>. A refusal of
               the service merge authorization also counts as a failed call. A
               <code>final_refusal</code> answer or another merge call that
@@ -1026,8 +1027,8 @@
             </li>
             <li>
               The loop stops after a round with no
-              <code>checks_pending</code> answer, no failed call and no merge.
-              It also stops after round 60, when the node leaves
+              <code>checks_pending</code> answer, no failed call, no merge and
+              no pause. It also stops after round 60, when the node leaves
               <code>External.Requested</code>, and when the server stops.
             </li>
             <li>
@@ -1077,8 +1078,8 @@
             <code>400 gateway.request.validation_failed</code>. Each round sends
             a new request key. A failed service merge logs the warning
             <code>Deferred merge failed.</code> with the result class, the code
-            and the message. For a GitHub refusal, the message starts with the
-            HTTP status.
+            and the message. When GitHub answers the merge call with an HTTP
+            status, the message starts with that status.
           </p>
           <p>
             At each server start, the Mission Service starts the deferred check
