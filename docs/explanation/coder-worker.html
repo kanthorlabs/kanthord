@@ -1011,8 +1011,11 @@ flowchart TB
             </li>
           </ol>
           <p>
-            The counter belongs to the execution, not to one unit. No event
-            other than a changed turn sets it to zero.
+            The counter belongs to the execution. The start of each planned unit
+            sets it to zero, and the worker sets it to zero once before the
+            first release gate. No other event sets it to zero. A pass of a
+            routed unit keeps the counter, so the unchanged turns of all routed
+            units add up.
           </p>
           <p>
             The execution keeps a <strong>verification memo</strong>. Inside one
@@ -1426,14 +1429,12 @@ flowchart TB
             <a href="#the-done-record">completed</a>, also when it writes no new
             done record. With the verdict rule, the last verdict turn of the
             progress limit ends the unit when it brings no new work in a judged
-            checkout. The counter also holds the unchanged turns of earlier
-            units. A pass of its own commands completes the unit and sets the
-            counter to zero. The release gate then checks the node
-            verifications. The head goes back to review with the new report, and
-            <code>rework_limit</code> bounds these reviews. A failure of its own
-            commands stops the execution with <code>no_progress</code>
-            <code>verdict_rule_unmet</code>. With no rule, the progress rule of
-            any unit applies.
+            checkout. A pass of its own commands completes the unit. The release
+            gate then checks the node verifications. The head goes back to
+            review with the new report, and <code>rework_limit</code> bounds
+            these reviews. A failure of its own commands stops the execution
+            with <code>no_progress</code> <code>verdict_rule_unmet</code>. With
+            no rule, the progress rule of any unit applies.
           </p>
           <h3 id="steps-8-and-9-the-release-gate">
             Steps 8 and 9: the release gate
@@ -1511,8 +1512,9 @@ flowchart TB
             A failure of the release gate never resets the head. The live
             checkout stays the place of the unit loop, so installed dependencies
             persist between turns. The unchanged-turn counter also covers the
-            routed revision turns. Two routed revision turns in a row that
-            change no file therefore stop with <code>no_progress</code>.
+            routed revision turns. Two routed revision turns that change no
+            file, with no changed turn between them, therefore stop with
+            <code>no_progress</code>, also when a unit passes between them.
           </p>
           <h3 id="the-affected-test-run">The affected test run</h3>
           <p>
