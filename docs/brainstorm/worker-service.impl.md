@@ -1892,11 +1892,11 @@ When a rerun passes, the rationale states that the test is flaky. The rationale 
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
 The review bundle also holds `changed_files`: every file that the change adds, modifies or deletes against `origin/<base branch>`, sorted. `modifiedFiles` reads it with `git diff --name-only -z --no-renames <base>...HEAD --`. Each path has the same prefix as an `added_files` path. An `examine` node has none.
-For a [review round](mission-service.md#rework-limit) with a review base, the review bundle holds the round files below, and it adds `round` (`{ number, review_base }`), `patch_paths` and `empty_patches`.
+The review bundle of every [review round](mission-service.md#rework-limit) holds `patch_paths` and `empty_patches`. A round with a review base also holds the round files below and `round` (`{ number, review_base }`).
 `patch_paths` lists the path of each patch file, relative to the agent root. `empty_patches` lists the binding name of each binding with an empty patch.
 `B` is the review-base commit of a binding. The worker checks that `git rev-list --first-parent HEAD` contains `B`.
 When the binding has no review-base commit, or `B` is not on that first-parent chain, the binding uses the full change against `origin/<base branch>`. The worker logs `review base off the node history`.
-In a round with a review base, such a fallback binding writes the output of `git diff --no-color origin/<base branch>...HEAD --` as its round patch. The patch goes into `patch_paths` and into the patch evidence. An empty full change puts the binding in `empty_patches`.
+Such a fallback binding writes the output of `git diff --no-color origin/<base branch>...HEAD --` as its round patch. In a round with no review base, for example the first round, every binding writes this full change patch. The patch goes into `patch_paths` and into the patch evidence. An empty full change puts the binding in `empty_patches`.
 When `B` equals `HEAD`, the patch of the binding is empty. The bundle lists the binding in `empty_patches`, and the reviewer judges no change of that binding.
 The patch is the output of `git log --first-parent --diff-merges=remerge --patch --no-color --format=fuller B..HEAD --`. A merge commit shows only its conflict resolution, so a base merge adds nothing.
 `changed_files` of the round is the sorted union of `git log --first-parent --diff-merges=remerge --name-only -z --no-renames --format= B..HEAD --`. `added_files` of the round is the same read with `--diff-filter=A`, minus each path that does not exist at `HEAD`.
@@ -2406,8 +2406,9 @@ The tool of the action performer takes the execution identity only.
   - the violation text of gate G, with `operation_failed` and the code `worker.turn.*`;
   - the JSON result of the command, with `operation_failed` and the code `worker.verification.infrastructure_failed`;
   - the redacted git stderr of a failed gate G commit, with `operation_failed` and the code `worker.git.commit_failed`;
+  - the redacted git cause of a failed git operation of the repository connector, with `operation_failed` and the code `repository.connector.git_failed`;
   - the JSON facts of the progress rule, with `no_progress`. The JSON holds no text, and the worker does not cut it.
-- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed`, which gives the redacted git stderr as `detail`. `agent.prompt.source_invalid` gives `details.reason` as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
+- A `CodedError` gives its code and no `detail`, except `worker.git.commit_failed` and `repository.connector.git_failed`. Each gives the redacted text of its innermost uncoded cause as `detail`. `agent.prompt.source_invalid` gives `details.reason` as `detail`. `budget_end` and `worker.merge.markers_left` carry no `detail`.
 - A revision turn or a verdict turn that changes no file twice in a row stops the execution with `no_progress`, under the progress rule of [The coder flow](#the-coder-flow). The second unchanged turn runs no verification.
 - A `no_progress` stop counts toward the [consecutive failure limit](mission-service.md#consecutive-failure-limit). A `provider_failed` stop with `bad_request` or `unauthorized` counts too.
 - A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance). It is neutral for the failure limit.

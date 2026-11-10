@@ -466,7 +466,7 @@ The release gate merges `origin/<base_branch>` again in every checkout and runs 
 A failed verification of the release gate sends a revision turn to the unit that owns the command, and the release gate runs again after that unit passes.
 After every verification passes, the release gate of an `implement` node runs the affected test command of each repository that declares one. The verdict `failed` of that run sends a revision turn to the node unit.
 The release gate is the only path to a release with no further work.
-The execution pushes the node branch of every checkout before every release, and it submits the evidence only after every push succeeds.
+The execution pushes the node branch of every checkout before every release. Before the push of a release with no further work, it submits the coder report. It submits the head commit evidence only after every push succeeds.
 Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding.
 When the resource budget ends, the agent stops and the execution performs cleanup.
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
@@ -666,6 +666,7 @@ For an `implement` node whose evidence names no repository snapshot, the reviewe
 Under that rule, the reviewer places the produced evidence of the attempt in the workspace, which is the agent root.
 For every node whose evaluation checks out repositories, the reviewer places the produced evidence in the `evidence` directory of the workspace, outside the agent root.
 Each checkout stays an exact, clean copy, and each asset path in the review bundle is relative to the agent root.
+The evaluation prompt tells the reviewer to read only the checkouts in its working directory and the paths that the review bundle lists.
 The reviewer execution code, never the agent, runs the verifications of the pinned revision from the agent root.
 The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
 The assessment names that evidence in its evidence set.
@@ -673,7 +674,7 @@ A failed or unrun verification causes the reviewer execution to write an assessm
 Its required rationale names that verification.
 Only after every verification passes does the agent judge the evidence against the criterion.
 On an `implement` node, the evaluation runs the affected test command of each repository that declares one before the judgement. The verdict `failed` of that run gives `criterion-not-met` with no judgement. [worker-service.impl.md](worker-service.impl.md#the-affected-test-run) holds the rules.
-A later [review round](mission-service.md#rework-limit) reviews only the patch of each binding since its review base.
+An `implement` review round with no review base and with a repository snapshot gets the full change patch of each binding against its base branch. A later [review round](mission-service.md#rework-limit) reviews only the patch of each binding since its review base. In a round with a review base, the reviewer raises a new finding only on a changed line. The same rule applies in a round without a review base whose `patch_paths` lists a patch. An OPEN blocker of the coder report is exempt.
 The reviewer lists each open finding that the change fixes in `fixed_finding_ids`, and a finding that it does not list stays open.
 The reviewer execution stores the patch of each binding with a nonempty patch as one evidence with the subject `Review round patch`.
 For an `examine` node, the judgement can hold one fix-node proposal for each defect inside a direct `implement` dependency.
