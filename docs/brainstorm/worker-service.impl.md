@@ -778,6 +778,11 @@ The heartbeat and the renewal:
 - `bindingsChanged(projectId)` bumps the `binding_version` of each instance that a binding of the project lists in its previous or its latest revision.
 - The process takes a new worker token and calls `connect` again 1800 s after each answer, on the local monotonic clock. The connection answer carries fresh client tokens, so an execution longer than one hour keeps its bearer.
 - The dashboard shows an instance as connected while its last heartbeat is inside `INSTANCE_CONNECTED_WINDOW`, 60 s.
+- The server logs one info record `worker.instance.connected` when an instance opens a connection, and when a lapsed connection sends a heartbeat or a connect again.
+- The stop order sweep runs every 15 s. It logs one info record `worker.instance.disconnected` for each connection whose last heartbeat left `INSTANCE_CONNECTED_WINDOW`, and marks the connection lapsed.
+- Each record holds `instance`, `connection_name` and `last_heartbeat_at`. A connection that an archive drops logs no disconnected record. A new connection replaces the current connection and logs no disconnected record for it.
+- After a server restart, a Gateway request that re-creates the connection logs `connection_name` null.
+- When the server cannot write a disconnected record, it logs `worker.instance.connection_log_failed` and continues.
 - An increment of `gateway.auth.version` fails every token with 401. The process takes a new worker token and connects with its `connection_id`. When a `client_secret` changed, it exits 1 with `worker.instance.secret_changed`. The restart resumes each registration and each `running` execution with a fresh handover.
 - The renewal reads only the monotonic clock, so a difference of the two clocks stops nothing.
 
@@ -1701,7 +1706,7 @@ The progress rule:
 - `changed` from gate G is the only measure of progress. A worker commit alone is not progress.
 - The unchanged-turn counter `unchangedTurns` lives in the state of the execution.
 - A revision turn with `changed` false adds one. A verdict turn that leaves the verdict rule false adds one.
-- A turn with `changed` true sets the counter to zero. A pass of a waived verdict unit also sets it to zero. No other event sets it to zero.
+- A turn with `changed` true sets the counter to zero. The start of each planned unit sets it to zero. The worker sets it to zero once, before the first release gate. No other event sets it to zero, and a pass of a routed unit keeps it.
 - At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification. One exception applies: a verdict turn at the limit that leaves the verdict rule false is waived, as [The verdict unit](#the-verdict-unit) states.
 - The stop `detail` names the rule that fired and its counts, as a JSON object:
   - `rule` is `unchanged_revision` for a revision turn with `changed` false, or `verdict_rule_unmet` for a verdict turn that leaves the verdict rule false.
@@ -1829,7 +1834,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - `readPrior` also writes one link-updates text. The text holds the newest 20 updates, their `new` marks and the count of older updates. 20 is a constant in code.
 - The text joins the verdict after a blank line, or it is the verdict when no other verdict exists. With no other verdict, no judged commit exists, and the release gate decides.
 - Before the last turn of the limit, a verdict turn that leaves the rule false counts as unchanged. The same instruction then goes again. The flow logs `verdict rule checked` after each turn.
-- At the last turn of the limit, the flow logs `verdict rule waived for review` and runs the own commands of the node unit once. A pass completes the unit, sets the counter to zero and goes to the release gate. A failure stops with `no_progress` `verdict_rule_unmet`. A budget end stays `budget_end`.
+- At the last turn of the limit, the flow logs `verdict rule waived for review` and runs the own commands of the node unit once. A pass completes the unit and goes to the release gate. A failure stops with `no_progress` `verdict_rule_unmet`. A budget end stays `budget_end`.
 - When the coder answers a finding OPEN and makes no commit, each verdict turn before the limit counts as unchanged. At the limit, a pass of the own commands sends the unit to the release gate, then to the next review. `rework_limit` bounds these reviews.
 - When the rule holds, the flow goes to the release gate, which runs the node verifications. The live checkout runs no node command.
 - A cleared assessment that is not `success` plans the node unit with its rationale as plain instruction text, with no rule. A pass completes the unit.
