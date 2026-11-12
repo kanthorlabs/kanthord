@@ -17,6 +17,8 @@ Ulrich ruled on 2026-10-23 that these items block all other work. KanthorD built
 
 Every item below waits for the completion of the design set. Ulrich moved them here on 2026-09-20.
 
+- EXCEPTION 2026-11-13 by Ulrich. The Yumi Workbench feature starts during Phase 2. Its scope is L0 to L10, Q1, A1, A2, F1, V1 and V2, with L9 dropped. Phase 3 work still starts only when Ulrich closes Phase 2. Open Phase 2 items keep their owners.
+
 ### Architecture
 
 - [ ] RULED 2026-10-07 by Ulrich. Rename the ten camelCase operation ids to the underscore form of `architecture.impl.md` section The operation ids: `gateway.openapi_file`, `mission.execution.cleared_outcome.get`, `mission.execution.pinned_revision.get`, `mission.external_action.get`, `mission.external_action.list`, `project.agent_configuration.get`, `project.agent_configuration.list`, `project.binding_revision.list`, `project.binding_set.get` and `project.binding_set.write`. Update the engine contracts, `engine/docs/cli/`, `docs/reference/gateway/openapi.html`, the hand-written `apps` wire types in `apps/src/api/types.ts`, and regenerate `docs/reference/workbench/tools.html`. Run it after the prompt composer implementation, which edits the same engine tree.
