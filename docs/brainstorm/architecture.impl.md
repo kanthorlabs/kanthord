@@ -1269,10 +1269,7 @@ The rules of the credential sections follow.
 
 - `/workers` lists the worker catalog. Each card links to its worker page and shows the count of live registrations of the worker.
 - The dashboard reads the expected instance count of a worker binding as `worker_instances.length`, and as `instance_count` for a binding of an external harness. A worker card counts that value.
-- Home lists the waiting jobs of one node state, intent and tag set that no live registration takes in the tab Fix setup with the cause `No taker`. When a worker binding matches them, the text names the binding and its worker and ends with the situation of the binding. The situation reads no placement of a binding:
-  - A binding of a hosted worker with `worker_instances: []`: "lists no instance. Add an instance to the binding on the Bindings tab."
-  - A binding of a hosted worker that lists instances: "has no live registration of a listed instance. Open the worker page to check its instances."
-  - A binding of an external harness: "has no live registration. Start its worker program."
+- Home lists the waiting jobs of one node state, intent and tag set that no live registration takes. The item sits in the tab Fix setup with the cause `No taker`. Its act `Open bindings` opens the Bindings tab of the project.
 - The worker page shows these sections, top to bottom:
   1. The header: the worker name, the host badge, the declared node states, the declared intents and the resource budget.
   2. Instances, for a hosted worker only. A row shows `<name> (v<revision>)`, the placement badge `server`, `container` or `worker`, `Executing <project> · <node>` or `Idle`, and the binding count. A `worker` row also shows the short fingerprint and `Connected · <connection_name>` or `Not connected`, and a holder-mismatch badge. The badge shows when a listing binding lacks a live current copy of the copy holder of that instance. A server instance that no binding lists shows "Runs with no binding. Archive it to stop it." The section holds `Add instance`. The empty state reads "No instances. Add one to give this worker capacity."
@@ -1619,8 +1616,7 @@ The prompt block:
 - An execution row of the Attempts tab offers `Trace`. The row shows turns, tokens, `Est. cost` and errors from that list. A trace that the list does not hold shows `Trace expired`.
 - An execution row of the Attempts tab shows a `Badge` with the category label and the subcategory of the cause. An `unattributed` cause shows `Unattributed` and the first suspect.
 - A registration row of the instance page with a live execution offers `Trace`.
-- The paused detail of a Home item with an execution offers `Last trace` for the newest execution.
-- The paused detail reads that trace with `tracking.trace.list` and `execution_id`, and shows its cause line beside `Last trace`. A failed read shows no cause line and keeps the link.
+- A paused Home card with an execution offers `Last trace` for the newest execution.
 - The project page header offers `Traces`. It opens `/traces?project_id=<project id>`.
 - The worker page offers `Traces`. It opens `/traces?worker_name=<worker name>`. The agent page offers `Traces`. It opens `/traces?agent_name=<agent name>`.
 - The Workbench pages hold no trace link, because a workbench session is no execution.
@@ -1739,8 +1735,8 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The text of the bar is a polite live region, so a screen reader hears each change of the step.
 - When every state becomes `none` or `ready` while the page is open, the bar shows `Ready` for 10 seconds and then hides. A page that opens with every state `none` or `ready` shows no bar.
 - Below `md`, the bar keeps one row: the badge, the binding name and the step line, which truncates. `Details` becomes an icon button with the label `Details`. The progress takes a thin line below the row. No content scrolls sideways.
-- Home lists each failed environment in the tab Fix setup with the cause "Environment failed". The text reads "<binding> of <project> failed: <class>. Workers claim no node of it." Its action `Open project` opens the project page.
-- Home also lists each `pending` environment whose `reason_started_at` is more than 10 minutes old (`PENDING_FIX_AFTER_MS` in `apps/src/lib/fix-attention.ts`). The cause is "Environment waiting". The text reads "<binding> of <project> waits: <reason> Workers claim no node of it. The server reads it again each minute." The item shows the age of `reason_started_at`. Its action `Open project` opens the project page. The retries of the Onboarding component continue.
+- Home lists each failed environment in the tab Fix setup with the cause "Environment failed". Its act `Open project` opens the project page.
+- Home also lists each `pending` environment whose `reason_started_at` is more than 10 minutes old (`PENDING_FIX_AFTER_MS` in `apps/src/lib/fix-attention.ts`). The item sits in the tab Fix setup with the cause "Environment waiting". The card shows the age of `reason_started_at`. Its act `Open project` opens the project page. The retries of the Onboarding component continue.
 
 ### The Home page
 
@@ -1771,11 +1767,12 @@ The rules of the board model follow.
 - The held nodes of an item are its nodes plus their transitive dependents that are not terminal. `Completed` and `Discarded` are terminal.
 - A paused item is gated when its newest execution stops with `provider_failed` and code `unauthorized`. A `credential_refused` item must also name a credential of that execution.
 - The need of a gated item reads "Rotate <credential> in Fix setup". The short need reads "Rotate <credential>".
-- `rankBoardItems` orders the items in this way: gated last, more held nodes first, the oldest `at` first with null last, then the subject, then the id.
+- `rankBoardItems` puts gated items last and items with more held nodes first. The oldest `at` follows, with null last. The subject and the id close the order.
 - `rankBoardItems` puts the inbox items after every other item. Among inbox items, the reason comes first: linked, review requested, assigned, direct, mentioned, then participating. The held nodes, `at` and id follow.
+- The board reads open Inbox threads in pages of 100, until `next_cursor` is null. The read stops with an error after 1000 pages or on a repeated cursor.
 - The held text reads "No node waits", "1 node waits" or "<n> nodes wait".
 - The workforce fact under the summary reads "<r> executions run · <w> jobs wait", with "1 execution runs" and "1 job waits".
-- Each cooling fact is one muted line under the summary. It reads "<agent> in <binding>[ of <project>]: every model cools down until <time>." The fact comes from `cooling` of the worker binding agent view.
+- Each cooling fact is one muted line under the summary. It reads "<agent> in <binding> of <project>: every model cools down until <time>." The fact comes from `cooling` of the worker binding agent view.
 
 The deck rules follow.
 
@@ -1789,7 +1786,7 @@ The deck rules follow.
 - The last sentence of the summary shows only when Inbox threads wait. The subject is a link that moves the cursor to #1.
 - With no item, the summary reads "No decision waits for you." With a read fault, it reads "No act found. Some records could not be read."
 - The workforce fact and the cooling lines follow the summary.
-- Primary: the card at the cursor. It holds the rank pill "#k", the tab label, the project pills, "Waiting <age> · since <hh:mm>" and "<n> nodes wait on this".
+- Primary: the card at the cursor. It holds the rank pill "#k", the tab label and the project pills. It also holds "Waiting <age> · since <hh:mm>". It holds "<n> nodes wait on this" when one node or more waits.
 - The primary card also holds the title, the cause, the lead act and More. A tool approval card adds the "Change asked" rows.
 - An Inbox card adds the message as plain text. It never renders Markdown or HTML, because an untrusted actor can write the text. A card of an untrusted actor adds the label "not trusted".
 - The "Change asked" rows hold the operation. They add one "<field> becomes" row for each input field of the call that waits, from the session read.
@@ -1800,7 +1797,7 @@ The deck rules follow.
 - A touch swipe of at least 40 px on the primary card moves the cursor at 390 px. A swipe never runs an act.
 - Cursor: it is a client-only id. A reload resets it to #1. The engine holds no cursor field, and no setting stores it.
 - A new item never replaces the primary.
-- Count line: it reads "<k> of <N> waiting · <acts> · <nodes>", plus " · <i> inbox" when Inbox threads wait. It holds the button "Expand (<N>)".
+- Count line: it reads "<k> of <N> waiting · <acts> · <nodes>". It holds the button "Expand (<N>)".
 - Inline list: the list opens directly under the count line. It holds a search on subject, cause, author and project, and tab filter chips.
 - Each row of the inline list holds a rank pill. The list shows 50 rows per page, with "Show 50 more".
 - A row click moves the cursor and collapses the list. "Collapse ▴" or Esc closes the list. The list opens no side sheet. No row holds an act.
@@ -1809,8 +1806,8 @@ The deck rules follow.
 - No project filter exists. The deck covers every project.
 - The deck holds the refresh while an act dialog is open.
 - Exit after an act: the card slides out in 220 ms, and the next card takes the cursor place. A muted line reads "Done: <subject> · <n> items wait".
-- A successful Approve, Reject, Rotate or Mark done shows a success toast. The exit adds no Yumi line. Under reduced motion, no card moves.
-- Settled elsewhere: the card shows "The selected item no longer waits." for 1.5 s. Then the same exit follows.
+- A successful Approve, Reject, Rotate, Mark done, Snooze, Remove dependency or Run onboarding again shows a success toast. Acknowledge on the footprint alert also shows one. The exit adds no Yumi line. Under reduced motion, no card moves.
+- Settled elsewhere: the item leaves with no act of this client, or after the client cancels the act dialog. The card then shows "The selected item no longer waits." for 1.5 s. Then the same exit follows.
 - Queue line: the pending approval of the open Home conversation renders in the stream as one line. It reads "<subject> is #k in your queue."
 - The "#k" link of the queue line moves the cursor.
 - Yumi off: the deck and every board act work. Ask Yumi leaves every card, and `environment_failed` leads with "Open project".
@@ -1819,8 +1816,8 @@ The deck rules follow.
 The act rules follow.
 
 - Each card shows the lead act and `More` at every width. `More` opens a bottom sheet with the other acts and Discard last.
-- The lead act is the first act that is not gated and not Discard. With no such act, the lead act is the first act.
-- Discard opens an `AlertDialog`.
+- The lead act is the first act that is not gated and not Discard. "Ask Yumi" leads only when it is the first act. With no such act, the lead act is the first act.
+- Discard opens an `AlertDialog`. The dialog of Home focuses Cancel first.
 - `finding_review` leads with "Decide", which opens the finding sheet. `followup_proposal` leads with "Decide".
 - `environment_failed` leads with "Ask Yumi". "Open project" and "Run onboarding again" sit in More. `environment_pending` leads with "Open project".
 - "Ask Yumi" sits in More of each node card and each Fix card. A tool approval card and an Inbox card have none. The case texts are in [Home](workbench-service.md#home).

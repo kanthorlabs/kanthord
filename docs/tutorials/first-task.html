@@ -523,15 +523,14 @@ kanthord --help</code></pre>
             Each action opens the screen or the sheet of the step. After a
             successful save, the dashboard returns to <code>/</code>. While a
             step is not done, <code>/</code> shows Onboarding. When every step
-            is <code>Done</code>, <code>/</code> shows
-            <strong>Overview</strong>.
+            is <code>Done</code>, <code>/</code> shows <strong>Home</strong>.
           </p>
           <p>
-            <strong>Skip onboarding</strong> shows Overview in this browser
-            only. The browser keeps the choice until you select
-            <strong>Resume onboarding</strong>. While a step is not done,
-            Overview then shows the link <strong>Resume onboarding</strong>. The
-            link shows Onboarding again.
+            <strong>Skip onboarding</strong> shows Home in this browser only.
+            The browser keeps the choice until you select
+            <strong>Resume onboarding</strong>. While a step is not done, Home
+            then shows the link <strong>Resume onboarding</strong>. The link
+            shows Onboarding again.
           </p>
           <h2 id="3-add-the-llm-credential">3. Add the LLM credential</h2>
           <p>The agents call a model with this credential.</p>
@@ -876,7 +875,7 @@ kanthord --help</code></pre>
           </ol>
           <p>
             Every Onboarding step is now <code>Done</code>, so the dashboard
-            returns to <code>/</code> and shows <strong>Overview</strong>.
+            returns to <code>/</code> and shows <strong>Home</strong>.
             Onboarding counts one worker binding as enough, but the first task
             needs both. Add the <code>reviewer</code> binding now.
           </p>
@@ -1271,12 +1270,12 @@ The first line of HEALTH.md is exactly `status: ok`, with no trailing spaces.</c
             the earlier ones included, and a <strong>Cause:</strong> line when
             the stop holds a cause. The <strong>Failed</strong> and
             <strong>History</strong> tabs of the <strong>Scheduler</strong> page
-            and the What section of the <strong>Overview</strong> detail of a
-            <code>Paused</code> node in the tab <strong>Resume</strong> show the
-            same cause. An error that the agent session throws before the
-            provider answers, for example <code>No API key found</code>, is no
-            provider failure. It shows as <strong>Operation failed</strong> with
-            a <strong>Cause:</strong> line.
+            and the card of a <code>Paused</code> node in the tab
+            <strong>Resume</strong> of <strong>Home</strong> show the same
+            cause. An error that the agent session throws before the provider
+            answers, for example <code>No API key found</code>, is no provider
+            failure. It shows as <strong>Operation failed</strong> with a
+            <strong>Cause:</strong> line.
           </p>
           <div class="table-wrap">
             <table>
@@ -1368,10 +1367,9 @@ The first line of HEALTH.md is exactly `status: ok`, with no trailing spaces.</c
             </li>
             <li>
               While every model of an agent cools down,
-              <strong>Overview</strong> shows &quot;&lt;agent&gt; in
-              &lt;binding&gt; of &lt;project&gt;: every model cools down until
-              &lt;time&gt;.&quot; With a project chosen in the project filter,
-              the sentence has no &quot;of &lt;project&gt;&quot;.
+              <strong>Home</strong> shows &quot;&lt;agent&gt; in &lt;binding&gt;
+              of &lt;project&gt;: every model cools down until
+              &lt;time&gt;.&quot;
             </li>
           </ul>
           <p>
