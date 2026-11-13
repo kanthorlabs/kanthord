@@ -28,7 +28,29 @@ It describes no mechanism of another service.
 - A Workbench path of two or more segments in agent text opens in a new tab. A slash command never becomes a link.
 - An error shows as one line directly under its cause, code first. The full text wraps and no hover is needed. The failed bubble or card gets a red border.
 - The chat header copies the pi command that continues the session outside kanthord. That pi uses its own login, its own prompt and its own tools, and a write from both sides forks the session.
-- While a run is active and no text streams, the chat shows that the agent works, with the seconds since the run started. The draft stays editable, and Stop takes the place of Send until the run ends.
+- While a run is active and no text streams, the chat shows that the agent works, with the seconds since the run started.
+- Every screen holds one composer: the input and Send on one row, an optional menu or confirm above, and one muted hint line below.
+- Send is always one plain button. During a run, Enter and Send queue the message.
+- Only the placeholder and the hint change with the state of the composer: idle, running or disabled.
+- The idle placeholder is "Message <display name> · / for commands". The running placeholder is "Message · sends after this run".
+- The hint line shows only context hints. A slash hint is an example.
+- The queue shows above the composer as one line with the count and the next item, "N queued" and "Next: <text>". A click expands it to the full list.
+- Each queued row has Edit and Remove. Edit removes the message, then refills the composer with its text.
+- The open state of the queue changes only on the click of the owner.
+- A run line sits on the running item, next to the request that started the run. It holds the state "Running" and Stop only.
+- A finished act shows no run controls.
+- Stop with an empty queue ends the run with no confirm.
+- Stop with queued messages opens a red confirm above the composer. Its title is "Stop the run and clear N queued?".
+- The confirm says "Your N queued messages return to the composer." For one message, it says "Your 1 queued message returns to the composer."
+- When the composer holds a draft, the confirm adds "Your draft sends next."
+- The confirm offers Stop, or "Stop & send draft" when the composer holds a draft, and Cancel.
+- "Stop & send draft" replaces the run. Cancel keeps the run, the queue and the draft.
+- A draft that is the "/new" command counts as no draft in the confirm.
+- When Edit or Remove finds that the message already started, the chat shows "The message already started."
+- While a run is active, the pickers of the agent provider, the model and the reasoning effort stay disabled. They stay disabled while a message waits in the queue.
+- The cleared texts return to the composer before the draft, joined with one newline. The chat shows no line about them in the transcript.
+- The hint line shows "N cleared messages are back in your draft" after Stop or replace clears the queue. One message reads "1 cleared message is back in your draft".
+- A call with no result shows "No Result" with the line "No result. The run ended before this call finished."
 - Every action of a workbench session comes from its human.
 - A human picks one agent of the catalog and starts a workbench session with that agent.
 - No conversation exists without a human message.
@@ -114,12 +136,18 @@ It describes no mechanism of another service.
 - A tool of a mutation operation runs only after the human approves that call.
 - A tool of a read operation and a built-in tool run without an approval.
 - A rejected call reaches the agent as a blocked call.
+- A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
+- A kanthord restart ends the active run and every pending approval.
 
 ## Operations
 
 - A human sends each message through its own request.
 - A [run](workbench-service.vocabulary.md#run) is the work of the agent on one human message.
 - A client reads the entries and the state of the active run of a session through a long poll. A workbench session uses no `stream` operation.
-- A session holds one run at a time.
+- A session holds one run at a time. A message during a run waits in the queue.
+- A [replace](workbench-service.vocabulary.md#replace) clears the queue, stops the run and runs the new message next.
+- Stop ends the run and clears the queue.
+- The owner removes a queued message.
+- A restart clears the queue.
 - The end of a long poll stops no run.
 - A client that misses events reads the completed runs of the session.
