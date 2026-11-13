@@ -45,7 +45,7 @@ It describes no mechanism of another service.
 - New Session lists only the enabled agents whose `agent list` item holds `workbench` in `consumers`. `workbench.session.create` still refuses any other agent.
 - New Session opens the route `/workbench/new` with no API call. The route shows a greeting from the display name of the agent. The quick action of the agent list opens it with its agent.
 - The first Send calls `workbench.session.create`, then `workbench.session.message`. A closed tab with no message writes nothing.
-- The dialog names the agent providers of the enablement and links to the agent page, where a human adds one.
+- The `/workbench/new` route names the agent providers of the enablement and links to the agent page, where a human adds one.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
 ## Prompt
