@@ -1660,12 +1660,12 @@ The MCP server exposes no upload write.
 ## Tool table
 
 The tool table of a native agent holds four sources.
-The first source is the pi built-in tools: `swe@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls.
+The first source is the pi built-in tools, which stand under `tools.builtin` of the agent declaration: `swe@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls.
 The second source is kanthord's own tools, which the server serves through its MCP server.
 An external harness reaches the same MCP server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
 The fourth source is the host-supplied tools that the `worker` application serves in its own process.
-An agent declaration names its host tools: `swe@1` holds `evidence-upload` and `link_update_list`, and `re@1` holds none.
+An agent declaration names its host tools under `tools.host`: `swe@1` holds `evidence-upload` and `link_update_list`, and `re@1` holds none.
 The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.

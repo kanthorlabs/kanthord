@@ -18,16 +18,20 @@ A mechanism here never overrides a rule there.
 - The catalog is a static server module that holds one declaration per agent name, with options, a whole-configuration constraint and prompts.
 - Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
 - `swe@1` and `re@1` declare an empty option schema.
-- A declaration holds `workbench`. The Workbench lists and opens only the agents with `workbench: true`, and it refuses another agent with the unknown-agent code. [`env@1`](project-service.impl.md#the-agent-env1) holds `workbench: false`.
+- A declaration holds `display_name` and `tools`. `AgentTools` is `{ builtin, host, operation }`. `builtin` and `host` hold tool names, and `operation` holds operation ids.
+- `workbenchAgentNames()` is the one reader of the session rule. It answers the agents whose `tools.operation` is not empty. The Workbench lists and opens only those agents, and it refuses another agent with the unknown-agent code. `pe@1` lists no operation.
+- The list test of `engine/src/workbench/tools.test.ts` checks that every listed id names an operation that `toolOperations` keeps, and that no list names a secret operation.
 - The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker runs the verifications after the turn. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
 - The worker framing holds the protocol conditions that apply to `swe@1`, `re@1` and `env@1`: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch, debug or probe file only under `.kanthord-scratch/` at the workspace root.
 - RULED 2026-10-24 by Ulrich (D14). A change of a shipped prompt text before the first tag keeps the agent names `swe@1`, `re@1` and `env@1` and the worker name `coder@1`.
 - The shipped role of `re@1` judges the evidence against the criterion and changes no file.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
-- `agent list` answers one summary per catalog agent: `agent_name`, `worker_names` and `enablement`.
-- `agent get` answers `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
+- `agent list` answers one summary per catalog agent: `{ agent_name, display_name, worker_names, consumers, tool_counts, enablement }`.
+- `consumers` names the services that run the agent, in the order `workbench`, `worker`. `workbench` comes from `workbenchAgentNames()`. `worker` comes from the released workers that name the agent and from the project environment agent `pe@1`. At L0, `swe@1` and `re@1` hold `["workbench", "worker"]`, `ops@1` holds `["workbench"]` and `pe@1` holds `["worker"]`.
+- `tool_counts` holds one count for each tool source: `builtin`, `host`, `kanthord-mcp` and `operation`. The count comes from the tools of `agent.get`.
+- `agent get` answers `display_name`, `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
 - `enablement` is null when no record exists.
-- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `display_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). A tool item holds the source, the name, `description` and `guard_class`. The source is `builtin`, `host`, `kanthord-mcp` or `operation`. `guard_class` is `read` or `card`. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## The prompt answer
@@ -35,9 +39,9 @@ A mechanism here never overrides a rule there.
 - `prompt` holds `parts` and `final`.
 - `parts` holds the parts of the system prompt in reading order, the framing last. Each part holds `{ layer, part, name, origin, path, binding_id, commit, digest, heading, state, text }`.
 - The first seven fields form the [prompt reference](agent.vocabulary.md#prompt-reference) of the part. `promptReferenceSchema` of `engine/src/agent/contract.ts` defines it, and `promptPartSchema` adds `layer`, `heading`, `state` and `text`.
-- `part` is one of `standard`, `role`, `workbench`, `instruction_file`, `repository`, `binding` and `framing`. `origin` is one of `binary`, `file`, `database` and `repository`. `state` is one of `resolved`, `changed`, `invalid` and `unreachable`. The three are the code enums `PromptPart`, `PromptOrigin` and `PromptPartState`.
-- `layer` is 1 for `standard`, `role` and `workbench`, 2 for `instruction_file` and `repository`, 3 for `binding`, and null for `framing`.
-- `standard` is `base.md` and `role` is `<agent_name>.md`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. For each repository binding in binding order, `instruction_file` is the file of `prompts.instruction_file`, `repository` is the nonblank text of `prompts.repository`, and `binding` is the nonblank text of `prompts.agents[<agent_name>]`.
+- `part` is one of `standard`, `identity`, `role`, `workbench`, `instruction_file`, `repository`, `binding` and `framing`. `origin` is one of `binary`, `file`, `database` and `repository`. `state` is one of `resolved`, `changed`, `invalid` and `unreachable`. The three are the code enums `PromptPart`, `PromptOrigin` and `PromptPartState`.
+- `layer` is 1 for `standard`, `identity`, `role` and `workbench`, 2 for `instruction_file` and `repository`, 3 for `binding`, and null for `framing`.
+- `standard` is `base.md` and `role` is `<agent_name>.md`. `identity` is the rendered template `identity`. It stands between `standard` and `role` in the system prompt of both surfaces, for every agent of `workbenchAgentNames()`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. For each repository binding in binding order, `instruction_file` is the file of `prompts.instruction_file`, `repository` is the nonblank text of `prompts.repository`, and `binding` is the nonblank text of `prompts.agents[<agent_name>]`.
 - `name` is the file name of a layer 1 part. It is the template name of `framing`, for example `framing-worker`. It is the binding name of a layer 2 or layer 3 part.
 - `origin` is `binary` for a shipped text, `file` for an override file, `database` for `repository` and `binding`, and `repository` for `instruction_file`.
 - `path` is the override location that the server looked up for `binary` and `file`. It is the repository path for origin `repository`, and `null` for origin `database` and when `agent.prompt.agent_directory` is empty.
@@ -299,7 +303,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine` and `repair`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `identity`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine` and `repair`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
@@ -313,7 +317,7 @@ The Agent component owns these keys of the section `agent`.
 | Template             | Values                                                                                                                                                                                                                                            |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `work`               | `node.name`, `node.requirement`, `node.criterion`, `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`, `tasks[].number`, `tasks[].id`, `tasks[].name`, `tasks[].criterion`, `repositories`, `affected_tests` |
-| `framing-worker`     | none                                                                                                                                                                                                                                              |
+| `identity`           | `display_name`                                                                                                                                                                                                                                    |
 | `framing-workbench`  | none                                                                                                                                                                                                                                              |
 | `task-revision`      | `rationale`, `results`, `output`, `release`                                                                                                                                                                                                       |
 | `criterion-revision` | `rationale`, `findings`                                                                                                                                                                                                                           |

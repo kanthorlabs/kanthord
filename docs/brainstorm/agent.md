@@ -34,6 +34,69 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A declaration supplies no provider, model identifier or reasoning effort default.
 - A human selects those values through the [agent configuration](#agent-configuration).
 - A human reads the declaration and the enablement of every agent in the catalog. That read changes no configuration.
+- The catalog holds `swe@1`, `re@1`, `pe@1` and `ops@1`. The display names are "SWE", "RE", "PE" and "Yumi".
+
+### Display name
+
+- Every declaration holds a required `display_name`.
+- Display names are unique case-insensitively in the catalog. The (invariant guard) case of `engine/src/agent/catalog.test.ts` guards this rule.
+- A mention matches `@<display name>` case-insensitively and by no other rule.
+
+### Agent tools
+
+- Every declaration holds a `tools` object `{ builtin, host, operation }`.
+- `builtin` applies in a Worker execution and in a Workbench session.
+- `host` applies in a Worker execution only.
+- `operation` applies in a Workbench session only.
+- `operation` is an explicit list of operation ids. The default is deny.
+- An operation that the list does not name is no tool of the agent.
+- An agent with an empty `operation` list has no Workbench session. `pe@1` is such an agent.
+- A human changes no list. Only a change of the catalog changes a list.
+- An [operation tool](agent.vocabulary.md#operation-tool) runs with the identity of the human who sent the last message.
+
+### Damage scale
+
+- Each operation has one damage class:
+
+| Class | Meaning       |
+| ----- | ------------- |
+| R0    | Read          |
+| R0p   | Probe         |
+| R1    | Undo          |
+| R2    | Rework        |
+| R3    | Loss or setup |
+| C     | Control       |
+| S     | Secret        |
+
+- An operation of class S, C or R3 is never a tool.
+
+### Selection rule
+
+- Damage gates, duty selects.
+- A read is a tool when an ops duty needs it.
+- An R1 or R2 mutation is a tool when an ops duty acts with it.
+
+### Operation lists
+
+- `swe@1` and `re@1` list the six node-review reads: `mission.node.get`, `mission.attempt.list`, `mission.outcome.list`, `mission.assessment.list`, `mission.evidence.list` and `mission.evidence.get`.
+- `pe@1` lists no operation.
+- `ops@1` lists 36 operations by class:
+
+| Class | Count | Operations                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R0p   | 1     | `gateway.healthcheck`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| R0    | 19    | `project.list`, `mission.get`, `mission.node.list`, `mission.node.get`, `mission.assessment.list`, `mission.proposal.list`, `mission.externalAction.list`, `mission.evidence.list`, `scheduler.execution.list`, `scheduler.queue.list`, `worker.instance.list`, `agent.cooldown.list`, `workbench.session.list`, `mission.export`, `mission.import.preview`, `worker.catalog.list`, `project.binding.list`, `project.agentConfiguration.list`, `llm.credential.list` |
+| R1    | 9     | `mission.node.pause`, `mission.node.resume`, `mission.node.check`, `mission.node.priority.set`, `mission.dependency.add`, `mission.dependency.remove`, `project.pause`, `project.resume`, `agent.cooldown.clear`                                                                                                                                                                                                                                                     |
+| R2    | 7     | `mission.node.unblock`, `mission.node.block`, `mission.node.create`, `mission.node.update`, `mission.proposal.decide`, `mission.criterion.set`, `mission.import.apply`                                                                                                                                                                                                                                                                                               |
+
+- [The Workbench tools page](../reference/workbench/tools.html) lists the tools of each agent.
+
+### Agents page
+
+- The Agents page shows each tool of an agent as a chip. The colour of the chip shows the guard class of the tool.
+- Hover or focus on a chip shows the description of the tool and the undo line of its class.
+- The undo line of `read` is "Reads only. Nothing to undo."
+- The undo line of `card` is "Waits on your card."
 
 ## Agent configuration
 
