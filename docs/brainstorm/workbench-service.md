@@ -54,8 +54,8 @@ It describes no mechanism of another service.
 
 - Home opens the latest `ops@1` conversation by `modified` whose first message does not start with "Case: ". It skips an item with an empty first message.
 - "New chat" makes no API call. The first Send creates the conversation, then sends the message.
-- The pending approval of the open Home conversation shows as the queue line. Its acts sit on the deck card.
-- With Yumi off, Home shows "Yumi is not enabled. Enable Yumi to chat here." with a link to the agent page of `ops@1`. The composer is disabled and shows no command list.
+- The pending approval of the open Home conversation shows as the [queue line](architecture.impl.md#the-home-page).
+- With Yumi off, Home shows "Yumi is not enabled. Enable Yumi to chat here." with a link to the agent page of `ops@1`.
 - The command list floats above the composer on focus of an empty draft or on "/".
 - The command "/brief" sends "Report the system status and the actions that need me."
 - The command "/health" sends "Check the health of the gateway and the providers." "/health" is the only command that leads to `gateway--healthcheck`.

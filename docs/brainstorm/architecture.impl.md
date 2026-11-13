@@ -1809,7 +1809,7 @@ The deck rules follow.
 - No project filter exists. The deck covers every project.
 - The deck holds the refresh while an act dialog is open.
 - Exit after an act: the card slides out in 220 ms, and the next card takes the cursor place. A muted line reads "Done: <subject> · <n> items wait".
-- The exit adds no toast and no Yumi line. Under reduced motion, no card moves.
+- A successful Approve, Reject, Rotate or Mark done shows a success toast. The exit adds no Yumi line. Under reduced motion, no card moves.
 - Settled elsewhere: the card shows "The selected item no longer waits." for 1.5 s. Then the same exit follows.
 - Queue line: the pending approval of the open Home conversation renders in the stream as one line. It reads "<subject> is #k in your queue."
 - The "#k" link of the queue line moves the cursor.
