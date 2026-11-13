@@ -1253,7 +1253,7 @@ Binding prompt of repository app:
             by <code>--</code>, for example <code>mission--node--create</code>.
           </p>
           <p>
-            The agent cannot call these 16 human operations. Fifteen of them
+            The agent cannot call these 22 human operations. Twenty-one of them
             handle a secret. <code>repository.host_key.pin</code> confirms the
             trust of an SSH host, and only a human confirms a host key.
           </p>
@@ -1276,6 +1276,16 @@ Binding prompt of repository app:
               <code>storage.credential.create</code>,
               <code>storage.credential.rotate</code>,
               <code>storage.credential.check</code>
+            </li>
+            <li>
+              <code>intake.credential.create</code>,
+              <code>intake.credential.rotate</code>,
+              <code>intake.credential.check</code>
+            </li>
+            <li>
+              <code>project.credential.create</code>,
+              <code>project.credential.rotate</code>,
+              <code>project.credential.check</code>
             </li>
             <li>
               <code>intake.inbound.get</code>, <code>intake.storage.get</code>,
@@ -1369,10 +1379,12 @@ Binding prompt of repository app:
             </table>
           </div>
           <p>
-            Damage gates and duty selects. An operation of class R3 (loss or
-            setup), C (control) or S (secret) is never a tool. A read is a tool
-            when an operations duty needs it. An R1 or R2 mutation is a tool
-            when an operations duty acts with it. A human changes no list.
+            The damage class decides whether an operation can be a tool. The
+            duty of an operation selects the tools from the allowed classes. An
+            operation of class R3 (loss or setup), C (control) or S (secret) is
+            never a tool. A read is a tool when an operations duty needs it. An
+            R1 or R2 mutation is a tool when an operations duty acts with it. A
+            human changes no list.
           </p>
           <p>
             A Workbench operation tool that changes state waits for the human.

@@ -202,7 +202,7 @@
       "name": "read",
       "source": "builtin",
       "input_schema": {},
-      "description": "Read the contents of a file.",
+      "description": "",
       "guard_class": null
     }
   ],
@@ -283,7 +283,9 @@
                     <code>description</code> and <code>guard_class</code>.
                     <code>guard_class</code> is <code>read</code> or
                     <code>card</code> for an <code>operation</code> item, and
-                    <code>null</code> for a built-in or host item. A
+                    <code>null</code> for a built-in or host item. Only an
+                    <code>operation</code> item has a description. The
+                    description of every other item is an empty string. A
                     <code>card</code> tool waits for the approval of the human.
                   </td>
                 </tr>

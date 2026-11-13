@@ -72,7 +72,8 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ### Selection rule
 
-- Damage gates, duty selects.
+- The damage class decides whether an operation can be a tool.
+- The duty of an operation selects the tools from the allowed classes.
 - A read is a tool when an ops duty needs it.
 - An R1 or R2 mutation is a tool when an ops duty acts with it.
 
