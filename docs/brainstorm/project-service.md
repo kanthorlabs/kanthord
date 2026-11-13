@@ -80,7 +80,7 @@ The Project Service validates each text against the bound of a prompt file, and 
 The Project Service reads the instruction file of the repository at the base commit that the attempt pins. A binding check and a binding write read it at the base head.
 A binding write refuses an instruction file that is invalid at the base head. An absent file passes.
 A change of a `prompts` key creates a binding revision. A node keeps the texts of its pinned binding revision until `mission node rebind`.
-The new binding ID of that revision counts as a changed binding for the Onboarding component, and it clears the mark that the stored environment came from `env@1`.
+The new binding ID of that revision counts as a changed binding for the Onboarding component, and it clears the mark that the stored environment came from `pe@1`.
 The Binding prompts of the agents are separate texts. A rule that the reviewer judges goes into the Repository prompt, so the coder reads it too.
 
 ## Conversation configuration and link trust
@@ -110,7 +110,7 @@ Onboarding resolves the environment, builds its image when a `container` instanc
 A node whose repository binding holds an environment that is not ready waits. It changes no state while it waits, and it continues when the environment is ready.
 An environment failure of an execution stops that execution with its own reason, `environment_failed`. It never becomes a revision turn of the coder agent. A failure whose detail holds `digests` never counts toward the failure limit of the node. A failure without `digests` counts toward that limit.
 The human acts only when the proof or an execution fails. The human then stores a fixed environment or runs the onboarding again.
-Only a human with the project scope and the agent `env@1` change the stored environment. `env@1` changes only an environment that it wrote or that no one stored. A push to the repository changes the environment only through the repository files that the sources read.
+Only a human with the project scope and the agent `pe@1` change the stored environment. `pe@1` changes only an environment that it wrote or that no one stored. A push to the repository changes the environment only through the repository files that the sources read.
 
 ## Execution configuration and instance count
 

@@ -22,8 +22,8 @@ A mechanism here never overrides a rule there.
 - `workbenchAgentNames()` is the one reader of the session rule. It answers the agents whose `tools.operation` is not empty. The Workbench lists and opens only those agents, and it refuses another agent with the unknown-agent code. `pe@1` lists no operation.
 - The list test of `engine/src/workbench/tools.test.ts` checks that every listed id names an operation that `toolOperations` keeps, and that no list names a secret operation.
 - The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker runs the verifications after the turn. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
-- The worker framing holds the protocol conditions that apply to `swe@1`, `re@1` and `env@1`: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch, debug or probe file only under `.kanthord-scratch/` at the workspace root.
-- RULED 2026-10-24 by Ulrich (D14). A change of a shipped prompt text before the first tag keeps the agent names `swe@1`, `re@1` and `env@1` and the worker name `coder@1`.
+- The worker framing holds the protocol conditions that apply to `swe@1`, `re@1` and `pe@1`: the worker owns the commit, the branch, the push, the verification and the release, and an agent writes a scratch, debug or probe file only under `.kanthord-scratch/` at the workspace root.
+- RULED 2026-10-24 by Ulrich (D14). A change of a shipped prompt text before the first tag keeps the agent names `swe@1`, `re@1` and `pe@1` and the worker name `coder@1`. Ulrich renamed the environment repair agent to `pe@1` on 2026-11-12 before the first tag.
 - The shipped role of `re@1` judges the evidence against the criterion and changes no file.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
 - `agent list` answers one summary per catalog agent: `{ agent_name, display_name, worker_names, consumers, tool_counts, enablement }`.
@@ -59,7 +59,7 @@ A mechanism here never overrides a rule there.
 - Only a `resolved` part holds `text`. A failed layer 2 read is a part state, and the read itself answers 200. An unreachable remote answers `unreachable`. An instruction file that is too large, is not UTF-8, cannot be read or holds a control character answers `invalid`. A text whose digest differs from its reference answers `changed`.
 - `final` holds the system prompt: each part in reading order. A part with a heading renders as the heading, a blank line and the text. `final` is null when a part is not `resolved`.
 - The query `view=final` answers `prompt` with `final` only.
-- The optional queries `project_id` and `binding_id` select the repository binding whose layers 2 and 3 join `final`, and `final` is then the Worker final. The read takes the instruction file at the current base head, as the next attempt takes it. Without them, a Workbench agent answers the Workbench final, and `env@1` answers the Worker final.
+- The optional queries `project_id` and `binding_id` select the repository binding whose layers 2 and 3 join `final`, and `final` is then the Worker final. The read takes the instruction file at the current base head, as the next attempt takes it. Without them, a Workbench agent answers the Workbench final, and `pe@1` answers the Worker final.
 - The optional queries `node_id` and `attempt` select the stack that the agent of one node reads. `attempt` is a positive integer. Without `attempt`, the read takes the open attempt, else the latest attempt. The read takes the instruction file at the commit that the attempt pins, and at the current base head for an attempt with no pin.
 - A `node_id` that names no mission node answers 404 `mission.node.not_found`. A node with no attempt, or with no attempt `attempt`, answers 404 `mission.record.not_found`.
 - A `binding_id` that names no repository binding of `project_id` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`. `attempt` without `node_id`, and `node_id` with `project_id` or `binding_id`, answer 400 `gateway.request.validation_failed`.
@@ -290,13 +290,13 @@ The Agent component owns these keys of the section `agent`.
 - A file of the same name in the agent directory replaces the shipped text of that file whole.
 - The reader takes a file as UTF-8 Markdown of at most 32768 bytes, with no control character other than a tab and a newline. The reader resolves no `@` import. A deadline of 10 seconds bounds each read.
 - A file that the reader rejects answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason` in `details`. `file` names the file, for example `swe@1.md`. An absent file selects the shipped text.
-- Every reader refuses in the same way: `agent.get`, the execution setup, the Workbench session open and the `env@1` run. No reader replaces an invalid file with the shipped text.
+- Every reader refuses in the same way: `agent.get`, the execution setup, the Workbench session open and the `pe@1` run. No reader replaces an invalid file with the shipped text.
 - The Repository prompt and the Binding prompt are the key `prompts` of the `config` JSON of a repository binding: `prompts.instruction_file`, `prompts.repository` and `prompts.agents`. The [Project Service](project-service.impl.md#validation) owns their validation.
 - The keys of `prompts.agents` are the agent names of the catalog. The catalog is the only list, so no new enum exists.
 - The composer reads the instruction file through the Project read `instructionFileOf`, with the Repository component reader. The reader follows a symbolic link inside the tree at the commit, so `AGENTS.md -> docs/agents.md` reads `docs/agents.md`.
 - The reader state `present` gives a part. `absent`, `not_regular_file` and `outside_root` give no part. `too_large`, `not_utf8` and `unreadable` answer 409 `agent.prompt.source_invalid`.
 - A present text passes the text validation of a prompt file. A text with a control character answers 409 `agent.prompt.source_invalid` with `reason: control_character`. A carriage return is a control character, so a file with CRLF line ends is invalid. The reader converts no newline.
-- `agent.prompt.source_invalid` holds `details: { part, name, binding_id, path, commit, reason }`. `binding_id` and `commit` are null for a layer 1 part. The execution setup and the `env@1` run answer it.
+- `agent.prompt.source_invalid` holds `details: { part, name, binding_id, path, commit, reason }`. `binding_id` and `commit` are null for a layer 1 part. The execution setup and the `pe@1` run answer it.
 - A retried execution setup that finds a stored part that no longer resolves answers 409 `agent.prompt.source_invalid` with `reason: changed`.
 - The configuration holds no `agent.prompt.system_file` or `agent.prompt.host_file`. A config step deletes both.
 - Tests cover an empty and a nonempty `agent_directory`, a relative path, an absent file, each rejection and each reader that refuses. Tests cover each reader state of an instruction file, a link inside the tree and a file with CRLF line ends.
@@ -361,7 +361,7 @@ The Agent component owns these keys of the section `agent`.
 - One redaction object exists for each call of `sensitiveTextRedaction`. It holds the rule set, one growing known set, the redaction table and the tag. It exposes two session hooks: `restore` and `hook`.
 - `openSession` creates the redaction object from the pi session id, unless the consumer passes one. The input of `openSession` holds exactly one of `knownSecrets` and `redaction`, so no consumer opens a session without a redaction.
 - `openSession` redacts the system prompt once with `redaction.text`, passes the result to the resource loader, and returns it. The worker and the workbench pin that text with `pinInference`. The worker pins the redacted work.
-- The worker passes the secrets of every credential of the execution as the known secrets of each session. The workbench passes the secrets of the holder of its current configuration. `env@1` passes the secrets of the server agent credentials.
+- The worker passes the secrets of every credential of the execution as the known secrets of each session. The workbench passes the secrets of the holder of its current configuration. `pe@1` passes the secrets of the server agent credentials.
 - The workbench keeps one redaction object for the life of its session in the process. Each later `openAgent` passes that object, so a marker from before `configure` restores after it.
 - The tracer applies rule 0 and rules 1 to 17 to its entry copy, with one `KnownMatcher` for each session and the tracer marker `<redacted:RULE>`.
 - The Intake Service is the second consumer of the rule set. `intake.inbound.event.describe` and `intake.inbound.event.get` apply rule 0 and rules 1 to 17 to the text of a stored inbound event before they answer.
@@ -595,7 +595,7 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 - An offset map links each view character to its source characters. A span of the view masks the source characters that produced it.
 - A view span starts at the first source character of its first view character. It ends after the last source character of its last view character.
 - The part checks and the wrapped view also run on each escaped view.
-- So a `.env` line inside the JSON `tail` of `env@1` (`engine/src/project/environment-agent.ts`) is found, also with CRLF line ends.
+- So a `.env` line inside the JSON `tail` of `pe@1` (`engine/src/project/environment-agent.ts`) is found, also with CRLF line ends.
 
 #### Exclusions
 
@@ -664,7 +664,7 @@ The tag:
 
 - `TAG` is the session part followed by the process part, 8 hexadecimal characters each, written as letters.
 - The session part is the first 8 characters of the sha-256 hex digest of the pi session id.
-- The process part is 8 random hexadecimal characters from `randomBytes`. It names one redaction object. A worker session and an `env@1` session have one object; a workbench session has one object for its life in the process.
+- The process part is 8 random hexadecimal characters from `randomBytes`. It names one redaction object. A worker session and an `pe@1` session have one object; a workbench session has one object for its life in the process.
 - Example: `<redacted:url_userinfo:d:jpcmebklahnbofmd>`.
 - `openSession` builds the redaction object from `sessionManager.getSessionId()` before it creates the pi session (`engine/src/agent/agent-session.ts`). So `text()` of the system prompt, `text()` of the work and every handler use one tag. With two tags, the pins find no equal text and insert a second copy.
 
@@ -785,7 +785,7 @@ Hook order:
 
 | Entry or payload                                                                                  | Covered by                                                                                                                  | State                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| User message (work prompt, instruction, workbench human text, `env@1` JSON failure)               | `message_end`, escaped view; the worker also redacts before `session.prompt`                                                | Covered                                                                                                                                                                                          |
+| User message (work prompt, instruction, workbench human text, `pe@1` JSON failure)                | `message_end`, escaped view; the worker also redacts before `session.prompt`                                                | Covered                                                                                                                                                                                          |
 | System message (prompt sections, `toolsAdded`), with the instruction file and the Binding prompts | `message_end`; `openSession` redacts the loader input                                                                       | Covered                                                                                                                                                                                          |
 | Assistant text, tool call arguments, `errorMessage`                                               | `message_end`                                                                                                               | Covered                                                                                                                                                                                          |
 | Thinking with a provider signature                                                                | Scanned, kept whole, counted, values added to the table                                                                     | Kept                                                                                                                                                                                             |
@@ -833,7 +833,7 @@ The worker writes seven attributes at the end of the `agent.session` span (`engi
 | `kanthord.session.thinking_kept`       | `thinking_kept`                                                                                      |
 
 - The workbench logs one record `sensitive text redacted` at each `closeAgent`, with the same seven fields, when a count is above 0. The counts do not reset. Each record holds the totals of the redaction object.
-- `env@1` logs the same record after `drive` returns or throws.
+- `pe@1` logs the same record after `drive` returns or throws.
 - No attribute or log field holds a value, a marker index, a tag, a length or a digest of a value.
 
 ### Errors
@@ -964,4 +964,4 @@ Engine consumers:
 - `engine/src/apps/server/e2e-workbench.test.ts`: a fake key in the workbench prompt reaches no model request.
 - In that test: a marker from before `session.configure` restores into `write` after it, and `closeAgent` writes the log record with `unkept`.
 - In that test: a `llm_credential` marker from before `configure` to another credential blocks after it.
-- `engine/src/project/environment-agent.test.ts`: the `env@1` session opens with the redaction, keeps the confinement, and redacts its JSON failure message. The log record follows `drive`.
+- `engine/src/project/environment-agent.test.ts`: the `pe@1` session opens with the redaction, keeps the confinement, and redacts its JSON failure message. The log record follows `drive`.

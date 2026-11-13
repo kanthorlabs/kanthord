@@ -456,7 +456,7 @@
                   <td>
                     An object that maps an agent name to its Binding prompt. The
                     keys are <code>swe@1</code>, <code>re@1</code> and
-                    <code>env@1</code>, and each key is optional.
+                    <code>pe@1</code>, and each key is optional.
                   </td>
                 </tr>
               </tbody>
@@ -514,7 +514,7 @@
               the first handover of its attempt pins, never from the node
               branch. Every later execution of the attempt reads the same
               commit, and a new attempt pins the base head again. The
-              <code>env@1</code> run reads the file at the commit of the run.
+              <code>pe@1</code> run reads the file at the commit of the run.
             </li>
             <li>
               An apply of a new or changed binding that names
@@ -543,7 +543,7 @@
               Environment onboarding treats the new binding ID as a changed
               binding and clears <code>environment_from_agent</code>, the mark
               that a stored environment came from a session of
-              <code>env@1</code>.
+              <code>pe@1</code>.
             </li>
             <li>
               The coder and the reviewer read the same layer 2. Write each rule

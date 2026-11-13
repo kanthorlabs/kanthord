@@ -210,7 +210,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - An effective instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
 - The `config` of a repository binding holds `prompts`, an optional `z.strictObject` with three optional keys: `instruction_file`, `repository` and `agents`. `bindingPromptsSchema` of `engine/src/project/contract.ts` defines it.
-- `agents` is an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS`: `swe@1`, `re@1` and `env@1`. The catalog is the only list, and no new enum exists.
+- `agents` is an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS`: `swe@1`, `re@1` and `pe@1`. The catalog is the only list, and no new enum exists.
 - A key outside the three keys, or an agent key outside the catalog, refuses the write with 400 `gateway.request.validation_failed`.
 - The write validates `repository` and each text of `agents` with the text validation of a prompt file: at most 32768 UTF-8 bytes and no control character other than a tab and a newline.
 - `instruction_file` is a relative repository path that uses `/`. It holds no `.` segment, no `..` segment, no empty segment, no backslash and no control character, and it holds at most 255 bytes. `instructionFilePathReason` of `engine/src/project/instruction-file.ts` checks it. It takes no `@<commit>` form, because the attempt pin records the commit.
@@ -220,7 +220,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - The instruction file of a binding revision joins the system prompt as `Repository prompt of repository <name>, file <path>:` and the text. `repository` joins as `Repository prompt of repository <name>, set in KanthorD:` and the text. `agents[<agent_name>]` joins the system prompt of that agent as `Binding prompt of repository <name>:` and the text. [agent.md](agent.md#prompt-composer) rules the order and the precedence.
 - A change of any `prompts` key stores the next binding revision with a new binding ID. A node keeps its pinned binding revision, and `mission node rebind` moves the node to the current revision.
 - The onboarding group of the binding takes the new binding ID as a changed row, and it clears `environment_from_agent`.
-- The execution setup, `agent.get` with a binding and an `env@1` run read the texts of the binding revision that each names.
+- The execution setup, `agent.get` with a binding and an `pe@1` run read the texts of the binding revision that each names.
 - The Project Service offers two reads through its `contract.ts`. `baseCommitOf(binding_id, deadline)` answers the head commit of the base branch, 40 or 64 lower-case hex. `instructionFileOf(binding_id, commit, deadline)` answers the reader state and the text of `prompts.instruction_file` at that commit.
 - Both reads reuse `readBase` and `readFiles` of `engine/src/project/environment.ts` and the SSH access of the binding. Each read takes the deadline of its caller, and every caller reads all bindings in parallel.
 - The execution setup and `agent.get` use one deadline of 20000 ms. The handover uses at most 20000 ms of the one deadline of its handler.
@@ -550,7 +550,7 @@ The component computes the status of a group in this order. The first rule that 
 - `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed`, `command_absent`, `affected_invalid` or `affected_timeout`. Only the origin `execution` writes `affected_invalid` and `affected_timeout`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
-- `repairs` counts the repairs of [the agent `env@1`](#the-agent-env1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.
+- `repairs` counts the repairs of [the agent `pe@1`](#the-agent-pe1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.
 - The file is a cache for display and the gate of the `host` target. A lost file costs one run.
 
 ### The run
@@ -611,7 +611,7 @@ The component computes the status of a group in this order. The first rule that 
 - While the status of a group is `failed`, the component reads the commit of its base branch every 60 seconds (`COMMIT_CHECK_MS`). The read is one `git ls-remote` through the Repository component.
   - A changed commit reads the inputs again. The failure of the old commit no longer counts under rule 3 of [the status](#the-status). Each reader of the proof file treats that failure as absent and ignores `<tag>-proved` for that read, so a run proves the environment again at the new commit. The file stays on disk until the new run writes the file of the digest. At the `image` target, the run builds only a missing `<tag>`. At the `remote` target, the status becomes `none`.
   - An unchanged commit starts no read and no run.
-  - The component skips the commit read during a run, a computation or a session of `env@1` of the group, and after a change of its target.
+  - The component skips the commit read during a run, a computation or a session of `pe@1` of the group, and after a change of its target.
   - A failed commit read keeps the status `failed` and logs `project.onboarding.read_failed` under the rules of a failed read.
 - A failed read logs `project.onboarding.read_failed` at the `error` level with the project, the binding, the resource identity, the reason and the failure reason. A failed read with the reason of the last logged record of the group logs no record. A successful read, a successful commit read, a change of the binding, a change of its target and a removal of the binding clear the last logged record, so the next failed read logs again.
 - The `reason` of a failed SSH read ends with the sentence `The failure reason is <failure_reason>.`, and `<failure_reason>` is the value of [the failure reason](repository.impl.md#the-failure-reason-of-a-git-operation). Any other failure has a null failure reason.
@@ -630,7 +630,7 @@ The component computes the status of a group in this order. The first rule that 
 - `project.environment.list` at `GET /api/project/:project_id/environment` is a `human` read. It answers `{ items }` with one environment state for each current repository binding, in binding name order.
 - An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `reason_started_at`, `failure`, `checks`, `repairs` and `repairing`.
 - `reason_started_at` is the time when `reason` changed from null to a message, and null while `reason` is null. A later message keeps the time.
-- `repairing` is true while a session of [the agent `env@1`](#the-agent-env1) runs for the group, and false otherwise.
+- `repairing` is true while a session of [the agent `pe@1`](#the-agent-pe1) runs for the group, and false otherwise.
 - `failure` is null unless the status is `failed`. It holds `class`, `origin`, `execution_id`, `command`, `exit_code`, `tail`, `reproduce` and `ended_at` of the proof file.
 - `checks` is the red baseline of the proof file of the digest. `tag` is null outside the `image` target.
 - The read answers from the records and the proof files. It reads no repository and starts no build.
@@ -762,12 +762,13 @@ The delete operations of the Project Service:
 - The run adds the child spans `environment.build`, `environment.setup` and `environment.proof`. A failed step ends its span with the status `Error` and `error.type` set to the class.
 - The trace decides nothing. The status never reads it.
 
-### The agent `env@1`
+### The agent `pe@1`
 
-- `env@1` is a one-shot agent session that the Onboarding component starts in the server, as the Workbench Service runs a session. It holds no worker, no registration and no claim.
-- `env@1` is one declaration of [the agent catalog](agent.impl.md#the-agent-catalog), with the tools `read`, `grep`, `find` and `ls`, no host tool, no overridable field and the prompt `static/prompt/env@1.md`. Its declaration holds `workbench: false`.
-- Its provider, its credential and its model come from the agent enablement of `env@1`. The agent page `/agents/env@1` holds that enablement, as for any agent. With no enabled `env@1`, the component starts no session, and the failure stays for the human.
-- Custody releases the model credential under [the release for an `env@1` session](custody.impl.md#the-protected-facility).
+- `pe@1` is the Platform Engineer, display name "PE".
+- `pe@1` is a one-shot agent session that the Onboarding component starts in the server, as the Workbench Service runs a session. It holds no worker, no registration and no claim.
+- `pe@1` is one declaration of [the agent catalog](agent.impl.md#the-agent-catalog), with the tools `read`, `grep`, `find` and `ls`, no host tool, no overridable field and the prompt `static/prompt/pe@1.md`. Its declaration lists no operation, so it has no Workbench session.
+- Its provider, its credential and its model come from the agent enablement of `pe@1`. The agent page `/agents/pe@1` holds that enablement, as for any agent. With no enabled `pe@1`, the component starts no session, and the failure stays for the human.
+- Custody releases the model credential under [the release for an `pe@1` session](custody.impl.md#the-protected-facility).
 - The session reads the files of the base-branch head in `environments/run-<session id>/checkout` through read-only tools.
 - A `tool_call` hook of the session resolves each path argument of `read`, `grep`, `find` and `ls` with `realpath` against the checkout. A path that is absolute, starts with `~`, holds a `..` segment or resolves outside the checkout, also through a symbolic link, answers a tool error and reads nothing. The session runs on the server host with the server user, so the hook keeps a prompt-injected file from reading a key file or the state directory. It writes only the stored environment of its binding, through the tool `environment_write`.
 - `environment_write` validates the document with the rules of [the environment of a repository binding](#the-environment-of-a-repository-binding). It writes it under the service identity of the Project Service as a binding revision.
@@ -778,7 +779,7 @@ The delete operations of the Project Service:
 - A session ends at a passed proof, after 5 attempts or after 64 tool calls. The sixth `environment_write` answers the reason `attempt_limit`, and it writes nothing and runs nothing. The 65th tool call answers `tool_limit`, and a refused write answers `write_refused`. These reasons are tool answers to the session, not codes of an operation.
 - A group holds at most one session at a time. Sessions of different groups run at once and share the queue of [the run](#the-run).
 - Only a failure event starts a session: a run that writes a failed proof file, or [the failure of an execution](#the-failure-of-an-execution). A failure inside a session and the end of a session start none.
-- The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `env@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
+- The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `pe@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
 - The current binding set still gives the group the target of the failed run or execution. A failure at an old target thus starts no session.
 - A session starts while `repairs` of the failed digest is below 3. The component increments `repairs` before the session starts. A new write of the same digest keeps the count, and `project.binding.environment.rebuild` resets it to 0.
 - The environment state holds `repairing: true` while a session of the group runs. The stop of the server aborts each session before it cancels the runs.
@@ -810,7 +811,7 @@ The first layer of the build builds the image at the start of a `container` inst
 | log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`.             |
 | log  | `worker.pool.environment_proof_failed`                   | A step of the proof at the `image` target fails. The record of `project.onboarding.run_failed` carries it in `err`, and the run records `setup_failed`. |
 | log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.                 |
-| log  | `project.onboarding.session_failed`                      | An `env@1` session ends with an error. It names the binding and the digest.                                                                             |
+| log  | `project.onboarding.session_failed`                      | An `pe@1` session ends with an error. It names the binding and the digest.                                                                              |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                                |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                               |
 
@@ -842,12 +843,12 @@ At every placement, the server derives the client identity of an instance for a 
 - `Prompts` holds the field `Instruction file`, a repository path that is empty by default. `Verify` runs `project.binding.check`, and the field shows its state: `<path> found at <commit>.`, `<path> absent at <commit>. The agents read no instruction file until the file exists.`, `<path> invalid: <reason text>. Save refuses this file.` or `<path> unreachable.` with the failure hint. `<reason text>` is the prose of the reason, for example `the file holds a control character, for example a carriage return`.
 - When the field is empty, the section shows `instruction_file_hint` of the check, `AGENTS.md exists at the base head.`. The check answers it only for a `present` `AGENTS.md`, because a hint for an invalid file leads to a refused save.
 - The help of the field states "Name one file, for example AGENTS.md. Its text joins the default standard of every agent. KanthorD reads no nested file. Leave the field empty when the file holds advice or instructions for an interactive tool."
-- `Prompts` holds the row `Repository prompt` for every agent, then one row `Binding prompt` for each agent of the catalog: `swe@1`, `re@1` and `env@1`.
+- `Prompts` holds the row `Repository prompt` for every agent, then one row `Binding prompt` for each agent of the catalog: `swe@1`, `re@1` and `pe@1`.
 - A row with a text expands to its Markdown and holds a copy button. A row with no text is inactive.
 - The `Edit` dialog of a row writes the draft only, and the Save of the binding stores it. The dialog shows the byte counter against the 32768-byte limit and refuses a text above the limit or with a control character. An empty text removes the text of that row.
 - The `Edit` dialog holds a `Preview` tab. The tab selects an agent and reads `agent.get` with `project_id` and `binding_id`. It replaces the text of the draft part and lists the parts in reading order, with the layer and the heading that the server answers. Each layer 2 and layer 3 part carries the label `Default standard`.
 - The help of the section states that a change stores a new binding revision, and that a node keeps the old text until `mission node rebind`.
-- The help states that the new binding revision makes the Onboarding component clear the mark that the stored environment came from `env@1`.
+- The help states that the new binding revision makes the Onboarding component clear the mark that the stored environment came from `pe@1`.
 - The help of the Repository prompt and of each Binding prompt states "Each work-product sentence is a rule. The reviewer judges a violation as a blocker. A rule about the method, the tools, the repository operations or the release is guidance: the reviewer reports a violation as a suggestion."
 - The help of the `re@1` Binding prompt row states "Put each rule that the reviewer judges into the Repository prompt, so the coder reads it too. Use this text only to relax the judgement of a rule."
 - The help states "A prompt holds no secret." The sensitive text redaction still replaces a finding in the system prompt.
@@ -883,8 +884,8 @@ At every placement, the server derives the client identity of an instance for a 
 - The section names the source with the text of [the environment source](project-service.vocabulary.md#environment-source). A `detected` or `universal` source shows its document read-only and offers `Store as environment`, which opens `Edit environment` with that document.
 - The section lists each variable of `environment_secrets` as `<variable> → <credential>`, never a value, with `Remove`. `Remove` writes the binding set without the variable.
 - `Set secret` opens a sheet with the variable, the credential name and the secret value in a password field. The send creates the `environment_secret` credential when it is absent, else rotates it, and then writes the binding key through the binding set. The sheet clears the value after each send.
-- While `repairing` is true, the section shows "Repairing with env@1 · repair <repairs> of 3". With `repairs` above 0, it shows the fact `Repairs` as "<repairs> of 3".
-- A failed environment with no enabled `env@1` shows "Enable env@1 to let KanthorD repair it." and the link `Enable env@1` to `/agents/env@1#enablement`.
+- While `repairing` is true, the section shows "Repairing with pe@1 · repair <repairs> of 3". With `repairs` above 0, it shows the fact `Repairs` as "<repairs> of 3".
+- A failed environment with no enabled `pe@1` shows "Enable pe@1 to let KanthorD repair it." and the link `Enable pe@1` to `/agents/pe@1#enablement`.
 - A failed environment shows its class, its command and exit code, the tail in a scrollable block with `Copy`, and the reproduce command with `Copy`.
 - The section holds `Run onboarding again`, `Edit environment` and `Copy environment`. `Run onboarding again` calls `project.binding.environment.rebuild`. A success shows the toast "Onboarding of <binding> started.". A 409 `project.environment.run_active` shows an info toast, and another refusal shows an error toast with `Retry`. `Copy environment` copies the `environment` of `project.binding.environment.get` as indented JSON.
 - A binding with `suite_pass` `absent` and the proposal shows "Add the suite pass record so that CI skips the test files that already passed." and the action `Add setup node`. The action creates the node of the plan `suite-pass-setup` with `mission.node.create`.
