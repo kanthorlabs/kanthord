@@ -1802,7 +1802,7 @@ The deck rules follow.
 - Each row of the inline list holds a rank pill. The list shows 50 rows per page, with "Show 50 more".
 - A row click moves the cursor and collapses the list. "Collapse ▴" or Esc closes the list. The list opens no side sheet. No row holds an act.
 - Outside the seven tabs: an act item joins the first group of the order and has no "Ask Yumi".
-- An information item is a Home line in the stream. It never takes the primary or the secondary.
+- An information item is a line in the stream. It never takes the primary or the secondary.
 - No project filter exists. The deck covers every project.
 - The deck holds the refresh while an act dialog is open.
 - Exit after an act: the card slides out in 220 ms, and the next card takes the cursor place. A muted line reads "Done: <subject> · <n> items wait".
