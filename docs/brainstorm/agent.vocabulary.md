@@ -17,6 +17,18 @@ For "Add password reset", Execution 1 opens an agent session of `swe@1` through 
 The phrase states that the catalog holds an agent declaration; it is no state value.
 `swe@1` is in the catalog when no enablement exists for it.
 
+## display name
+
+The unique name that a human uses to address an agent in a mention.
+The catalog holds `swe@1` as "SWE", `re@1` as "RE", `pe@1` as "PE" and `ops@1` as "Yumi".
+The mention `@yumi` matches "Yumi", and the mention `@YUMI` matches it too.
+
+## operation tool
+
+A KanthorD operation that an agent calls as a tool in a Workbench session.
+The operation list of the agent declaration names it.
+`ops@1` holds `mission.node.pause` as an operation tool, and `pe@1` holds none.
+
 ## agent enablement
 
 The global record keyed by agent name that permits agent use.

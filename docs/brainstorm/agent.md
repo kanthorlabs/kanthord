@@ -34,6 +34,70 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A declaration supplies no provider, model identifier or reasoning effort default.
 - A human selects those values through the [agent configuration](#agent-configuration).
 - A human reads the declaration and the enablement of every agent in the catalog. That read changes no configuration.
+- The catalog holds `swe@1`, `re@1`, `pe@1` and `ops@1`. The display names are "SWE", "RE", "PE" and "Yumi".
+
+### Display name
+
+- Every declaration holds a required `display_name`.
+- Display names are unique case-insensitively in the catalog. The (invariant guard) case of `engine/src/agent/catalog.test.ts` guards this rule.
+- A mention matches `@<display name>` case-insensitively and by no other rule.
+
+### Agent tools
+
+- Every declaration holds a `tools` object `{ builtin, host, operation }`.
+- `builtin` applies in a Worker execution and in a Workbench session.
+- `host` applies in a Worker execution only.
+- `operation` applies in a Workbench session only.
+- `operation` is an explicit list of operation ids. The default is deny.
+- An operation that the list does not name is no tool of the agent.
+- An agent with an empty `operation` list has no Workbench session. `pe@1` is such an agent.
+- A human changes no list. Only a change of the catalog changes a list.
+- An [operation tool](agent.vocabulary.md#operation-tool) runs with the identity of the human who sent the last message.
+
+### Damage scale
+
+- Each operation has one damage class:
+
+| Class | Meaning       |
+| ----- | ------------- |
+| R0    | Read          |
+| R0p   | Probe         |
+| R1    | Undo          |
+| R2    | Rework        |
+| R3    | Loss or setup |
+| C     | Control       |
+| S     | Secret        |
+
+- An operation of class S, C or R3 is never a tool.
+
+### Selection rule
+
+- The damage class decides whether an operation can be a tool.
+- The duty of an operation selects the tools from the allowed classes.
+- A read is a tool when an ops duty needs it.
+- An R1 or R2 mutation is a tool when an ops duty acts with it.
+
+### Operation lists
+
+- `swe@1` and `re@1` list the six node-review reads: `mission.node.get`, `mission.attempt.list`, `mission.outcome.list`, `mission.assessment.list`, `mission.evidence.list` and `mission.evidence.get`.
+- `pe@1` lists no operation.
+- `ops@1` lists 36 operations by class:
+
+| Class | Count | Operations                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R0p   | 1     | `gateway.healthcheck`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| R0    | 19    | `project.list`, `mission.get`, `mission.node.list`, `mission.node.get`, `mission.assessment.list`, `mission.proposal.list`, `mission.externalAction.list`, `mission.evidence.list`, `scheduler.execution.list`, `scheduler.queue.list`, `worker.instance.list`, `agent.cooldown.list`, `workbench.session.list`, `mission.export`, `mission.import.preview`, `worker.catalog.list`, `project.binding.list`, `project.agentConfiguration.list`, `llm.credential.list` |
+| R1    | 9     | `mission.node.pause`, `mission.node.resume`, `mission.node.check`, `mission.node.priority.set`, `mission.dependency.add`, `mission.dependency.remove`, `project.pause`, `project.resume`, `agent.cooldown.clear`                                                                                                                                                                                                                                                     |
+| R2    | 7     | `mission.node.unblock`, `mission.node.block`, `mission.node.create`, `mission.node.update`, `mission.proposal.decide`, `mission.criterion.set`, `mission.import.apply`                                                                                                                                                                                                                                                                                               |
+
+- [The Workbench tools page](../reference/workbench/tools.html) lists the tools of each agent.
+
+### Agents page
+
+- The Agents page shows each tool of an agent as a chip. The colour of the chip shows the guard class of the tool.
+- Hover or focus on a chip shows the description of the tool and the undo line of its class.
+- The undo line of `read` is "Reads only. Nothing to undo."
+- The undo line of `card` is "Waits on your card."
 
 ## Agent configuration
 
@@ -148,19 +212,19 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - `prompts.instruction_file` is absent by default, and an absent path reads no file. The binding names exactly one file.
 - The Binding prompt is the text of `prompts.agents[<agent_name>]` in the configuration of a repository binding. Each agent name of the catalog holds its own text. A blank text is an absent text.
 - The server composes the system prompt for every consumer. The order is `base.md`, `<agent_name>.md` and `workbench.md` for a Workbench session. Then, for each repository binding in binding order, the instruction file, the stored Repository prompt and the Binding prompt follow. The framing closes the system prompt.
-- `swe@1` and `re@1` read layers 2 and 3 of every repository binding of the node at its pinned revision. `env@1` reads layers 2 and 3 of the binding of its environment run, with the instruction file at the commit of that run.
+- `swe@1` and `re@1` read layers 2 and 3 of every repository binding of the node at its pinned revision. `pe@1` reads layers 2 and 3 of the binding of its environment run, with the instruction file at the commit of that run.
 - The precedence from the highest is the framing, the Binding prompt, the stored Repository prompt, the instruction file, `workbench.md`, the Role and the Standard. A later text governs an earlier text. The messages follow the system prompt, and a later message governs an earlier one.
 - An instruction of one repository governs only the work on the files of that repository. It never governs the reply format that a message demands.
 - The Binding prompt of each agent is a separate text. A rule that the reviewer judges goes into the Repository prompt, so the coder reads it too. Use the Binding prompt of `re@1` only to relax the judgement of a rule.
 - KanthorD reads the one instruction file that a repository binding names, at the base commit that the attempt pins. It reads no nested instruction file, no `*.local.md` file and no file of a home directory.
 - KanthorD expands no `@` import of an instruction file. A `CLAUDE.md` that holds only `@AGENTS.md` therefore needs the path `AGENTS.md`.
-- A present instruction file adds a part. An absent file, a file that is no regular file and a file outside the repository root add no part. At the execution setup and the `env@1` run, a file that is too large, is not UTF-8, cannot be read or holds a control character answers 409 `agent.prompt.source_invalid`. `agent.get` shows the part state `invalid`.
+- A present instruction file adds a part. An absent file, a file that is no regular file and a file outside the repository root add no part. At the execution setup and the `pe@1` run, a file that is too large, is not UTF-8, cannot be read or holds a control character answers 409 `agent.prompt.source_invalid`. `agent.get` shows the part state `invalid`.
 - `claude-code@1` receives no KanthorD text. Claude Code loads its own `CLAUDE.md` files as behavior of its harness, and KanthorD does not support that load. Its working directory is the candidate. A `claude-code@1` coder reads the instruction file only through the `CLAUDE.md` of the candidate. It reads no pin. The evaluation claims of such a coder carry no layer 2 integrity.
 - A file of the agent directory or of its `prompts` subdirectory that the loader rejects answers 409 `agent.prompt.template_invalid` at every reader. No reader replaces it with the shipped text.
 - The work prompt is the task message of the consumer. It belongs to no prompt layer, and the composer pins it.
 - A change of an agent file takes effect at the next composition. A change of a `prompts` key is a change of the binding configuration, so it stores the next binding revision. A node keeps the texts of its pinned binding revision until `mission node rebind`.
 - The first `worker.handover` of an attempt pins the base commit of the instruction file of each repository binding. Every later execution of that attempt reads the instruction file at that commit. A new attempt reads the base head again.
-- A change of a `prompts` key gives the binding a new binding ID. Environment onboarding treats it as a changed binding and clears the mark that the stored environment came from `env@1`.
+- A change of a `prompts` key gives the binding a new binding ID. Environment onboarding treats it as a changed binding and clears the mark that the stored environment came from `pe@1`.
 - Each execution records one [prompt reference](agent.vocabulary.md#prompt-reference) for each part of the system prompt of each agent, the framing included. The `agent.prompt` span of the execution holds the list. KanthorD stores no copy of a prompt text.
 - A reference resolves by its origin. A `database` reference reads the text of its binding revision, which never changes. A `repository` reference reads the file at its commit through the Project Service. A `binary` or `file` reference reads the current text.
 - Each resolved text passes a digest check. A text whose digest differs from the reference answers the state `changed` and no text.

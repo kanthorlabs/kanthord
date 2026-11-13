@@ -99,7 +99,7 @@ The component of the Project Service that resolves, builds and proves the enviro
 
 ## repair counter
 
-The count of the agent repairs of one failed digest, kept in its proof file. The agent `env@1` repairs a failed environment at most 3 times.
+The count of the agent repairs of one failed digest, kept in its proof file. The agent `pe@1` repairs a failed environment at most 3 times.
 
 ## environment secret
 
@@ -184,7 +184,7 @@ The set is closed and it holds three keys.
 
 - **instruction_file**: The repository path of the instruction file, for example `AGENTS.md`. It is absent by default.
 - **repository**: The stored Repository prompt, which every agent on the repository reads.
-- **agents**: One Binding prompt for each agent name of the catalog, for example `swe@1`, `re@1` and `env@1`.
+- **agents**: One Binding prompt for each agent name of the catalog, for example `swe@1`, `re@1` and `pe@1`.
 
 The repository binding `app` holds `prompts` with `instruction_file: AGENTS.md`, `repository` "A test file sits beside its source file." and `agents` with `re@1` set to "A missing changelog entry gives a suggestion, not a blocker."
 

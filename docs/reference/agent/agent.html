@@ -42,6 +42,7 @@
           <li><a href="#expected-response">Expected response</a></li>
           <li><a href="#api-shape">API shape</a></li>
           <li><a href="#cli-shape">CLI shape</a></li>
+          <li><a href="#list-agents">List the agents</a></li>
         </ul>
       </details>
       <main>
@@ -55,8 +56,8 @@
             the same read and change no state.
           </p>
           <p>
-            The catalog holds the agents <code>swe@1</code>,
-            <code>re@1</code> and <code>env@1</code>. An agent name outside the
+            The catalog holds the agents <code>swe@1</code>, <code>re@1</code>,
+            <code>pe@1</code> and <code>ops@1</code>. An agent name outside the
             catalog fails. The answer contains
             <code>enablement: null</code> when the agent has no live
             <a href="enablement.html">enablement</a>.
@@ -93,13 +94,13 @@
             <code>409 agent.prompt.template_invalid</code> with
             <code>details.file</code>. No reader falls back to the shipped text.
             The execution setup, the Workbench session open and the
-            <code>env@1</code> run refuse in the same way.
+            <code>pe@1</code> run refuse in the same way.
           </p>
           <p>The read selects the repository bindings in one of three ways:</p>
           <ul>
             <li>
               With no binding query, a Workbench agent answers the Workbench
-              system prompt, and <code>env@1</code> answers the worker system
+              system prompt, and <code>pe@1</code> answers the worker system
               prompt. No layer 2 or layer 3 part joins.
             </li>
             <li>
@@ -133,6 +134,7 @@
           </p>
           <pre><code class="language-json">{
   "agent_name": "re@1",
+  "display_name": "RE",
   "configuration_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -195,7 +197,15 @@
     ],
     "final": "This text is the shared standard of every agent. ..."
   },
-  "tools": [{ "name": "read", "source": "builtin", "input_schema": {} }],
+  "tools": [
+    {
+      "name": "read",
+      "source": "builtin",
+      "input_schema": {},
+      "description": "",
+      "guard_class": null
+    }
+  ],
   "enablement": null,
   "chain": [],
   "active_position": null,
@@ -215,6 +225,14 @@
                   <td><code>agent_name</code></td>
                   <td>string</td>
                   <td>Catalog key of the agent.</td>
+                </tr>
+                <tr>
+                  <td><code>display_name</code></td>
+                  <td>string</td>
+                  <td>
+                    The name that a human uses in a mention, for example
+                    <code>RE</code>. It is unique in the catalog, ignoring case.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>configuration_schema</code></td>
@@ -260,8 +278,15 @@
                   <td>
                     Permitted tools. Each item holds <code>name</code>,
                     <code>source</code> (<code>host</code>,
-                    <code>builtin</code> or <code>kanthord-mcp</code>) and
-                    <code>input_schema</code>.
+                    <code>builtin</code>, <code>kanthord-mcp</code> or
+                    <code>operation</code>), <code>input_schema</code>,
+                    <code>description</code> and <code>guard_class</code>.
+                    <code>guard_class</code> is <code>read</code> or
+                    <code>card</code> for an <code>operation</code> item, and
+                    <code>null</code> for a built-in or host item. Only an
+                    <code>operation</code> item has a description. The
+                    description of every other item is an empty string. A
+                    <code>card</code> tool waits for the approval of the human.
                   </td>
                 </tr>
                 <tr>
@@ -382,6 +407,10 @@
             <li>
               <code>standard</code>: <code>base.md</code>, for every agent.
             </li>
+            <li>
+              <code>identity</code>: the display name of the agent, for every
+              agent that has a Workbench session.
+            </li>
             <li><code>role</code>: <code>&lt;agent_name&gt;.md</code>.</li>
             <li>
               <code>workbench</code>: <code>workbench.md</code>, only in the
@@ -415,21 +444,21 @@
                   <td>integer or null</td>
                   <td>
                     The prompt layer: <code>1</code> for <code>standard</code>,
-                    <code>role</code> and <code>workbench</code>,
-                    <code>2</code> for <code>instruction_file</code> and
-                    <code>repository</code>, <code>3</code> for
-                    <code>binding</code>. <code>null</code> for
-                    <code>framing</code>.
+                    <code>identity</code>, <code>role</code> and
+                    <code>workbench</code>, <code>2</code> for
+                    <code>instruction_file</code> and <code>repository</code>,
+                    <code>3</code> for <code>binding</code>.
+                    <code>null</code> for <code>framing</code>.
                   </td>
                 </tr>
                 <tr>
                   <td><code>part</code></td>
                   <td>string</td>
                   <td>
-                    <code>standard</code>, <code>role</code>,
-                    <code>workbench</code>, <code>instruction_file</code>,
-                    <code>repository</code>, <code>binding</code> or
-                    <code>framing</code>.
+                    <code>standard</code>, <code>identity</code>,
+                    <code>role</code>, <code>workbench</code>,
+                    <code>instruction_file</code>, <code>repository</code>,
+                    <code>binding</code> or <code>framing</code>.
                   </td>
                 </tr>
                 <tr>
@@ -901,6 +930,145 @@ kanthord agent get re@1 --node &lt;node-id&gt; --attempt 2 --view final</code></
             <a href="../index.html#client-configuration">client configuration</a
             >. The HTTP client has a 31-second deadline for this 30-second
             operation.
+          </p>
+          <h2 id="list-agents">List the agents</h2>
+          <p>
+            <code>agent list</code> reads one summary for each agent of the
+            catalog, also for an agent without an enablement. The API and the
+            CLI perform the same read and change no state. The agents come in
+            ascending <code>agent_name</code> order.
+          </p>
+          <pre><code class="language-json">{
+  "items": [
+    {
+      "agent_name": "ops@1",
+      "display_name": "Yumi",
+      "worker_names": [],
+      "consumers": ["workbench"],
+      "tool_counts": { "builtin": 0, "host": 0, "kanthord-mcp": 0, "operation": 36 },
+      "enablement": null
+    }
+  ],
+  "next_cursor": null
+}</code></pre>
+          <p>
+            <code>next_cursor</code> is <code>null</code> on the last page. Each
+            item holds these fields:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>agent_name</code></td>
+                  <td>string</td>
+                  <td>Catalog key of the agent.</td>
+                </tr>
+                <tr>
+                  <td><code>display_name</code></td>
+                  <td>string</td>
+                  <td>The name that a human uses in a mention.</td>
+                </tr>
+                <tr>
+                  <td><code>worker_names</code></td>
+                  <td>array of string</td>
+                  <td>The released workers that name the agent.</td>
+                </tr>
+                <tr>
+                  <td><code>consumers</code></td>
+                  <td>array of string</td>
+                  <td>
+                    The services that run the agent, in the order
+                    <code>workbench</code>, <code>worker</code>.
+                    <code>workbench</code> means that the agent lists at least
+                    one operation tool. <code>worker</code> means that a
+                    released worker names the agent, or that the agent is
+                    <code>pe@1</code>. The array holds one, both or none of the
+                    values.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>tool_counts</code></td>
+                  <td>object</td>
+                  <td>
+                    The number of tools by source, with the keys
+                    <code>builtin</code>, <code>host</code>,
+                    <code>kanthord-mcp</code> and <code>operation</code>. The
+                    counts equal the <code>tools</code> of
+                    <code>agent get</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>enablement</code></td>
+                  <td>object or null</td>
+                  <td>
+                    The live
+                    <a href="enablement.html#expected-response"
+                      >enablement record</a
+                    >, or <code>null</code> when no live record exists.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td><code>GET /api/agent</code></td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>agent.list</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Query <code>limit</code></td>
+                  <td>
+                    Page size from <code>1</code> to <code>1000</code>; the
+                    default is <code>100</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Query <code>cursor</code></td>
+                  <td>
+                    <code>next_cursor</code> of the previous page. A malformed
+                    cursor fails with
+                    <code>400 system.pagination.cursor_invalid</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre><code class="language-sh">curl -s 'http://127.0.0.1:31415/api/agent?limit=100' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
+          <pre><code class="language-text">kanthord agent list [--limit &lt;count&gt;] [--cursor &lt;cursor&gt;] [--token &lt;jwt&gt;] [--endpoint &lt;url&gt;]</code></pre>
+          <p>
+            <code>--limit</code> sets <code>limit</code> and
+            <code>--cursor</code> sets <code>cursor</code>. The CLI fails with
+            <code>cli.agent.list.token_required</code> when no token is
+            available, and with <code>cli.agent.list.indeterminate</code> when
+            the result is indeterminate.
           </p>
         </article>
       </main>

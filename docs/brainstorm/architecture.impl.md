@@ -1733,7 +1733,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - The elapsed time shows "<n> s" below one minute, else "<n> min" in whole minutes. It changes at each poll.
 - A failed read of the list keeps the last answer and shows no error.
 - A `pending` state with a `reason` shows "Waiting: <reason>". A state whose run waits in the queue, with `run_started_at` null, shows "Waiting for another run" and no elapsed time.
-- The step lines are "Reading the repository", "Building the image", "Proving on the base branch head" and "Ready". While `repairing` is true, the step line is "Repairing with env@1 · repair <repairs> of 3". A failed state shows "Failed: <class>" and the command, for example "Failed: command_absent · pnpm".
+- The step lines are "Reading the repository", "Building the image", "Proving on the base branch head" and "Ready". While `repairing` is true, the step line is "Repairing with pe@1 · repair <repairs> of 3". A failed state shows "Failed: <class>" and the command, for example "Failed: command_absent · pnpm".
 - A `Progress` of shadcn shows the step: at the `image` target, read, build and proof are steps 1 to 3 of 3; at the `host` target, read and proof are steps 1 and 2 of 2. A failed state shows no progress.
 - The bar holds `Details`. It opens `/projects/<project>?tab=bindings&environment=<binding name>`.
 - The text of the bar is a polite live region, so a screen reader hears each change of the step.

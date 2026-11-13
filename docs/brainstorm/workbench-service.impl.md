@@ -35,6 +35,11 @@ A mechanism here never overrides a rule there.
 - The tool name is the operation ID with each `.` replaced by `--`, for example `mission--node--list`. The tool maps the name back to its operation ID.
 - Every tool name matches `^[a-zA-Z0-9_-]{1,64}$`, the form that the model providers accept.
 - The tool parameters are the input schema of the operation.
+- `toolOperations(operations, listed)` keeps the eligible operations whose id the agent lists. An operation is eligible when it has `human` access, is no stream and is no secret operation.
+- `operationToolDeclarations(operations, agentName)` answers one item for each tool of the agent, in the order of its list: `{ name, source: "operation", input_schema, description, guard_class }`. `guard_class` is `card` for a mutation and `read` otherwise.
+- `SECRET_OPERATION_IDS` holds the operations that carry secret material. It holds `intake.inbound.get`, `intake.storage.get`, `mission.evidence.asset.content.get` and `{intake,project}.credential.{create,rotate,check}`, and the credential operations of the LLM, repository and storage services that write or check a secret.
+- An operation whose answer holds a presigned URL is secret material. An operation whose body holds a typed secret is secret material.
+- The output test of `engine/src/workbench/tools.test.ts` asserts that no tool-eligible operation has an output key `get_url` or `put_url`.
 - `pending_approval` names the operation ID.
 - The tool calls the direct adapter of the operation registry.
 - A mutation takes a new idempotency key for each tool call.
