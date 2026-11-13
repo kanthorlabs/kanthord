@@ -133,7 +133,7 @@ What each cleanup removes and what stays:
 ## Dashboard
 
 - The dashboard holds a "Footprint" section in the navigation group "System".
-- An alert shows as a banner on the Overview, below the health alert of the server, and as a badge on the "Footprint" navigation item.
+- An alert shows as an information line on Home, below the health alert of the server, and as a badge on the "Footprint" navigation item.
 - An alert adds no board item and no board tab.
 - A cleanup opens a confirmation dialog that states the consequence of the kind and a safer path.
 - [footprint-service.impl.md](footprint-service.impl.md#the-dashboard) holds the screens.

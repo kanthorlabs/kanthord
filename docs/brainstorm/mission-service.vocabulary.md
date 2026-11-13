@@ -580,7 +580,7 @@ The rows of the thread derive the item, and no record stores it.
 The term names no closed set.
 
 The developer is mentioned on issue 117 of `acme/app`, and no node links that issue.
-The Inbox of the board shows one inbox item for issue 117 until the developer marks it done.
+The Inbox of Home shows one inbox item for issue 117 until the developer marks it done.
 
 ## link update
 
