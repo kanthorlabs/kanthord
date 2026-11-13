@@ -36,6 +36,7 @@ import {
   signInMessage,
   workerBindingConfig,
 } from "./instances.mjs";
+import { pollInboundBody } from "./inbound.mjs";
 import { isServerManaged, PLACEMENTS } from "./placement.mjs";
 import { spawnWorker, stopWorkers, withoutKanthordClient } from "./workers.mjs";
 
@@ -298,14 +299,13 @@ log("project created", {
   bindings: Object.keys(bindings),
 });
 
-const inbound = await api.post("/api/intake/inbound", {
-  project_id: project.id,
-  kind: "poll",
-  platform: "github",
-  consumer: "mission.delivery.admit",
-  credential: config.repository.config.credential,
-  configuration: { resource: config.repository.github },
-});
+const inbound = await api.post(
+  "/api/intake/inbound",
+  pollInboundBody({
+    projectId: project.id,
+    repository: config.repository,
+  }),
+);
 log("poll inbound created", {
   inbound: inbound.id,
   resource: config.repository.github,
